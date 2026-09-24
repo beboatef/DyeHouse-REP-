@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DyeHouseERP.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Intentionally has ZERO PackageReferences. The Domain layer must never
+       depend on ASP.NET Core, EF Core, or any infrastructure concern. -->
+
+</Project>
