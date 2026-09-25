@@ -120,9 +120,9 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
         if (!request.OverrideNegativeStock)
             throw new NegativeStockException(available, requested);
 
-        if (!_currentUser.IsInRole(Permissions.InventoryAllowNegativeStock))
+        if (!_currentUser.IsInRole(Permissions.InventoryAllowNegativeStock) || !_currentUser.IsInRole(Permissions.InventoryApproveNegativeStock))
             throw new UnauthorizedAccessException(
-                $"Overriding negative stock requires the '{Permissions.InventoryAllowNegativeStock}' permission.");
+                $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 
         // Authorized override: record it for the Negative Stock / Balance
         // Override Report (spec section 17) and let the allocation proceed.
