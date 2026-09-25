@@ -13,7 +13,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
 
         builder.Property(c => c.Code).HasMaxLength(30).IsRequired();
         builder.Property(c => c.Name).HasMaxLength(200).IsRequired();
-        builder.Property(c => c.AccountNumber).HasMaxLength(50).IsRequired();
+        builder.Property(c => c.AccountNumber).HasMaxLength(50).IsRequired().HasDefaultValueSql("CONVERT(nvarchar(50), [Code])");
         builder.HasIndex(c => c.AccountNumber).IsUnique();
         builder.Property(c => c.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(c => c.ModifiedBy).HasMaxLength(100);
