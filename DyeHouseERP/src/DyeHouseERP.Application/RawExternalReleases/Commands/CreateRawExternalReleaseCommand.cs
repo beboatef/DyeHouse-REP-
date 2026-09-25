@@ -63,7 +63,7 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
             throw new DomainException(
                 $"Message '{message.MessageNumber}' is not available for release (inspection status: {message.InspectionStatus}, status: {message.Status}).");
 
-        var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, cancellationToken);
+        var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, message.WarehouseId, cancellationToken);
 
         var kgShort = request.QuantityKg.HasValue && request.QuantityKg.Value > balanceKg;
         var meterShort = request.QuantityMeter.HasValue && request.QuantityMeter.Value > balanceMeter;

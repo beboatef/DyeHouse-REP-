@@ -14,10 +14,10 @@ public class InventoryLedgerService : IInventoryLedgerService
     public InventoryLedgerService(ApplicationDbContext context) => _context = context;
 
     public async Task<(decimal Kg, decimal Meter)> GetMessageBalanceAsync(
-        Guid rawMessageId, Guid itemId, CancellationToken cancellationToken = default)
+        Guid rawMessageId, Guid itemId, Guid warehouseId, CancellationToken cancellationToken = default)
     {
         var rows = await _context.InventoryTransactions.AsNoTracking()
-            .Where(t => t.RawMessageId == rawMessageId && t.ItemId == itemId)
+            .Where(t => t.RawMessageId == rawMessageId && t.ItemId == itemId && t.WarehouseId == warehouseId)
             .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
             .ToListAsync(cancellationToken);
 
@@ -25,10 +25,10 @@ public class InventoryLedgerService : IInventoryLedgerService
     }
 
     public async Task<(decimal Kg, decimal Meter)> GetCustomerBalanceAsync(
-        Guid rawMessageId, Guid itemId, Guid customerId, CancellationToken cancellationToken = default)
+        Guid rawMessageId, Guid itemId, Guid customerId, Guid warehouseId, CancellationToken cancellationToken = default)
     {
         var rows = await _context.InventoryTransactions.AsNoTracking()
-            .Where(t => t.RawMessageId == rawMessageId && t.ItemId == itemId && t.CustomerId == customerId)
+            .Where(t => t.RawMessageId == rawMessageId && t.ItemId == itemId && t.CustomerId == customerId && t.WarehouseId == warehouseId)
             .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
             .ToListAsync(cancellationToken);
 

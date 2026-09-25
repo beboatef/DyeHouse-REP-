@@ -84,7 +84,7 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
             (request.QuantityMeter.HasValue && l.QuantityMeter.HasValue))
             ?? throw new DomainException("The raw message has no line matching the requested unit (KG/Meter).");
 
-        var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, line.ItemId, order.CustomerId, cancellationToken);
+        var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, line.ItemId, order.CustomerId, message.WarehouseId, cancellationToken);
 
         await EnsureSufficientBalance(request, message, line.ItemId, order.CustomerId, balanceKg, balanceMeter, cancellationToken);
 

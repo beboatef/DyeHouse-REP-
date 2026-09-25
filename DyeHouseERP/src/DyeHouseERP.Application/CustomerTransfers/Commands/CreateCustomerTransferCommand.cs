@@ -63,7 +63,7 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 
-        var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.FromCustomerId, cancellationToken);
+        var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.FromCustomerId, message.WarehouseId, cancellationToken);
 
         var kgShort = request.QuantityKg.HasValue && request.QuantityKg.Value > balanceKg;
         var meterShort = request.QuantityMeter.HasValue && request.QuantityMeter.Value > balanceMeter;

@@ -39,7 +39,7 @@ public interface IDateTime
 public interface IInventoryLedgerService
 {
     /// <summary>Total remaining quantity in a message/item, regardless of which customer currently owns which portion.</summary>
-    Task<(decimal Kg, decimal Meter)> GetMessageBalanceAsync(Guid rawMessageId, Guid itemId, CancellationToken cancellationToken = default);
+    Task<(decimal Kg, decimal Meter)> GetMessageBalanceAsync(Guid rawMessageId, Guid itemId, Guid warehouseId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The portion of a message/item currently owned by ONE specific
@@ -50,7 +50,7 @@ public interface IInventoryLedgerService
     /// message, so this balance shifts between customers without the
     /// message's header ever being edited.
     /// </summary>
-    Task<(decimal Kg, decimal Meter)> GetCustomerBalanceAsync(Guid rawMessageId, Guid itemId, Guid customerId, CancellationToken cancellationToken = default);
+    Task<(decimal Kg, decimal Meter)> GetCustomerBalanceAsync(Guid rawMessageId, Guid itemId, Guid customerId, Guid warehouseId, CancellationToken cancellationToken = default);
 
     /// <summary>All distinct RawMessageIds a customer currently has (or has ever had) any ledger activity against - i.e. originally received by them, or transferred to them.</summary>
     Task<List<Guid>> GetMessageIdsForCustomerAsync(Guid customerId, CancellationToken cancellationToken = default);

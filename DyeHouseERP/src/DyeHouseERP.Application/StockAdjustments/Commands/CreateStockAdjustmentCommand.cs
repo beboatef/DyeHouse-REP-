@@ -58,7 +58,7 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
 
         await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
 
-        var (beforeKg, beforeMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, cancellationToken);
+        var (beforeKg, beforeMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, message.WarehouseId, cancellationToken);
 
         if (request.Type == AdjustmentType.Decrease)
         {
