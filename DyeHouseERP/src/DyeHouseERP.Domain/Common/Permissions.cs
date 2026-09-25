@@ -38,6 +38,8 @@ public static class Permissions
     public const string StageRequiresApproval = "production.approve_stage";
 
     public const string InventoryView = "inventory.view";
+    public const string InventoryEdit = "inventory.edit";
+    public const string InventoryDelete = "inventory.delete";
     public const string InventoryAdjust = "inventory.adjust";
     /// <summary>Authorizes overriding the negative-stock block (spec section 18).</summary>
     public const string InventoryAllowNegativeStock = "inventory.allow_negative_stock";
@@ -71,7 +73,7 @@ public static class Permissions
         ItemsView, ItemsCreate, ItemsEdit,
         RawReceive, RawInspect, RawConsume, RawReturn, RawExternalRelease, RawTransfer,
         ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, StageRequiresApproval,
-        InventoryView, InventoryAdjust, InventoryAllowNegativeStock, InventoryApproveNegativeStock,
+        InventoryView, InventoryEdit, InventoryDelete, InventoryAdjust, InventoryAllowNegativeStock, InventoryApproveNegativeStock,
         ReadyView, ReadyTransfer, ReadyDeliver,
         InvoicesView, InvoicesCreate, InvoicesIssue, InvoicesCancel,
         TreasuryView, TreasuryCreate,
