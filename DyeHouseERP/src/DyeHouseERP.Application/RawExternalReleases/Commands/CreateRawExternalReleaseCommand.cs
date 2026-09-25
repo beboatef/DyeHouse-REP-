@@ -61,7 +61,7 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
 
         if (!message.IsAvailableForAllocation)
             throw new DomainException(
-                $"Message '{message.MessageNumber}' is not available for release (inspection status: {message.InspectionStatus}, status: {message.Status}).");
+                $"Message '{message.MessageNumber}' is not available for release (status: {message.Status}).");
 
         var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, message.WarehouseId, cancellationToken);
 

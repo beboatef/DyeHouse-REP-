@@ -80,8 +80,7 @@ public class RawMessage : AuditableEntity
 
     /// <summary>Whether material from this message is currently available to allocate against.</summary>
     public bool IsAvailableForAllocation =>
-        InspectionStatus is InspectionStatus.Accepted or InspectionStatus.AcceptedWithNotes
-        && Status is RawMessageStatus.Open or RawMessageStatus.PartiallyUsed;
+        Status is RawMessageStatus.Open or RawMessageStatus.PartiallyUsed;
 
     public void RecalculateStatus(bool hasRemainingBalance, bool hasAnyUsage)
     {

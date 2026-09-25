@@ -73,7 +73,7 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
 
         if (!message.IsAvailableForAllocation)
             throw new DomainException(
-                $"Message '{message.MessageNumber}' is not available for allocation (inspection status: {message.InspectionStatus}, status: {message.Status}). Rejected or un-inspected material cannot be used in production.");
+                $"Message '{message.MessageNumber}' is not available for allocation (status: {message.Status}). Material cannot be used in production.");
 
         // A message may carry several item lines; pick the line whose unit
         // matches what's being requested (kept simple for this scaffold -
