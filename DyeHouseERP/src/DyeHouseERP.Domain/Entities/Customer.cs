@@ -11,6 +11,7 @@ public class Customer : AuditableEntity
 {
     public string Code { get; private set; } = string.Empty;
     public string Name { get; private set; } = string.Empty;
+    public string AccountNumber { get; private set; } = string.Empty;
     public bool IsActive { get; private set; } = true;
 
     private Customer() { } // EF Core
@@ -18,6 +19,7 @@ public class Customer : AuditableEntity
     public Customer(string code, string name, string createdBy)
     {
         SetCode(code);
+        SetAccountNumber(code);
         SetName(name);
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
@@ -28,6 +30,12 @@ public class Customer : AuditableEntity
         if (string.IsNullOrWhiteSpace(code))
             throw new ArgumentException("Customer code is required.", nameof(code));
         Code = code.Trim();
+    }
+
+    public void SetAccountNumber(string accountNumber)
+    {
+        if (string.IsNullOrWhiteSpace(accountNumber)) throw new ArgumentException("Account number is required.");
+        AccountNumber = accountNumber.Trim();
     }
 
     public void SetName(string name)
