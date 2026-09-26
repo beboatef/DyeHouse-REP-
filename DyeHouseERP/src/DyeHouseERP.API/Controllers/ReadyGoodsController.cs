@@ -33,4 +33,28 @@ public class ReadyGoodsController : ControllerBase
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetTransfers), new { }, result);
     }
+    [HttpPut("transfers/{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryEdit)]
+    public async Task<ActionResult<ReadyGoodsTransferDto>> UpdateTransfer(
+        Guid id,
+        [FromBody] UpdateReadyGoodsTransferRequest request)
+    {
+        var command = new UpdateReadyGoodsTransferCommand(
+            id,
+            request.TransferDate,
+            request.QuantityKg,
+            request.QuantityMeter,
+            request.PieceCount,
+            request.Notes);
+
+        return Ok(await _mediator.Send(command));
+    }
+
 }
+
+public sealed record UpdateReadyGoodsTransferRequest(
+    DateTime TransferDate,
+    decimal? QuantityKg,
+    decimal? QuantityMeter,
+    int? PieceCount,
+    string? Notes);

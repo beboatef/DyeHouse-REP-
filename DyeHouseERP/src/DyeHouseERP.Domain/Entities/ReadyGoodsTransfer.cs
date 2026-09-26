@@ -45,4 +45,21 @@ public class ReadyGoodsTransfer : AuditableEntity
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
     }
+    public void UpdateDetails(
+        DateTime transferDate,
+        decimal? quantityKg,
+        decimal? quantityMeter,
+        int? pieceCount,
+        string? notes)
+    {
+        if (quantityKg is null && quantityMeter is null)
+            throw new ArgumentException("KG and/or Meter quantity is required.");
+
+        TransferDate = transferDate;
+        QuantityKg = quantityKg;
+        QuantityMeter = quantityMeter;
+        PieceCount = pieceCount;
+        Notes = notes;
+    }
+
 }
