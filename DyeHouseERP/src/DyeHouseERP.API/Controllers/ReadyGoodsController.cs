@@ -50,6 +50,14 @@ public class ReadyGoodsController : ControllerBase
         return Ok(await _mediator.Send(command));
     }
 
+    [HttpDelete("transfers/{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryDelete)]
+    public async Task<IActionResult> DeleteTransfer(Guid id)
+    {
+        await _mediator.Send(new DeleteReadyGoodsTransferCommand(id));
+        return NoContent();
+    }
+
 }
 
 public sealed record UpdateReadyGoodsTransferRequest(
