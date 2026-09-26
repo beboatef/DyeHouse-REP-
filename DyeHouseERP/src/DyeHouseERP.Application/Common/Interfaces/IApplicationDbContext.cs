@@ -22,6 +22,7 @@ public interface IApplicationDbContext
     DbSet<ProductionOrder> ProductionOrders { get; }
     DbSet<ProductionOrderStageExecution> ProductionOrderStageExecutions { get; }
     DbSet<RawAllocation> RawAllocations { get; }
+    DbSet<ReadyGoodsSource> ReadyGoodsSources { get; }
     DbSet<NegativeStockOverride> NegativeStockOverrides { get; }
     DbSet<RawExternalRelease> RawExternalReleases { get; }
     DbSet<CustomerTransfer> CustomerTransfers { get; }

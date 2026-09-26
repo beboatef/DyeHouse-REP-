@@ -36,6 +36,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<MaterialIssue> MaterialIssues => Set<MaterialIssue>();
     public DbSet<MaterialPreparation> MaterialPreparations => Set<MaterialPreparation>();
     public DbSet<ReadyGoodsTransfer> ReadyGoodsTransfers => Set<ReadyGoodsTransfer>();
+    public DbSet<ReadyGoodsSource> ReadyGoodsSources => Set<ReadyGoodsSource>();
     public DbSet<Delivery> Deliveries => Set<Delivery>();
     public DbSet<DeliveryLine> DeliveryLines => Set<DeliveryLine>();
     public DbSet<Invoice> Invoices => Set<Invoice>();

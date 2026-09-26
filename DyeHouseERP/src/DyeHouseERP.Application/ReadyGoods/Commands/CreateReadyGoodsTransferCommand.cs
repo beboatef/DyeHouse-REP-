@@ -67,6 +67,20 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
             request.QuantityKg, request.QuantityMeter, _currentUser.UserName, request.PieceCount, request.Notes);
         _db.ReadyGoodsTransfers.Add(transfer);
 
+var allocations = await _db.RawAllocations
+    .Where(x => x.ProductionOrderId == order.Id)
+    .ToListAsync(cancellationToken);
+
+foreach (var allocation in allocations)
+{
+    _db.ReadyGoodsSources.Add(new ReadyGoodsSource(
+        transfer.Id,
+        allocation.RawMessageId,
+        allocation.ItemId,
+        allocation.QuantityKg,
+        allocation.QuantityMeter));
+}
+
         _db.InventoryTransactions.Add(new InventoryTransaction(
             DocumentType.ReadyGoodsTransfer, transfer.TransferNumber, transfer.Id, _clock.UtcNow,
             request.WarehouseId, order.CustomerId, order.ItemId,
