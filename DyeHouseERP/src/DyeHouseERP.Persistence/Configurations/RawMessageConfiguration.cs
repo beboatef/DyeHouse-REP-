@@ -25,6 +25,10 @@ public class RawMessageConfiguration : IEntityTypeConfiguration<RawMessage>
         builder.Property(m => m.InspectionStatus).HasConversion<string>().HasMaxLength(30);
         builder.Property(m => m.Status).HasConversion<string>().HasMaxLength(30);
 
+        // Derived/behavioural members - never persisted columns.
+        builder.Ignore(m => m.IsAvailableForAllocation);
+        builder.Ignore(m => m.HasRejections);
+
         builder.HasIndex(m => m.CustomerId);
         builder.HasIndex(m => m.WarehouseId);
 
@@ -47,7 +51,12 @@ public class RawMessageLineConfiguration : IEntityTypeConfiguration<RawMessageLi
 
         builder.Property(l => l.QuantityKg).HasPrecision(18, 3);
         builder.Property(l => l.QuantityMeter).HasPrecision(18, 3);
+        builder.Property(l => l.RejectedQuantityKg).HasPrecision(18, 3);
+        builder.Property(l => l.RejectedQuantityMeter).HasPrecision(18, 3);
         builder.Property(l => l.Notes).HasMaxLength(1000);
+
+        builder.Ignore(l => l.AcceptedQuantityKg);
+        builder.Ignore(l => l.AcceptedQuantityMeter);
 
         builder.HasIndex(l => l.ItemId);
 
@@ -56,5 +65,13 @@ public class RawMessageLineConfiguration : IEntityTypeConfiguration<RawMessageLi
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_RawMessageLines_AtLeastOneQuantity",
             "[QuantityKg] IS NOT NULL OR [QuantityMeter] IS NOT NULL"));
+
+        // Data-level guard mirroring the domain rule on rejections: a rejected
+        // quantity can never exceed what was actually received (spec section 55),
+        // and can never be negative.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "CK_RawMessageLines_RejectedWithinReceived",
+            "([RejectedQuantityKg] IS NULL OR ([RejectedQuantityKg] >= 0 AND [QuantityKg] IS NOT NULL AND [RejectedQuantityKg] <= [QuantityKg]))" +
+            " AND ([RejectedQuantityMeter] IS NULL OR ([RejectedQuantityMeter] >= 0 AND [QuantityMeter] IS NOT NULL AND [RejectedQuantityMeter] <= [QuantityMeter]))"));
     }
 }

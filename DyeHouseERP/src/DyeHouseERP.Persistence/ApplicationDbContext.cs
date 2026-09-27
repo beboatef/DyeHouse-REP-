@@ -15,6 +15,12 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<Check> Checks => Set<Check>();
+    public DbSet<CheckMovement> CheckMovements => Set<CheckMovement>();
+    public DbSet<FormationRequest> FormationRequests => Set<FormationRequest>();
+    public DbSet<FormationGroup> FormationGroups => Set<FormationGroup>();
+    public DbSet<FormationSpecTemplate> FormationSpecTemplates => Set<FormationSpecTemplate>();
     public DbSet<Item> Items => Set<Item>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<RawMessage> RawMessages => Set<RawMessage>();
@@ -54,6 +60,22 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<PeriodClose> PeriodCloses => Set<PeriodClose>();
     public DbSet<SavedReportTemplate> SavedReportTemplates => Set<SavedReportTemplate>();
+
+    // Purchases (spec section 35)
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
+    public DbSet<PurchaseReceipt> PurchaseReceipts => Set<PurchaseReceipt>();
+    public DbSet<PurchaseReceiptLine> PurchaseReceiptLines => Set<PurchaseReceiptLine>();
+    public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
+    public DbSet<SupplierInvoiceLine> SupplierInvoiceLines => Set<SupplierInvoiceLine>();
+    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<SupplierLedgerEntry> SupplierLedgerEntries => Set<SupplierLedgerEntry>();
+
+    // Payroll & wages (spec section 36)
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<PayrollRun> PayrollRuns => Set<PayrollRun>();
+    public DbSet<PayrollRunLine> PayrollRunLines => Set<PayrollRunLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

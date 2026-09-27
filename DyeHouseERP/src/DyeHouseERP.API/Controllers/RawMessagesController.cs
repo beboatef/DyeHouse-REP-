@@ -53,7 +53,7 @@ public class RawMessagesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RecordInspection(Guid id, [FromBody] RecordInspectionRequest request)
     {
-        await _mediator.Send(new RecordInspectionCommand(id, request.Result, request.Notes));
+        await _mediator.Send(new RecordInspectionCommand(id, request.Result, request.Notes, request.Rejections));
         return NoContent();
     }
 
@@ -76,4 +76,12 @@ public class RawMessagesController : ControllerBase
     }
 }
 
-public record RecordInspectionRequest(Domain.Enums.InspectionStatus Result, string? Notes);
+/// <summary>
+/// Optional receiving-inspection information (spec section 9 - recorded, never a
+/// blocking approval step). Rejections carry the per-line rejected quantity that
+/// must stop being allocatable while staying traceable to this receipt.
+/// </summary>
+public record RecordInspectionRequest(
+    Domain.Enums.InspectionStatus Result,
+    string? Notes,
+    List<DyeHouseERP.Application.RawReceipts.DTOs.RawMessageLineRejectionInput>? Rejections = null);

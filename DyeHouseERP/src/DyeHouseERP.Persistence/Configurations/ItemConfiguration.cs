@@ -13,6 +13,9 @@ public class ItemConfiguration : IEntityTypeConfiguration<Item>
 
         builder.Property(i => i.Code).HasMaxLength(30).IsRequired();
         builder.Property(i => i.Name).HasMaxLength(200).IsRequired();
+        builder.Property(i => i.NameAr).HasMaxLength(200).IsRequired();
+        builder.Property(i => i.NameEn).HasMaxLength(200).IsRequired();
+        builder.Property(i => i.Category).HasMaxLength(100);
         builder.Property(i => i.BaseUnit).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(i => i.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(i => i.ModifiedBy).HasMaxLength(100);

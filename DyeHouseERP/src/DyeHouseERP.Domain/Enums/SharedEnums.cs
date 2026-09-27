@@ -49,7 +49,93 @@ public enum DocumentType
     MaterialIssue = 13,
     PreparationDilution = 14,
     ReadyGoodsTransfer = 15,
-    ProductionRequest = 16
+    ProductionRequest = 16,
+    FormationRequest = 17,
+
+    /// <summary>
+    /// The checks register. A check's own number comes from the bank, not from
+    /// this numbering engine, so no sequence is seeded for this type - it exists
+    /// purely so cash/bank ledger rows posted by a cleared check can name their
+    /// real source document (spec sections 40 and 46).
+    /// </summary>
+    CheckRegister = 18,
+
+    // ---- Purchases (spec section 35) ----
+    PurchaseOrder = 19,
+    PurchaseReceipt = 20,
+    SupplierInvoice = 21,
+    SupplierPayment = 22,
+
+    // ---- Payroll (spec section 36) ----
+    PayrollRun = 23
+}
+
+/// <summary>
+/// The two job-order line types of a dyehouse (spec section 16). Stored as
+/// real data (never inferred from text) so it can be filtered, reported on,
+/// costed and traced. "Closed line" = one continuous line processed as a
+/// whole; "open line" (على المفتوح) = processed as open-width / unclosed
+/// fabric. No behaviour is hard-coded off it - it is a first-class property
+/// that flows through filters, reports, costing and traceability.
+/// </summary>
+public enum JobOrderType
+{
+    ClosedLine = 1,
+    OpenLine = 2
+}
+
+/// <summary>Lifecycle of a Formation Request (طلب تشكيل) - spec section 32.</summary>
+public enum FormationRequestStatus
+{
+    Draft = 1,
+    Submitted = 2,
+    Approved = 3,
+    InProgress = 4,
+    PartiallyCompleted = 5,
+    Completed = 6,
+    Rejected = 7,
+    Cancelled = 8
+}
+
+/// <summary>Direction of a check instrument (spec section 37): a customer check we received, or one we issued/endorsed to a supplier.</summary>
+public enum CheckDirection
+{
+    CustomerCheck = 1,
+    SupplierCheck = 2
+}
+
+/// <summary>Check lifecycle (spec section 38). A check is ONE physical financial instrument; every transition is a recorded movement, never a new check.</summary>
+public enum CheckStatus
+{
+    Received = 1,
+    InHand = 2,
+    Deposited = 3,
+    Endorsed = 4,
+    Cleared = 5,
+    Bounced = 6,
+    Cancelled = 7
+}
+
+/// <summary>Who physically holds the check right now.</summary>
+public enum CheckHolderType
+{
+    Customer = 1,
+    Company = 2,
+    Supplier = 3,
+    Bank = 4
+}
+
+/// <summary>Every way a check can move (spec section 39) - each one appends a CheckMovement row, so the instrument's full history is always reconstructable.</summary>
+public enum CheckMovementType
+{
+    Received = 1,
+    Issued = 2,
+    ReturnedToHolder = 3,
+    Endorsed = 4,
+    Deposited = 5,
+    Cleared = 6,
+    Bounced = 7,
+    Cancelled = 8
 }
 
 /// <summary>Overall lifecycle of a Production Order (spec section 12).</summary>
@@ -155,4 +241,40 @@ public enum ProductionRequestStatus
     Approved = 2,
     Rejected = 3,
     ConvertedToOrder = 4
+}
+
+/// <summary>Lifecycle of a purchase order (spec section 35). Receiving is what moves it towards Received - never a manual status edit.</summary>
+public enum PurchaseOrderStatus
+{
+    Draft = 1,
+    Submitted = 2,
+    Approved = 3,
+    PartiallyReceived = 4,
+    Received = 5,
+    Cancelled = 6
+}
+
+/// <summary>Lifecycle of a supplier invoice. Posting is the moment it becomes a payable on the supplier account; cancelling posts a reversal.</summary>
+public enum SupplierInvoiceStatus
+{
+    Draft = 1,
+    Posted = 2,
+    Cancelled = 3
+}
+
+/// <summary>Employee active state (spec section 36).</summary>
+public enum EmployeeStatus
+{
+    Active = 1,
+    Suspended = 2,
+    Terminated = 3
+}
+
+/// <summary>Lifecycle of a monthly payroll run (spec section 36). Posting is the only step with a financial effect.</summary>
+public enum PayrollRunStatus
+{
+    Draft = 1,
+    Approved = 2,
+    Posted = 3,
+    Cancelled = 4
 }

@@ -38,6 +38,11 @@ public class StartStageCommandHandler : IRequestHandler<StartStageCommand, Produ
         if (order.Status == ProductionOrderStatus.RawAllocated)
             order.MarkInProduction();
 
+        // If this order was converted from an approved Formation Request, the request moves to
+        // In Progress at the same moment - the chain stays consistent (spec sections 31-32).
+        await DyeHouseERP.Application.FormationRequests.Commands.FormationProductionSync
+            .OnProductionStartedAsync(_db, order, _currentUser.UserName, cancellationToken);
+
         stage.Start(_currentUser.UserName);
 
         await _db.SaveChangesAsync(cancellationToken);

@@ -24,6 +24,48 @@ public class ReportsController : ControllerBase
         _export = export;
     }
 
+    /// <summary>
+    /// The inventory ledger: every stock movement ever posted, with its source document, user, date,
+    /// warehouse, item, customer, raw material message and job order (spec sections 10, 14, 48).
+    /// Balances are never stored - they are summed from exactly these rows.
+    /// </summary>
+    [HttpGet("inventory-movements")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
+    [ProducesResponseType(typeof(List<InventoryMovementDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<InventoryMovementDto>>> GetInventoryMovements(
+        [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] Guid? warehouseId,
+        [FromQuery] Guid? rawMessageId, [FromQuery] Guid? productionOrderId,
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int limit = 500)
+        => Ok(await _mediator.Send(new GetInventoryMovementsQuery(
+            customerId, itemId, warehouseId, rawMessageId, productionOrderId, from, to, limit)));
+
+    [HttpGet("inventory-movements/excel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> GetInventoryMovementsExcel(
+        [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] Guid? warehouseId,
+        [FromQuery] Guid? rawMessageId, [FromQuery] DateTime? from, [FromQuery] DateTime? to,
+        [FromServices] IReportExportService export)
+    {
+        var movements = await _mediator.Send(new GetInventoryMovementsQuery(
+            customerId, itemId, warehouseId, rawMessageId, null, from, to, 5000));
+
+        var headers = new List<string>
+        {
+            "Date", "SourceType", "SourceDocument", "Warehouse", "Customer", "Item",
+            "Message", "JobOrder", "QuantityKg", "QuantityMeter", "Direction", "User"
+        };
+
+        var rows = movements.Select(m => new object?[]
+        {
+            m.TransactionDate.ToString("yyyy-MM-dd"), m.SourceDocumentType, m.SourceDocumentNumber, m.WarehouseName,
+            m.CustomerCode, m.ItemCode, m.MessageNumber, m.OrderNumber,
+            m.QuantityKg, m.QuantityMeter, m.Direction.ToString(), m.CreatedBy
+        }).ToList();
+
+        var bytes = export.GenerateExcel("InventoryMovements", headers, rows);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "inventory-movements.xlsx");
+    }
+
     /// <summary>Negative Stock / Balance Override Report (spec section 17).</summary>
     [HttpGet("negative-stock-overrides")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsView)]

@@ -25,6 +25,22 @@ public class ProductionOrder : AuditableEntity
     public string? CustomerReference { get; private set; }   // customer's own request/reference number
     public string? Notes { get; private set; }
     public ProductionPriority Priority { get; private set; } = ProductionPriority.Normal;
+
+    /// <summary>
+    /// Closed line / open line (spec section 16: الخط المقفول / على المفتوح).
+    /// Stored as real data so it can be filtered, reported, costed and
+    /// delivered against - never inferred from free text.
+    /// </summary>
+    public JobOrderType JobOrderType { get; private set; } = JobOrderType.ClosedLine;
+
+    /// <summary>
+    /// Set when this Job Order was created from an approved Formation Request
+    /// (spec section 31) - the chain Customer -&gt; Raw Material Message -&gt;
+    /// Formation Request -&gt; Job Order stays navigable in both directions.
+    /// </summary>
+    public Guid? FormationRequestId { get; private set; }
+    public Guid? FormationGroupId { get; private set; }
+
     public DateTime OrderDate { get; private set; }
     public ProductionOrderStatus Status { get; private set; } = ProductionOrderStatus.Draft;
 
@@ -48,7 +64,9 @@ public class ProductionOrder : AuditableEntity
         string orderNumber, Guid customerId, Guid itemId, DateTime orderDate, string createdBy,
         string? color = null, decimal? requestedQuantityKg = null, decimal? requestedQuantityMeter = null,
         string? rawOrigin = null, string? customerReference = null, string? notes = null,
-        ProductionPriority priority = ProductionPriority.Normal, Guid? reprocessingOfProductionOrderId = null)
+        ProductionPriority priority = ProductionPriority.Normal, Guid? reprocessingOfProductionOrderId = null,
+        JobOrderType jobOrderType = JobOrderType.ClosedLine,
+        Guid? formationRequestId = null, Guid? formationGroupId = null)
     {
         if (string.IsNullOrWhiteSpace(orderNumber))
             throw new ArgumentException("Order number is required.", nameof(orderNumber));
@@ -64,6 +82,9 @@ public class ProductionOrder : AuditableEntity
         CustomerReference = customerReference;
         Notes = notes;
         Priority = priority;
+        JobOrderType = jobOrderType;
+        FormationRequestId = formationRequestId;
+        FormationGroupId = formationGroupId;
         ReprocessingOfProductionOrderId = reprocessingOfProductionOrderId;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
@@ -107,6 +128,28 @@ public class ProductionOrder : AuditableEntity
             throw new DocumentLockedException("Production Order", OrderNumber);
 
         Status = ProductionOrderStatus.InProduction;
+    }
+
+    /// <summary>Links this order back to the approved Formation Request/group it fulfils (spec section 31).</summary>
+    public void LinkFormationRequest(Guid formationRequestId, Guid? formationGroupId, string modifiedBy)
+    {
+        FormationRequestId = formationRequestId;
+        FormationGroupId = formationGroupId;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Changes the line type while the order is still a draft (spec section 16) - never silently after production started.</summary>
+    public void SetJobOrderType(JobOrderType jobOrderType, string modifiedBy)
+    {
+        if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+        if (Status == ProductionOrderStatus.InProduction)
+            throw new DomainException("The line type of an order already in production cannot be changed.");
+
+        JobOrderType = jobOrderType;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
     }
 
     public void Complete()

@@ -27,9 +27,22 @@ public class Warehouse : AuditableEntity
     }
 }
 
+/// <summary>
+/// Warehouse kinds (spec section 15). The structure stays configurable -
+/// an admin can add as many warehouses of any kind as the factory needs;
+/// these are only the defaults that make the two ownership worlds explicit:
+/// RawMaterial / ProductionWip / ReadyGoods hold CUSTOMER-owned material,
+/// Materials / OperatingSupplies hold FACTORY-owned stock.
+/// </summary>
 public enum WarehouseKind
 {
     RawMaterial = 1,
     Materials = 2,
-    ReadyGoods = 3
+    ReadyGoods = 3,
+
+    /// <summary>Production / WIP (spec section 15) - customer-owned material currently being processed.</summary>
+    ProductionWip = 4,
+
+    /// <summary>Operating supplies: spare parts, winding supplies, packaging, maintenance and consumption items (spec section 27) - never charged to a Job Order automatically.</summary>
+    OperatingSupplies = 5
 }

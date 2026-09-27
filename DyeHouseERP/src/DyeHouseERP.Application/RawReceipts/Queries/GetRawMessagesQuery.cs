@@ -97,6 +97,7 @@ public class GetRawMessagesQueryHandler : IRequestHandler<GetRawMessagesQuery, L
             Notes = m.Notes,
             InspectionStatus = m.InspectionStatus,
             Status = m.Status,
+            HasRejections = m.HasRejections,
             Lines = m.Lines
                 .Where(l => !request.ItemId.HasValue || l.ItemId == request.ItemId)
                 .Select(l =>
@@ -112,6 +113,10 @@ public class GetRawMessagesQueryHandler : IRequestHandler<GetRawMessagesQuery, L
                         QuantityMeter = l.QuantityMeter,
                         PieceCount = l.PieceCount,
                         Notes = l.Notes,
+                        RejectedQuantityKg = l.RejectedQuantityKg,
+                        RejectedQuantityMeter = l.RejectedQuantityMeter,
+                        AcceptedQuantityKg = l.AcceptedQuantityKg,
+                        AcceptedQuantityMeter = l.AcceptedQuantityMeter,
                         RemainingKg = l.QuantityKg.HasValue ? bal.Kg : null,
                         RemainingMeter = l.QuantityMeter.HasValue ? bal.Meter : null
                     };

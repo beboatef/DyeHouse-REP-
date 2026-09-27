@@ -30,6 +30,12 @@ public static class DocumentSequenceSeeder
         (DocumentType.PreparationDilution,      "PRP", 6, true,  false),
         (DocumentType.ReadyGoodsTransfer,       "RGT", 6, true,  false),
         (DocumentType.ProductionRequest,        "REQ", 6, true,  false),
+        (DocumentType.FormationRequest,         "FRM", 6, true,  false),
+        (DocumentType.PurchaseOrder,            "PO",  6, true,  false),
+        (DocumentType.PurchaseReceipt,          "GRN", 6, true,  false),
+        (DocumentType.SupplierInvoice,          "SINV",6, true,  false),
+        (DocumentType.SupplierPayment,          "SPAY",6, true,  false),
+        (DocumentType.PayrollRun,               "PRL", 6, true,  false),
     };
 
     public static async Task SeedAsync(ApplicationDbContext context, CancellationToken cancellationToken = default)

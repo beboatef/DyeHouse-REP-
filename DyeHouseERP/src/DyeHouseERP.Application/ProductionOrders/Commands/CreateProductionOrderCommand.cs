@@ -13,7 +13,8 @@ public record CreateProductionOrderCommand(
     Guid CustomerId, Guid ItemId, DateTime OrderDate,
     string? Color, decimal? RequestedQuantityKg, decimal? RequestedQuantityMeter,
     string? RawOrigin, string? CustomerReference, string? Notes,
-    ProductionPriority Priority) : IRequest<ProductionOrderDto>;
+    ProductionPriority Priority,
+    JobOrderType JobOrderType = JobOrderType.ClosedLine) : IRequest<ProductionOrderDto>;
 
 public class CreateProductionOrderCommandValidator : AbstractValidator<CreateProductionOrderCommand>
 {
@@ -21,6 +22,7 @@ public class CreateProductionOrderCommandValidator : AbstractValidator<CreatePro
     {
         RuleFor(x => x.CustomerId).NotEmpty();
         RuleFor(x => x.ItemId).NotEmpty();
+        RuleFor(x => x.JobOrderType).IsInEnum();
         RuleFor(x => x)
             .Must(x => x.RequestedQuantityKg is > 0 || x.RequestedQuantityMeter is > 0)
             .WithMessage("Provide a requested quantity in KG and/or Meter.");
@@ -48,7 +50,8 @@ public class CreateProductionOrderCommandHandler : IRequestHandler<CreateProduct
         var order = new ProductionOrder(
             orderNumber, request.CustomerId, request.ItemId, request.OrderDate, _currentUser.UserName,
             request.Color, request.RequestedQuantityKg, request.RequestedQuantityMeter,
-            request.RawOrigin, request.CustomerReference, request.Notes, request.Priority);
+            request.RawOrigin, request.CustomerReference, request.Notes, request.Priority,
+            jobOrderType: request.JobOrderType);
 
         // Snapshot the currently-active stage route (spec section 19) onto this order.
         var activeStages = await _db.ProductionStageDefinitions

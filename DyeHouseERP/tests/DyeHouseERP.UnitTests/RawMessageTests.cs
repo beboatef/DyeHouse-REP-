@@ -43,11 +43,14 @@ public class RawMessageTests
     }
 
     [Fact]
-    public void IsAvailableForAllocation_IsFalse_UntilInspectionAccepted()
+    public void IsAvailableForAllocation_DoesNotRequireInspectionApproval()
     {
         var message = CreateMessage();
 
-        message.IsAvailableForAllocation.Should().BeFalse("a message pending inspection must not be allocatable (spec section 11)");
+        // Spec section 9: inspection is recorded information only - there is NO
+        // mandatory inspection approval step blocking a receipt from posting.
+        message.IsAvailableForAllocation.Should().BeTrue(
+            "a receipt must be allowed to post and be allocatable without inspection approval (spec section 9)");
 
         message.RecordInspection(InspectionStatus.Accepted, "inspector", null, DateTime.UtcNow);
 
@@ -55,13 +58,56 @@ public class RawMessageTests
     }
 
     [Fact]
-    public void IsAvailableForAllocation_IsFalse_WhenRejected()
+    public void RecordInspection_WithRejection_KeepsItTraceableButOutOfStock()
     {
         var message = CreateMessage();
+        var line = message.AddLine(Guid.NewGuid(), quantityKg: 1000m, quantityMeter: null, pieceCount: null, notes: null);
 
-        message.RecordInspection(InspectionStatus.Rejected, "inspector", "damaged", DateTime.UtcNow);
+        message.RecordInspection(InspectionStatus.AcceptedWithNotes, "inspector", "50 KG damaged", DateTime.UtcNow);
+        var recorded = message.RecordLineRejection(line.Id, rejectedKg: 50m, rejectedMeter: null);
 
-        message.IsAvailableForAllocation.Should().BeFalse("rejected raw material must never become available production stock (spec section 11)");
+        recorded.Kg.Should().Be(50m, "the delta is what the caller posts to the ledger");
+        message.HasRejections.Should().BeTrue();
+        line.RejectedQuantityKg.Should().Be(50m);
+        line.AcceptedQuantityKg.Should().Be(950m, "rejected material must never count as accepted stock (spec section 9)");
+    }
+
+    [Fact]
+    public void RecordLineRejection_RejectingMoreThanReceived_Throws()
+    {
+        var message = CreateMessage();
+        var line = message.AddLine(Guid.NewGuid(), quantityKg: 100m, quantityMeter: null, pieceCount: null, notes: null);
+
+        var act = () => message.RecordLineRejection(line.Id, rejectedKg: 150m, rejectedMeter: null);
+
+        act.Should().Throw<DomainException>("a rejected quantity can never exceed what was received (spec section 55)");
+    }
+
+    [Fact]
+    public void RecordLineRejection_Accumulates_AndRefusesAUnitThatWasNeverReceived()
+    {
+        var message = CreateMessage();
+        var line = message.AddLine(Guid.NewGuid(), quantityKg: 100m, quantityMeter: null, pieceCount: null, notes: null);
+
+        message.RecordLineRejection(line.Id, rejectedKg: 10m, rejectedMeter: null);
+        var second = message.RecordLineRejection(line.Id, rejectedKg: 5m, rejectedMeter: null);
+
+        second.Kg.Should().Be(5m);
+        line.RejectedQuantityKg.Should().Be(15m);
+
+        var act = () => message.RecordLineRejection(line.Id, rejectedKg: null, rejectedMeter: 5m);
+        act.Should().Throw<DomainException>("no Meter quantity was received on this line, so none can be rejected");
+    }
+
+    [Fact]
+    public void RecordLineRejection_ForALineFromAnotherMessage_Throws()
+    {
+        var message = CreateMessage();
+        message.AddLine(Guid.NewGuid(), quantityKg: 100m, quantityMeter: null, pieceCount: null, notes: null);
+
+        var act = () => message.RecordLineRejection(Guid.NewGuid(), rejectedKg: 1m, rejectedMeter: null);
+
+        act.Should().Throw<DomainException>();
     }
 }
 

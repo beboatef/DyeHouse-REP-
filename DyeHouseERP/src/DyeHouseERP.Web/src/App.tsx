@@ -4,8 +4,10 @@ import RequireAuth from "@/components/RequireAuth";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import CustomersPage from "@/pages/CustomersPage";
+import SuppliersPage from "@/pages/SuppliersPage";
 import ItemsPage from "@/pages/ItemsPage";
 import WarehousesPage from "@/pages/WarehousesPage";
+import WarehouseHubPage from "@/pages/WarehouseHubPage";
 import RawMessagesPage from "@/pages/RawMessagesPage";
 import ProductionStagesPage from "@/pages/ProductionStagesPage";
 import ProductionOrdersPage from "@/pages/ProductionOrdersPage";
@@ -19,6 +21,10 @@ import ReadyGoodsPage from "@/pages/ReadyGoodsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import TreasuryPage from "@/pages/TreasuryPage";
+import ChecksPage from "@/pages/ChecksPage";
+import FormationRequestsPage from "@/pages/FormationRequestsPage";
+import FormationRequestDetailPage from "@/pages/FormationRequestDetailPage";
+import FormationSpecificationsPage from "@/pages/FormationSpecificationsPage";
 import CustomerPortalPage from "@/pages/CustomerPortalPage";
 import ProductionFloorPage from "@/pages/ProductionFloorPage";
 import UsersPage from "@/pages/UsersPage";
@@ -32,6 +38,8 @@ import RawMessagePrintPage from "@/pages/print/RawMessagePrintPage";
 import ScanViewPage from "@/pages/scan/ScanViewPage";
 import ReportBuilderPage from "@/pages/ReportBuilderPage";
 import PeriodClosingPage from "@/pages/PeriodClosingPage";
+import PurchasesPage from "@/pages/PurchasesPage";
+import PayrollPage from "@/pages/PayrollPage";
 
 export default function App() {
   return (
@@ -41,8 +49,12 @@ export default function App() {
         <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/items" element={<ItemsPage />} />
         <Route path="/warehouses" element={<WarehousesPage />} />
+        {/* One Warehouse module (spec section 14). The individual routes below stay
+            working inside its tabs and for existing deep links. */}
+        <Route path="/warehouse" element={<WarehouseHubPage />} />
         <Route path="/raw-messages" element={<RawMessagesPage />} />
         <Route path="/raw-external-releases" element={<RawExternalReleasesPage />} />
         <Route path="/customer-transfers" element={<CustomerTransfersPage />} />
@@ -53,6 +65,12 @@ export default function App() {
         <Route path="/deliveries" element={<DeliveriesPage />} />
         <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/treasury" element={<TreasuryPage />} />
+        <Route path="/checks" element={<ChecksPage />} />
+        <Route path="/formation-requests" element={<FormationRequestsPage />} />
+        <Route path="/formation-requests/:id" element={<FormationRequestDetailPage />} />
+        <Route path="/formation-specifications" element={<FormationSpecificationsPage />} />
+        <Route path="/purchases" element={<PurchasesPage />} />
+        <Route path="/payroll" element={<PayrollPage />} />
         <Route path="/customer-portal" element={<CustomerPortalPage />} />
         <Route path="/production-floor" element={<ProductionFloorPage />} />
         <Route path="/production-stages" element={<ProductionStagesPage />} />

@@ -12,6 +12,12 @@ namespace DyeHouseERP.Application.Common.Interfaces;
 public interface IApplicationDbContext
 {
     DbSet<Customer> Customers { get; }
+    DbSet<Supplier> Suppliers { get; }
+    DbSet<Check> Checks { get; }
+    DbSet<CheckMovement> CheckMovements { get; }
+    DbSet<FormationRequest> FormationRequests { get; }
+    DbSet<FormationGroup> FormationGroups { get; }
+    DbSet<FormationSpecTemplate> FormationSpecTemplates { get; }
     DbSet<Item> Items { get; }
     DbSet<Warehouse> Warehouses { get; }
     DbSet<RawMessage> RawMessages { get; }
@@ -51,6 +57,22 @@ public interface IApplicationDbContext
     DbSet<CompanySettings> CompanySettings { get; }
     DbSet<PeriodClose> PeriodCloses { get; }
     DbSet<SavedReportTemplate> SavedReportTemplates { get; }
+
+    // Purchases (spec section 35)
+    DbSet<PurchaseOrder> PurchaseOrders { get; }
+    DbSet<PurchaseOrderLine> PurchaseOrderLines { get; }
+    DbSet<PurchaseReceipt> PurchaseReceipts { get; }
+    DbSet<PurchaseReceiptLine> PurchaseReceiptLines { get; }
+    DbSet<SupplierInvoice> SupplierInvoices { get; }
+    DbSet<SupplierInvoiceLine> SupplierInvoiceLines { get; }
+    DbSet<SupplierPayment> SupplierPayments { get; }
+    DbSet<SupplierLedgerEntry> SupplierLedgerEntries { get; }
+
+    // Payroll & wages (spec section 36)
+    DbSet<Department> Departments { get; }
+    DbSet<Employee> Employees { get; }
+    DbSet<PayrollRun> PayrollRuns { get; }
+    DbSet<PayrollRunLine> PayrollRunLines { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

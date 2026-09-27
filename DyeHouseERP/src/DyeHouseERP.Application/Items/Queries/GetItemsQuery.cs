@@ -5,7 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.Items.Queries;
 
-public record GetItemsQuery(bool? ActiveOnly = null, string? Search = null) : IRequest<List<ItemDto>>;
+/// <summary>
+/// Item master lookup (spec section 6). Search covers code, both names and the
+/// category so the same box works in Arabic or English.
+/// </summary>
+public record GetItemsQuery(bool? ActiveOnly = null, string? Search = null, string? Category = null)
+    : IRequest<List<ItemDto>>;
 
 public class GetItemsQueryHandler : IRequestHandler<GetItemsQuery, List<ItemDto>>
 {
@@ -19,12 +24,33 @@ public class GetItemsQueryHandler : IRequestHandler<GetItemsQuery, List<ItemDto>
         if (request.ActiveOnly == true)
             query = query.Where(i => i.IsActive);
 
+        if (!string.IsNullOrWhiteSpace(request.Category))
+            query = query.Where(i => i.Category == request.Category);
+
         if (!string.IsNullOrWhiteSpace(request.Search))
-            query = query.Where(i => i.Code.Contains(request.Search) || i.Name.Contains(request.Search));
+        {
+            var term = request.Search.Trim();
+            query = query.Where(i =>
+                i.Code.Contains(term) ||
+                i.Name.Contains(term) ||
+                i.NameAr.Contains(term) ||
+                i.NameEn.Contains(term) ||
+                (i.Category != null && i.Category.Contains(term)));
+        }
 
         return await query
             .OrderBy(i => i.Code)
-            .Select(i => new ItemDto { Id = i.Id, Code = i.Code, Name = i.Name, BaseUnit = i.BaseUnit, IsActive = i.IsActive })
+            .Select(i => new ItemDto
+            {
+                Id = i.Id,
+                Code = i.Code,
+                Name = i.Name,
+                NameAr = i.NameAr,
+                NameEn = i.NameEn,
+                Category = i.Category,
+                BaseUnit = i.BaseUnit,
+                IsActive = i.IsActive
+            })
             .ToListAsync(cancellationToken);
     }
 }

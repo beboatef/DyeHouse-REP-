@@ -57,6 +57,61 @@ public static class Permissions
     public const string TreasuryView = "treasury.view";
     public const string TreasuryCreate = "treasury.create";
 
+    // ---- Formation Request / طلب تشكيل (spec sections 28-33) ----
+    // Granular by action, not just by module: seeing a request, editing a
+    // draft, approving it and converting it to a Job Order are four separate
+    // rights, so a production planner can prepare requests without being able
+    // to approve their own work.
+    public const string FormationView = "formation.view";
+    public const string FormationCreate = "formation.create";
+    public const string FormationEdit = "formation.edit";
+    public const string FormationSubmit = "formation.submit";
+    public const string FormationApprove = "formation.approve";
+    public const string FormationReject = "formation.reject";
+    public const string FormationCancel = "formation.cancel";
+    public const string FormationConvertToJobOrder = "formation.convert";
+    public const string FormationManageGroups = "formation.manage_groups";
+    public const string FormationManageSpecifications = "formation.manage_specifications";
+    public const string FormationViewTraceability = "formation.traceability";
+    public const string FormationPrint = "formation.print";
+    public const string FormationExport = "formation.export";
+
+    // ---- Checks register (spec sections 37-40) ----
+    public const string ChecksView = "checks.view";
+    public const string ChecksCreate = "checks.create";
+    public const string ChecksEdit = "checks.edit";
+    public const string ChecksEndorse = "checks.endorse";
+    public const string ChecksDeposit = "checks.deposit";
+    public const string ChecksClear = "checks.clear";
+    public const string ChecksBounce = "checks.bounce";
+    public const string ChecksCancel = "checks.cancel";
+    public const string ChecksExport = "checks.export";
+
+    // ---- Suppliers master (shared by Checks now, Purchases next) ----
+    public const string SuppliersView = "suppliers.view";
+    public const string SuppliersCreate = "suppliers.create";
+    public const string SuppliersEdit = "suppliers.edit";
+
+    // ---- Purchases: requests, orders, receiving, supplier invoices, payments (spec section 35) ----
+    public const string PurchasesView = "purchases.view";
+    public const string PurchasesCreate = "purchases.create";
+    public const string PurchasesEdit = "purchases.edit";
+    public const string PurchasesSubmit = "purchases.submit";
+    public const string PurchasesApprove = "purchases.approve";
+    public const string PurchasesReceive = "purchases.receive";
+    public const string PurchasesCancel = "purchases.cancel";
+    public const string PurchasesInvoice = "purchases.invoice";
+    public const string PurchasesPay = "purchases.pay";
+    public const string PurchasesExport = "purchases.export";
+
+    // ---- Payroll & wages: departments, employees, monthly runs (spec section 36) ----
+    public const string PayrollView = "payroll.view";
+    public const string PayrollManageEmployees = "payroll.employees";
+    public const string PayrollCreate = "payroll.create";
+    public const string PayrollApprove = "payroll.approve";
+    public const string PayrollPost = "payroll.post";
+    public const string PayrollCancel = "payroll.cancel";
+
     public const string ReportsView = "reports.view";
     public const string ReportsExport = "reports.export";
 
@@ -77,6 +132,14 @@ public static class Permissions
         ReadyView, ReadyTransfer, ReadyDeliver,
         InvoicesView, InvoicesCreate, InvoicesIssue, InvoicesCancel,
         TreasuryView, TreasuryCreate,
+        FormationView, FormationCreate, FormationEdit, FormationSubmit, FormationApprove,
+        FormationReject, FormationCancel, FormationConvertToJobOrder, FormationManageGroups,
+        FormationManageSpecifications, FormationViewTraceability, FormationPrint, FormationExport,
+        ChecksView, ChecksCreate, ChecksEdit, ChecksEndorse, ChecksDeposit, ChecksClear, ChecksBounce, ChecksCancel, ChecksExport,
+        SuppliersView, SuppliersCreate, SuppliersEdit,
+        PurchasesView, PurchasesCreate, PurchasesEdit, PurchasesSubmit, PurchasesApprove,
+        PurchasesReceive, PurchasesCancel, PurchasesInvoice, PurchasesPay, PurchasesExport,
+        PayrollView, PayrollManageEmployees, PayrollCreate, PayrollApprove, PayrollPost, PayrollCancel,
         ReportsView, ReportsExport,
         UsersManage, RolesManage, SettingsManage, AuditView
     };

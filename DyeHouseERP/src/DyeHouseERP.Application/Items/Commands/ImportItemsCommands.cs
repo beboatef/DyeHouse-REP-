@@ -7,102 +7,220 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.Items.Commands;
 
-/// <summary>Excel import for Items (spec section 38). Expected columns: Code, Name, BaseUnit (KG or Meter).</summary>
-public record PreviewItemImportCommand(byte[] FileBytes) : IRequest<ItemImportPreviewDto>;
+/// <summary>
+/// Excel import for the Item master, following the workflow spec section 7
+/// requires: Download template -&gt; Upload -&gt; Preview -&gt; Validate -&gt; Show errors
+/// -&gt; Confirm -&gt; Create items -&gt; Import result.
+///
+/// Expected columns (case-insensitive): Code, NameAr, NameEn, Category, BaseUnit.
+///   - BaseUnit must be exactly KG or Meter (no conversion, no "Top/توب").
+///   - Duplicate codes inside the file are rejected.
+///   - Existing item codes are NEVER overwritten automatically: they are
+///     reported as existing, and are only updated by the execute step when the
+///     caller passed an explicit allowExistingUpdate flag (which the API only
+///     exposes behind the items.edit permission - see UpdateExistingAllowed).
+///
+/// This command is the Preview step: it validates every row and writes nothing.
+/// </summary>
+public record PreviewItemImportCommand(byte[] FileBytes, bool AllowExistingUpdate = false) : IRequest<ItemImportPreviewDto>;
 
 public class PreviewItemImportCommandHandler : IRequestHandler<PreviewItemImportCommand, ItemImportPreviewDto>
 {
     private readonly IApplicationDbContext _db;
-    private readonly IExcelReaderService _excelReader;
-    public PreviewItemImportCommandHandler(IApplicationDbContext db, IExcelReaderService excelReader) { _db = db; _excelReader = excelReader; }
+    private readonly IExcelImportReader _reader;
+    public PreviewItemImportCommandHandler(IApplicationDbContext db, IExcelImportReader reader) { _db = db; _reader = reader; }
 
     public async Task<ItemImportPreviewDto> Handle(PreviewItemImportCommand request, CancellationToken cancellationToken)
     {
-        var rows = _excelReader.ReadRows(request.FileBytes);
-        var existingCodes = (await _db.Items.AsNoTracking().Select(i => i.Code).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var results = ItemImportValidator.Validate(rows, existingCodes);
+        var rows = await ItemImportValidator.ValidateAsync(
+            request.FileBytes, _db, _reader, request.AllowExistingUpdate, cancellationToken);
 
         return new ItemImportPreviewDto
         {
-            TotalRows = results.Count, ValidRows = results.Count(r => r.IsValid),
-            InvalidRows = results.Count(r => !r.IsValid), Rows = results
+            TotalRows = rows.Count,
+            ValidRows = rows.Count(r => r.IsValid),
+            InvalidRows = rows.Count(r => !r.IsValid),
+            NewRows = rows.Count(r => !r.IsExisting),
+            ExistingRows = rows.Count(r => r.IsExisting),
+            UpdateExistingAllowed = request.AllowExistingUpdate,
+            Rows = rows
         };
     }
 }
 
-public record ExecuteItemImportCommand(byte[] FileBytes) : IRequest<ItemImportExecuteResultDto>;
+/// <summary>
+/// The Confirm -&gt; Create/Update -&gt; Result step. Re-validates from scratch (a
+/// stale client-side preview is never trusted) and reports every row's outcome.
+/// </summary>
+public record ExecuteItemImportCommand(byte[] FileBytes, bool AllowExistingUpdate = false) : IRequest<ItemImportExecuteResultDto>;
 
 public class ExecuteItemImportCommandHandler : IRequestHandler<ExecuteItemImportCommand, ItemImportExecuteResultDto>
 {
     private readonly IApplicationDbContext _db;
-    private readonly IExcelReaderService _excelReader;
+    private readonly IExcelImportReader _reader;
     private readonly ICurrentUserService _currentUser;
 
-    public ExecuteItemImportCommandHandler(IApplicationDbContext db, IExcelReaderService excelReader, ICurrentUserService currentUser)
+    public ExecuteItemImportCommandHandler(IApplicationDbContext db, IExcelImportReader reader, ICurrentUserService currentUser)
     {
-        _db = db; _excelReader = excelReader; _currentUser = currentUser;
+        _db = db; _reader = reader; _currentUser = currentUser;
     }
 
     public async Task<ItemImportExecuteResultDto> Handle(ExecuteItemImportCommand request, CancellationToken cancellationToken)
     {
-        var rows = _excelReader.ReadRows(request.FileBytes);
-        var existingCodes = (await _db.Items.AsNoTracking().Select(i => i.Code).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var results = ItemImportValidator.Validate(rows, existingCodes);
+        var rows = await ItemImportValidator.ValidateAsync(
+            request.FileBytes, _db, _reader, request.AllowExistingUpdate, cancellationToken);
 
-        var imported = 0;
+        var existingItems = await _db.Items
+            .Where(i => rows.Select(r => r.Code).Contains(i.Code))
+            .ToListAsync(cancellationToken);
+
+        var created = 0;
+        var updated = 0;
         var errors = new List<string>();
-
-        foreach (var row in results.Where(r => r.IsValid))
-        {
-            var unit = Enum.Parse<UnitOfMeasure>(row.BaseUnit, ignoreCase: true);
-            _db.Items.Add(new Item(row.Code, row.Name, unit, _currentUser.UserName));
-            imported++;
-        }
-        foreach (var row in results.Where(r => !r.IsValid))
-            errors.Add($"Row {row.RowNumber}: {string.Join("; ", row.Errors)}");
-
-        if (imported > 0) await _db.SaveChangesAsync(cancellationToken);
-
-        return new ItemImportExecuteResultDto { Imported = imported, Skipped = results.Count - imported, Errors = errors };
-    }
-}
-
-internal static class ItemImportValidator
-{
-    public static List<ItemImportRowResult> Validate(List<Dictionary<string, string>> rows, HashSet<string> existingCodes)
-    {
-        var results = new List<ItemImportRowResult>();
-        var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var rowNumber = 1;
 
         foreach (var row in rows)
         {
-            rowNumber++;
-            var code = GetValue(row, "Code");
-            var name = GetValue(row, "Name");
-            var baseUnit = GetValue(row, "BaseUnit");
-            var errors = new List<string>();
+            if (!row.IsValid)
+            {
+                errors.Add($"Row {row.RowNumber} ({row.Code}): {string.Join("; ", row.Errors)}");
+                continue;
+            }
 
-            if (string.IsNullOrWhiteSpace(code)) errors.Add("Code is required.");
-            if (string.IsNullOrWhiteSpace(name)) errors.Add("Name is required.");
-            if (string.IsNullOrWhiteSpace(baseUnit)) errors.Add("BaseUnit is required (KG or Meter).");
-            else if (!Enum.TryParse<UnitOfMeasure>(baseUnit, ignoreCase: true, out _)) errors.Add($"BaseUnit '{baseUnit}' must be KG or Meter.");
+            var unit = Enum.Parse<UnitOfMeasure>(row.BaseUnit, ignoreCase: true);
+            var existing = existingItems.FirstOrDefault(i => string.Equals(i.Code, row.Code, StringComparison.OrdinalIgnoreCase));
+
+            if (existing is null)
+            {
+                _db.Items.Add(new Item(row.Code, row.Name, unit, _currentUser.UserName,
+                    row.NameAr, row.NameEn, row.Category));
+                row.Action = "Create";
+                created++;
+                continue;
+            }
+
+            if (!request.AllowExistingUpdate)
+            {
+                // Existing items are never silently overwritten (spec section 7).
+                row.IsValid = false;
+                row.Action = "Skip";
+                row.Errors.Add("An item with this code already exists. Updating existing items requires the items.edit permission.");
+                errors.Add($"Row {row.RowNumber} ({row.Code}): already exists and was not updated.");
+                continue;
+            }
+
+            existing.SetNames(row.NameAr, row.NameEn);
+            existing.SetCategory(row.Category);
+            row.Action = "Update";
+            if (existing.BaseUnit != unit)
+                row.Errors.Add($"Base unit was left unchanged ({existing.BaseUnit}); change it on the item itself so historical quantities are never reinterpreted.");
+            updated++;
+        }
+
+        if (created > 0 || updated > 0)
+            await _db.SaveChangesAsync(cancellationToken);
+
+        return new ItemImportExecuteResultDto
+        {
+            Created = created,
+            Updated = updated,
+            Skipped = rows.Count(r => !r.IsValid),
+            Errors = errors,
+            Rows = rows
+        };
+    }
+}
+
+/// <summary>Shared row-level validation so Preview and Execute can never disagree about what is valid.</summary>
+internal static class ItemImportValidator
+{
+    public static async Task<List<ItemImportRowResult>> ValidateAsync(
+        byte[] fileBytes, IApplicationDbContext db, IExcelImportReader reader,
+        bool allowExistingUpdate, CancellationToken cancellationToken)
+    {
+        using var stream = new MemoryStream(fileBytes);
+        var rawRows = reader.ReadRows(stream, out var headers);
+
+        var existingCodes = (await db.Items.AsNoTracking().Select(i => i.Code).ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var results = new List<ItemImportRowResult>();
+        var rowNumber = 1; // row 1 is the header row, data starts at 2
+
+        foreach (var raw in rawRows)
+        {
+            rowNumber++;
+            var code = Header(raw, headers, "Code");
+            var nameAr = Header(raw, headers, "NameAr", "Name Arabic", "الاسم بالعربية");
+            var nameEn = Header(raw, headers, "NameEn", "Name English", "الاسم بالإنجليزية", "Name");
+            var category = Header(raw, headers, "Category", "التصنيف");
+            var baseUnit = Header(raw, headers, "BaseUnit", "Base Unit", "Unit", "وحدة القياس");
+
+            var result = new ItemImportRowResult
+            {
+                RowNumber = rowNumber,
+                Code = code ?? string.Empty,
+                NameAr = nameAr ?? string.Empty,
+                NameEn = nameEn ?? string.Empty,
+                Name = nameEn ?? nameAr ?? string.Empty,
+                Category = category,
+                BaseUnit = baseUnit ?? string.Empty
+            };
+
+            if (string.IsNullOrWhiteSpace(code))
+                result.Errors.Add("Code is required.");
+            if (string.IsNullOrWhiteSpace(nameAr) && string.IsNullOrWhiteSpace(nameEn))
+                result.Errors.Add("At least one item name is required (NameAr or NameEn).");
+            if (string.IsNullOrWhiteSpace(baseUnit))
+                result.Errors.Add("BaseUnit is required (KG or Meter).");
+            else if (!Enum.TryParse<UnitOfMeasure>(baseUnit, ignoreCase: true, out _))
+                result.Errors.Add($"BaseUnit '{baseUnit}' is not valid - it must be KG or Meter. KG and Meter are never converted into each other.");
 
             if (!string.IsNullOrWhiteSpace(code))
             {
-                if (existingCodes.Contains(code)) errors.Add($"Code '{code}' already exists.");
-                if (!seenInFile.Add(code)) errors.Add($"Code '{code}' is duplicated within the file.");
+                if (!seenInFile.Add(code))
+                    result.Errors.Add($"Code '{code}' is duplicated within the file.");
+
+                result.IsExisting = existingCodes.Contains(code);
+                if (result.IsExisting)
+                {
+                    if (!allowExistingUpdate)
+                        result.Errors.Add($"Code '{code}' already exists. Existing items are not overwritten automatically.");
+                    else
+                        result.Action = "Update";
+                }
             }
 
-            results.Add(new ItemImportRowResult { RowNumber = rowNumber, Code = code, Name = name, BaseUnit = baseUnit, IsValid = errors.Count == 0, Errors = errors });
+            result.IsValid = result.Errors.Count == 0;
+            if (!result.IsValid) result.Action = "Skip";
+
+            results.Add(result);
         }
 
         return results;
     }
 
-    private static string GetValue(Dictionary<string, string> row, string key)
+    private static string? Header(Dictionary<string, string?> row, List<string> headers, params string[] candidates)
     {
-        var match = row.Keys.FirstOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
-        return match is null ? string.Empty : row[match];
+        foreach (var candidate in candidates)
+        {
+            var key = headers.FirstOrDefault(h => string.Equals(h, candidate, StringComparison.OrdinalIgnoreCase));
+            if (key is null) continue;
+            var value = row.GetValueOrDefault(key)?.Trim();
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return null;
     }
+}
+
+/// <summary>Column headers of the item import template (spec section 7 step 1: "Download template").</summary>
+public static class ItemImportTemplate
+{
+    public static readonly string[] Headers = { "Code", "NameAr", "NameEn", "Category", "BaseUnit" };
+
+    public static List<object?[]> SampleRows() => new()
+    {
+        new object?[] { "ITM-001", "قطن 100", "Cotton 100", "Fabric", "KG" },
+        new object?[] { "ITM-002", "قماش سادة", "Plain Fabric", "Fabric", "Meter" }
+    };
 }

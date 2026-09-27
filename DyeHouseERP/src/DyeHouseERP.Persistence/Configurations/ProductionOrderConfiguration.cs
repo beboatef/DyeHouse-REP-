@@ -28,10 +28,16 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
         builder.Property(o => o.Priority).HasConversion<string>().HasMaxLength(20);
         builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
 
+        // Closed line / open line (الخط المقفول / على المفتوح) is real, indexed data -
+        // it is filtered, reported, costed and delivered against (spec section 16).
+        builder.Property(o => o.JobOrderType).HasConversion<string>().HasMaxLength(20).IsRequired();
+
         builder.HasIndex(o => o.CustomerId);
         builder.HasIndex(o => o.ItemId);
         builder.HasIndex(o => o.Status);
+        builder.HasIndex(o => o.JobOrderType);
         builder.HasIndex(o => o.ReprocessingOfProductionOrderId);
+        builder.HasIndex(o => o.FormationRequestId);
 
         builder.Metadata.FindNavigation(nameof(ProductionOrder.StageExecutions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);

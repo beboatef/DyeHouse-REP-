@@ -1,20 +1,22 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CustomersApi, ItemsApi, ProductionOrdersApi, ProductionPriority } from "@/api/client";
+import { CustomersApi, ItemsApi, JobOrderType, ProductionOrdersApi, ProductionPriority } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { useI18n } from "@/i18n";
 
-const statusLabel: Record<string, string> = {
-  Draft: "مسودة", RawAllocated: "تم تخصيص الخام", InProduction: "قيد التشغيل", Completed: "مكتمل", Cancelled: "ملغي"
-};
 const statusTone: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> = {
   Draft: "gray", RawAllocated: "blue", InProduction: "yellow", Completed: "green", Cancelled: "red"
 };
 const priorityLabel: Record<string, string> = { Low: "منخفضة", Normal: "عادية", High: "عالية", Urgent: "عاجلة" };
 
 export default function ProductionOrdersPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  // Closed line / open line (spec section 16) - a real, filterable property of every Job Order.
+  const [jobOrderType, setJobOrderType] = useState<JobOrderType>("ClosedLine");
+  const [typeFilter, setTypeFilter] = useState<JobOrderType | "">("");
   const [customerId, setCustomerId] = useState("");
   const [itemId, setItemId] = useState("");
   const [color, setColor] = useState("");
@@ -28,12 +30,15 @@ export default function ProductionOrdersPage() {
 
   const { data: customers } = useQuery({ queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true }) });
   const { data: items } = useQuery({ queryKey: ["items", "active"], queryFn: () => ItemsApi.list({ activeOnly: true }) });
-  const { data: orders, isLoading } = useQuery({ queryKey: ["production-orders"], queryFn: () => ProductionOrdersApi.list() });
+  const { data: orders, isLoading } = useQuery({
+    queryKey: ["production-orders", typeFilter],
+    queryFn: () => ProductionOrdersApi.list({ jobOrderType: typeFilter || undefined })
+  });
 
   const createMutation = useMutation({
     mutationFn: () =>
       ProductionOrdersApi.create({
-        customerId, itemId, orderDate, priority,
+        customerId, itemId, orderDate, priority, jobOrderType,
         color: color || undefined,
         requestedQuantityKg: qtyKg ? Number(qtyKg) : undefined,
         requestedQuantityMeter: qtyMeter ? Number(qtyMeter) : undefined,
@@ -52,10 +57,18 @@ export default function ProductionOrdersPage() {
   return (
     <>
       <PageHeader
-        title="أوامر التشغيل"
-        subtitle="المرجع المركزي لدورة الإنتاج بالكامل - من تخصيص الخام حتى اكتمال جميع المراحل"
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ أمر تشغيل جديد"}</Button>}
+        title={t("nav.jobOrders")}
+        subtitle={t("jo.subtitle")}
+        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("fr.new")}</Button>}
       />
+
+      <Card className="p-4 mb-4">
+        <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")} className="max-w-xs">
+          <option value="">{t("common.all")} - {t("jo.type")}</option>
+          <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
+          <option value="OpenLine">{t("jo.type.OpenLine")}</option>
+        </Select>
+      </Card>
 
       {showForm && (
         <Card className="p-5 mb-6">
@@ -92,6 +105,13 @@ export default function ProductionOrdersPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">الكمية المطلوبة (متر)</label>
                 <Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t("jo.type")}</label>
+                <Select value={jobOrderType} onChange={(e) => setJobOrderType(e.target.value as JobOrderType)}>
+                  <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
+                  <option value="OpenLine">{t("jo.type.OpenLine")}</option>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">الأولوية</label>
@@ -140,12 +160,20 @@ export default function ProductionOrdersPage() {
                   {o.color && <><span className="text-gray-400 mx-2">·</span><span className="text-sm text-gray-600">{o.color}</span></>}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge>
                   <Badge tone="gray">{priorityLabel[o.priority]}</Badge>
-                  <Badge tone={statusTone[o.status]}>{statusLabel[o.status]}</Badge>
+                  <Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge>
                 </div>
               </div>
               <div className="mt-2 text-xs text-gray-400">
                 {o.stageExecutions.filter((s) => s.status === "Completed").length} / {o.stageExecutions.length} مراحل مكتملة
+                {o.formationRequestNumber && (
+                  <>
+                    {" · "}
+                    {t("fr.number")}: <span className="ltr-nums font-medium">{o.formationRequestNumber}</span>
+                    {o.formationGroupNumber !== null && <> · {t("fr.group")} #{o.formationGroupNumber}</>}
+                  </>
+                )}
               </div>
             </Card>
           </Link>

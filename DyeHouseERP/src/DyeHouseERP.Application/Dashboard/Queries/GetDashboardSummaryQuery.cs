@@ -42,6 +42,28 @@ public class GetDashboardSummaryQueryHandler : IRequestHandler<GetDashboardSumma
         var openInvoicesTotal = openInvoices.Sum(i =>
             openInvoiceLines.Where(l => l.InvoiceId == i.Id).Sum(l => l.Quantity * l.ProcessingPrice) - i.Discount + i.Tax);
 
+        var pendingFormationRequests = await _db.FormationRequests.AsNoTracking()
+            .CountAsync(r => r.Status == FormationRequestStatus.Submitted, cancellationToken);
+
+        var formationRequestsInProgress = await _db.FormationRequests.AsNoTracking()
+            .CountAsync(r => r.Status == FormationRequestStatus.InProgress ||
+                r.Status == FormationRequestStatus.PartiallyCompleted, cancellationToken);
+
+        var activeSuppliers = await _db.Suppliers.AsNoTracking().CountAsync(s => s.IsActive, cancellationToken);
+
+        var today = DateTime.UtcNow.Date;
+        var dueSoonCutoff = today.AddDays(7);
+        var openChecks = await _db.Checks.AsNoTracking()
+            .Where(c => c.Status != CheckStatus.Cleared && c.Status != CheckStatus.Cancelled)
+            .Select(c => new { c.Amount, c.DueDate, c.Status })
+            .ToListAsync(cancellationToken);
+
+        var checksInHand = openChecks
+            .Where(c => c.Status is CheckStatus.InHand or CheckStatus.Received)
+            .Sum(c => c.Amount);
+        var checksDueSoon = openChecks.Count(c => c.DueDate >= today && c.DueDate <= dueSoonCutoff);
+        var overdueChecks = openChecks.Count(c => c.DueDate < today);
+
         var statusCounts = await _db.ProductionOrders.AsNoTracking()
             .GroupBy(o => o.Status)
             .Select(g => new StatusCountDto { Status = g.Key.ToString(), Count = g.Count() })
@@ -68,6 +90,12 @@ public class GetDashboardSummaryQueryHandler : IRequestHandler<GetDashboardSumma
             ReadyGoodsBalanceKg = readyGoodsKg,
             OpenInvoicesCount = openInvoices.Count,
             OpenInvoicesTotal = openInvoicesTotal,
+            PendingFormationRequests = pendingFormationRequests,
+            FormationRequestsInProgress = formationRequestsInProgress,
+            ChecksInHandAmount = checksInHand,
+            ChecksDueSoonCount = checksDueSoon,
+            OverdueChecksCount = overdueChecks,
+            ActiveSuppliers = activeSuppliers,
             ProductionOrdersByStatus = statusCounts,
             RawReceiptsLast14Days = dailyReceipts
         };

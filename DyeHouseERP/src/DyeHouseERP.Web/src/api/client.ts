@@ -38,6 +38,9 @@ export interface Item {
   id: string;
   code: string;
   name: string;
+  nameAr: string;
+  nameEn: string;
+  category: string | null;
   baseUnit: UnitOfMeasure;
   isActive: boolean;
 }
@@ -46,7 +49,7 @@ export interface Warehouse {
   id: string;
   code: string;
   name: string;
-  kind: "RawMaterial" | "Materials" | "ReadyGoods";
+  kind: "RawMaterial" | "ProductionWip" | "ReadyGoods" | "Materials" | "OperatingSupplies";
   isActive: boolean;
 }
 
@@ -59,6 +62,12 @@ export interface RawMessageLine {
   quantityMeter: number | null;
   pieceCount: number | null;
   notes: string | null;
+  /** Rejected at receiving inspection, if any (spec sections 8-9). Inspection is recorded info, never an approval gate. */
+  rejectedQuantityKg: number | null;
+  rejectedQuantityMeter: number | null;
+  /** Received minus rejected - what stays the customer's allocatable stock. */
+  acceptedQuantityKg: number | null;
+  acceptedQuantityMeter: number | null;
   remainingKg: number | null;
   remainingMeter: number | null;
 }
@@ -76,6 +85,7 @@ export interface RawMessage {
   notes: string | null;
   inspectionStatus: "PendingInspection" | "Accepted" | "AcceptedWithNotes" | "Rejected";
   status: "Open" | "PartiallyUsed" | "Depleted" | "Closed";
+  hasRejections: boolean;
   lines: RawMessageLine[];
 }
 
@@ -87,10 +97,86 @@ export const CustomersApi = {
 };
 
 export const ItemsApi = {
-  list: (params?: { activeOnly?: boolean; search?: string }) =>
+  list: (params?: { activeOnly?: boolean; search?: string; category?: string }) =>
     api.get<Item[]>("/items", { params }).then((r) => r.data),
-  create: (body: { code: string; name: string; baseUnit: UnitOfMeasure }) =>
-    api.post<Item>("/items", body).then((r) => r.data)
+  create: (body: {
+    code: string;
+    name: string;
+    baseUnit: UnitOfMeasure;
+    nameAr?: string;
+    nameEn?: string;
+    category?: string;
+  }) => api.post<Item>("/items", body).then((r) => r.data),
+  update: (id: string, body: {
+    nameAr?: string;
+    nameEn?: string;
+    category?: string;
+    baseUnit?: UnitOfMeasure;
+    isActive?: boolean;
+  }) => api.put<Item>(`/items/${id}`, { id, ...body }).then((r) => r.data),
+  exportExcel: (params?: { activeOnly?: boolean; search?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.activeOnly) query.set("activeOnly", "true");
+    if (params?.search) query.set("search", params.search);
+    return downloadFile(`/items/export/excel?${query.toString()}`, "items.xlsx");
+  },
+  downloadTemplate: () => downloadFile("/items/import/template", "items-import-template.xlsx")
+};
+
+// ---------------- Items Excel import (spec section 7) ----------------
+
+export interface ItemImportRowResult {
+  rowNumber: number;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  category: string | null;
+  baseUnit: string;
+  isValid: boolean;
+  isExisting: boolean;
+  action: "Create" | "Update" | "Skip" | string;
+  errors: string[];
+}
+
+export interface ItemImportPreview {
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  newRows: number;
+  existingRows: number;
+  updateExistingAllowed: boolean;
+  rows: ItemImportRowResult[];
+}
+
+export interface ItemImportExecuteResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  rows: ItemImportRowResult[];
+}
+
+export const ItemImportApi = {
+  /** allowExistingUpdate targets the items.edit-protected endpoints (never the default ones). */
+  preview: (file: File, allowExistingUpdate = false) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api
+      .post<ItemImportPreview>(allowExistingUpdate ? "/items/import/preview-update" : "/items/import/preview", form, {
+        headers: { "Content-Type": "multipart/form-data" }
+      })
+      .then((r) => r.data);
+  },
+  execute: (file: File, allowExistingUpdate = false) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api
+      .post<ItemImportExecuteResult>(allowExistingUpdate ? "/items/import/execute-update" : "/items/import/execute", form, {
+        headers: { "Content-Type": "multipart/form-data" }
+      })
+      .then((r) => r.data);
+  }
 };
 
 export const WarehousesApi = {
@@ -111,8 +197,14 @@ export const RawMessagesApi = {
     notes?: string;
     lines: { itemId: string; quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string }[];
   }) => api.post<RawMessage>("/raw-messages", body).then((r) => r.data),
-  recordInspection: (id: string, body: { result: string; notes?: string }) =>
-    api.post(`/raw-messages/${id}/inspection`, body)
+  recordInspection: (
+    id: string,
+    body: {
+      result: string;
+      notes?: string;
+      rejections?: { lineId: string; rejectedQuantityKg?: number; rejectedQuantityMeter?: number }[];
+    }
+  ) => api.post(`/raw-messages/${id}/inspection`, body)
 };
 
 // ---------------- Production Stages (configurable engine) ----------------
@@ -155,6 +247,8 @@ export const ProductionStagesApi = {
 
 export type ProductionOrderStatus = "Draft" | "RawAllocated" | "InProduction" | "Completed" | "Cancelled";
 export type ProductionPriority = "Low" | "Normal" | "High" | "Urgent";
+/** Job order line type (spec section 16): closed line / open line. */
+export type JobOrderType = "ClosedLine" | "OpenLine";
 export type StageExecutionStatus = "Pending" | "InProgress" | "Completed" | "Skipped";
 
 export interface RawAllocationLine {
@@ -205,16 +299,25 @@ export interface ProductionOrder {
   customerReference: string | null;
   notes: string | null;
   priority: ProductionPriority;
+  jobOrderType: JobOrderType;
   orderDate: string;
   status: ProductionOrderStatus;
   reprocessingOfProductionOrderId: string | null;
+  formationRequestId: string | null;
+  formationRequestNumber: string | null;
+  formationGroupId: string | null;
+  formationGroupNumber: number | null;
   rawAllocations: RawAllocationLine[];
   stageExecutions: StageExecution[];
 }
 
 export const ProductionOrdersApi = {
-  list: (params?: { customerId?: string; status?: ProductionOrderStatus }) =>
-    api.get<ProductionOrder[]>("/production-orders", { params }).then((r) => r.data),
+  list: (params?: {
+    customerId?: string;
+    status?: ProductionOrderStatus;
+    jobOrderType?: JobOrderType;
+    formationRequestId?: string;
+  }) => api.get<ProductionOrder[]>("/production-orders", { params }).then((r) => r.data),
   get: (id: string) => api.get<ProductionOrder>(`/production-orders/${id}`).then((r) => r.data),
   create: (body: {
     customerId: string;
@@ -227,6 +330,7 @@ export const ProductionOrdersApi = {
     customerReference?: string;
     notes?: string;
     priority: ProductionPriority;
+    jobOrderType?: JobOrderType;
   }) => api.post<ProductionOrder>("/production-orders", body).then((r) => r.data),
   allocateRaw: (
     id: string,
@@ -675,6 +779,55 @@ export interface NegativeStockOverride {
   reason: string; requestedBy: string; approvedBy: string;
 }
 
+// ---------------- Inventory ledger movements (spec sections 10, 14, 48) ----------------
+
+export interface InventoryMovement {
+  id: string;
+  sourceDocumentType: string;
+  sourceDocumentNumber: string;
+  sourceDocumentId: string;
+  transactionDate: string;
+  warehouseId: string;
+  warehouseName: string;
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  rawMessageId: string | null;
+  messageNumber: string | null;
+  productionOrderId: string | null;
+  orderNumber: string | null;
+  quantityKg: number | null;
+  quantityMeter: number | null;
+  direction: "In" | "Out";
+  signedQuantityKg: number | null;
+  signedQuantityMeter: number | null;
+  createdBy: string;
+  createdAtUtc: string;
+  reversesTransactionId: string | null;
+}
+
+export const InventoryLedgerApi = {
+  movements: (params?: {
+    customerId?: string; itemId?: string; warehouseId?: string; rawMessageId?: string;
+    productionOrderId?: string; from?: string; to?: string; limit?: number;
+  }) => api.get<InventoryMovement[]>("/reports/inventory-movements", { params }).then((r) => r.data),
+  exportMovementsExcel: (params?: {
+    customerId?: string; itemId?: string; warehouseId?: string; rawMessageId?: string; from?: string; to?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.customerId) query.set("customerId", params.customerId);
+    if (params?.itemId) query.set("itemId", params.itemId);
+    if (params?.warehouseId) query.set("warehouseId", params.warehouseId);
+    if (params?.rawMessageId) query.set("rawMessageId", params.rawMessageId);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    return downloadFile(`/reports/inventory-movements/excel?${query.toString()}`, "inventory-movements.xlsx");
+  }
+};
+
 export const ReportsApi = {
   negativeStockOverrides: () => api.get<NegativeStockOverride[]>("/reports/negative-stock-overrides").then((r) => r.data),
   downloadNegativeStockOverridesPdf: () => downloadFile("/reports/negative-stock-overrides/pdf", "negative-stock-overrides.pdf"),
@@ -718,6 +871,12 @@ export interface DashboardSummary {
   readyGoodsBalanceKg: number;
   openInvoicesCount: number;
   openInvoicesTotal: number;
+  pendingFormationRequests: number;
+  formationRequestsInProgress: number;
+  checksInHandAmount: number;
+  checksDueSoonCount: number;
+  overdueChecksCount: number;
+  activeSuppliers: number;
   productionOrdersByStatus: { status: string; count: number }[];
   rawReceiptsLast14Days: { date: string; totalKg: number }[];
 }
@@ -816,5 +975,685 @@ export const ReportBuilderApi = {
       const link = document.createElement("a");
       link.href = url; link.download = "custom-report.xlsx"; document.body.appendChild(link); link.click(); link.remove();
     })
+};
+
+// ---------------- Formation Requests / طلب تشكيل (spec sections 28-33) ----------------
+
+export type FormationRequestStatus =
+  | "Draft" | "Submitted" | "Approved" | "InProgress"
+  | "PartiallyCompleted" | "Completed" | "Rejected" | "Cancelled";
+
+/** One group / cell on a request - its specification values are a snapshot taken when it was created. */
+export interface FormationGroup {
+  id: string;
+  groupNumber: number;
+  name: string | null;
+  plannedQuantity: number;
+  producedQuantity: number;
+  remainingQuantity: number;
+  unit: UnitOfMeasure;
+  tubCount: number | null;
+  color: string | null;
+  widthCm: number | null;
+  metersPerKg: number | null;
+  gsm: number | null;
+  tubFormat: string | null;
+  windingTapeFormat: string | null;
+  qualityInstructions: string | null;
+  labInstructions: string | null;
+  internalInstructions: string | null;
+  customerInstructions: string | null;
+  notes: string | null;
+  specificationTemplateId: string | null;
+  specificationTemplateName: string | null;
+  specificationSnapshotAtUtc: string | null;
+}
+
+export interface FormationRequest {
+  id: string;
+  requestNumber: string;
+  requestDate: string;
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  rawMessageId: string | null;
+  messageNumber: string | null;
+  totalQuantity: number;
+  unit: UnitOfMeasure;
+  notes: string | null;
+  status: FormationRequestStatus;
+  productionOrderId: string | null;
+  productionOrderNumber: string | null;
+  submittedBy: string | null;
+  submittedAtUtc: string | null;
+  approvedBy: string | null;
+  approvedAtUtc: string | null;
+  rejectedBy: string | null;
+  rejectedAtUtc: string | null;
+  rejectionReason: string | null;
+  cancelledBy: string | null;
+  cancelledAtUtc: string | null;
+  cancellationReason: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+  producedQuantity: number;
+  groups: FormationGroup[];
+}
+
+export interface FormationSpecificationInput {
+  widthCm?: number | null;
+  metersPerKg?: number | null;
+  gsm?: number | null;
+  tubFormat?: string | null;
+  windingTapeFormat?: string | null;
+  qualityInstructions?: string | null;
+  labInstructions?: string | null;
+  internalInstructions?: string | null;
+  customerInstructions?: string | null;
+}
+
+export interface FormationGroupInput {
+  id?: string | null;
+  name?: string | null;
+  plannedQuantity: number;
+  unit: UnitOfMeasure;
+  tubCount?: number | null;
+  color?: string | null;
+  specificationTemplateId?: string | null;
+  specification?: FormationSpecificationInput | null;
+  notes?: string | null;
+}
+
+export interface FormationSpecTemplate {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn: string;
+  widthCm: number | null;
+  metersPerKg: number | null;
+  gsm: number | null;
+  tubFormat: string | null;
+  windingTapeFormat: string | null;
+  notes: string | null;
+  qualityInstructions: string | null;
+  labInstructions: string | null;
+  internalInstructions: string | null;
+  customerInstructions: string | null;
+  isActive: boolean;
+}
+
+export interface FormationTraceabilityLink {
+  stage: string;
+  reference: string;
+  detail: string | null;
+  route: string | null;
+  entityId: string | null;
+  dateUtc: string | null;
+}
+
+export interface FormationTraceability {
+  request: FormationRequest;
+  links: FormationTraceabilityLink[];
+}
+
+export const FormationRequestsApi = {
+  list: (params?: {
+    customerId?: string; itemId?: string; rawMessageId?: string;
+    status?: FormationRequestStatus; from?: string; to?: string;
+  }) => api.get<FormationRequest[]>("/formation-requests", { params }).then((r) => r.data),
+  get: (id: string) => api.get<FormationRequest>(`/formation-requests/${id}`).then((r) => r.data),
+  traceability: (id: string) =>
+    api.get<FormationTraceability>(`/formation-requests/${id}/traceability`).then((r) => r.data),
+  create: (body: {
+    customerId: string; itemId: string; requestDate: string; unit: UnitOfMeasure;
+    groups: FormationGroupInput[]; rawMessageId?: string | null; notes?: string | null;
+  }) => api.post<FormationRequest>("/formation-requests", body).then((r) => r.data),
+  update: (id: string, body: {
+    requestDate: string; unit: UnitOfMeasure; groups: FormationGroupInput[];
+    rawMessageId?: string | null; notes?: string | null;
+  }) => api.put<FormationRequest>(`/formation-requests/${id}`, { id, ...body }).then((r) => r.data),
+  submit: (id: string) => api.post<FormationRequest>(`/formation-requests/${id}/submit`).then((r) => r.data),
+  approve: (id: string) => api.post<FormationRequest>(`/formation-requests/${id}/approve`).then((r) => r.data),
+  reject: (id: string, reason: string) =>
+    api.post<FormationRequest>(`/formation-requests/${id}/reject`, { reason }).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<FormationRequest>(`/formation-requests/${id}/cancel`, { reason }).then((r) => r.data),
+  convertToJobOrder: (id: string, body: {
+    groupId?: string | null; jobOrderType: JobOrderType; priority?: ProductionPriority;
+    orderDate?: string; color?: string | null; notes?: string | null; customerReference?: string | null;
+  }) => api.post<FormationRequest>(`/formation-requests/${id}/convert-to-job-order`, body).then((r) => r.data),
+  exportExcel: (params?: { customerId?: string; status?: FormationRequestStatus }) => {
+    const query = new URLSearchParams();
+    if (params?.customerId) query.set("customerId", params.customerId);
+    if (params?.status) query.set("status", params.status);
+    return downloadFile(`/formation-requests/export/excel?${query.toString()}`, "formation-requests.xlsx");
+  },
+  downloadPdf: (id: string, requestNumber: string) =>
+    downloadFile(`/formation-requests/${id}/pdf`, `formation-request-${requestNumber}.pdf`)
+};
+
+export const FormationSpecificationsApi = {
+  list: (params?: { activeOnly?: boolean; search?: string }) =>
+    api.get<FormationSpecTemplate[]>("/formation-specifications", { params }).then((r) => r.data),
+  create: (body: {
+    code: string; nameAr: string; nameEn: string;
+    widthCm?: number | null; metersPerKg?: number | null; gsm?: number | null;
+    tubFormat?: string | null; windingTapeFormat?: string | null; notes?: string | null;
+    qualityInstructions?: string | null; labInstructions?: string | null;
+    internalInstructions?: string | null; customerInstructions?: string | null;
+  }) => api.post<FormationSpecTemplate>("/formation-specifications", body).then((r) => r.data),
+  update: (id: string, body: Partial<FormationSpecTemplate>) =>
+    api.put<FormationSpecTemplate>(`/formation-specifications/${id}`, { id, ...body }).then((r) => r.data),
+  setActive: (id: string, isActive: boolean) =>
+    api.post<FormationSpecTemplate>(`/formation-specifications/${id}/active`, { isActive }).then((r) => r.data)
+};
+
+// ---------------- Checks register (spec sections 37-40) ----------------
+
+export type CheckDirection = "CustomerCheck" | "SupplierCheck";
+export type CheckStatus =
+  | "Received" | "InHand" | "Deposited" | "Endorsed" | "Cleared" | "Bounced" | "Cancelled";
+export type CheckHolderType = "Customer" | "Company" | "Supplier" | "Bank";
+export type CheckMovementType =
+  | "Received" | "Issued" | "ReturnedToHolder" | "Endorsed" | "Deposited" | "Cleared" | "Bounced" | "Cancelled";
+
+export interface CheckMovement {
+  id: string;
+  movementType: CheckMovementType;
+  fromHolder: string;
+  toHolder: string;
+  toHolderType: CheckHolderType;
+  movementDate: string;
+  reason: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
+  treasuryAccountId: string | null;
+  treasuryAccountName: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+}
+
+export interface Check {
+  id: string;
+  checkNumber: string;
+  direction: CheckDirection;
+  status: CheckStatus;
+  bankName: string;
+  branchName: string | null;
+  amount: number;
+  currency: string;
+  issueDate: string;
+  dueDate: string;
+  issuer: string;
+  originalHolder: string;
+  currentHolder: string;
+  currentHolderType: CheckHolderType;
+  customerId: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  supplierId: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  treasuryAccountId: string | null;
+  treasuryAccountName: string | null;
+  customerReference: string | null;
+  notes: string | null;
+  receivedAtUtc: string | null;
+  depositedAtUtc: string | null;
+  clearedAtUtc: string | null;
+  bouncedAtUtc: string | null;
+  bounceReason: string | null;
+  cancelledAtUtc: string | null;
+  cancellationReason: string | null;
+  daysToDueDate: number | null;
+  createdBy: string;
+  createdAtUtc: string;
+  movements: CheckMovement[];
+}
+
+export interface CheckRegisterSummary {
+  totalChecks: number;
+  totalAmount: number;
+  customerChecksAmount: number;
+  supplierChecksAmount: number;
+  inHandAmount: number;
+  depositedAmount: number;
+  endorsedAmount: number;
+  clearedAmount: number;
+  bouncedAmount: number;
+  dueSoonCount: number;
+  dueSoonAmount: number;
+  overdueCount: number;
+  overdueAmount: number;
+  byStatus: { status: CheckStatus; count: number; amount: number }[];
+}
+
+export const ChecksApi = {
+  list: (params?: {
+    direction?: CheckDirection; status?: CheckStatus; customerId?: string; supplierId?: string;
+    from?: string; to?: string; dueBefore?: string; overdueOnly?: boolean; search?: string;
+  }) => api.get<Check[]>("/checks", { params }).then((r) => r.data),
+  get: (id: string) => api.get<Check>(`/checks/${id}`).then((r) => r.data),
+  summary: (params?: { from?: string; to?: string }) =>
+    api.get<CheckRegisterSummary>("/checks/summary", { params }).then((r) => r.data),
+  registerCustomerCheck: (body: {
+    checkNumber: string; bankName: string; amount: number; issueDate: string; dueDate: string;
+    issuer: string; customerId: string; currency?: string; branchName?: string;
+    customerReference?: string; notes?: string; confirmInHandNow?: boolean; receivedDate?: string;
+  }) => api.post<Check>("/checks/customer-checks", body).then((r) => r.data),
+  registerSupplierCheck: (body: {
+    checkNumber: string; bankName: string; amount: number; issueDate: string; dueDate: string;
+    issuer: string; supplierId: string; treasuryAccountId?: string; currency?: string;
+    branchName?: string; notes?: string; handOverNow?: boolean; handOverDate?: string; reason?: string;
+  }) => api.post<Check>("/checks/supplier-checks", body).then((r) => r.data),
+  confirmReceipt: (id: string, movementDate?: string) =>
+    api.post<Check>(`/checks/${id}/confirm-receipt`, { movementDate }).then((r) => r.data),
+  endorse: (id: string, body: { supplierId: string; movementDate?: string; reason?: string }) =>
+    api.post<Check>(`/checks/${id}/endorse`, body).then((r) => r.data),
+  deposit: (id: string, body: { treasuryAccountId: string; movementDate?: string; notes?: string }) =>
+    api.post<Check>(`/checks/${id}/deposit`, body).then((r) => r.data),
+  clear: (id: string, body?: { movementDate?: string; notes?: string; treasuryAccountId?: string }) =>
+    api.post<Check>(`/checks/${id}/clear`, body ?? {}).then((r) => r.data),
+  bounce: (id: string, reason: string, movementDate?: string) =>
+    api.post<Check>(`/checks/${id}/bounce`, { reason, movementDate }).then((r) => r.data),
+  returnToCompany: (id: string, reason?: string) =>
+    api.post<Check>(`/checks/${id}/return`, { reason }).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<Check>(`/checks/${id}/cancel`, { reason }).then((r) => r.data),
+  exportExcel: (params?: { direction?: CheckDirection; status?: CheckStatus; overdueOnly?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.direction) query.set("direction", params.direction);
+    if (params?.status) query.set("status", params.status);
+    if (params?.overdueOnly) query.set("overdueOnly", "true");
+    return downloadFile(`/checks/export/excel?${query.toString()}`, "checks.xlsx");
+  },
+  exportPdf: (params?: { direction?: CheckDirection; status?: CheckStatus; overdueOnly?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.direction) query.set("direction", params.direction);
+    if (params?.status) query.set("status", params.status);
+    if (params?.overdueOnly) query.set("overdueOnly", "true");
+    return downloadFile(`/checks/export/pdf?${query.toString()}`, "checks.pdf");
+  }
+};
+
+// ---------------- Suppliers (spec section 35) ----------------
+
+export interface Supplier {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  accountNumber: string;
+  phone: string | null;
+  address: string | null;
+  contactPerson: string | null;
+  taxNumber: string | null;
+  isActive: boolean;
+}
+
+export const SuppliersApi = {
+  list: (params?: { activeOnly?: boolean; search?: string }) =>
+    api.get<Supplier[]>("/suppliers", { params }).then((r) => r.data),
+  create: (body: {
+    code: string; name: string; nameAr?: string; nameEn?: string; accountNumber?: string;
+    phone?: string; address?: string; contactPerson?: string; taxNumber?: string;
+  }) => api.post<Supplier>("/suppliers", body).then((r) => r.data),
+  update: (id: string, body: Partial<Supplier> & { isActive?: boolean }) =>
+    api.put<Supplier>(`/suppliers/${id}`, { id, ...body }).then((r) => r.data)
+};
+
+// ---------------- Purchases (spec section 35) ----------------
+
+export type PurchaseOrderStatus = "Draft" | "Submitted" | "Approved" | "PartiallyReceived" | "Received" | "Cancelled";
+export type SupplierInvoiceStatus = "Draft" | "Posted" | "Cancelled";
+
+export interface PurchaseOrderLine {
+  id: string;
+  materialId: string;
+  materialCode: string;
+  materialName: string;
+  quantity: number;
+  unit: MaterialUnit;
+  unitPrice: number;
+  lineValue: number;
+  receivedQuantity: number;
+  outstandingQuantity: number;
+  notes: string | null;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  orderNumber: string;
+  orderDate: string;
+  supplierId: string;
+  supplierCode: string;
+  supplierName: string;
+  warehouseId: string;
+  warehouseName: string;
+  expectedDeliveryDate: string | null;
+  notes: string | null;
+  status: PurchaseOrderStatus;
+  totalValue: number;
+  receivedValue: number;
+  submittedBy: string | null;
+  approvedBy: string | null;
+  cancelledBy: string | null;
+  cancellationReason: string | null;
+  createdAtUtc: string;
+  createdBy: string;
+  lines: PurchaseOrderLine[];
+}
+
+export interface PurchaseReceiptLine {
+  id: string;
+  materialId: string;
+  materialCode: string;
+  materialName: string;
+  quantity: number;
+  unit: MaterialUnit;
+  unitCost: number;
+  lineValue: number;
+  notes: string | null;
+}
+
+export interface PurchaseReceipt {
+  id: string;
+  receiptNumber: string;
+  receiptDate: string;
+  supplierId: string;
+  supplierCode: string;
+  supplierName: string;
+  warehouseId: string;
+  warehouseName: string;
+  purchaseOrderId: string | null;
+  orderNumber: string | null;
+  receivedBy: string;
+  supplierDocumentNumber: string | null;
+  notes: string | null;
+  totalValue: number;
+  createdAtUtc: string;
+  createdBy: string;
+  lines: PurchaseReceiptLine[];
+}
+
+export interface SupplierInvoiceLine {
+  id: string;
+  materialId: string | null;
+  materialCode: string | null;
+  description: string;
+  quantity: number;
+  unit: MaterialUnit;
+  unitPrice: number;
+  lineValue: number;
+}
+
+export interface SupplierInvoice {
+  id: string;
+  invoiceNumber: string;
+  internalNumber: string | null;
+  invoiceDate: string;
+  dueDate: string;
+  supplierId: string;
+  supplierCode: string;
+  supplierName: string;
+  purchaseOrderId: string | null;
+  orderNumber: string | null;
+  purchaseReceiptId: string | null;
+  receiptNumber: string | null;
+  subTotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  currency: string;
+  status: SupplierInvoiceStatus;
+  notes: string | null;
+  postedBy: string | null;
+  postedAtUtc: string | null;
+  cancellationReason: string | null;
+  createdAtUtc: string;
+  createdBy: string;
+  lines: SupplierInvoiceLine[];
+}
+
+export interface SupplierPayment {
+  id: string;
+  paymentNumber: string;
+  paymentDate: string;
+  supplierId: string;
+  supplierCode: string;
+  supplierName: string;
+  treasuryAccountId: string;
+  treasuryAccountName: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string | null;
+  checkId: string | null;
+  checkNumber: string | null;
+  supplierInvoiceId: string | null;
+  description: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+}
+
+export interface SupplierLedgerEntry {
+  id: string;
+  supplierId: string;
+  supplierCode: string;
+  supplierName: string;
+  entryDate: string;
+  sourceDocumentType: string;
+  sourceDocumentNumber: string;
+  sourceDocumentId: string;
+  debit: number;
+  credit: number;
+  description: string;
+  createdBy: string;
+  createdAtUtc: string;
+  runningBalance: number;
+}
+
+export interface SupplierBalance {
+  supplierId: string;
+  supplierCode: string;
+  supplierName: string;
+  currency: string;
+  totalInvoiced: number;
+  totalPaid: number;
+  outstanding: number;
+  openInvoiceCount: number;
+  overdueAmount: number;
+}
+
+export const PurchasesApi = {
+  orders: (params?: { supplierId?: string; status?: PurchaseOrderStatus; from?: string; to?: string }) =>
+    api.get<PurchaseOrder[]>("/purchases/orders", { params }).then((r) => r.data),
+  order: (id: string) => api.get<PurchaseOrder>(`/purchases/orders/${id}`).then((r) => r.data),
+  createOrder: (body: {
+    orderDate: string;
+    supplierId: string;
+    warehouseId: string;
+    expectedDeliveryDate?: string;
+    notes?: string;
+    lines?: { materialId: string; quantity: number; unit: MaterialUnit; unitPrice: number; notes?: string }[];
+  }) => api.post<PurchaseOrder>("/purchases/orders", body).then((r) => r.data),
+  addOrderLine: (id: string, body: { materialId: string; quantity: number; unit: MaterialUnit; unitPrice: number; notes?: string }) =>
+    api.post<PurchaseOrder>(`/purchases/orders/${id}/lines`, { orderId: id, ...body }).then((r) => r.data),
+  removeOrderLine: (id: string, lineId: string) =>
+    api.delete<PurchaseOrder>(`/purchases/orders/${id}/lines/${lineId}`).then((r) => r.data),
+  submitOrder: (id: string) => api.post<PurchaseOrder>(`/purchases/orders/${id}/submit`).then((r) => r.data),
+  approveOrder: (id: string) => api.post<PurchaseOrder>(`/purchases/orders/${id}/approve`).then((r) => r.data),
+  cancelOrder: (id: string, reason: string) =>
+    api.post<PurchaseOrder>(`/purchases/orders/${id}/cancel`, { reason }).then((r) => r.data),
+
+  receipts: (params?: { supplierId?: string; purchaseOrderId?: string }) =>
+    api.get<PurchaseReceipt[]>("/purchases/receipts", { params }).then((r) => r.data),
+  createReceipt: (body: {
+    receiptDate: string;
+    supplierId: string;
+    warehouseId: string;
+    purchaseOrderId?: string;
+    supplierDocumentNumber?: string;
+    notes?: string;
+    lines: { materialId: string; quantity: number; unit: MaterialUnit; unitCost: number; purchaseOrderLineId?: string }[];
+  }) => api.post<PurchaseReceipt>("/purchases/receipts", body).then((r) => r.data),
+
+  invoices: (params?: { supplierId?: string; status?: SupplierInvoiceStatus; overdueOnly?: boolean }) =>
+    api.get<SupplierInvoice[]>("/purchases/supplier-invoices", { params }).then((r) => r.data),
+  createInvoice: (body: {
+    invoiceNumber: string;
+    invoiceDate: string;
+    dueDate: string;
+    supplierId: string;
+    purchaseOrderId?: string;
+    purchaseReceiptId?: string;
+    internalNumber?: string;
+    notes?: string;
+    currency?: string;
+    discount?: number;
+    tax?: number;
+    lines?: { materialId?: string; description: string; quantity: number; unit: MaterialUnit; unitPrice: number }[];
+  }) => api.post<SupplierInvoice>("/purchases/supplier-invoices", body).then((r) => r.data),
+  postInvoice: (id: string) =>
+    api.post<SupplierInvoice>(`/purchases/supplier-invoices/${id}/post`).then((r) => r.data),
+  cancelInvoice: (id: string, reason: string) =>
+    api.post<SupplierInvoice>(`/purchases/supplier-invoices/${id}/cancel`, { reason }).then((r) => r.data),
+
+  payments: (params?: { supplierId?: string }) =>
+    api.get<SupplierPayment[]>("/purchases/supplier-payments", { params }).then((r) => r.data),
+  paySupplier: (body: {
+    paymentDate: string;
+    supplierId: string;
+    treasuryAccountId: string;
+    amount: number;
+    paymentMethod?: string;
+    checkId?: string;
+    supplierInvoiceId?: string;
+    description?: string;
+  }) => api.post<SupplierPayment>("/purchases/supplier-payments", body).then((r) => r.data),
+
+  ledger: (supplierId: string, params?: { from?: string; to?: string }) =>
+    api.get<SupplierLedgerEntry[]>(`/purchases/suppliers/${supplierId}/ledger`, { params }).then((r) => r.data),
+  balances: (params?: { supplierId?: string; withBalanceOnly?: boolean }) =>
+    api.get<SupplierBalance[]>("/purchases/supplier-balances", { params }).then((r) => r.data)
+};
+
+// ---------------- Payroll & wages (spec section 36) ----------------
+
+export type EmployeeStatus = "Active" | "Suspended" | "Terminated";
+export type PayrollRunStatus = "Draft" | "Approved" | "Posted" | "Cancelled";
+
+export interface Department {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  notes: string | null;
+  isActive: boolean;
+  employeeCount: number;
+}
+
+export interface Employee {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
+  jobTitle: string | null;
+  basicSalary: number;
+  status: EmployeeStatus;
+  hireDate: string;
+  terminationDate: string | null;
+  phone: string | null;
+  nationalId: string | null;
+  bankAccountNumber: string | null;
+  notes: string | null;
+}
+
+export interface PayrollRunLine {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  departmentId: string;
+  departmentName: string | null;
+  basicSalary: number;
+  allowances: number;
+  deductions: number;
+  grossPay: number;
+  netPay: number;
+  notes: string | null;
+}
+
+export interface PayrollRun {
+  id: string;
+  runNumber: string;
+  periodYear: number;
+  periodMonth: number;
+  treasuryAccountId: string | null;
+  treasuryAccountName: string | null;
+  notes: string | null;
+  status: PayrollRunStatus;
+  totalGross: number;
+  totalDeductions: number;
+  totalNet: number;
+  employeeCount: number;
+  approvedBy: string | null;
+  postedBy: string | null;
+  cancellationReason: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+  lines: PayrollRunLine[];
+}
+
+export const PayrollApi = {
+  departments: (params?: { activeOnly?: boolean; search?: string }) =>
+    api.get<Department[]>("/payroll/departments", { params }).then((r) => r.data),
+  createDepartment: (body: { code: string; nameAr?: string; nameEn?: string; notes?: string }) =>
+    api.post<Department>("/payroll/departments", body).then((r) => r.data),
+  updateDepartment: (id: string, body: { nameAr?: string; nameEn?: string; notes?: string; isActive?: boolean }) =>
+    api.put<Department>(`/payroll/departments/${id}`, { id, ...body }).then((r) => r.data),
+
+  employees: (params?: { departmentId?: string; status?: EmployeeStatus; activeOnly?: boolean; search?: string }) =>
+    api.get<Employee[]>("/payroll/employees", { params }).then((r) => r.data),
+  createEmployee: (body: {
+    code: string;
+    departmentId: string;
+    basicSalary: number;
+    hireDate: string;
+    nameAr?: string;
+    nameEn?: string;
+    jobTitle?: string;
+    phone?: string;
+    nationalId?: string;
+    bankAccountNumber?: string;
+    notes?: string;
+  }) => api.post<Employee>("/payroll/employees", body).then((r) => r.data),
+  updateEmployee: (id: string, body: Partial<Employee> & { status?: EmployeeStatus }) =>
+    api.put<Employee>(`/payroll/employees/${id}`, { id, ...body }).then((r) => r.data),
+
+  runs: (params?: { periodYear?: number; status?: PayrollRunStatus }) =>
+    api.get<PayrollRun[]>("/payroll/runs", { params }).then((r) => r.data),
+  run: (id: string) => api.get<PayrollRun>(`/payroll/runs/${id}`).then((r) => r.data),
+  createRun: (body: { periodYear: number; periodMonth: number; treasuryAccountId?: string; notes?: string }) =>
+    api.post<PayrollRun>("/payroll/runs", body).then((r) => r.data),
+  updateRunLine: (id: string, lineId: string, body: { allowances: number; deductions: number; notes?: string }) =>
+    api.put<PayrollRun>(`/payroll/runs/${id}/lines/${lineId}`, { runId: id, lineId, ...body }).then((r) => r.data),
+  removeRunLine: (id: string, lineId: string) =>
+    api.delete<PayrollRun>(`/payroll/runs/${id}/lines/${lineId}`).then((r) => r.data),
+  setRunAccount: (id: string, treasuryAccountId: string | null) =>
+    api.put<PayrollRun>(`/payroll/runs/${id}/account`, { treasuryAccountId }).then((r) => r.data),
+  approveRun: (id: string) => api.post<PayrollRun>(`/payroll/runs/${id}/approve`).then((r) => r.data),
+  postRun: (id: string) => api.post<PayrollRun>(`/payroll/runs/${id}/post`).then((r) => r.data),
+  cancelRun: (id: string, reason: string) =>
+    api.post<PayrollRun>(`/payroll/runs/${id}/cancel`, { reason }).then((r) => r.data)
 };
 

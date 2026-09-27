@@ -49,6 +49,22 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             .Where(m => messageIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, cancellationToken);
 
+        // Formation Request link (spec section 31) - shown on the Job Order so the chain
+        // Customer -> Message -> Formation Request -> Job Order stays navigable.
+        string? formationRequestNumber = null;
+        int? formationGroupNumber = null;
+        if (order.FormationRequestId.HasValue)
+        {
+            var formationRequest = await db.FormationRequests.AsNoTracking()
+                .Include(r => r.Groups)
+                .FirstOrDefaultAsync(r => r.Id == order.FormationRequestId.Value, cancellationToken);
+
+            formationRequestNumber = formationRequest?.RequestNumber;
+            if (order.FormationGroupId.HasValue && formationRequest is not null)
+                formationGroupNumber = formationRequest.Groups
+                    .FirstOrDefault(g => g.Id == order.FormationGroupId.Value)?.GroupNumber;
+        }
+
         return new ProductionOrderDto
         {
             Id = order.Id,
@@ -65,9 +81,14 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             CustomerReference = order.CustomerReference,
             Notes = order.Notes,
             Priority = order.Priority,
+            JobOrderType = order.JobOrderType,
             OrderDate = order.OrderDate,
             Status = order.Status,
             ReprocessingOfProductionOrderId = order.ReprocessingOfProductionOrderId,
+            FormationRequestId = order.FormationRequestId,
+            FormationRequestNumber = formationRequestNumber,
+            FormationGroupId = order.FormationGroupId,
+            FormationGroupNumber = formationGroupNumber,
             RawAllocations = allocations.Select(a => new RawAllocationDto
             {
                 Id = a.Id,

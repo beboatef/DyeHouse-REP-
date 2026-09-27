@@ -53,9 +53,19 @@ public class ProductionOrderDto
     public string? CustomerReference { get; set; }
     public string? Notes { get; set; }
     public ProductionPriority Priority { get; set; }
+
+    /// <summary>Closed line / open line (الخط المقفول / على المفتوح) - real data, filterable and reportable (spec section 16).</summary>
+    public JobOrderType JobOrderType { get; set; }
+
     public DateTime OrderDate { get; set; }
     public ProductionOrderStatus Status { get; set; }
     public Guid? ReprocessingOfProductionOrderId { get; set; }
+
+    /// <summary>Set when this Job Order fulfils an approved Formation Request (spec section 31).</summary>
+    public Guid? FormationRequestId { get; set; }
+    public string? FormationRequestNumber { get; set; }
+    public Guid? FormationGroupId { get; set; }
+    public int? FormationGroupNumber { get; set; }
     public List<RawAllocationDto> RawAllocations { get; set; } = new();
     public List<StageExecutionDto> StageExecutions { get; set; } = new();
 }

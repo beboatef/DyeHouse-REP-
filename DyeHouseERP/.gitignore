@@ -11,6 +11,7 @@ logs/
 ## Node / React
 node_modules/
 dist/
+*.tsbuildinfo
 .env
 .env.local
 

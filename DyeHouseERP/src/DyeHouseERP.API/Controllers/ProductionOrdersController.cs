@@ -22,8 +22,9 @@ public class ProductionOrdersController : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
     [ProducesResponseType(typeof(List<ProductionOrderDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<ProductionOrderDto>>> Get(
-        [FromQuery] Guid? customerId, [FromQuery] ProductionOrderStatus? status)
-        => Ok(await _mediator.Send(new GetProductionOrdersQuery(customerId, status)));
+        [FromQuery] Guid? customerId, [FromQuery] ProductionOrderStatus? status,
+        [FromQuery] JobOrderType? jobOrderType, [FromQuery] Guid? formationRequestId)
+        => Ok(await _mediator.Send(new GetProductionOrdersQuery(customerId, status, jobOrderType, formationRequestId)));
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
