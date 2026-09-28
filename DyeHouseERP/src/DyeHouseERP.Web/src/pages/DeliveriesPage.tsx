@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CustomersApi, DeliveriesApi, DocumentPdfApi, ReadyGoodsApi } from "@/api/client";
+import { CustomersApi, DeliveriesApi, ReadyGoodsApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { useI18n } from "@/i18n";
+import { ExportButtons } from "@/components/ExportButtons";
+import { DeliveriesExports } from "@/api/exports";
 
 const statusLabel: Record<string, string> = { Draft: "مسودة", Prepared: "مجهزة", Delivered: "تم التسليم", Cancelled: "ملغاة" };
 const statusTone: Record<string, "gray" | "blue" | "green" | "red"> = { Draft: "gray", Prepared: "blue", Delivered: "green", Cancelled: "red" };
@@ -11,6 +14,7 @@ type LineDraft = { productionOrderId: string; itemId: string; color: string; qua
 const emptyLine = (): LineDraft => ({ productionOrderId: "", itemId: "", color: "", quantityKg: "", quantityMeter: "" });
 
 export default function DeliveriesPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [customerId, setCustomerId] = useState("");
@@ -58,7 +62,15 @@ export default function DeliveriesPage() {
       <PageHeader
         title="التسليمات"
         subtitle="مسودة ← مجهزة ← تم التسليم ← ملغاة - التسليم يخصم من المخزون الجاهز، والإلغاء ينشئ حركة عكسية"
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تسليم جديد"}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ action: DeliveriesExports.excel }}
+              pdf={{ action: DeliveriesExports.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تسليم جديد"}</Button>
+          </div>
+        }
       />
 
       {showForm && (
@@ -112,7 +124,7 @@ export default function DeliveriesPage() {
       <div className="space-y-3">
         {isLoading && <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>}
         {deliveries?.map((d) => (
-          <Card key={d.id} className="p-4">
+          <Card key={d.id} className="card-pad">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="font-bold ltr-nums">{d.deliveryNumber}</span>
@@ -122,22 +134,31 @@ export default function DeliveriesPage() {
               <Badge tone={statusTone[d.status]}>{statusLabel[d.status]}</Badge>
             </div>
 
-            <table className="w-full text-sm mt-3">
-              <tbody>
-                {d.lines.map((l) => (
-                  <tr key={l.id} className="border-b border-gray-50 last:border-0">
-                    <td className="py-1.5 ltr-nums">{l.productionOrderNumber}</td>
-                    <td className="py-1.5">{l.itemCode}{l.color ? ` (${l.color})` : ""}</td>
-                    <td className="py-1.5 ltr-nums">{l.quantityKg != null && `${l.quantityKg} كجم `}{l.quantityMeter != null && `${l.quantityMeter} م`}</td>
+            <div className="table-wrap mt-3">
+              <table className="table table-dense">
+                <thead>
+                  <tr>
+                    <th>{t("prod.jobOrder", "أمر التشغيل")}</th>
+                    <th>{t("common.item", "الصنف")}</th>
+                    <th>{t("common.quantity", "الكمية")}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {d.lines.map((l) => (
+                    <tr key={l.id}>
+                      <td className="ltr-nums">{l.productionOrderNumber}</td>
+                      <td>{l.itemCode}{l.color ? ` (${l.color})` : ""}</td>
+                      <td className="ltr-nums">{l.quantityKg != null && `${l.quantityKg} كجم `}{l.quantityMeter != null && `${l.quantityMeter} م`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-            <div className="flex items-center gap-2 mt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               {d.status === "Draft" && <Button variant="secondary" onClick={() => prepareMutation.mutate(d.id)}>تجهيز</Button>}
               <Link to={`/print/delivery/${d.id}`} target="_blank"><Button type="button" variant="ghost">معاينة قبل الطباعة</Button></Link>
-              <Button variant="ghost" onClick={() => DocumentPdfApi.delivery(d.id, d.deliveryNumber)}>تنزيل PDF</Button>
+              <Button variant="ghost" onClick={DeliveriesExports.documentPdf(d.id)}>تنزيل PDF</Button>
               {d.status === "Prepared" && <Button variant="secondary" onClick={() => deliverMutation.mutate(d.id)}>تسليم</Button>}
               {(d.status === "Draft" || d.status === "Prepared" || d.status === "Delivered") && (
                 <>
@@ -145,7 +166,7 @@ export default function DeliveriesPage() {
                     placeholder="سبب الإلغاء..."
                     value={cancelReasonById[d.id] ?? ""}
                     onChange={(e) => setCancelReasonById((p) => ({ ...p, [d.id]: e.target.value }))}
-                    className="max-w-xs"
+                    className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs"
                   />
                   <Button variant="ghost" disabled={!cancelReasonById[d.id]} onClick={() => cancelMutation.mutate({ id: d.id, reason: cancelReasonById[d.id] })}>إلغاء</Button>
                 </>

@@ -38,21 +38,28 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
     private readonly ICurrentUserService _currentUser;
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public CreateRawMessageCommandHandler(
         IApplicationDbContext db,
         ICurrentUserService currentUser,
         IDocumentNumberGenerator numberGenerator,
-        IDateTime clock)
+        IDateTime clock,
+        IPeriodCloseService periodClose)
     {
         _db = db;
         _currentUser = currentUser;
         _numberGenerator = numberGenerator;
         _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<RawMessageDto> Handle(CreateRawMessageCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: a raw receipt is a stock posting, so its date must
+        // fall outside any closed period.
+        await _periodClose.EnsureOpenAsync(request.ReceiptDate, cancellationToken);
+
         // Section 6: the message number is ALWAYS system-generated via the
         // concurrency-safe sequence engine - never typed by the user.
         var messageNumber = await _numberGenerator.NextAsync(DocumentType.RawReceiptMessage, cancellationToken: cancellationToken);

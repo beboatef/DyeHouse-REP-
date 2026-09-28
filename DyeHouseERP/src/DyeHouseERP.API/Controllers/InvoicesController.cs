@@ -4,6 +4,7 @@ using DyeHouseERP.Application.Invoices.DTOs;
 using DyeHouseERP.Application.Invoices.Queries;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.API.Authorization;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -29,6 +30,32 @@ public class InvoicesController : ControllerBase
     public async Task<ActionResult<InvoiceDto>> GetById(Guid id) => Ok(await _mediator.Send(new GetInvoiceByIdQuery(id)));
 
     /// <summary>Printable single-invoice PDF (spec section 39) - customer, date, line items, totals, ready for print/download.</summary>
+    /// <summary>
+    /// The invoice register as Excel or PDF (spec sections 38/39), honouring the
+    /// same customerId/status filters as the list so the file always matches
+    /// what the user is looking at.
+    /// </summary>
+    [HttpGet("export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] InvoiceStatus? status,
+        [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
+    {
+        var invoices = await _mediator.Send(new GetInvoicesQuery(customerId, status));
+        var headers = new List<string>
+        {
+            "InvoiceNumber", "Date", "Customer", "Lines", "SubTotal", "Discount", "Tax", "Total", "Status"
+        };
+
+        var rows = invoices.Select(i => new object?[]
+        {
+            i.InvoiceNumber, i.InvoiceDate.ToString("yyyy-MM-dd"), $"{i.CustomerCode} - {i.CustomerName}",
+            i.Lines.Count, i.SubTotal, i.Discount, i.Tax, i.Total, i.Status.ToString()
+        }).ToList();
+
+        return ExportFileHelper.ToFile(export, format, "Customer Invoices", "DyeHouse ERP",
+            headers, rows, "invoices", "Invoices");
+    }
+
     [HttpGet("{id:guid}/pdf")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetInvoicePdf(Guid id, [FromServices] IReportExportService export)

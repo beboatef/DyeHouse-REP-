@@ -1,11 +1,13 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.RawExternalReleases.DTOs;
+using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.RawExternalReleases.Queries;
 
-public record GetRawExternalReleasesQuery(Guid? CustomerId = null) : IRequest<List<RawExternalReleaseDto>>;
+public record GetRawExternalReleasesQuery(Guid? CustomerId = null, RawReleaseReason? Reason = null,
+    ExternalProcessingStatus? Status = null) : IRequest<List<RawExternalReleaseDto>>;
 
 public class GetRawExternalReleasesQueryHandler : IRequestHandler<GetRawExternalReleasesQuery, List<RawExternalReleaseDto>>
 {
@@ -16,6 +18,8 @@ public class GetRawExternalReleasesQueryHandler : IRequestHandler<GetRawExternal
     {
         var query = _db.RawExternalReleases.AsNoTracking().AsQueryable();
         if (request.CustomerId.HasValue) query = query.Where(r => r.CustomerId == request.CustomerId);
+        if (request.Reason is not null) query = query.Where(r => r.Reason == request.Reason);
+        if (request.Status is not null) query = query.Where(r => r.Status == request.Status);
 
         var releases = await query.OrderByDescending(r => r.ReleaseDate).ToListAsync(cancellationToken);
         if (releases.Count == 0) return new List<RawExternalReleaseDto>();
@@ -26,6 +30,10 @@ public class GetRawExternalReleasesQueryHandler : IRequestHandler<GetRawExternal
             .Where(i => releases.Select(r => r.ItemId).Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
         var messages = await _db.RawMessages.AsNoTracking()
             .Where(m => releases.Select(r => r.RawMessageId).Contains(m.Id)).ToDictionaryAsync(m => m.Id, cancellationToken);
+
+        var orderIds = releases.Where(r => r.ProductionOrderId is not null).Select(r => r.ProductionOrderId!.Value).Distinct().ToList();
+        var orders = await _db.ProductionOrders.AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.OrderNumber, cancellationToken);
 
         return releases.Select(r => new RawExternalReleaseDto
         {
@@ -46,7 +54,17 @@ public class GetRawExternalReleasesQueryHandler : IRequestHandler<GetRawExternal
             ExternalParty = r.ExternalParty,
             Notes = r.Notes,
             CreatedBy = r.CreatedBy,
-            CreatedAtUtc = r.CreatedAtUtc
+            CreatedAtUtc = r.CreatedAtUtc,
+            ProductionOrderId = r.ProductionOrderId,
+            ProductionOrderNumber = r.ProductionOrderId is not null ? orders.GetValueOrDefault(r.ProductionOrderId.Value) : null,
+            ExternalProcessingStage = r.ExternalProcessingStage,
+            ExternalProcessingCost = r.ExternalProcessingCost,
+            ExpectedReturnDate = r.ExpectedReturnDate,
+            ActualReturnDate = r.ActualReturnDate,
+            ReturnedQuantityKg = r.ReturnedQuantityKg,
+            ReturnedQuantityMeter = r.ReturnedQuantityMeter,
+            CancellationReason = r.CancellationReason,
+            Status = r.Status
         }).ToList();
     }
 }

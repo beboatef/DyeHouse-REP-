@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WarehousesApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import ImportPanel from "@/components/ImportPanel";
+import { WarehousesExports } from "@/api/exports";
 
 const kinds = [
   { value: "RawMaterial", label: "مخزن خام" },
@@ -41,7 +44,29 @@ export default function WarehousesPage() {
       <PageHeader
         title="المخازن"
         subtitle="عدد ونوع المخازن قابل للتخصيص بالكامل - لا يوجد عدد ثابت مفروض على النظام"
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ مخزن جديد"}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ action: WarehousesExports.excel }}
+              pdf={{ action: WarehousesExports.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ مخزن جديد"}</Button>
+          </div>
+        }
+      />
+
+      {/*
+        Warehouses import is create-only by design: changing a warehouse's Kind
+        would silently reinterpret every historical balance it already holds,
+        so an existing code is always reported as a conflict rather than
+        updated. `supportsUpdate={false}` is what shows that in the UI.
+      */}
+      <ImportPanel
+        base="/warehouses/import"
+        supportsUpdate={false}
+        columns={["Code", "Name", "Kind"]}
+        title="استيراد المخازن من Excel"
+        onDone={() => qc.invalidateQueries({ queryKey: ["warehouses"] })}
       />
 
       {showForm && (

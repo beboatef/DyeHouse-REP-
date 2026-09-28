@@ -14,9 +14,14 @@ public class MaterialConfiguration : IEntityTypeConfiguration<Material>
         builder.Property(m => m.Name).HasMaxLength(200).IsRequired();
         builder.Property(m => m.Unit).HasConversion<string>().HasMaxLength(20);
         builder.Property(m => m.PurchasePrice).HasPrecision(18, 4);
+        // Chemical (production dye/auxiliary) vs OperatingSupply (spare parts,
+        // packaging, maintenance consumables) - spec sections 23 + 27.
+        builder.Property(m => m.Kind).HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(m => m.ReorderLevel).HasPrecision(18, 3);
         builder.Property(m => m.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(m => m.ModifiedBy).HasMaxLength(100);
         builder.HasIndex(m => m.Code).IsUnique();
+        builder.HasIndex(m => m.Kind);
     }
 }
 

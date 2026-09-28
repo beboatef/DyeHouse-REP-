@@ -38,8 +38,12 @@ import RawMessagePrintPage from "@/pages/print/RawMessagePrintPage";
 import ScanViewPage from "@/pages/scan/ScanViewPage";
 import ReportBuilderPage from "@/pages/ReportBuilderPage";
 import PeriodClosingPage from "@/pages/PeriodClosingPage";
+import NotFoundPage from "@/pages/NotFoundPage";
 import PurchasesPage from "@/pages/PurchasesPage";
 import PayrollPage from "@/pages/PayrollPage";
+import ApprovalCenterPage from "@/pages/ApprovalCenterPage";
+import SuppliesPage from "@/pages/SuppliesPage";
+import MaterialSalesPage from "@/pages/MaterialSalesPage";
 
 export default function App() {
   return (
@@ -71,6 +75,11 @@ export default function App() {
         <Route path="/formation-specifications" element={<FormationSpecificationsPage />} />
         <Route path="/purchases" element={<PurchasesPage />} />
         <Route path="/payroll" element={<PayrollPage />} />
+        <Route path="/approvals" element={<ApprovalCenterPage />} />
+        {/* Operating supplies and material sales live under Materials & supplies
+            (spec sections 26 + 27) - they are factory-owned stock, not custodies. */}
+        <Route path="/supplies" element={<SuppliesPage />} />
+        <Route path="/material-sales" element={<MaterialSalesPage />} />
         <Route path="/customer-portal" element={<CustomerPortalPage />} />
         <Route path="/production-floor" element={<ProductionFloorPage />} />
         <Route path="/production-stages" element={<ProductionStagesPage />} />
@@ -91,6 +100,12 @@ export default function App() {
         <Route path="/print/raw-message/:id" element={<RawMessagePrintPage />} />
         <Route path="/scan/:type/:id" element={<ScanViewPage />} />
       </Route>
+
+      {/* Last route on purpose: without it an unknown URL renders a blank
+          page inside the shell, with no message and no way back. Kept outside
+          the authenticated group so a bad link is still recoverable when
+          signed out. */}
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

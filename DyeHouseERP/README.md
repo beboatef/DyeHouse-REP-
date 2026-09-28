@@ -1,20 +1,36 @@
 # DyeHouse ERP
 
-A production-oriented ERP for a fabric dyeing/finishing job-work factory (لحساب الغير), built with .NET Clean Architecture + React. This implements every functional section of the original spec (sections 1-37) end to end: master data, raw receiving, production with a configurable stage engine, separates/reprocessing, materials/chemicals, ready goods, delivery, invoicing, customer accounts, treasury, cost accounting, and a customer-portal + production-floor surface.
+A production-oriented ERP for a fabric dyeing/finishing job-work factory (لحساب الغير), built with .NET Clean Architecture + React. This implements the original spec end to end, across all of its functional sections: master data, raw receiving, production with a configurable stage engine, customer formation requests and specification cells, separates/reprocessing, materials/chemicals, operating supplies, material sales, ready goods, delivery, invoicing, customer accounts, treasury, cheques, purchases with supplier statements, payroll, cost accounting (including job-order costing), reporting with PDF/Excel export, attachments, an approval center, and a customer-portal + production-floor surface - all behind granular, server-enforced permissions, an automatic audit log, and a bilingual Arabic/English (RTL/LTR) UI.
 
 ## Important: what "tested" actually means here
 
-I do not have the ability to run this application in the environment that generated this code - no internet access, no Docker, no ability to launch `dotnet run` or `npm run dev` and click through the UI. I was asked directly to "test everything," so I want to be precise about what I could and could not do, rather than let that instruction quietly go unaddressed:
+What has genuinely been run in this repo's development environment:
 
-**What I actually did (real, but limited):**
-- Static structural verification via `grep`/`diff` across the whole codebase: every `DbSet<T>` in `IApplicationDbContext` has a matching one in `ApplicationDbContext` (and vice versa); every `[HttpGet/Post/Put/Delete]` action has exactly one matching `[Authorize(Policy = ...)]` permission attribute (checked file-by-file, counts must match); no duplicate `using` statements were introduced by scripted edits; no stray/malformed directories from earlier shell mistakes.
-- Careful, consistent hand-written code following one pattern throughout, so errors are more likely to be small and mechanical (a missing `using`, an EF precision nuance) than structural.
+- `dotnet build DyeHouseERP.sln` - **0 warnings, 0 errors** across all six projects.
+- `dotnet test tests/DyeHouseERP.UnitTests` - **59/59 passing** (domain rules: no-FIFO allocation, stage rules, transfers, ledger direction, numbering, negative-stock override, check lifecycle, permission-list normalisation).
+- `dotnet ef migrations add` - migrations are generated in `src/DyeHouseERP.Persistence/Migrations` and the model snapshot is up to date. Generating a migration builds the whole EF model, so the entity configurations, indexes, FK cascade paths and column mappings are all verified by it - not just by eye.
+- Frontend type checking - `bunx tsc --noEmit -p tsconfig.json` exits 0, with `noUnusedLocals`/`noUnusedParameters` on.
+- Static structural verification across the codebase, run as scripts rather than by eye: `node tools/wiring-sweep.js` (271 controller actions, 0 duplicate routes, 0 actions without a permission policy beyond the two intentional `[AllowAnonymous]` ones, 74 UI download/import calls with 0 unresolved) and `node tools/duplicate-sweep.js` (0 duplicate permission values, i18n keys, entity names or indexes; 63/63 `DbSet`s matching in both directions).
 
-**What I did NOT do:**
-- Never ran `dotnet build`. Never ran `dotnet ef migrations add` against a real database. Never ran `npm install` or `npm run build`. Never opened the app in a browser. Never ran the integration tests I wrote earlier in this conversation.
-- So I cannot promise it compiles cleanly on the first try, and you should treat your own first `dotnet build` + `npm install` as the actual test - not a formality.
+What has **not** been run, and cannot be in this environment:
+- The integration tests in `tests/DyeHouseERP.IntegrationTests` need a real SQL Server (`Server=localhost,1433`) - there is none here, and the numbering engine's `sp_getapplock` has no in-memory equivalent. They are written and compiling, but unexecuted. **No SQL Server integration testing has been performed.**
+- The API therefore cannot start (`Program.cs` runs `Database.MigrateAsync()` on boot and there is no database to migrate), so the UI was exercised **without a backend**. `tools/ui-smoke.js` and `tools/ui-smoke-authed.js` drive a headless Chromium over the real routes: every module screen mounts, no page throws, the language switch flips RTL↔LTR, and clicking each export/import control was observed issuing the correct request. What could **not** be observed is the other half of those calls - a real `.xlsx`/`.pdf` body, a saved file, a rendered statement with data - because every response is a connection error. Claims about *what a button does* below are therefore backed by a captured request; claims about *the file it produces* are not.
 
-If you run it and hit errors, paste them back to me and I'll fix them directly - that's a real, fast feedback loop, unlike me guessing at problems I can't reproduce.
+## Headless UI smoke test
+
+The preview is a static Vite dev server, so the browser tests are run against it with a stub auth token (the guard only checks for a token's presence, and there is no backend to log in against):
+
+```bash
+freebuff-preview start
+mkdir -p /tmp/uitest && cd /tmp/uitest && npm i puppeteer@23   # kept out of package.json on purpose
+cd - >/dev/null
+node tools/smoke-modules.sh        # every module transforms through the running dev server
+node tools/ui-smoke.js             # 27 routes, signed out
+node tools/ui-smoke-authed.js      # 33 module screens, token stubbed
+```
+
+Chromium needs system libraries that are not present in a bare image:
+`apt-get install -y --no-install-recommends libglib2.0-0 libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 fonts-liberation`
 
 ## Getting started
 
@@ -58,6 +74,37 @@ npm run dev
 ```
 
 Opens at `http://localhost:5173`, proxying `/api` to the backend.
+
+> **Hosted-preview note.** The repository root is the folder containing `src/`,
+> but `package.json` lives in `src/DyeHouseERP.Web/`. A preview tool that
+> assumes it sits at the repository root will fail with
+> `ENOENT: .../package.json`. Point it at the real directory instead of moving
+> the manifest:
+>
+> ```bash
+> freebuff-preview set-install "cd DyeHouseERP/src/DyeHouseERP.Web && npm install"
+> freebuff-preview set "cd DyeHouseERP/src/DyeHouseERP.Web && npx vite --host 0.0.0.0 --port ${PORT:-5173}" 5173
+> freebuff-preview set-build  "cd DyeHouseERP/src/DyeHouseERP.Web && npx vite build"
+> freebuff-preview start
+> ```
+>
+> The preview is also served under a generated external hostname
+> (`<port>-<workspace>.e2b.app`). Vite rejects requests whose `Host` header is
+> not in `server.allowedHosts`, so without that list the external URL returns
+> *"Blocked request. This host ... is not allowed."* instead of the app. It is
+> set to `[".e2b.app", ".e2b.dev"]` in `vite.config.ts` - **not**
+> `allowedHosts: true`, which would turn the DNS-rebinding protection off
+> entirely. A leading dot matches the domain and every subdomain, and these are
+> plain strings because Vite compares entries with `===` (a `RegExp` entry can
+> never match). Verify with:
+>
+> ```bash
+> node tools/ext-preview-check.js https://<port>-<workspace>.e2b.app
+> ```
+>
+> which loads the real external hostname in a headless browser and fails if Vite
+> answers with its host-check page. Hitting `127.0.0.1` would pass even with the
+> check misconfigured, so the external URL is the only meaningful test.
 
 ### 3. Running the integration tests
 
@@ -114,11 +161,27 @@ tests/
 | 42 | Audit log (automatic, every Create/Update/Delete + Login/LoginFailed) | `Domain/Entities/AuditLogEntry.cs`, `Persistence/Interceptors/AuditSaveChangesInterceptor.cs`, `Application/Audit/*` |
 | 1, 47 | Company branding: logo upload + name, shown on login/sidebar | `Domain/Entities/CompanySettings.cs`, `Application/Settings/*`, `API/Controllers/SettingsController.cs`, `Web/src/pages/SettingsPage.tsx` |
 | 19, 33 | Real-data dashboard (no hardcoded KPIs - spec rule #19) | `Application/Dashboard/Queries/GetDashboardSummaryQuery.cs`, `Web/src/pages/DashboardPage.tsx` |
-| 37, 38 | Excel export (customers, reports) + Excel import (customers, with preview/validate/confirm workflow) | `Infrastructure/Services/{ReportExportService,ExcelImportReader}.cs`, `Application/Customers/Commands/ImportCustomersCommands.cs`, `Web/src/pages/CustomersPage.tsx` |
+| 37, 38 | Excel export + Excel import across every master-data and operational list. One shared contract (`ImportPreviewDto` / `ImportExecuteResultDto`) and one shared wizard (`Web/src/components/ImportPanel.tsx`); endpoint declarations live in `Web/src/api/exports.ts`, file generation in `Infrastructure/Services/{ReportExportService,ExcelImportReader}.cs` |
 | 39 | Printable single-document PDFs + in-app print-preview screens | `API/Controllers/{InvoicesController,DeliveriesController,ProductionOrdersController,RawMessagesController}.cs` (`/pdf` actions), `Web/src/components/PrintPreviewLayout.tsx`, `Web/src/pages/print/*` |
 | 40 | QR codes + scan quick-view | `Web/src/pages/scan/ScanViewPage.tsx` (embedded via `qrcode.react` in the print-preview pages) |
 | 43 | Period closing | `Domain/Entities/PeriodClose.cs`, `Persistence/Services/PeriodCloseService.cs`, `Application/PeriodClosing/*`, `Web/src/pages/PeriodClosingPage.tsx` |
 | 36 | Custom report builder (whitelisted entities/columns only) | `Application/ReportBuilder/*`, `API/Controllers/ReportBuilderController.cs`, `Web/src/pages/ReportBuilderPage.tsx` |
+| 5, 12 | Customer Formation Requests: reusable specification cells, snapshot on approval, group output, linkage to job orders and raw messages | `Domain/Entities/{FormationRequest,FormationSpecTemplate}.cs`, `Application/FormationRequests/*`, `API/Controllers/{FormationRequestsController,FormationSpecificationsController}.cs`, `Web/src/pages/{FormationRequestsPage,FormationRequestDetailPage,FormationSpecificationsPage}.tsx` |
+| 34 | Job Order costing: estimated / live actual / approved cost, cost per KG and per Meter, costing notes, Excel/PDF export | `Application/CostAccounting/Commands/ProductionOrderCostingCommands.cs`, `Application/CostAccounting/Queries/GetProductionOrderCostQuery.cs`, `API/Controllers/CostAccountingController.cs`, `Web/src/pages/ProductionOrderDetailPage.tsx` (cost panel) |
+| 21 | External Processing: release to a third party, expected return, cost, return posting, cancellation | `Domain/Entities/RawExternalRelease.cs`, `Application/RawExternalReleases/Commands/ExternalProcessingCommands.cs`, `Web/src/pages/RawExternalReleasesPage.tsx` |
+| 26 | Material sales to customers (draft -> approved -> posted), ledger-backed, never a stock edit | `Domain/Entities/MaterialSale.cs`, `Application/MaterialSales/*`, `API/Controllers/MaterialSalesController.cs`, `Web/src/pages/MaterialSalesPage.tsx` |
+| 27 | Operating supplies as their own store workflow (issue, timeline, acknowledgment) | `Domain/Entities/SupplyIssue.cs`, `Application/Supplies/*`, `API/Controllers/SuppliesController.cs`, `Web/src/pages/SuppliesPage.tsx` |
+| 44 | Approval Center - one read-only inbox over every pending approval in the system | `Application/Approvals/*`, `API/Controllers/ApprovalsController.cs`, `Web/src/pages/ApprovalCenterPage.tsx` |
+| 47 | Private attachments on any business document (stored in-DB, permission-checked downloads) | `Domain/Entities/Attachment.cs`, `Application/Attachments/*`, `API/Controllers/AttachmentsController.cs`, `Web/src/components/AttachmentsPanel.tsx` |
+| 6, 7 | Bilingual items (AR/EN names + category) and full Excel import for items: template, preview, validation, duplicate handling, permission-gated update of existing rows | `Domain/Entities/Item.cs`, `Application/Items/{Commands,Queries}/*`, `API/Controllers/ItemsController.cs`, `Web/src/pages/ItemsPage.tsx` |
+| 37, 38, 39 | Print/PDF/Excel across documents and reports: every list endpoint that is worth printing accepts `?format=excel\|pdf`, every single document has a `/pdf`, and the three account statements (customer, supplier, treasury) are documents with opening balance, running balance and closing total. UI: `Web/src/api/exports.ts` + `Web/src/components/ExportButtons.tsx` |
+| 2, 3 | Arabic/English UI with a language switcher and automatic RTL/LTR | `Web/src/i18n/index.tsx` (`useI18n`), `Web/src/components/Layout.tsx` |
+| 35 | Purchases: requests/orders/receiving/supplier invoices/payments, balances and statements, draft editing, details, Excel + PDF export | `Domain/Entities/Purchase*.cs`, `Application/Purchases/*`, `API/Controllers/PurchasesController.cs`, `Web/src/pages/PurchasesPage.tsx`, `Web/src/api/documents.ts` |
+| 49 | Payroll: departments, employees, monthly runs, allowances/deductions, approve/post/cancel, payslip PDF and run Excel/PDF | `Domain/Entities/{Employee,PayrollRun}.cs`, `Application/Payroll/*`, `API/Controllers/PayrollController.cs`, `Web/src/pages/PayrollPage.tsx` |
+| 33 | Cheques: incoming/outgoing, received, deposited, cleared, bounced/returned, endorsed, cancelled, with a movement ledger, status audit and Excel/PDF export | `Domain/Entities/Check.cs`, `Application/Checks/*`, `API/Controllers/ChecksController.cs`, `Web/src/pages/ChecksPage.tsx` |
+| 14 | Suppliers master data + supplier statement | `Domain/Entities/Supplier.cs`, `Application/Suppliers/*`, `API/Controllers/SuppliersController.cs`, `Web/src/pages/SuppliersPage.tsx` |
+| 18 | Inventory movements report over the append-only ledger (+ Excel/PDF) | `Application/Reports/Queries/GetInventoryMovementsQuery.cs`, `API/Controllers/ReportsController.cs` |
+| 14 | Warehouse as ONE sidebar module: balances, receipts, issues, transfers, adjustments, movements, master data | `Web/src/pages/WarehouseHubPage.tsx` |
 
 Every module above has a matching RTL Arabic React page reachable from the sidebar.
 
@@ -137,17 +200,17 @@ Every module above has a matching RTL Arabic React page reachable from the sideb
 
 ## Honest gaps / what I'd do next with more time
 
-- Not compiled. As above - first build will surface small issues.
-- No EF migrations generated yet - `dotnet ef migrations add InitialCreate` needs to be run against a real SQL Server to produce the actual migration files and confirm the model builds cleanly (check constraints, cascade paths on `CustomerTransfer`'s two customer FKs, etc.).
-- **No bilingual Arabic/English localization system.** The UI is still hardcoded Arabic strings inside React components - exactly what the review prompt calls out as unacceptable ("Do not hardcode Arabic text directly throughout React components"). There is no `ar.json`/`en.json`, no language switcher, no automatic LTR mode. This is the single largest remaining gap from that review and hasn't been started - it needs a real i18n library (e.g. `react-i18next`), translation-key extraction across ~30 pages, and backend error-message localization. I did not attempt it this session because it's a large, separable piece of work better done as its own focused pass than squeezed in alongside everything else.
-- **Excel import** now has one real, complete implementation for Customers (`/api/customers/import/preview` then `/import/execute`) following the exact safe workflow the spec requires: upload → read (`ExcelImportReader`, ClosedXML) → validate every row (missing fields, duplicate codes, in-file duplicates) → preview with per-row errors → explicit confirm → execute (re-validates before committing, never trusts a stale preview) → results. Items/Materials/opening-balance imports aren't built yet, but they're the same pattern (see `CustomerImportValidator` as the template).
-- **Document PDFs** (spec section 39) now exist for single Invoice, Delivery, Production Order, and Raw Message documents (`GET /api/{resource}/{id}/pdf`), not just the two list-style reports from before - each has a "طباعة PDF" button in its page. Printing itself is "download the PDF and use the browser's print dialog" rather than a dedicated in-app print-preview screen.
-- **In-app print preview** (spec section 39) now exists for real: `/print/invoice/:id`, `/print/delivery/:id`, `/print/production-order/:id`, `/print/raw-message/:id` render the document as styled A4 HTML (company logo, header, line items, totals, signature lines) with a "طباعة" button that calls the browser's own print dialog - no server round-trip needed just to preview, and `@media print` rules hide everything but the document itself. The old PDF-download endpoints still exist too, for actually saving a file.
+- Build, unit tests, migrations and frontend type checking all pass (see above). What is still unverified is runtime behaviour against a real SQL Server and a real browser - the integration tests exist but need a database this environment does not have.
+- Bilingual AR/EN with RTL/LTR is implemented in `Web/src/i18n/index.tsx` (`useI18n`: `t`, `pick`, `lang`, `dir`), with both dictionaries at key parity (547 keys each, no duplicates). Some older screens still carry inline Arabic literals; the shared shell, dashboard, purchases, payroll, checks, items, formation, supplies, material-sales, warehouse and approvals screens are on translation keys. Finishing the extraction on the remaining legacy pages is mechanical work, not new architecture.
+- **Excel import** follows one contract everywhere, for six master-data lists: Customers, Items, Materials/Chemicals, Suppliers, Warehouses and Employees. Upload → read (`ExcelImportReader`, ClosedXML) → validate every row (missing fields, duplicate keys, in-file duplicates, existing-record conflicts) → preview with per-row errors and the exact action each row will take → explicit confirm → execute (re-validates from scratch, never trusts a stale preview) → results. Overwriting an existing record is a *separate* pair of endpoints guarded by the module's `*.edit` permission and only reachable when the user ticks a box - that is what makes "no silent overwrite" true. Warehouses are the deliberate exception (`supportsUpdate={false}`): changing a warehouse's `Kind` would silently reinterpret every historical balance it already holds, so an import can only ever create. Arabic header aliases are accepted by every validator, so one template works for an Arabic-speaking clerk and for an export from another system.
+- **Document PDFs** (spec section 39) exist for every single document that gets handed to someone: raw message, production order, delivery, invoice, formation request, check, purchase order, purchase receipt, supplier invoice, material sale, supply issue, job-order costing, plus the customer/supplier/treasury statements. Each has a "PDF" button on its own screen.
+- **In-app print preview** (spec section 39) exists for the four core operational documents: `/print/invoice/:id`, `/print/delivery/:id`, `/print/production-order/:id`, `/print/raw-message/:id` render styled A4 HTML (company logo, header, line items, totals, signature lines, QR) and hand off to the browser's own print dialog. Statements and reports use a lighter `@media print` stylesheet on the report screen itself. The PDF endpoints remain the way to *save* a file.
+- **Verification tooling.** `node tools/wiring-sweep.js` proves every download/import path the React app calls resolves to a real controller action, that no action lacks a permission policy (other than login and the public company settings), and that no verb+route pair is declared twice. `node tools/duplicate-sweep.js` proves there are no duplicate permission values, i18n keys, entity class names or `HasIndex` calls, and that the 63 `DbSet`s on `ApplicationDbContext` match the interface the Application layer depends on in both directions. `node tools/hooks-check.js` walks the TypeScript AST for the React failure modes a compiler passes straight through - a hook called inside a branch, a loop or a callback, and a local binding that shadows a hook name. `bash tools/smoke-modules.sh` asks a *running* dev server to transform every application module, which catches a page that cannot compile. `node tools/ui-smoke.js` and `node tools/ui-smoke-authed.js` drive a headless browser over the real routes (see below). None of them replace a compiler; each closes a gap the compiler cannot see.
 - **QR codes** (spec section 40) are embedded in every print-preview page, encoding a link to a matching `/scan/:type/:id` quick-view screen. Scanning a Production Order shows exactly what the spec asks for: customer, item, color, requested/completed quantity, current stage, status, and the full stage history - not the full edit screen.
-- **Period closing** (spec section 43) is implemented: `PeriodClose` entity, close/reopen commands (reopen is itself audited via the existing audit interceptor), and `IPeriodCloseService.EnsureOpenAsync` wired into four representative posting handlers (issuing an invoice, creating a stock adjustment, creating a treasury receipt, creating a treasury payment) - each now rejects a date inside a closed period. Extending the same check to every other posting command (raw receipt, delivery, etc.) is the identical one-line addition; it hasn't been done for all of them yet.
+- **Period closing** (spec section 43) now blocks every posting path, not a sample of them. `IPeriodCloseService.EnsureOpenAsync` is called by **all 29 handlers that insert a ledger row** (verified by scanning every `new InventoryTransaction / MaterialTransaction / CustomerLedgerEntry / SupplierLedgerEntry / TreasuryTransaction` site): raw receipt, inspection rejection, raw allocation, customer-to-customer transfer, external release and external-processing return, ready-goods transfer, delivery and its cancellation, material issue/transfer/preparation, supply issue and its cancellation, material-sale posting and cancellation, purchase receipt, supplier invoice post/cancel, supplier payment, invoice issue/cancel, treasury receipt/payment/transfer, stock adjustment, cheque clearing, payroll post/cancel. The date used is exactly the date stamped on the ledger row: reversal/cancellation handlers are dated today, so a closed historical period never blocks a correction - only a period that covers *today* does. That is the documented intent of the feature, not an oversight.
 - **Custom report builder** (spec section 36) is real but intentionally narrow: `ReportableEntitiesRegistry` whitelists exactly which entities (`ProductionOrders`, `Invoices`, `Customers`) and which columns can be queried - there is no dynamic/raw SQL anywhere, matching the spec's explicit warning against exposing that to normal users. Users pick an entity + columns, run it, save it as a named template, and export PDF/Excel. Adding a new reportable entity means one registry entry + one case in `RunReportCommandHandler` - the pattern is proven, just not yet applied to every entity in the system.
-- No QR/barcode scanning hardware integration (the QR codes are generated and the scan-view page exists, but there's no dedicated barcode-scanner input workflow beyond "open the URL the QR code encodes").
-- Permissions are now genuinely per-endpoint (`[Authorize(Policy = PermissionPolicy.For(Permissions.X))]` on every controller action, checked server-side by `PermissionAuthorizationHandler`) rather than a class-level role check. What's still simplified: permissions are delivered as JWT role claims per user (`User.Roles`, comma-separated) rather than a separate Roles table with its own CRUD screen - `roles.manage` exists as a permission constant but there's no "create a custom role with this permission set" UI yet, only per-user permission checkboxes on `/users`.
+- **QR/barcode: no hardware scanner integration, deliberately.** No current requirement asks the factory to operate a handheld scanner, so none was added: QR labels are generated on the print-preview documents and the `/scan/:type/:id` quick-view screens are reached by opening the URL the code encodes (any phone camera or handheld reader in keyboard-wedge mode that types a URL works). Keyboard-wedge scanners that emit a plain document number instead of a URL would need a small "lookup by number" screen - explicitly **optional**, not built, and listed here so the decision is visible rather than forgotten.
+- **Permissions: no Role entity, on purpose.** Access is a flat, per-user list of permission names (`User.Roles`, checked server-side by `PermissionAuthorizationHandler`, with `admin` as the catch-all) rather than a Roles table with role-permission mappings. Introducing a Role aggregate now would mean a new table, a join table, claim-derivation changes and a migration - i.e. a redesign of a working permission system, which is exactly what was asked not to happen. What *was* missing and is now closed: the picker on `/users` exposed only **3 of the 95** permissions, so most granular permissions could not be granted to anyone through the app. `Web/src/permissions.ts` now mirrors all 95 backend permissions (grouped, Arabic-labelled, searchable - verified to match `Permissions.All` exactly), and a login's permissions can finally be **edited** after creation (`PUT /api/users/{id}`, guarded by `roles.manage`, which until now was a dead constant). Two guard rails make that safe: you cannot edit your own permissions, and the last active administrator cannot lose `admin`.
 - **PDF/Arabic font caveat**: `ReportExportService` (QuestPDF) renders Arabic titles/labels, but correct shaping needs an Arabic-capable font actually present on the host. Dev machines usually have one; a bare Linux container often doesn't - if PDF text comes out as boxes on your server, embed a font (e.g. Noto Naskh Arabic) via `QuestPDF.Drawing.FontManager.RegisterFont` at startup. Excel export (ClosedXML) has no such issue - Arabic renders correctly since it's just cell text, not typeset PDF content.
 - List queries that hydrate full DTOs per row (e.g. `GetProductionOrdersQuery`) are simple but not optimized for large datasets - noted inline where this matters most.
 - Real integration tests now exist in `tests/DyeHouseERP.IntegrationTests` (`WebApplicationFactory<Program>`, boots the real API in-process against a real SQL Server) covering: customer CRUD + 401/409 handling, manual raw allocation with the negative-stock block, and a full happy path from raw receipt through to a zero customer-statement balance. They need SQL Server reachable (see "Running the tests" below) - they don't run against an in-memory fake because the numbering engine's `sp_getapplock` call has no in-memory equivalent.

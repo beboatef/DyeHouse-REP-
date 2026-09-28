@@ -2,6 +2,7 @@ using DyeHouseERP.Application.Customers.Commands;
 using DyeHouseERP.Application.Customers.DTOs;
 using DyeHouseERP.Application.Customers.Queries;
 using DyeHouseERP.API.Authorization;
+using DyeHouseERP.Application.Common.Import;
 using DyeHouseERP.Domain.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -47,27 +48,65 @@ public class CustomersController : ControllerBase
     }
 
     /// <summary>
-    /// Step 1 of the Excel import workflow (spec section 38): parses and
+    /// The same list as a printable document (spec section 39) - one `format`
+    /// switch, so the Customers screen can offer Excel and PDF from the same
+    /// filters without a second round of code.
+    /// </summary>
+    [HttpGet("export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> Export([FromQuery] bool? activeOnly, [FromQuery] string? search,
+        [FromQuery] string format = "excel", [FromServices] Application.Common.Interfaces.IReportExportService export = null!)
+    {
+        var customers = await _mediator.Send(new GetCustomersQuery(activeOnly, search));
+        var headers = new List<string> { "Code", "Name", "Active" };
+        var rows = customers
+            .Select(c => new object?[] { c.Code, c.Name, c.IsActive ? "Yes" : "No" })
+            .ToList();
+
+        return Common.ExportFileHelper.ToFile(export, format, "Customer List", "DyeHouse ERP",
+            headers, rows, "customers", "Customers");
+    }
+
+    /// <summary>Step 1 of the import workflow: the template with the exact expected columns.</summary>
+    [HttpGet("import/template")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersView)]
+    public IActionResult ImportTemplate([FromServices] Application.Common.Interfaces.IReportExportService export)
+        => Common.ExportFileHelper.Template(export, "Customers", CustomerImportTemplate.Headers,
+            CustomerImportTemplate.SampleRows(), "customers-import-template");
+
+    /// <summary>
+    /// Step 2 of the Excel import workflow (spec section 38): parses and
     /// validates the uploaded file WITHOUT saving anything, returning a
     /// per-row preview with any errors so the user can review before
-    /// confirming. Expected columns: Code, Name.
+    /// confirming. Header names accept English or Arabic spellings.
     /// </summary>
     [HttpPost("import/preview")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersCreate)]
-    public async Task<ActionResult<CustomerImportPreviewDto>> PreviewImport(IFormFile file)
-    {
-        await using var stream = new MemoryStream();
-        await file.CopyToAsync(stream);
-        return Ok(await _mediator.Send(new PreviewCustomerImportCommand(stream.ToArray())));
-    }
+    public async Task<ActionResult<ImportPreviewDto>> PreviewImport(IFormFile file)
+        => Ok(await _mediator.Send(new PreviewCustomerImportCommand(
+            await Common.ExportFileHelper.ReadUploadAsync(file), AllowUpdate: false)));
 
-    /// <summary>Step 2: re-validates the same file and imports only the valid rows (spec: "No silent invalid imports", "Transaction rollback on critical failure").</summary>
+    /// <summary>Step 3: re-validates the same file and imports only the valid rows (spec: "No silent invalid imports", "Transaction rollback on critical failure").</summary>
     [HttpPost("import/execute")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersCreate)]
-    public async Task<ActionResult<CustomerImportExecuteResultDto>> ExecuteImport(IFormFile file)
-    {
-        await using var stream = new MemoryStream();
-        await file.CopyToAsync(stream);
-        return Ok(await _mediator.Send(new ExecuteCustomerImportCommand(stream.ToArray())));
-    }
+    public async Task<ActionResult<ImportExecuteResultDto>> ExecuteImport(IFormFile file)
+        => Ok(await _mediator.Send(new ExecuteCustomerImportCommand(
+            await Common.ExportFileHelper.ReadUploadAsync(file), AllowUpdate: false)));
+
+    /// <summary>
+    /// The same two steps for a user who may also update existing customers.
+    /// `customers.edit` is required here and only here - a create-only user
+    /// cannot reach an endpoint that would overwrite a master record.
+    /// </summary>
+    [HttpPost("import/preview-update")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersEdit)]
+    public async Task<ActionResult<ImportPreviewDto>> PreviewImportWithUpdate(IFormFile file)
+        => Ok(await _mediator.Send(new PreviewCustomerImportCommand(
+            await Common.ExportFileHelper.ReadUploadAsync(file), AllowUpdate: true)));
+
+    [HttpPost("import/execute-update")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersEdit)]
+    public async Task<ActionResult<ImportExecuteResultDto>> ExecuteImportWithUpdate(IFormFile file)
+        => Ok(await _mediator.Send(new ExecuteCustomerImportCommand(
+            await Common.ExportFileHelper.ReadUploadAsync(file), AllowUpdate: true)));
 }

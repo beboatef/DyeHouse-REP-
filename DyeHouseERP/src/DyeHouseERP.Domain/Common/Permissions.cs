@@ -112,6 +112,30 @@ public static class Permissions
     public const string PayrollPost = "payroll.post";
     public const string PayrollCancel = "payroll.cancel";
 
+    // ---- Job Order costing (spec section 34) ----
+    public const string CostingView = "costing.view";
+    public const string CostingEditEstimate = "costing.edit_estimate";
+    /// <summary>Signing off the approved cost of a completed Job Order - a financial decision, kept separate from editing the estimate.</summary>
+    public const string CostingApprove = "costing.approve";
+
+    // ---- Operating supplies internal issue (spec section 27) ----
+    public const string SuppliesView = "supplies.view";
+    public const string SuppliesIssue = "supplies.issue";
+    public const string SuppliesCancel = "supplies.cancel";
+
+    // ---- Factory-owned materials sales (spec section 26) ----
+    public const string MaterialSalesView = "material_sales.view";
+    public const string MaterialSalesCreate = "material_sales.create";
+    public const string MaterialSalesPost = "material_sales.post";
+    public const string MaterialSalesCancel = "material_sales.cancel";
+
+    // ---- Approval Center (spec section 44) ----
+    public const string ApprovalsView = "approvals.view";
+
+    // ---- Attachments on business documents (spec section 47) ----
+    public const string AttachmentsView = "attachments.view";
+    public const string AttachmentsManage = "attachments.manage";
+
     public const string ReportsView = "reports.view";
     public const string ReportsExport = "reports.export";
 
@@ -140,6 +164,11 @@ public static class Permissions
         PurchasesView, PurchasesCreate, PurchasesEdit, PurchasesSubmit, PurchasesApprove,
         PurchasesReceive, PurchasesCancel, PurchasesInvoice, PurchasesPay, PurchasesExport,
         PayrollView, PayrollManageEmployees, PayrollCreate, PayrollApprove, PayrollPost, PayrollCancel,
+        CostingView, CostingEditEstimate, CostingApprove,
+        SuppliesView, SuppliesIssue, SuppliesCancel,
+        MaterialSalesView, MaterialSalesCreate, MaterialSalesPost, MaterialSalesCancel,
+        ApprovalsView,
+        AttachmentsView, AttachmentsManage,
         ReportsView, ReportsExport,
         UsersManage, RolesManage, SettingsManage, AuditView
     };

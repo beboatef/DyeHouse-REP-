@@ -9,6 +9,7 @@ import {
   TreasuryAccountsApi
 } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ChecksExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 /**
@@ -325,10 +326,16 @@ export default function ChecksPage() {
                   {t(`checks.direction.${check.direction}`)}
                 </Badge>
                 <Badge tone={statusTone[check.status]}>{t(`checks.status.${check.status}`)}</Badge>
-                <button className="text-xs font-semibold text-brand-600 hover:underline" onClick={() => openActions(check.id)}>
+                <button className="btn-link" onClick={() => openActions(check.id)}>
                   {t("common.actions")}
                 </button>
-                <button className="text-xs font-semibold text-slate-500 hover:underline" onClick={() => setExpanded(expanded === check.id ? null : check.id)}>
+                <button
+                  className="btn-link"
+                  onClick={ChecksExports.documentPdf(check.id)}
+                >
+                  {t("common.pdf")}
+                </button>
+                <button className="btn-link" onClick={() => setExpanded(expanded === check.id ? null : check.id)}>
                   {t("checks.history")}
                 </button>
               </div>
@@ -352,7 +359,7 @@ export default function ChecksPage() {
                     <Select
                       value={actionState.supplierId}
                       onChange={(e) => setActionState({ ...actionState, supplierId: e.target.value })}
-                      className="max-w-xs"
+                      className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs"
                     >
                       <option value="">{t("checks.selectSupplier")}</option>
                       {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
@@ -367,7 +374,7 @@ export default function ChecksPage() {
                     <Select
                       value={actionState.accountId}
                       onChange={(e) => setActionState({ ...actionState, accountId: e.target.value })}
-                      className="max-w-xs"
+                      className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs"
                     >
                       <option value="">{t("checks.selectAccount")}</option>
                       {accounts?.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
@@ -390,7 +397,7 @@ export default function ChecksPage() {
                       placeholder={t("common.reason")}
                       value={actionState.reason}
                       onChange={(e) => setActionState({ ...actionState, reason: e.target.value })}
-                      className="max-w-xs"
+                      className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs"
                     />
                     <Button variant="secondary" onClick={() => movementMutation.mutate({ action: "bounce", id: check.id })}>
                       {t("checks.action.bounce")}
@@ -406,7 +413,7 @@ export default function ChecksPage() {
                       placeholder={t("common.reason")}
                       value={actionState.reason}
                       onChange={(e) => setActionState({ ...actionState, reason: e.target.value })}
-                      className="max-w-xs"
+                      className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs"
                     />
                     <Button variant="ghost" onClick={() => movementMutation.mutate({ action: "cancel", id: check.id })}>
                       {t("checks.action.cancel")}

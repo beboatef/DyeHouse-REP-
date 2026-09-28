@@ -68,7 +68,7 @@ export default function SettingsPage() {
                 <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={(e) => onFileSelected(e.target.files?.[0])} />
               </label>
               {logoDataUrl && (
-                <button type="button" onClick={() => setLogoDataUrl(null)} className="inline-flex items-center gap-2 text-sm text-red-600 hover:underline w-fit">
+                <button type="button" onClick={() => setLogoDataUrl(null)} className="inline-flex min-h-[32px] w-fit items-center gap-2 rounded-md px-2 text-sm font-semibold text-danger transition-colors hover:bg-danger-soft">
                   <Trash2 size={16} />
                   إزالة الشعار
                 </button>

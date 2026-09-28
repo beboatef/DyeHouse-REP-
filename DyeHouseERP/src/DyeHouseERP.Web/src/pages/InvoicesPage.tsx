@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CustomersApi, CustomerStatementApi, DocumentPdfApi, downloadFile, InvoicesApi, ItemsApi } from "@/api/client";
+import { CustomersApi, CustomerStatementApi, InvoicesApi, ItemsApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { InvoicesExports, StatementsExports } from "@/api/exports";
 
 const statusLabel: Record<string, string> = { Draft: "مسودة", Issued: "معتمدة", PartiallyPaid: "مدفوعة جزئيًا", Paid: "مدفوعة", Cancelled: "ملغاة" };
 const statusTone: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> = { Draft: "gray", Issued: "blue", PartiallyPaid: "yellow", Paid: "green", Cancelled: "red" };
@@ -55,14 +57,20 @@ export default function InvoicesPage() {
     <>
       <PageHeader title="الفواتير وحساب العميل" subtitle="مسودة ← معتمدة (تسجل في حساب العميل) - الإلغاء ينشئ حركة عكسية ولا يحذف السجل الأصلي" />
 
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
-        <button onClick={() => setTab("invoices")} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "invoices" ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500"}`}>الفواتير</button>
-        <button onClick={() => setTab("statement")} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "statement" ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500"}`}>كشف حساب عميل</button>
+      <div className="tabs mb-6">
+        <button onClick={() => setTab("invoices")} className={`tab ${tab === "invoices" ? "tab-active" : ""}`}>الفواتير</button>
+        <button onClick={() => setTab("statement")} className={`tab ${tab === "statement" ? "tab-active" : ""}`}>كشف حساب عميل</button>
       </div>
 
       {tab === "invoices" && (
         <>
-          <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ فاتورة جديدة"}</Button></div>
+          <div className="flex justify-end gap-2 mb-4">
+            <ExportButtons
+              excel={{ action: InvoicesExports.list.excel }}
+              pdf={{ action: InvoicesExports.list.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ فاتورة جديدة"}</Button>
+          </div>
 
           {showForm && (
             <Card className="p-5 mb-6">
@@ -110,7 +118,7 @@ export default function InvoicesPage() {
           <div className="space-y-3">
             {isLoading && <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>}
             {invoices?.map((inv) => (
-              <Card key={inv.id} className="p-4">
+              <Card key={inv.id} className="card-pad">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <span className="font-bold ltr-nums">{inv.invoiceNumber}</span>
@@ -121,13 +129,13 @@ export default function InvoicesPage() {
                   </div>
                   <Badge tone={statusTone[inv.status]}>{statusLabel[inv.status]}</Badge>
                 </div>
-                <div className="flex items-center gap-2 mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   {inv.status === "Draft" && <Button variant="secondary" onClick={() => issueMutation.mutate(inv.id)}>اعتماد</Button>}
                   <Link to={`/print/invoice/${inv.id}`} target="_blank"><Button type="button" variant="ghost">معاينة قبل الطباعة</Button></Link>
-                  <Button variant="ghost" onClick={() => DocumentPdfApi.invoice(inv.id, inv.invoiceNumber)}>تنزيل PDF</Button>
+                  <Button variant="ghost" onClick={InvoicesExports.documentPdf(inv.id)}>تنزيل PDF</Button>
                   {(inv.status === "Draft" || inv.status === "Issued" || inv.status === "PartiallyPaid") && (
                     <>
-                      <Input placeholder="سبب الإلغاء..." value={cancelReasonById[inv.id] ?? ""} onChange={(e) => setCancelReasonById((p) => ({ ...p, [inv.id]: e.target.value }))} className="max-w-xs" />
+                      <Input placeholder="سبب الإلغاء..." value={cancelReasonById[inv.id] ?? ""} onChange={(e) => setCancelReasonById((p) => ({ ...p, [inv.id]: e.target.value }))} className="min-w-[12rem] flex-1 sm:max-w-xs" />
                       <Button variant="ghost" disabled={!cancelReasonById[inv.id]} onClick={() => cancelMutation.mutate({ id: inv.id, reason: cancelReasonById[inv.id] })}>إلغاء</Button>
                     </>
                   )}
@@ -151,13 +159,13 @@ export default function InvoicesPage() {
               <div className="flex justify-end gap-2 mb-3">
                 <Button
                   variant="secondary"
-                  onClick={() => downloadFile(`/customers/${statementCustomerId}/statement/pdf`, `statement-${statementCustomerId}.pdf`)}
+                  onClick={() => StatementsExports.customer(statementCustomerId).pdf()}
                 >
                   تنزيل PDF
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={() => downloadFile(`/customers/${statementCustomerId}/statement/excel`, `statement-${statementCustomerId}.xlsx`)}
+                  onClick={() => StatementsExports.customer(statementCustomerId).excel()}
                 >
                   تنزيل Excel
                 </Button>

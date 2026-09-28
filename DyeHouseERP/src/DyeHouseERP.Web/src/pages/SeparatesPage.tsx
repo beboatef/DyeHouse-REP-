@@ -58,13 +58,13 @@ export default function SeparatesPage() {
             )}
 
             {s.status === "PendingReprocessing" && (
-              <div className="flex gap-2 mt-3 items-center">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button variant="secondary" onClick={() => reprocessMutation.mutate(s.id)}>إنشاء أمر إعادة تشغيل</Button>
                 <Input
                   placeholder="سبب الإتلاف..."
                   value={scrapReasonById[s.id] ?? ""}
                   onChange={(e) => setScrapReasonById((p) => ({ ...p, [s.id]: e.target.value }))}
-                  className="max-w-xs"
+                  className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs"
                 />
                 <Button
                   variant="ghost"

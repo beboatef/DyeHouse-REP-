@@ -33,15 +33,21 @@ public class CreateMaterialPreparationCommandHandler : IRequestHandler<CreateMat
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public CreateMaterialPreparationCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock)
+        IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<MaterialPreparationDto> Handle(CreateMaterialPreparationCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: preparation/dilution consumes and produces material stock.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.OriginalMaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.OriginalMaterialId);
 

@@ -41,6 +41,21 @@ public class ProductionOrder : AuditableEntity
     public Guid? FormationRequestId { get; private set; }
     public Guid? FormationGroupId { get; private set; }
 
+    // ---- Job Order costing (spec section 34) ----
+    // Three figures, deliberately kept apart so nobody has to guess which one
+    // they are looking at:
+    //   EstimatedCost - what the order was quoted/planned at (editable while open)
+    //   ApprovedCost  - the frozen figure an authorized user signed off on
+    //   ActualCost    - NEVER stored here; it is always rolled up live from
+    //                   posted MaterialIssue/MaterialPreparation/CostEntry rows
+    //                   (see GetProductionOrderCostQuery), so it can never
+    //                   drift from the transactions that actually happened.
+    public decimal? EstimatedCost { get; private set; }
+    public decimal? ApprovedCost { get; private set; }
+    public string? CostApprovedBy { get; private set; }
+    public DateTime? CostApprovedAtUtc { get; private set; }
+    public string? CostingNotes { get; private set; }
+
     public DateTime OrderDate { get; private set; }
     public ProductionOrderStatus Status { get; private set; } = ProductionOrderStatus.Draft;
 
@@ -149,6 +164,46 @@ public class ProductionOrder : AuditableEntity
 
         JobOrderType = jobOrderType;
         ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Records the planned/estimated cost of the order (spec section 34).
+    /// Allowed while the order is still open so the estimate can be refined as
+    /// the job becomes clearer; refused once the order is completed or
+    /// cancelled, because that history is frozen.
+    /// </summary>
+    public void SetEstimatedCost(decimal? estimatedCost, string? costingNotes, string modifiedBy)
+    {
+        if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+        if (estimatedCost is < 0) throw new ArgumentException("Estimated cost cannot be negative.", nameof(estimatedCost));
+
+        EstimatedCost = estimatedCost;
+        CostingNotes = string.IsNullOrWhiteSpace(costingNotes) ? CostingNotes : costingNotes.Trim();
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Approves the order's cost (spec section 34). The approved figure is an
+    /// explicit decision recorded with who signed it and when - it is never
+    /// silently set to the live actual rollup, because an approved cost must
+    /// not change afterwards on its own.
+    /// </summary>
+    public void ApproveCost(decimal approvedCost, string? costingNotes, string approvedBy)
+    {
+        if (Status == ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+        if (Status != ProductionOrderStatus.Completed)
+            throw new DomainException("The cost of an order can only be approved once the order is completed.");
+        if (approvedCost < 0) throw new ArgumentException("Approved cost cannot be negative.", nameof(approvedCost));
+
+        ApprovedCost = approvedCost;
+        CostApprovedBy = approvedBy;
+        CostApprovedAtUtc = DateTime.UtcNow;
+        CostingNotes = string.IsNullOrWhiteSpace(costingNotes) ? CostingNotes : costingNotes.Trim();
+        ModifiedBy = approvedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }
 

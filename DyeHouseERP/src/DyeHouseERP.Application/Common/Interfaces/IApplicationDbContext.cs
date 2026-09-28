@@ -74,5 +74,16 @@ public interface IApplicationDbContext
     DbSet<PayrollRun> PayrollRuns { get; }
     DbSet<PayrollRunLine> PayrollRunLines { get; }
 
+    // Operating supplies internal issue (spec section 27)
+    DbSet<SupplyIssue> SupplyIssues { get; }
+    DbSet<SupplyIssueLine> SupplyIssueLines { get; }
+
+    // Factory-owned materials sales (spec section 26)
+    DbSet<MaterialSale> MaterialSales { get; }
+    DbSet<MaterialSaleLine> MaterialSaleLines { get; }
+
+    // Private attachments on business documents (spec section 47)
+    DbSet<Attachment> Attachments { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

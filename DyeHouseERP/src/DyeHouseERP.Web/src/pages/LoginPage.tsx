@@ -2,14 +2,23 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AuthApi, SettingsApi } from "@/api/client";
-import { Card, Button, Input } from "@/components/ui";
-import { Factory } from "lucide-react";
+import { Button, Input } from "@/components/ui";
+import { useTheme, type Theme } from "@/components/ThemeProvider";
+import { Factory, User, Lock, AlertCircle, Sun, Moon, Monitor } from "lucide-react";
 
+/**
+ * Login screen.
+ *
+ * Presentation only: the mutation, the credentials, the token storage and the
+ * navigation target are untouched. The only additions are the theme control
+ * and the layout/typography, both from the design system.
+ */
 export default function LoginPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const { theme, setTheme } = useTheme();
 
   const { data: settings } = useQuery({ queryKey: ["company-settings"], queryFn: () => SettingsApi.get() });
 
@@ -23,23 +32,44 @@ export default function LoginPage() {
     onError: () => setError("اسم المستخدم أو كلمة المرور غير صحيحة")
   });
 
+  const themeOptions: { value: Theme; icon: React.ReactNode; label: string }[] = [
+    { value: "light", icon: <Sun size={15} />, label: "فاتح" },
+    { value: "dark", icon: <Moon size={15} />, label: "داكن" },
+    { value: "system", icon: <Monitor size={15} />, label: "النظام" }
+  ];
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ background: "linear-gradient(135deg, #312e81 0%, #4c1d95 50%, #6d28d9 100%)" }}
-    >
-      <Card className="w-full max-w-sm p-8">
-        <div className="text-center mb-6">
-          <div className="mx-auto mb-3 w-14 h-14 rounded-xl bg-indigo-50 flex items-center justify-center overflow-hidden">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-surface-sunken p-4">
+      <div className="absolute end-4 top-4 flex items-center gap-1 rounded-lg border border-line-strong bg-surface p-1">
+        {themeOptions.map((o) => (
+          <button
+            key={o.value}
+            onClick={() => setTheme(o.value)}
+            className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+              theme === o.value ? "bg-brand-600 text-white" : "text-ink-muted hover:bg-surface-sunken"
+            }`}
+            aria-label={o.label}
+            aria-pressed={theme === o.value}
+            title={o.label}
+          >
+            {o.icon}
+          </button>
+        ))}
+      </div>
+
+      <div className="card card-pad w-full max-w-sm">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-brand-50 dark:bg-brand-900/50">
             {settings?.logoDataUrl ? (
-              <img src={settings.logoDataUrl} alt="" className="w-full h-full object-contain p-1.5" />
+              <img src={settings.logoDataUrl} alt="" className="h-full w-full object-contain p-1.5" />
             ) : (
-              <Factory size={24} className="text-brand-700" />
+              <Factory size={26} className="text-brand-600" />
             )}
           </div>
-          <div className="text-xl font-bold text-brand-700">{settings?.companyNameAr || "DyeHouse ERP"}</div>
-          <div className="text-xs text-gray-500 mt-1">تسجيل الدخول</div>
+          <div className="text-lg font-bold text-ink">{settings?.companyNameAr || "DyeHouse ERP"}</div>
+          <div className="mt-1 text-xs text-ink-muted">تسجيل الدخول</div>
         </div>
+
         <form
           className="space-y-4"
           onSubmit={(e) => {
@@ -49,22 +79,59 @@ export default function LoginPage() {
           }}
         >
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">اسم المستخدم</label>
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
+            <label htmlFor="login-username" className="field-label">
+              اسم المستخدم
+            </label>
+            <div className="relative">
+              <User size={16} className="pointer-events-none absolute inset-y-0 start-3 my-auto text-ink-subtle" />
+              <Input
+                id="login-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoFocus
+                autoComplete="username"
+                className="ps-9"
+                placeholder="admin"
+              />
+            </div>
           </div>
+
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">كلمة المرور</label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <label htmlFor="login-password" className="field-label">
+              كلمة المرور
+            </label>
+            <div className="relative">
+              <Lock size={16} className="pointer-events-none absolute inset-y-0 start-3 my-auto text-ink-subtle" />
+              <Input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="ps-9"
+              />
+            </div>
           </div>
-          <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+
+          <Button type="submit" className="w-full" size="lg" disabled={loginMutation.isPending}>
             {loginMutation.isPending ? "جارٍ الدخول..." : "دخول"}
           </Button>
-          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+
+          {error && (
+            <p
+              role="alert"
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-danger-soft px-3 py-2 text-center text-sm text-danger-ink"
+            >
+              <AlertCircle size={15} />
+              {error}
+            </p>
+          )}
         </form>
-        <p className="text-xs text-gray-400 text-center mt-6">
-          بيئة التطوير: admin / Admin@12345
-        </p>
-      </Card>
+
+        <p className="mt-6 text-center text-2xs text-ink-subtle">بيئة التطوير: admin / Admin@12345</p>
+      </div>
     </div>
   );
 }

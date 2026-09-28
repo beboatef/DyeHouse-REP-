@@ -3,7 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PayrollApi, TreasuryAccountsApi } from "@/api/client";
 import type { EmployeeStatus, PayrollRun, PayrollRunStatus } from "@/api/client";
+import { PayrollExports } from "@/api/exports";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import ImportPanel from "@/components/ImportPanel";
+import { EmployeesExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 /**
@@ -255,6 +259,19 @@ function EmployeesTab() {
 
   return (
     <>
+      <div className="flex justify-end mb-3">
+        <ExportButtons
+          excel={{ label: t("common.export"), action: EmployeesExports.excel }}
+        />
+      </div>
+
+      <ImportPanel
+        base="/payroll/employees/import"
+        columns={["Code", "NameAr", "NameEn", "Department", "JobTitle", "BasicSalary", "HireDate", "Phone", "NationalId", "BankAccount"]}
+        title="استيراد الموظفين من Excel"
+        onDone={() => qc.invalidateQueries({ queryKey: ["employees"] })}
+      />
+
       <Card className="p-4 mb-4 flex flex-wrap items-end gap-3">
         <div className="w-56">
           <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.department")}</label>
@@ -553,6 +570,16 @@ function RunsTab() {
                 <Button variant="ghost" onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
                   {t("common.details")}
                 </Button>
+                {r.status !== "Cancelled" && (
+                  <>
+                    <Button variant="ghost" onClick={PayrollExports.runExcel(r.id)}>
+                      {t("common.excel")}
+                    </Button>
+                    <Button variant="ghost" onClick={PayrollExports.runPdf(r.id)}>
+                      {t("common.pdf")}
+                    </Button>
+                  </>
+                )}
                 {r.status === "Draft" && (
                   <Button variant="secondary" onClick={() => approveMutation.mutate(r.id)}>{t("pay.approve")}</Button>
                 )}
@@ -617,6 +644,14 @@ function RunsTab() {
                           </td>
                           <td className="py-2 ltr-nums font-medium">{money(l.netPay)}</td>
                           <td className="py-2">
+                            {r.status !== "Cancelled" && (
+                              <button
+                                className="text-gray-600 hover:underline text-xs font-semibold"
+                                onClick={PayrollExports.payslipPdf(r.id, l.id)}
+                              >
+                                {t("export.payslip")}
+                              </button>
+                            )}
                             {r.status === "Draft" && !editing && (
                               <>
                                 <button

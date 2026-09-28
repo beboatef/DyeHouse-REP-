@@ -38,15 +38,21 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
     private readonly ICurrentUserService _currentUser;
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public CreateReadyGoodsTransferCommandHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator, IDateTime clock)
+        IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
+        IDateTime clock, IPeriodCloseService periodClose)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<ReadyGoodsTransferDto> Handle(CreateReadyGoodsTransferCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: transferring finished goods into ready-goods stock is a stock posting.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 

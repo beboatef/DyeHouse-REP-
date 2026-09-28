@@ -5,6 +5,9 @@ import {
 } from "@/api/client";
 import { ProductionOrdersApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import ImportPanel from "@/components/ImportPanel";
+import { MaterialsExports } from "@/api/exports";
 
 type Tab = "master" | "transfers" | "issues" | "preparations";
 
@@ -34,9 +37,39 @@ export default function MaterialsPage() {
       </div>
 
       {tab === "master" && <MaterialMasterTab />}
-      {tab === "transfers" && <MaterialTransfersTab />}
-      {tab === "issues" && <MaterialIssuesTab />}
-      {tab === "preparations" && <MaterialPreparationsTab />}
+      {tab === "transfers" && (
+        <>
+          <div className="flex justify-end mb-3">
+            <ExportButtons
+              excel={{ action: MaterialsExports.transfers.excel }}
+              pdf={{ action: MaterialsExports.transfers.pdf }}
+            />
+          </div>
+          <MaterialTransfersTab />
+        </>
+      )}
+      {tab === "issues" && (
+        <>
+          <div className="flex justify-end mb-3">
+            <ExportButtons
+              excel={{ action: MaterialsExports.issues.excel }}
+              pdf={{ action: MaterialsExports.issues.pdf }}
+            />
+          </div>
+          <MaterialIssuesTab />
+        </>
+      )}
+      {tab === "preparations" && (
+        <>
+          <div className="flex justify-end mb-3">
+            <ExportButtons
+              excel={{ action: MaterialsExports.preparations.excel }}
+              pdf={{ action: MaterialsExports.preparations.pdf }}
+            />
+          </div>
+          <MaterialPreparationsTab />
+        </>
+      )}
     </>
   );
 }
@@ -57,9 +90,20 @@ function MaterialMasterTab() {
 
   return (
     <>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end gap-2 mb-4">
+        <ExportButtons
+          excel={{ action: MaterialsExports.excel }}
+          pdf={{ action: MaterialsExports.pdf }}
+        />
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ مادة جديدة"}</Button>
       </div>
+
+      <ImportPanel
+        base="/materials/import"
+        columns={["Code", "Name", "Unit", "PurchasePrice", "Kind", "ReorderLevel"]}
+        title="استيراد المواد والكيماويات من Excel"
+        onDone={() => qc.invalidateQueries({ queryKey: ["materials"] })}
+      />
       {showForm && (
         <Card className="p-5 mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>

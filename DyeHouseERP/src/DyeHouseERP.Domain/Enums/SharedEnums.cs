@@ -67,7 +67,13 @@ public enum DocumentType
     SupplierPayment = 22,
 
     // ---- Payroll (spec section 36) ----
-    PayrollRun = 23
+    PayrollRun = 23,
+
+    // ---- Operating supplies internal issue (spec section 27) ----
+    SupplyIssue = 24,
+
+    // ---- Materials/chemicals sold to third parties (spec section 26) ----
+    MaterialSale = 25
 }
 
 /// <summary>
@@ -171,6 +177,20 @@ public enum RawReleaseReason
     ReturnToCustomer = 1,
     ExternalProcessing = 2,
     Sale = 3
+}
+
+/// <summary>
+/// Progress of an External Processing release (spec section 21): material sent
+/// to an outside processor, then received back. <see cref="NotApplicable"/> is
+/// used for returns-to-customer and outright sales, which never come back.
+/// </summary>
+public enum ExternalProcessingStatus
+{
+    NotApplicable = 0,
+    AwaitingReturn = 1,
+    PartiallyReturned = 2,
+    Returned = 3,
+    Cancelled = 4
 }
 
 /// <summary>Direction of a manual stock adjustment (spec section 16).</summary>
@@ -277,4 +297,33 @@ public enum PayrollRunStatus
     Approved = 2,
     Posted = 3,
     Cancelled = 4
+}
+
+/// <summary>
+/// Distinguishes the two FACTORY-owned stores (spec sections 23 + 27):
+/// production chemicals/dyes go to the materials store, while spare parts,
+/// packaging and maintenance consumables go to the separate operating
+/// supplies store. Both live in the same Material ledger - only the store,
+/// the internal-issue workflow and the reporting differ.
+/// </summary>
+public enum MaterialKind
+{
+    Chemical = 1,
+    OperatingSupply = 2
+}
+
+/// <summary>Internal recipients of operating supplies (spec section 27).</summary>
+public enum SupplyIssueStatus
+{
+    Draft = 1,
+    Posted = 2,
+    Cancelled = 3
+}
+
+/// <summary>Lifecycle of a factory-owned materials sale (spec section 26). Posting is the only step with a stock/financial effect.</summary>
+public enum MaterialSaleStatus
+{
+    Draft = 1,
+    Posted = 2,
+    Cancelled = 3
 }

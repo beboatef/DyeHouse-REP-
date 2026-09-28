@@ -12,6 +12,8 @@ import {
   UnitOfMeasure
 } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { FormationRequestsExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 /**
@@ -245,9 +247,10 @@ export default function FormationRequestsPage() {
         subtitle={t("fr.subtitle")}
         action={
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => FormationRequestsApi.exportExcel({ status: statusFilter || undefined })}>
-              {t("common.export")}
-            </Button>
+            <ExportButtons
+              excel={{ label: t("common.export"), action: FormationRequestsExports.excel }}
+              pdf={{ label: t("common.exportPdf"), action: FormationRequestsExports.pdf }}
+            />
             <Button
               onClick={() => {
                 if (showForm) {
@@ -476,14 +479,15 @@ export default function FormationRequestsPage() {
               <th className="text-start px-4 py-3 font-medium">{t("fr.totalQuantity")}</th>
               <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
               <th className="text-start px-4 py-3 font-medium">{t("fr.jobOrder")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("common.pdf")}</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
             )}
             {!isLoading && requests?.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
             )}
             {requests?.map((request) => (
               <tr key={request.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
@@ -491,6 +495,11 @@ export default function FormationRequestsPage() {
                   <Link to={`/formation-requests/${request.id}`} className="text-brand-600 hover:underline ltr-nums">
                     {request.requestNumber}
                   </Link>
+                </td>
+                <td className="px-4 py-3">
+                  <Button variant="ghost" onClick={FormationRequestsExports.documentPdf(request.id)}>
+                    {t("common.pdf")}
+                  </Button>
                 </td>
                 <td className="px-4 py-3 ltr-nums text-gray-600">{request.requestDate.slice(0, 10)}</td>
                 <td className="px-4 py-3">

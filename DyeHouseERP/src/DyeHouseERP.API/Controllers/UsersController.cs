@@ -30,6 +30,16 @@ public class UsersController : ControllerBase
         return CreatedAtAction(nameof(Get), new { }, result);
     }
 
+    /// <summary>
+    /// Edits a login's display name and permission set (spec section 41).
+    /// Guarded by roles.manage rather than users.manage because it changes which
+    /// permissions the account holds - that constant existed but was unused until now.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RolesManage)]
+    public async Task<ActionResult<UserDto>> Update(Guid id, [FromBody] UpdateUserBody body)
+        => Ok(await _mediator.Send(new UpdateUserCommand(id, body.DisplayName, body.Roles)));
+
     [HttpPost("{id:guid}/deactivate")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.UsersManage)]
     public async Task<IActionResult> Deactivate(Guid id)
@@ -48,3 +58,5 @@ public class UsersController : ControllerBase
 }
 
 public record ChangePasswordRequest(string NewPassword);
+
+public record UpdateUserBody(string DisplayName, List<string> Roles);

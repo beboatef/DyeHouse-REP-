@@ -214,7 +214,7 @@ export default function FormationSpecificationsPage() {
                   </Badge>
                 </td>
                 <td className="px-4 py-3 space-x-3 whitespace-nowrap">
-                  <button className="text-brand-600 hover:underline text-xs font-semibold" onClick={() => startEdit(template)}>
+                  <button className="btn-link" onClick={() => startEdit(template)}>
                     {t("common.edit")}
                   </button>
                   <button

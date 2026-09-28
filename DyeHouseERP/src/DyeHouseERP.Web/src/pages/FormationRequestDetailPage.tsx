@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormationRequestsApi, FormationRequestStatus, JobOrderType, ProductionPriority } from "@/api/client";
+import AttachmentsPanel from "@/components/AttachmentsPanel";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
@@ -296,6 +297,13 @@ export default function FormationRequestDetailPage() {
           <p className="text-sm text-gray-400">{t("common.empty")}</p>
         )}
       </Card>
+
+      {/* Private attachments for this formation request (spec section 47). */}
+      {id && (
+        <div className="mt-6">
+          <AttachmentsPanel entityType="FormationRequest" entityId={id} />
+        </div>
+      )}
     </>
   );
 }

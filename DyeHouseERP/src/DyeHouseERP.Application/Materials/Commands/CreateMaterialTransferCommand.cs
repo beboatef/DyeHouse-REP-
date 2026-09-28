@@ -31,15 +31,21 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public CreateMaterialTransferCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock)
+        IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<MaterialTransferDto> Handle(CreateMaterialTransferCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: moving material between warehouses is a stock posting.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);
 

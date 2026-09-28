@@ -4,6 +4,8 @@ import {
   CustomersApi, InvoicesApi, PaymentsApi, ReceiptsApi, TreasuryAccountKind, TreasuryAccountsApi, TreasuryTransfersApi
 } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { DocumentActions } from "@/components/ExportButtons";
+import { StatementsExports } from "@/api/exports";
 
 type Tab = "accounts" | "receipts" | "payments" | "transfers";
 
@@ -45,6 +47,17 @@ function AccountsTab() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["treasury-accounts"] }); setShowForm(false); setCode(""); setName(""); }
   });
 
+  // كشف الحساب per account: a real statement from the treasury ledger, with the
+  // same date range feeding the screen, the print view and the Excel/PDF files.
+  const [statementFor, setStatementFor] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const { data: statement } = useQuery({
+    queryKey: ["treasury-statement", statementFor?.id, from, to],
+    queryFn: () => TreasuryAccountsApi.statement(statementFor!.id, { from: from || undefined, to: to || undefined }),
+    enabled: !!statementFor
+  });
+
   return (
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ حساب جديد"}</Button></div>
@@ -64,20 +77,91 @@ function AccountsTab() {
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
             <th className="text-start px-4 py-3 font-medium">الكود</th><th className="text-start px-4 py-3 font-medium">الاسم</th>
-            <th className="text-start px-4 py-3 font-medium">النوع</th><th className="text-start px-4 py-3 font-medium">الرصيد</th>
+            <th className="text-start px-4 py-3 font-medium">النوع</th>
+            <th className="text-start px-4 py-3 font-medium">الرصيد</th>
+            <th className="text-start px-4 py-3 font-medium">كشف الحساب</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {accounts?.map((a) => (
               <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium ltr-nums">{a.code}</td><td className="px-4 py-3">{a.name}</td>
                 <td className="px-4 py-3"><Badge tone="blue">{a.kind === "Cash" ? "نقدي" : "بنكي"}</Badge></td>
                 <td className="px-4 py-3 ltr-nums font-medium">{a.balance}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" type="button" onClick={() => setStatementFor({ id: a.id, code: a.code, name: a.name })}>
+                      كشف حساب
+                    </Button>
+                    <DocumentActions pdf={StatementsExports.treasury(a.id, from || undefined, to || undefined).pdf} />
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
+
+      {statementFor && (
+        <Card className="mt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-100">
+            <div>
+              <div className="font-semibold">كشف حساب: {statementFor.code} - {statementFor.name}</div>
+              <div className="text-xs text-gray-500">الرصيد الافتتاحي والإجماليات محسوبة من دفتر الخزينة، وليست حقولًا مخزَّنة</div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div><label className="block text-[11px] text-gray-500 mb-1">من</label>
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+              <div><label className="block text-[11px] text-gray-500 mb-1">إلى</label>
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+              <Button variant="secondary" onClick={() => StatementsExports.treasury(statementFor.id, from || undefined, to || undefined).excel()}>
+                تنزيل Excel
+              </Button>
+              <Button variant="secondary" onClick={() => StatementsExports.treasury(statementFor.id, from || undefined, to || undefined).pdf()}>
+                تنزيل PDF
+              </Button>
+              <Button variant="secondary" onClick={() => window.print()}>طباعة</Button>
+              <Button variant="ghost" onClick={() => setStatementFor(null)}>إغلاق</Button>
+            </div>
+          </div>
+
+          {statement && (
+            <div className="p-4">
+              <div className="flex flex-wrap gap-6 text-sm mb-3">
+                <span>افتتاحي: <b className="ltr-nums">{statement.openingBalance}</b></span>
+                <span className="text-green-700">وارد: <b className="ltr-nums">{statement.totalIn}</b></span>
+                <span className="text-red-600">منصرف: <b className="ltr-nums">{statement.totalOut}</b></span>
+                <span>ختامي: <b className="ltr-nums">{statement.closingBalance}</b></span>
+              </div>
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
+                  <th className="text-start px-3 py-2 font-medium">التاريخ</th>
+                  <th className="text-start px-3 py-2 font-medium">المستند</th>
+                  <th className="text-start px-3 py-2 font-medium">البيان</th>
+                  <th className="text-start px-3 py-2 font-medium">منصرف</th>
+                  <th className="text-start px-3 py-2 font-medium">وارد</th>
+                  <th className="text-start px-3 py-2 font-medium">الرصيد</th>
+                </tr></thead>
+                <tbody>
+                  {statement.lines.length === 0 && (
+                    <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">لا توجد حركات في هذه الفترة</td></tr>
+                  )}
+                  {statement.lines.map((l, i) => (
+                    <tr key={i} className="border-b border-gray-100 last:border-0">
+                      <td className="px-3 py-2 ltr-nums">{new Date(l.transactionDate).toLocaleDateString("en-GB")}</td>
+                      <td className="px-3 py-2 ltr-nums">{l.sourceDocumentNumber}</td>
+                      <td className="px-3 py-2">{l.description ?? l.sourceDocumentType}</td>
+                      <td className="px-3 py-2 ltr-nums">{l.debit || ""}</td>
+                      <td className="px-3 py-2 ltr-nums">{l.credit || ""}</td>
+                      <td className="px-3 py-2 ltr-nums">{l.runningBalance}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
     </>
   );
 }

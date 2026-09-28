@@ -1,7 +1,10 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Reports.DTOs;
+using DyeHouseERP.Application.ReadyGoods.Queries;
+using DyeHouseERP.Application.RawReceipts.Queries;
 using DyeHouseERP.Application.Reports.Queries;
 using DyeHouseERP.API.Authorization;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -64,6 +67,64 @@ public class ReportsController : ControllerBase
 
         var bytes = export.GenerateExcel("InventoryMovements", headers, rows);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "inventory-movements.xlsx");
+    }
+
+    /// <summary>Same inventory ledger, as a printable PDF (spec section 39) - filters and date range included in the header.</summary>
+    [HttpGet("inventory-movements/pdf")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> GetInventoryMovementsPdf(
+        [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] Guid? warehouseId,
+        [FromQuery] Guid? rawMessageId, [FromQuery] Guid? productionOrderId,
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to)
+    {
+        var movements = await _mediator.Send(new GetInventoryMovementsQuery(
+            customerId, itemId, warehouseId, rawMessageId, productionOrderId, from, to, 5000));
+
+        var headers = new List<string>
+        {
+            "Date", "SourceType", "SourceDocument", "Warehouse", "Customer", "Item",
+            "Message", "JobOrder", "QuantityKg", "QuantityMeter", "Direction", "User"
+        };
+
+        var rows = movements.Select(m => new object?[]
+        {
+            m.TransactionDate.ToString("yyyy-MM-dd"), m.SourceDocumentType, m.SourceDocumentNumber, m.WarehouseName,
+            m.CustomerCode, m.ItemCode, m.MessageNumber, m.OrderNumber,
+            m.QuantityKg, m.QuantityMeter, m.Direction.ToString(), m.CreatedBy
+        }).ToList();
+
+        return ExportFileHelper.ToPdf(_export, "حركات المخزون", DateRangeLabel(from, to), headers, rows, "inventory-movements");
+    }
+
+    /// <summary>
+    /// Warehouse balances report (spec sections 18 + 30) as Excel or PDF: the live
+    /// remaining quantity per raw-receipt message line, plus the ready-goods balance
+    /// per job order. Both are summed from the ledgers, never from a stored balance.
+    /// </summary>
+    [HttpGet("warehouse-balances/export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> ExportWarehouseBalances([FromQuery] Guid? customerId,
+        [FromQuery] string format = "excel")
+    {
+        var messages = await _mediator.Send(new GetRawMessagesQuery(customerId, null, true));
+        var ready = await _mediator.Send(new GetReadyGoodsBalanceQuery(customerId));
+
+        var headers = new[] { "Kind", "Reference", "Customer", "Item", "Warehouse / Job order", "Balance KG", "Balance M" };
+        var rows = new List<object?[]>();
+
+        rows.AddRange(messages.SelectMany(m => m.Lines.Select(l => new object?[]
+        {
+            "Raw material", m.MessageNumber, $"{m.CustomerCode} - {m.CustomerName}", $"{l.ItemCode} - {l.ItemName}",
+            m.WarehouseName, l.RemainingKg, l.RemainingMeter
+        })));
+
+        rows.AddRange(ready.Select(r => new object?[]
+        {
+            "Ready goods", r.ProductionOrderNumber, $"{r.CustomerCode} - {r.CustomerName}", $"{r.ItemCode} - {r.ItemName}",
+            r.ProductionOrderNumber, r.RemainingKg, r.RemainingMeter
+        }));
+
+        return ExportFileHelper.ToFile(_export, format, "Warehouse Balances", "DyeHouse ERP", headers, rows, "warehouse-balances", "Balances");
     }
 
     /// <summary>Negative Stock / Balance Override Report (spec section 17).</summary>

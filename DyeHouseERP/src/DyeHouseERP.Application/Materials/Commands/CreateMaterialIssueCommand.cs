@@ -33,15 +33,21 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public CreateMaterialIssueCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock)
+        IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<MaterialIssueDto> Handle(CreateMaterialIssueCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: issuing chemicals to production is a stock posting.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);
         var order = await _db.ProductionOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)

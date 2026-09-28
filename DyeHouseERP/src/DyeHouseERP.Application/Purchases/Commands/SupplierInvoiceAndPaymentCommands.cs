@@ -184,12 +184,18 @@ public class CancelSupplierInvoiceCommandHandler : IRequestHandler<CancelSupplie
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly ISender _mediator;
+    private readonly IPeriodCloseService _periodClose;
 
-    public CancelSupplierInvoiceCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, ISender mediator)
-    { _db = db; _currentUser = currentUser; _mediator = mediator; }
+    public CancelSupplierInvoiceCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, ISender mediator,
+        IPeriodCloseService periodClose)
+    { _db = db; _currentUser = currentUser; _mediator = mediator; _periodClose = periodClose; }
 
     public async Task<SupplierInvoiceDto> Handle(CancelSupplierInvoiceCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: the reversal row is dated today, so a closed period only
+        // blocks this if today is closed - historical corrections stay possible.
+        await _periodClose.EnsureOpenAsync(DateTime.UtcNow.Date, cancellationToken);
+
         var invoice = await _db.SupplierInvoices.Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("SupplierInvoice", request.Id);

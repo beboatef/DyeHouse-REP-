@@ -77,6 +77,17 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PayrollRun> PayrollRuns => Set<PayrollRun>();
     public DbSet<PayrollRunLine> PayrollRunLines => Set<PayrollRunLine>();
 
+    // Operating supplies internal issue (spec section 27)
+    public DbSet<SupplyIssue> SupplyIssues => Set<SupplyIssue>();
+    public DbSet<SupplyIssueLine> SupplyIssueLines => Set<SupplyIssueLine>();
+
+    // Factory-owned materials sales (spec section 26)
+    public DbSet<MaterialSale> MaterialSales => Set<MaterialSale>();
+    public DbSet<MaterialSaleLine> MaterialSaleLines => Set<MaterialSaleLine>();
+
+    // Private attachments on business documents (spec section 47)
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);

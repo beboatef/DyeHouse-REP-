@@ -8,6 +8,8 @@ import {
   UnitOfMeasure
 } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { ItemsExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 /**
@@ -95,12 +97,10 @@ export default function ItemsPage() {
         subtitle={t("items.subtitle")}
         action={
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => ItemsApi.downloadTemplate()}>
-              {t("common.template")}
-            </Button>
-            <Button variant="secondary" onClick={() => ItemsApi.exportExcel({ search: search || undefined })}>
-              {t("common.export")}
-            </Button>
+            <ExportButtons
+              excel={{ label: t("common.export"), action: ItemsExports.excel }}
+              pdf={{ label: t("common.exportPdf"), action: ItemsExports.pdf }}
+            />
             <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("items.new")}</Button>
           </div>
         }
@@ -163,7 +163,10 @@ export default function ItemsPage() {
           <input
             type="file"
             accept=".xlsx,.xlsm"
-            className="text-xs"
+            className="block h-[38px] w-full max-w-xs cursor-pointer rounded-lg border border-line-strong
+                       bg-surface text-sm text-ink file:me-2 file:cursor-pointer file:rounded-md
+                       file:border-0 file:bg-surface-sunken file:px-3 file:py-2 file:text-xs
+                       file:font-semibold file:text-ink hover:border-brand-500"
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);
               setPreview(null);

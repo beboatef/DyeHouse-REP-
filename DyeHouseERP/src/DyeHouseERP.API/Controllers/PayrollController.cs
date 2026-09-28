@@ -1,3 +1,6 @@
+using DyeHouseERP.API.Common;
+using DyeHouseERP.Application.Common.Import;
+using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Payroll.Commands;
 using DyeHouseERP.Application.Payroll.DTOs;
 using DyeHouseERP.Application.Payroll.Queries;
@@ -86,6 +89,57 @@ public class PayrollController : ControllerBase
         return Ok(await _mediator.Send(command));
     }
 
+    // ------------------------------- employees export / import (spec section 38)
+
+    /// <summary>Employee master as Excel or PDF, honouring the same filters as GET.</summary>
+    [HttpGet("employees/export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> ExportEmployees(
+        [FromQuery] Guid? departmentId, [FromQuery] EmployeeStatus? status,
+        [FromQuery] bool? activeOnly, [FromQuery] string? search,
+        [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
+    {
+        var employees = await _mediator.Send(new GetEmployeesQuery(departmentId, status, activeOnly, search));
+        var headers = new[] { "Code", "NameAr", "NameEn", "Department", "Job title", "Basic salary", "Hire date", "Phone", "Status" };
+        var rows = employees.Select(e => new object?[]
+        {
+            e.Code, e.NameAr, e.NameEn, $"{e.DepartmentCode} - {e.DepartmentName}", e.JobTitle,
+            e.BasicSalary, e.HireDate.ToString("yyyy-MM-dd"), e.Phone, e.Status.ToString()
+        }).ToList();
+
+        return ExportFileHelper.ToFile(export, format, "Employees", "DyeHouse ERP", headers, rows, "employees", "Employees");
+    }
+
+    /// <summary>Step 1 of the employee import workflow: the template with the exact expected columns.</summary>
+    [HttpGet("employees/import/template")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
+    public IActionResult GetEmployeeImportTemplate([FromServices] IReportExportService export)
+        => ExportFileHelper.Template(export, "Employees", EmployeeImportTemplate.Headers, EmployeeImportTemplate.SampleRows(), "employees-import-template");
+
+    /// <summary>Step 2: validate the upload (departments, salary and dates) and report row errors. Writes nothing.</summary>
+    [HttpPost("employees/import/preview")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
+    public async Task<ActionResult<ImportPreviewDto>> PreviewEmployeeImport(IFormFile file)
+        => Ok(await _mediator.Send(new PreviewEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), false)));
+
+    /// <summary>Step 3: confirm - re-validates and creates only the valid new rows.</summary>
+    [HttpPost("employees/import/execute")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
+    public async Task<ActionResult<ImportExecuteResultDto>> ExecuteEmployeeImport(IFormFile file)
+        => Ok(await _mediator.Send(new ExecuteEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), false)));
+
+    /// <summary>Preview of the update-capable import - payroll.employees is required to overwrite an existing employee.</summary>
+    [HttpPost("employees/import/preview-update")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
+    public async Task<ActionResult<ImportPreviewDto>> PreviewEmployeeImportWithUpdate(IFormFile file)
+        => Ok(await _mediator.Send(new PreviewEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), true)));
+
+    /// <summary>Confirm of the update-capable import (spec rule: no silent overwrite).</summary>
+    [HttpPost("employees/import/execute-update")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
+    public async Task<ActionResult<ImportExecuteResultDto>> ExecuteEmployeeImportWithUpdate(IFormFile file)
+        => Ok(await _mediator.Send(new ExecuteEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), true)));
+
     // -------------------------------------------------------- payroll runs
 
     [HttpGet("runs")]
@@ -148,6 +202,73 @@ public class PayrollController : ControllerBase
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<PayrollRunDto>> CancelRun(Guid id, [FromBody] CancelPayrollRequest request)
         => Ok(await _mediator.Send(new CancelPayrollRunCommand(id, request.Reason)));
+
+    /// <summary>
+    /// Payslip PDF for one employee within a run (spec section 49). Built from
+    /// the run's own line, so the printed figures are exactly what was approved
+    /// and posted - never recomputed from the employee master.
+    /// </summary>
+    [HttpGet("runs/{id:guid}/payslips/{lineId:guid}/pdf")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
+    public async Task<IActionResult> GetPayslipPdf(Guid id, Guid lineId, [FromServices] IReportExportService export)
+    {
+        var run = await _mediator.Send(new GetPayrollRunByIdQuery(id));
+        var line = run.Lines.FirstOrDefault(l => l.Id == lineId);
+        if (line is null) return NotFound();
+
+        var headers = new[] { "Item", "Amount" };
+        var rows = new List<object?[]>
+        {
+            new object?[] { "Employee code", line.EmployeeCode },
+            new object?[] { "Employee", line.EmployeeName },
+            new object?[] { "Department", line.DepartmentName },
+            new object?[] { "Basic salary", line.BasicSalary },
+            new object?[] { "Allowances", line.Allowances },
+            new object?[] { "Gross", line.GrossPay },
+            new object?[] { "Deductions", line.Deductions },
+            new object?[] { "Net pay", line.NetPay }
+        };
+
+        var subtitle = $"Payslip {run.PeriodMonth:00}/{run.PeriodYear} - run {run.RunNumber}";
+        var pdf = export.GeneratePdf($"Payslip - {line.EmployeeName}", subtitle, headers, rows);
+        return File(pdf, "application/pdf", $"payslip-{line.EmployeeCode}-{run.PeriodYear}{run.PeriodMonth:00}.pdf");
+    }
+
+    /// <summary>The whole run as a printable payroll sheet (spec section 49).</summary>
+    [HttpGet("runs/{id:guid}/pdf")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
+    public async Task<IActionResult> GetRunPdf(Guid id, [FromServices] IReportExportService export)
+    {
+        var run = await _mediator.Send(new GetPayrollRunByIdQuery(id));
+
+        var headers = new[] { "Employee code", "Employee", "Department", "Basic", "Allowances", "Deductions", "Net" };
+        var rows = run.Lines.Select(l => new object?[]
+        {
+            l.EmployeeCode, l.EmployeeName, l.DepartmentName, l.BasicSalary, l.Allowances, l.Deductions, l.NetPay
+        }).ToList();
+
+        rows.Add(new object?[] { string.Empty, "TOTAL", string.Empty, string.Empty, string.Empty, run.TotalDeductions, run.TotalNet });
+
+        var pdf = export.GeneratePdf($"Payroll Run {run.RunNumber}", $"{run.PeriodMonth:00}/{run.PeriodYear} - {run.Status}", headers, rows);
+        return File(pdf, "application/pdf", $"payroll-{run.RunNumber}.pdf");
+    }
+
+    /// <summary>Payroll run as Excel for accounting (spec section 49).</summary>
+    [HttpGet("runs/{id:guid}/excel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
+    public async Task<IActionResult> GetRunExcel(Guid id, [FromServices] IReportExportService export)
+    {
+        var run = await _mediator.Send(new GetPayrollRunByIdQuery(id));
+
+        var headers = new[] { "Employee code", "Employee", "Department", "Basic", "Allowances", "Deductions", "Net" };
+        var rows = run.Lines.Select(l => new object?[]
+        {
+            l.EmployeeCode, l.EmployeeName, l.DepartmentName, l.BasicSalary, l.Allowances, l.Deductions, l.NetPay
+        }).ToList();
+
+        var xlsx = export.GenerateExcel($"Payroll {run.PeriodYear}-{run.PeriodMonth:00}", headers, rows);
+        return File(xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"payroll-{run.RunNumber}.xlsx");
+    }
 }
 
 /// <summary>Body for selecting which account a payroll run is paid from.</summary>

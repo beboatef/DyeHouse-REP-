@@ -47,14 +47,19 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
-    public MarkDeliveryDeliveredCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock)
+    public MarkDeliveryDeliveredCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
-        _db = db; _currentUser = currentUser; _clock = clock;
+        _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose;
     }
 
     public async Task<DeliveryDto> Handle(MarkDeliveryDeliveredCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: delivering ready goods is the stock posting that empties the lot.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var delivery = await _db.Deliveries.FirstOrDefaultAsync(d => d.Id == request.DeliveryId, cancellationToken)
             ?? throw new NotFoundException("Delivery", request.DeliveryId);
         var lines = await _db.DeliveryLines.Where(l => l.DeliveryId == delivery.Id).ToListAsync(cancellationToken);
@@ -111,14 +116,20 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
-    public CancelDeliveryCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock)
+    public CancelDeliveryCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
-        _db = db; _currentUser = currentUser; _clock = clock;
+        _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose;
     }
 
     public async Task<DeliveryDto> Handle(CancelDeliveryCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: the reversal row is dated today, so a closed period only
+        // blocks it if today itself is closed - historical corrections stay possible.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var delivery = await _db.Deliveries.FirstOrDefaultAsync(d => d.Id == request.DeliveryId, cancellationToken)
             ?? throw new NotFoundException("Delivery", request.DeliveryId);
 

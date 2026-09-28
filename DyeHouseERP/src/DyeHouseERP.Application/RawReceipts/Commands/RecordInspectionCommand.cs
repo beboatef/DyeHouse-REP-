@@ -54,16 +54,23 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
-    public RecordInspectionCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock)
+    public RecordInspectionCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
         _db = db;
         _currentUser = currentUser;
         _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<Unit> Handle(RecordInspectionCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: rejecting part of a receipt posts a correcting OUT row,
+        // so the inspection date must fall outside any closed period.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var message = await _db.RawMessages.FindAsync(new object[] { request.RawMessageId }, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 

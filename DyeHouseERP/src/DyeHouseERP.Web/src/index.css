@@ -1,16 +1,461 @@
+/* Must stay the very first statement: a CSS `@import` that appears after any
+   other rule is discarded by the CSS spec, and the bundler was silently
+   dropping it - leaving `font-family: Cairo` pointing at a font that never
+   loaded, so the whole Arabic UI rendered in a system fallback. */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+/* ===========================================================================
+   DESIGN TOKENS
+   ---------------------------------------------------------------------------
+   Every colour is defined twice: as a plain value (for `var(--x)`) and as
+   space-separated RGB channels (for `rgb(var(--x-rgb) / <alpha-value>)`).
+   Tailwind needs the channel form to support `/opacity` modifiers; the plain
+   form is what plain CSS and inline styles use.
 
-html, body, #root {
-  height: 100%;
+   Dark surfaces are #0F172A / #111827 / #1F2937 as specified - slate rather
+   than pure black, so elevation stays readable instead of crushing to #000.
+   =========================================================================== */
+@layer base {
+  :root {
+    /* -- surfaces ---------------------------------------------------------- */
+    --surface: #ffffff;
+    --surface-sunken: #f7f8fa;
+    --surface-raised: #ffffff;
+    --surface-overlay: #ffffff;
+
+    /* -- ink --------------------------------------------------------------- */
+    --ink: #111827;
+    --ink-muted: #4b5563;
+    --ink-subtle: #6b7280;
+    --ink-inverse: #f9fafb;
+
+    /* -- lines ------------------------------------------------------------- */
+    --line: #e5e7eb;
+    --line-strong: #d1d5db;
+
+    /* -- brand: calm industrial blue --------------------------------------- */
+    --brand-50: #eff5ff;
+    --brand-100: #dbe8fe;
+    --brand-200: #bfd7fe;
+    --brand-300: #93bbfd;
+    --brand-400: #609afa;
+    --brand-500: #3b82f6;
+    --brand-600: #2563eb;
+    --brand-700: #1d4ed8;
+    --brand-800: #1e40af;
+    --brand-900: #1e3a8a;
+
+    /* -- status ----------------------------------------------------------- */
+    --success: #059669;
+    --success-soft: #ecfdf5;
+    --success-ink: #065f46;
+
+    --warning: #d97706;
+    --warning-soft: #fffbeb;
+    --warning-ink: #92400e;
+
+    --danger: #dc2626;
+    --danger-soft: #fef2f2;
+    --danger-ink: #991b1b;
+
+    --info: #0891b2;
+    --info-soft: #ecfeff;
+    --info-ink: #155e75;
+
+    /* -- shape ------------------------------------------------------------- */
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-lg: 12px;
+
+    --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
+    --shadow-pop: 0 10px 15px -3px rgb(16 24 40 / 0.1), 0 4px 6px -4px rgb(16 24 40 / 0.1);
+
+    /* -- control sizing (the single source of truth for control heights) ---- */
+    --control-h-sm: 32px;
+    --control-h: 38px;
+    --control-h-lg: 44px;
+
+    /* -- channel mirrors (for Tailwind opacity modifiers) ------------------ */
+    --surface-rgb: 255 255 255;
+    --surface-sunken-rgb: 247 248 250;
+    --surface-raised-rgb: 255 255 255;
+    --surface-overlay-rgb: 255 255 255;
+    --ink-rgb: 17 24 39;
+    --ink-muted-rgb: 75 85 99;
+    --ink-subtle-rgb: 107 114 128;
+    --ink-inverse-rgb: 249 250 251;
+    --line-rgb: 229 231 235;
+    --line-strong-rgb: 209 213 219;
+    --brand-50-rgb: 239 245 255;
+    --brand-100-rgb: 219 232 254;
+    --brand-200-rgb: 191 215 254;
+    --brand-300-rgb: 147 187 253;
+    --brand-400-rgb: 96 154 250;
+    --brand-500-rgb: 59 130 246;
+    --brand-600-rgb: 37 99 235;
+    --brand-700-rgb: 29 78 216;
+    --brand-800-rgb: 30 64 175;
+    --brand-900-rgb: 30 58 138;
+    --success-rgb: 5 150 105;
+    --success-soft-rgb: 236 253 245;
+    --success-ink-rgb: 6 95 70;
+    --warning-rgb: 217 119 6;
+    --warning-soft-rgb: 255 251 235;
+    --warning-ink-rgb: 146 64 14;
+    --danger-rgb: 220 38 38;
+    --danger-soft-rgb: 254 242 242;
+    --danger-ink-rgb: 153 27 27;
+    --info-rgb: 8 145 178;
+    --info-soft-rgb: 236 254 255;
+    --info-ink-rgb: 21 94 117;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --surface: #111827;
+    --surface-sunken: #0f172a;
+    --surface-raised: #1f2937;
+    --surface-overlay: #1f2937;
+
+    --ink: #f3f4f6;
+    --ink-muted: #cbd5e1;
+    --ink-subtle: #94a3b8;
+    --ink-inverse: #111827;
+
+    --line: #1f2937;
+    --line-strong: #334155;
+
+    /* Brand steps are lightened in dark mode so they keep their contrast
+       against #111827 instead of going muddy. */
+    --brand-50: #172554;
+    --brand-100: #1e3a8a;
+    --brand-200: #1e40af;
+    --brand-300: #2563eb;
+    --brand-400: #3b82f6;
+    --brand-500: #60a5fa;
+    --brand-600: #3b82f6;
+    --brand-700: #60a5fa;
+    --brand-800: #93c5fd;
+    --brand-900: #bfdbfe;
+
+    --success: #10b981;
+    --success-soft: #052e26;
+    --success-ink: #6ee7b7;
+
+    --warning: #f59e0b;
+    --warning-soft: #2a1f05;
+    --warning-ink: #fcd34d;
+
+    --danger: #ef4444;
+    --danger-soft: #2a1113;
+    --danger-ink: #fca5a5;
+
+    --info: #22d3ee;
+    --info-soft: #062a33;
+    --info-ink: #a5f3fc;
+
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.2);
+    --shadow-pop: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+
+    --surface-rgb: 17 24 39;
+    --surface-sunken-rgb: 15 23 42;
+    --surface-raised-rgb: 31 41 55;
+    --surface-overlay-rgb: 31 41 55;
+    --ink-rgb: 243 244 246;
+    --ink-muted-rgb: 203 213 225;
+    --ink-subtle-rgb: 148 163 184;
+    --ink-inverse-rgb: 17 24 39;
+    --line-rgb: 31 41 55;
+    --line-strong-rgb: 51 65 85;
+    --brand-50-rgb: 23 37 84;
+    --brand-100-rgb: 30 58 138;
+    --brand-200-rgb: 30 64 175;
+    --brand-300-rgb: 37 99 235;
+    --brand-400-rgb: 59 130 246;
+    --brand-500-rgb: 96 165 250;
+    --brand-600-rgb: 59 130 246;
+    --brand-700-rgb: 96 165 250;
+    --brand-800-rgb: 147 197 253;
+    --brand-900-rgb: 191 219 254;
+    --success-rgb: 16 185 129;
+    --success-soft-rgb: 5 46 38;
+    --success-ink-rgb: 110 231 183;
+    --warning-rgb: 245 158 11;
+    --warning-soft-rgb: 42 31 5;
+    --warning-ink-rgb: 252 211 77;
+    --danger-rgb: 239 68 68;
+    --danger-soft-rgb: 42 17 19;
+    --danger-ink-rgb: 252 165 165;
+    --info-rgb: 34 211 238;
+    --info-soft-rgb: 6 42 51;
+    --info-ink-rgb: 165 243 252;
+
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: 'Cairo', system-ui, sans-serif;
+    @apply bg-surface-sunken text-ink antialiased;
+    /* Prevents the whole page from ever scrolling sideways on a phone. */
+    overflow-x: hidden;
+  }
+
+  /* A single, consistent focus ring for every interactive element. Keyboard
+     users must always be able to see where they are. */
+  :focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Firefox scrollbar styling so dark mode doesn't get a light scrollbar. */
+  * {
+    scrollbar-width: thin;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: var(--line-strong);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-subtle);
+  }
 }
 
-body {
-  font-family: 'Cairo', system-ui, sans-serif;
-  @apply bg-gray-50 text-gray-900;
+/* ===========================================================================
+   COMPONENT LAYER
+   Shared primitives. Pages compose these instead of re-declaring padding,
+   radius and border on every table, so density stays identical across all
+   39 modules.
+   =========================================================================== */
+@layer components {
+  /* -- Cards --------------------------------------------------------------- */
+  .card {
+    @apply rounded-lg border border-line bg-surface shadow-card;
+  }
+  .card-pad {
+    @apply p-4 sm:p-5;
+  }
+
+  /* -- Buttons ------------------------------------------------------------- */
+  /* Min-height 38px meets the comfortable touch-target floor; `sm` is 32px
+     and reserved for dense toolbars, never for primary mobile actions. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg
+           border border-transparent text-sm font-semibold transition-colors
+           disabled:cursor-not-allowed disabled:opacity-50;
+    height: var(--control-h);
+    @apply px-4;
+  }
+  .btn-sm {
+    height: var(--control-h-sm);
+    @apply px-3 text-xs;
+  }
+  .btn-lg {
+    height: var(--control-h-lg);
+    @apply px-5;
+  }
+  .btn-primary {
+    @apply bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+  }
+  .btn-secondary {
+    @apply border-line bg-surface text-ink hover:bg-surface-sunken;
+  }
+  .btn-ghost {
+    @apply text-ink-muted hover:bg-surface-sunken hover:text-ink;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:opacity-90;
+  }
+
+  /* -- Form controls -------------------------------------------------------- */
+  .input,
+  .select,
+  .textarea {
+    @apply w-full rounded-lg border border-line-strong bg-surface text-sm text-ink
+           placeholder:text-ink-subtle transition-colors
+           focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25
+           disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-subtle;
+    height: var(--control-h);
+    @apply px-3;
+  }
+  .textarea {
+    @apply py-2;
+    height: auto;
+    min-height: 80px;
+  }
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+  .field-error {
+    @apply mt-1 text-xs text-danger;
+  }
+
+  /* -- Checkbox / radio -----------------------------------------------------
+     The pages use bare `<input type="checkbox">`, which renders at the browser
+     default of ~13x13px - below a usable touch target. Styling the element
+     itself fixes all of them centrally instead of editing six call sites.
+     ----------------------------------------------------------------------- */
+  input[type="checkbox"],
+  input[type="radio"] {
+    @apply h-4 w-4 shrink-0 cursor-pointer rounded border-line-strong bg-surface text-brand-600
+           transition-colors focus:ring-2 focus:ring-brand-500/30;
+    /* A 26px hit area around the 16px box so the target is comfortable on
+       touch without the visual box growing. */
+    position: relative;
+  }
+  input[type="checkbox"]::before,
+  input[type="radio"]::before {
+    content: "";
+    position: absolute;
+    inset: -5px;
+  }
+  /* A <label> wrapping a checkbox is the real tap target (clicking it toggles
+     the box), so it - not the 16px input - is what needs the height. */
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]) {
+    @apply min-h-[32px] cursor-pointer items-center gap-2 rounded-md px-1 py-1 transition-colors;
+  }
+
+  /* -- Tables ---------------------------------------------------------------
+     One definition for every table in the ERP. The previous audit found four
+     different cell-paddings across 25 tables; these tokens make that
+     impossible to drift.
+     ----------------------------------------------------------------------- */
+  .table-wrap {
+    @apply w-full overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table {
+    @apply w-full border-collapse text-sm;
+    min-width: 640px;
+  }
+  .table thead th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-line bg-surface-sunken
+           px-4 py-2.5 text-start text-xs font-semibold uppercase tracking-wide text-ink-muted;
+  }
+  .table tbody td {
+    @apply border-b border-line px-4 py-2.5 align-middle text-ink;
+  }
+  .table tbody tr {
+    @apply transition-colors;
+  }
+  .table tbody tr:hover {
+    @apply bg-surface-sunken;
+  }
+  /* Compact variant for dense operational grids. */
+  .table-dense tbody td {
+    @apply px-3 py-1.5;
+  }
+  .table-dense thead th {
+    @apply px-3 py-2;
+  }
+
+  /* Text-style buttons inside table cells and card action rows.
+     The pages use bare <button class="text-xs font-semibold ..."> for row
+     actions. A bare text button is only as tall as its line box (~16px), which
+     is too small to hit reliably. This raises the hit area without changing
+     the visual weight, so the dense look is preserved. */
+  .btn-link {
+    @apply inline-flex min-h-[32px] items-center justify-center rounded-md px-2 text-xs
+           font-semibold text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700
+           disabled:cursor-not-allowed disabled:opacity-50
+           dark:hover:bg-brand-900/40 dark:hover:text-brand-300;
+  }
+
+  /* Narrow-viewport table handling.
+     `display: block` on the <table> turns it into its own scroll container
+     while thead/tbody/tr/td keep table formatting through anonymous boxes, so
+     a wide ERP grid scrolls inside itself and the page never scrolls sideways.
+     Scoped to the breakpoint so it is applied centrally to the 31 tables in
+     the app that have no wrapper, instead of editing each file. */
+  @media (max-width: 1279px) {
+    .card > table,
+    .table-auto-scroll {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  /* -- Badges --------------------------------------------------------------- */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .badge-success { @apply bg-success-soft text-success-ink; }
+  .badge-warning { @apply bg-warning-soft text-warning-ink; }
+  .badge-danger  { @apply bg-danger-soft text-danger-ink; }
+  .badge-info    { @apply bg-info-soft text-info-ink; }
+  .badge-neutral { @apply bg-surface-sunken text-ink-muted; }
+
+  /* -- Tabs -----------------------------------------------------------------
+     Horizontally scrollable on narrow screens instead of forcing the page to
+     scroll sideways.
+     ----------------------------------------------------------------------- */
+  .tabs {
+    @apply flex gap-1 overflow-x-auto border-b border-line;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .tab {
+    @apply whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm font-medium
+           text-ink-muted transition-colors hover:text-ink;
+  }
+  .tab-active {
+    @apply border-brand-600 text-brand-600;
+  }
+
+  /* -- Page scaffolding ----------------------------------------------------- */
+  .page {
+    @apply mx-auto w-full max-w-content;
+  }
+  .page-title {
+    @apply text-xl font-bold text-ink sm:text-2xl;
+  }
+  .page-subtitle {
+    @apply mt-1 text-sm text-ink-muted;
+  }
+
+  /* -- States --------------------------------------------------------------- */
+  .empty-state {
+    @apply flex flex-col items-center justify-center gap-2 px-6 py-12 text-center;
+  }
+  .empty-state-title {
+    @apply text-sm font-medium text-ink;
+  }
+  .empty-state-text {
+    @apply text-sm text-ink-subtle;
+  }
+
+  /* -- Sidebar -------------------------------------------------------------- */
+  .nav-link {
+    @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium
+           text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700
+           dark:hover:bg-brand-900/40 dark:hover:text-brand-200;
+  }
+  .nav-link-active {
+    @apply bg-brand-50 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200;
+  }
 }
 
 /* Numbers (document numbers, quantities) read better LTR even inside an RTL page */
@@ -18,4 +463,23 @@ body {
   direction: ltr;
   unicode-bidi: isolate;
   display: inline-block;
+}
+
+/* Respect a user's reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print: force the light palette and drop the chrome. The print layouts in
+   src/pages/print render documents, not screens. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }

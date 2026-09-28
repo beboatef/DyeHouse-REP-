@@ -62,14 +62,20 @@ public class CancelInvoiceCommandHandler : IRequestHandler<CancelInvoiceCommand,
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
-    public CancelInvoiceCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock)
+    public CancelInvoiceCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
-        _db = db; _currentUser = currentUser; _clock = clock;
+        _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose;
     }
 
     public async Task<InvoiceDto> Handle(CancelInvoiceCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: the reversal row is dated today, so a closed period only
+        // blocks this if today is closed - historical corrections stay possible.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == request.InvoiceId, cancellationToken)
             ?? throw new NotFoundException("Invoice", request.InvoiceId);
 

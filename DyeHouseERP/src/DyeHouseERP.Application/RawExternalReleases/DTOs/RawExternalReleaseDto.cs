@@ -22,4 +22,16 @@ public class RawExternalReleaseDto
     public string? Notes { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
+
+    // ---- External Processing workflow (spec section 21) ----
+    public Guid? ProductionOrderId { get; set; }
+    public string? ProductionOrderNumber { get; set; }
+    public string? ExternalProcessingStage { get; set; }
+    public decimal? ExternalProcessingCost { get; set; }
+    public DateTime? ExpectedReturnDate { get; set; }
+    public DateTime? ActualReturnDate { get; set; }
+    public decimal? ReturnedQuantityKg { get; set; }
+    public decimal? ReturnedQuantityMeter { get; set; }
+    public string? CancellationReason { get; set; }
+    public ExternalProcessingStatus Status { get; set; }
 }

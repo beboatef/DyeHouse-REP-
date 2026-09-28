@@ -3,6 +3,7 @@ using DyeHouseERP.Application.FormationRequests.Commands;
 using DyeHouseERP.Application.FormationRequests.DTOs;
 using DyeHouseERP.Application.FormationRequests.Queries;
 using DyeHouseERP.API.Authorization;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using MediatR;
@@ -110,6 +111,30 @@ public class FormationRequestsController : ControllerBase
 
         var bytes = export.GenerateExcel("FormationRequests", headers, rows);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "formation-requests.xlsx");
+    }
+
+    /// <summary>The same register as a printable document (spec section 39), driven by the same filters.</summary>
+    [HttpGet("export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationExport)]
+    public async Task<IActionResult> Export(
+        [FromQuery] Guid? customerId, [FromQuery] FormationRequestStatus? status,
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to,
+        [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
+    {
+        var requests = await _mediator.Send(new GetFormationRequestsQuery(customerId, null, null, status, from, to));
+        var headers = new List<string>
+        {
+            "RequestNumber", "Date", "Customer", "Item", "Message", "Groups", "TotalQuantity", "Unit", "Status", "JobOrder"
+        };
+
+        var rows = requests.Select(r => new object?[]
+        {
+            r.RequestNumber, r.RequestDate.ToString("yyyy-MM-dd"), r.CustomerCode, r.ItemCode, r.MessageNumber,
+            r.Groups.Count, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString(), r.ProductionOrderNumber
+        }).ToList();
+
+        return ExportFileHelper.ToFile(export, format, "Customer Formation Requests", "DyeHouse ERP",
+            headers, rows, "formation-requests", "FormationRequests");
     }
 
     /// <summary>Printable formation request with its group/cell specification table (spec sections 49-50).</summary>

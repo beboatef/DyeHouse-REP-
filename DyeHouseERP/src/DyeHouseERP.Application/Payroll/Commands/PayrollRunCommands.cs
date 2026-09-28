@@ -260,12 +260,18 @@ public class CancelPayrollRunCommandHandler : IRequestHandler<CancelPayrollRunCo
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly ISender _mediator;
+    private readonly IPeriodCloseService _periodClose;
 
-    public CancelPayrollRunCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, ISender mediator)
-    { _db = db; _currentUser = currentUser; _mediator = mediator; }
+    public CancelPayrollRunCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, ISender mediator,
+        IPeriodCloseService periodClose)
+    { _db = db; _currentUser = currentUser; _mediator = mediator; _periodClose = periodClose; }
 
     public async Task<PayrollRunDto> Handle(CancelPayrollRunCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: the reversal row is dated today, so a closed period only
+        // blocks this if today is closed - historical corrections stay possible.
+        await _periodClose.EnsureOpenAsync(DateTime.UtcNow.Date, cancellationToken);
+
         var run = await _db.PayrollRuns.Include(r => r.Lines)
             .FirstOrDefaultAsync(r => r.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("PayrollRun", request.Id);

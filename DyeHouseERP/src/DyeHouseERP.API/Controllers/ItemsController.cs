@@ -3,6 +3,7 @@ using DyeHouseERP.Application.Items.Commands;
 using DyeHouseERP.Application.Items.DTOs;
 using DyeHouseERP.Application.Items.Queries;
 using DyeHouseERP.API.Authorization;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -64,6 +65,23 @@ public class ItemsController : ControllerBase
 
         var bytes = export.GenerateExcel("Items", headers, rows);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "items.xlsx");
+    }
+
+    /// <summary>The same list as a printable document (spec section 39), driven by the same filters.</summary>
+    [HttpGet("export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> Export(
+        [FromQuery] bool? activeOnly, [FromQuery] string? search,
+        [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
+    {
+        var items = await _mediator.Send(new GetItemsQuery(activeOnly, search));
+        var headers = new List<string> { "Code", "NameAr", "NameEn", "Category", "BaseUnit", "Active" };
+        var rows = items.Select(i => new object?[]
+        {
+            i.Code, i.NameAr, i.NameEn, i.Category, i.BaseUnit.ToString(), i.IsActive ? "Yes" : "No"
+        }).ToList();
+
+        return ExportFileHelper.ToFile(export, format, "Item List", "DyeHouse ERP", headers, rows, "items", "Items");
     }
 
     /// <summary>Step 1 of the import workflow (spec section 7): the empty template with the exact expected columns.</summary>

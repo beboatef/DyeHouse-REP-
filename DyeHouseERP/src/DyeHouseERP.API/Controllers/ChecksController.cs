@@ -3,6 +3,7 @@ using DyeHouseERP.Application.Checks.DTOs;
 using DyeHouseERP.Application.Checks.Queries;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.API.Authorization;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using MediatR;
@@ -146,6 +147,34 @@ public class ChecksController : ControllerBase
         var subtitle = $"{from?.ToString("yyyy-MM-dd") ?? "..."} - {to?.ToString("yyyy-MM-dd") ?? "..."}";
         var bytes = export.GeneratePdf("Checks Register", subtitle, headers, rows);
         return File(bytes, "application/pdf", "checks.pdf");
+    }
+
+    /// <summary>
+    /// One cheque as a printable voucher, including its full movement history
+    /// (received / endorsed / deposited / cleared / bounced / returned) so the
+    /// status audit travels with the printed document (spec sections 40 + 49).
+    /// </summary>
+    [HttpGet("{id:guid}/pdf")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksExport)]
+    public async Task<IActionResult> GetPdf(Guid id, [FromServices] IReportExportService export)
+    {
+        var check = await _mediator.Send(new GetCheckByIdQuery(id));
+
+        var headers = new List<string> { "Movement", "Date", "From", "To", "To holder type", "Reason" };
+        var rows = check.Movements.Select(m => new object?[]
+        {
+            m.MovementType.ToString(), m.MovementDate.ToString("yyyy-MM-dd"), m.FromHolder, m.ToHolder,
+            m.ToHolderType.ToString(), m.Reason
+        }).ToList();
+
+        var party = check.Direction == CheckDirection.CustomerCheck
+            ? $"Customer: {check.CustomerCode} {check.CustomerName}"
+            : $"Supplier: {check.SupplierCode} {check.SupplierName}";
+
+        var subtitle = $"{check.CheckNumber}  |  {check.BankName} {check.BranchName}  |  {check.Amount} {check.Currency}"
+            + $"  |  due {check.DueDate:yyyy-MM-dd}  |  {check.Status}  |  holder: {check.CurrentHolder} ({check.CurrentHolderType})  |  {party}";
+
+        return ExportFileHelper.ToPdf(export, $"شيك رقم {check.CheckNumber}", subtitle, headers, rows, $"check-{check.CheckNumber}");
     }
 }
 

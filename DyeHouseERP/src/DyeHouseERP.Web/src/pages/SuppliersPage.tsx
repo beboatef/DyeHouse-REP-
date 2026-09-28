@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SuppliersApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import ImportPanel from "@/components/ImportPanel";
+import { SuppliersExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 /**
@@ -65,7 +68,22 @@ export default function SuppliersPage() {
       <PageHeader
         title={t("suppliers.title")}
         subtitle={t("suppliers.subtitle")}
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("suppliers.new")}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ action: SuppliersExports.excel }}
+              pdf={{ action: SuppliersExports.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("suppliers.new")}</Button>
+          </div>
+        }
+      />
+
+      <ImportPanel
+        base="/suppliers/import"
+        columns={["Code", "NameAr", "NameEn", "Phone", "Address", "ContactPerson", "TaxNumber"]}
+        title="استيراد الموردين من Excel"
+        onDone={() => qc.invalidateQueries({ queryKey: ["suppliers"] })}
       />
 
       {showForm && (

@@ -20,7 +20,9 @@ public record CreateRawExternalReleaseCommand(
     Guid CustomerId, Guid ItemId, Guid RawMessageId,
     decimal? QuantityKg, decimal? QuantityMeter, RawReleaseReason Reason,
     string? ExternalParty, string? Notes,
-    bool OverrideNegativeStock = false, string? OverrideReason = null) : IRequest<RawExternalReleaseDto>;
+    bool OverrideNegativeStock = false, string? OverrideReason = null,
+    Guid? ProductionOrderId = null, string? ExternalProcessingStage = null,
+    decimal? ExternalProcessingCost = null, DateTime? ExpectedReturnDate = null) : IRequest<RawExternalReleaseDto>;
 
 public class CreateRawExternalReleaseCommandValidator : AbstractValidator<CreateRawExternalReleaseCommand>
 {
@@ -42,20 +44,25 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IInventoryLedgerService _ledger;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public CreateRawExternalReleaseCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
-        IInventoryLedgerService ledger, IDateTime clock)
+        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose)
     {
         _db = db;
         _currentUser = currentUser;
         _numberGenerator = numberGenerator;
         _ledger = ledger;
         _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<RawExternalReleaseDto> Handle(CreateRawExternalReleaseCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: releasing raw material out of the warehouse is a stock posting.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 
@@ -90,7 +97,11 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
         var release = new RawExternalRelease(
             releaseNumber, _clock.UtcNow, request.CustomerId, request.ItemId, message.Id,
             request.QuantityKg, request.QuantityMeter, request.Reason, _currentUser.UserName,
-            request.ExternalParty, request.Notes);
+            request.ExternalParty, request.Notes,
+            productionOrderId: request.ProductionOrderId,
+            externalProcessingStage: request.ExternalProcessingStage,
+            externalProcessingCost: request.ExternalProcessingCost,
+            expectedReturnDate: request.ExpectedReturnDate);
 
         _db.RawExternalReleases.Add(release);
 
@@ -125,7 +136,12 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
             ExternalParty = release.ExternalParty,
             Notes = release.Notes,
             CreatedBy = release.CreatedBy,
-            CreatedAtUtc = release.CreatedAtUtc
+            CreatedAtUtc = release.CreatedAtUtc,
+            ProductionOrderId = release.ProductionOrderId,
+            ExternalProcessingStage = release.ExternalProcessingStage,
+            ExternalProcessingCost = release.ExternalProcessingCost,
+            ExpectedReturnDate = release.ExpectedReturnDate,
+            Status = release.Status
         };
     }
 }

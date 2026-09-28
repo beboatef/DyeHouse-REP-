@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdjustmentType, CustomersApi, ItemsApi, RawMessagesApi, StockAdjustmentsApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { StockAdjustmentsExports } from "@/api/exports";
 
 export default function StockAdjustmentsPage() {
   const qc = useQueryClient();
@@ -52,7 +54,15 @@ export default function StockAdjustmentsPage() {
       <PageHeader
         title="تسويات المخزون"
         subtitle="كل تسوية تُسجَّل مع الرصيد قبل وبعد - ولا يمكن تعديلها بعد الحفظ، فقط تسوية جديدة"
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تسوية جديدة"}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ action: StockAdjustmentsExports.excel }}
+              pdf={{ action: StockAdjustmentsExports.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تسوية جديدة"}</Button>
+          </div>
+        }
       />
 
       {showForm && (

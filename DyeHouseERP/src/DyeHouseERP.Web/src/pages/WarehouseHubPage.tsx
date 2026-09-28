@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CustomersApi, InventoryLedgerApi, RawMessagesApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { ReportsExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 import RawMessagesPage from "@/pages/RawMessagesPage";
 import RawExternalReleasesPage from "@/pages/RawExternalReleasesPage";
@@ -97,7 +99,7 @@ function BalancesTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <Card className="p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
         <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
           <option value="">{t("common.all")} - {t("common.customer")}</option>
           {customers?.map((c) => (
@@ -111,7 +113,16 @@ function BalancesTab() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="text-xs text-slate-500 flex items-center">{t("wh.balanceNote")}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-slate-500">{t("wh.balanceNote")}</span>
+          {/* Same live balances the table shows: raw remaining per message line
+              plus ready-goods per job order, all summed from the ledgers. */}
+          <ExportButtons
+            excel={{ label: t("common.export"), action: () => ReportsExports.warehouseBalances("excel")({ customerId: customerId || undefined }) }}
+            pdf={{ label: t("common.pdf"), action: () => ReportsExports.warehouseBalances("pdf")({ customerId: customerId || undefined }) }}
+            extra={<Button variant="secondary" onClick={() => window.print()}>{t("common.print")}</Button>}
+          />
+        </div>
       </Card>
 
       <Card>
@@ -185,12 +196,21 @@ function MovementsTab() {
           <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.to")}</label>
           <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => InventoryLedgerApi.exportMovementsExcel({ from: filters.from || undefined, to: filters.to || undefined })}
-        >
-          {t("common.export")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <ExportButtons
+            excel={{ label: t("common.export"), action: () => ReportsExports.inventoryMovements.excel({
+              from: filters.from || undefined,
+              to: filters.to || undefined,
+              warehouseId: filters.warehouseId || undefined
+            }) }}
+            pdf={{ label: t("common.pdf"), action: () => ReportsExports.inventoryMovements.pdf({
+              from: filters.from || undefined,
+              to: filters.to || undefined,
+              warehouseId: filters.warehouseId || undefined
+            }) }}
+            extra={<Button variant="secondary" onClick={() => window.print()}>{t("common.print")}</Button>}
+          />
+        </div>
         <div className="text-xs text-slate-500">
           {t("wh.tab.movements")}: {data?.length ?? 0}
         </div>

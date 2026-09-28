@@ -46,20 +46,25 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IInventoryLedgerService _ledger;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public CreateCustomerTransferCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
-        IInventoryLedgerService ledger, IDateTime clock)
+        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose)
     {
         _db = db;
         _currentUser = currentUser;
         _numberGenerator = numberGenerator;
         _ledger = ledger;
         _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<CustomerTransferDto> Handle(CreateCustomerTransferCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: a customer-to-customer transfer is a stock posting.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 

@@ -8,11 +8,15 @@ using Microsoft.EntityFrameworkCore;
 namespace DyeHouseERP.Application.CostAccounting.Queries;
 
 /// <summary>
-/// Total Production Order cost rollup (spec section 35):
-/// Material + Preparation + allocated Operating Cost (labor/electricity/
-/// fuel/maintenance/other) = Total Cost; cost per KG/Meter and margin are
-/// only computed when their denominator is actually positive - never a
-/// divide-by-zero.
+/// Total Job Order cost rollup (spec section 34):
+/// Material + Preparation + External Processing + allocated Operating Cost
+/// (labor/electricity/fuel/maintenance/other) = ACTUAL cost, always derived
+/// live from posted transactions so it can never drift from them. The
+/// ESTIMATED and APPROVED figures are stored on the order and returned
+/// alongside it; cost per KG/Meter and margin are only computed when their
+/// denominator is actually positive - never a divide-by-zero.
+/// Customer-owned raw material is reported as quantities only and is NEVER
+/// valued into this cost. Only factory-owned material issues are costed.
 /// </summary>
 public record GetProductionOrderCostQuery(Guid ProductionOrderId) : IRequest<ProductionOrderCostDto>;
 
@@ -34,6 +38,13 @@ public class GetProductionOrderCostQueryHandler : IRequestHandler<GetProductionO
             .Where(p => p.ProductionOrderId == request.ProductionOrderId)
             .SumAsync(p => p.Cost, cancellationToken) ?? 0;
 
+        // External processing (spec section 21): the cost charged by the outside
+        // processor, linked to this order at the time the material was released.
+        var externalProcessingCost = await _db.RawExternalReleases.AsNoTracking()
+            .Where(r => r.ProductionOrderId == request.ProductionOrderId &&
+                        r.Reason == RawReleaseReason.ExternalProcessing)
+            .SumAsync(r => (decimal?)r.ExternalProcessingCost, cancellationToken) ?? 0;
+
         var costEntries = await _db.CostEntries.AsNoTracking()
             .Where(c => c.ProductionOrderId == request.ProductionOrderId)
             .ToListAsync(cancellationToken);
@@ -45,7 +56,8 @@ public class GetProductionOrderCostQueryHandler : IRequestHandler<GetProductionO
         var maintenance = Sum(CostCategory.Maintenance);
         var other = Sum(CostCategory.Other);
 
-        var totalCost = materialCost + preparationCost + labor + electricity + fuel + maintenance + other;
+        var totalCost = materialCost + preparationCost + externalProcessingCost
+                        + labor + electricity + fuel + maintenance + other;
 
         // Output quantity = what was actually transferred to ready goods for this order.
         var readyTransfer = await _db.ReadyGoodsTransfers.AsNoTracking()
@@ -66,8 +78,15 @@ public class GetProductionOrderCostQueryHandler : IRequestHandler<GetProductionO
         {
             ProductionOrderId = order.Id, ProductionOrderNumber = order.OrderNumber,
             MaterialCost = materialCost, PreparationCost = preparationCost,
+            ExternalProcessingCost = externalProcessingCost,
             LaborCost = labor, ElectricityCost = electricity, FuelCost = fuel, MaintenanceCost = maintenance, OtherCost = other,
             TotalCost = totalCost,
+            EstimatedCost = order.EstimatedCost,
+            ApprovedCost = order.ApprovedCost,
+            CostApprovedBy = order.CostApprovedBy,
+            CostApprovedAtUtc = order.CostApprovedAtUtc,
+            CostingNotes = order.CostingNotes,
+            ApprovedVariance = order.ApprovedCost is null ? null : order.ApprovedCost.Value - totalCost,
             OutputKg = outputKg, OutputMeter = outputMeter,
             CostPerKg = outputKg is > 0 ? totalCost / outputKg : null,
             CostPerMeter = outputMeter is > 0 ? totalCost / outputMeter : null,

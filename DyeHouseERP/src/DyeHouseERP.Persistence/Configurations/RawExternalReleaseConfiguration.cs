@@ -23,8 +23,19 @@ public class RawExternalReleaseConfiguration : IEntityTypeConfiguration<RawExter
         builder.Property(r => r.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(r => r.ModifiedBy).HasMaxLength(100);
 
+        // ---- External Processing workflow (spec section 21) ----
+        builder.Property(r => r.ExternalProcessingStage).HasMaxLength(200);
+        builder.Property(r => r.ExternalProcessingCost).HasPrecision(18, 2);
+        builder.Property(r => r.ReturnedQuantityKg).HasPrecision(18, 3);
+        builder.Property(r => r.ReturnedQuantityMeter).HasPrecision(18, 3);
+        builder.Property(r => r.ReturnedBy).HasMaxLength(100);
+        builder.Property(r => r.CancellationReason).HasMaxLength(1000);
+        builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+
         builder.HasIndex(r => r.RawMessageId);
         builder.HasIndex(r => r.CustomerId);
+        builder.HasIndex(r => r.ProductionOrderId);
+        builder.HasIndex(r => r.Status);
     }
 }
 

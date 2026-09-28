@@ -1,3 +1,5 @@
+using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Application.Deliveries.Commands;
 using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Deliveries.Queries;
@@ -28,6 +30,25 @@ public class DeliveriesController : ControllerBase
     public async Task<ActionResult<DeliveryDto>> GetById(Guid id) => Ok(await _mediator.Send(new GetDeliveryByIdQuery(id)));
 
     /// <summary>Printable delivery document PDF (spec section 39) - has no financial value, just the physical delivery record.</summary>
+    /// <summary>Deliveries register as Excel or PDF - one row per delivered line, with raw origin (spec section 31).</summary>
+    [HttpGet("export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] DeliveryStatus? status,
+        [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
+    {
+        var deliveries = await _mediator.Send(new GetDeliveriesQuery(customerId, status));
+
+        var headers = new[] { "Delivery no.", "Date", "Customer", "Job order", "Item", "Color", "Qty KG", "Qty M", "Pieces", "Raw origin", "Status" };
+        var rows = deliveries.SelectMany(d => d.Lines.Select(l => new object?[]
+        {
+            d.DeliveryNumber, d.DeliveryDate.ToString("yyyy-MM-dd"), $"{d.CustomerCode} - {d.CustomerName}",
+            l.ProductionOrderNumber, $"{l.ItemCode}", l.Color, l.QuantityKg, l.QuantityMeter, l.PieceCount,
+            l.RawOrigin, d.Status.ToString()
+        })).ToList();
+
+        return ExportFileHelper.ToFile(export, format, "Deliveries", "DyeHouse ERP", headers, rows, "deliveries", "Deliveries");
+    }
+
     [HttpGet("{id:guid}/pdf")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetDeliveryPdf(Guid id, [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export)

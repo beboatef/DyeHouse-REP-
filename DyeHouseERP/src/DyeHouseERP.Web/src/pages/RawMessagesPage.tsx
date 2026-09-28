@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CustomersApi, DocumentPdfApi, ItemsApi, RawMessagesApi, WarehousesApi } from "@/api/client";
+import { CustomersApi, ItemsApi, RawMessagesApi, WarehousesApi } from "@/api/client";
 import type { RawMessage } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { RawMessagesExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 type LineDraft = { itemId: string; quantityKg: string; quantityMeter: string; pieceCount: string; notes: string };
@@ -142,7 +144,15 @@ export default function RawMessagesPage() {
       <PageHeader
         title={t("raw.title")}
         subtitle={t("raw.subtitle")}
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("raw.new")}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ label: t("common.export"), action: RawMessagesExports.excel }}
+              pdf={{ label: t("common.exportPdf"), action: RawMessagesExports.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("raw.new")}</Button>
+          </div>
+        }
       />
 
       {showForm && (
@@ -253,7 +263,7 @@ export default function RawMessagesPage() {
                 <Link to={`/print/raw-message/${m.id}`} target="_blank">
                   <Button type="button" variant="ghost">{t("raw.previewPrint")}</Button>
                 </Link>
-                <Button variant="ghost" onClick={() => DocumentPdfApi.rawMessage(m.id, m.messageNumber)}>{t("raw.downloadPdf")}</Button>
+                <Button variant="ghost" onClick={RawMessagesExports.documentPdf(m.id)}>{t("raw.downloadPdf")}</Button>
                 <Badge tone={inspectionTone[m.inspectionStatus]}>{t(inspectionKey[m.inspectionStatus], m.inspectionStatus)}</Badge>
                 <Button variant="secondary" onClick={() => inspectionMutation.mutate({ id: m.id, result: "Accepted" })}>
                   {t("raw.inspection.accept")}

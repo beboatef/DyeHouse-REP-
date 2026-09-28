@@ -9,9 +9,22 @@ import {
   WarehousesApi
 } from "@/api/client";
 import type { MaterialUnit, PurchaseOrder, PurchaseOrderStatus, SupplierInvoiceStatus } from "@/api/client";
+import { PurchaseDocumentsApi } from "@/api/documents";
+import { PurchasesExports } from "@/api/exports";
+import SupplierStatementPanel from "./purchases/SupplierStatementPanel";
+import AttachmentsPanel from "@/components/AttachmentsPanel";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
+/** Shared Excel/PDF export button pair (spec section 35). */
+function ExportButtons({ onExport, labels }: { onExport: (format: "excel" | "pdf") => void; labels: { excel: string; pdf: string } }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button variant="ghost" onClick={() => onExport("excel")}>{`${labels.excel} Excel`}</Button>
+      <Button variant="ghost" onClick={() => onExport("pdf")}>{`${labels.pdf} PDF`}</Button>
+    </div>
+  );
+}
 /**
  * Purchases (spec section 35) inside the existing UI patterns: one page with tabs
  * for orders, receiving, supplier invoices, payments and supplier balances.
@@ -81,7 +94,12 @@ export default function PurchasesPage() {
       {tab === "receipts" && <ReceiptsTab />}
       {tab === "invoices" && <InvoicesTab />}
       {tab === "payments" && <PaymentsTab />}
-      {tab === "balances" && <BalancesTab />}
+      {tab === "balances" && (
+        <>
+          <SupplierStatementPanel />
+          <BalancesTab />
+        </>
+      )}
     </>
   );
 }
@@ -104,6 +122,14 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
   const [lines, setLines] = useState<{ materialId: string; quantity: string; unit: MaterialUnit; unitPrice: string }[]>([
     { materialId: "", quantity: "", unit: "KG", unitPrice: "" }
   ]);
+
+  // Draft editing (spec section 35): the header and any line that has not been
+  // received yet can be corrected. The API is the authority on what is editable.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editExpected, setEditExpected] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editLines, setEditLines] = useState<Record<string, { quantity: string; unitPrice: string }>>({});
+  const [editError, setEditError] = useState<string | null>(null);
 
   const { data: suppliers } = useQuery({ queryKey: ["suppliers", "active"], queryFn: () => SuppliersApi.list({ activeOnly: true }) });
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => WarehousesApi.list() });
@@ -164,6 +190,38 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
     onSuccess: invalidate
   });
 
+  const saveHeader = useMutation({
+    mutationFn: (order: PurchaseOrder) => PurchaseDocumentsApi.updateOrder(order.id, {
+      orderDate: new Date(order.orderDate).toISOString(),
+      supplierId: order.supplierId,
+      warehouseId: order.warehouseId,
+      expectedDeliveryDate: editExpected ? new Date(editExpected).toISOString() : null,
+      notes: editNotes || null
+    }),
+    onSuccess: () => { invalidate(); setEditError(null); },
+    onError: (err: any) => setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const saveLine = useMutation({
+    mutationFn: (vars: { orderId: string; lineId: string; quantity: number; unitPrice: number }) =>
+      PurchaseDocumentsApi.updateOrderLine(vars.orderId, vars.lineId, {
+        quantity: vars.quantity, unitPrice: vars.unitPrice
+      }),
+    onSuccess: () => { invalidate(); setEditError(null); },
+    onError: (err: any) => setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const startEdit = (order: PurchaseOrder) => {
+    setEditing(order.id);
+    setExpanded(order.id);
+    setEditExpected(order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate).toISOString().slice(0, 10) : "");
+    setEditNotes(order.notes ?? "");
+    setEditLines(Object.fromEntries(order.lines.map((l) => [l.id, { quantity: String(l.quantity), unitPrice: String(l.unitPrice) }])));
+    setEditError(null);
+  };
+
+  const canEditLine = (orderStatus: PurchaseOrderStatus) => orderStatus === "Draft" || orderStatus === "Submitted";
+
   const cancelOrder = (order: PurchaseOrder) => {
     const reason = window.prompt(t("pur.cancelReason"));
     if (!reason) return;
@@ -183,6 +241,10 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
           </Select>
         </div>
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pur.newOrder")}</Button>
+        <ExportButtons
+          labels={{ excel: t("pur.exportOrders"), pdf: t("common.pdf") }}
+          onExport={(format) => PurchasesExports.orders[format]({ status: statusFilter || undefined, supplierId: supplierId || undefined })}
+        />
       </Card>
 
       {showForm && (
@@ -321,6 +383,11 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                 <Button variant="ghost" onClick={() => setExpanded(expanded === o.id ? null : o.id)}>
                   {t("common.details")}
                 </Button>
+                {(o.status === "Draft" || o.status === "Submitted") && (
+                  <Button variant="ghost" onClick={() => (editing === o.id ? setEditing(null) : startEdit(o))}>
+                    {editing === o.id ? t("common.cancel") : t("pur.editOrder")}
+                  </Button>
+                )}
                 {o.status === "Draft" && (
                   <Button variant="secondary" onClick={() => action.mutate({ id: o.id, action: "submit" })}>
                     {t("pur.submit")}
@@ -334,8 +401,37 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                 {o.status !== "Cancelled" && o.status !== "Received" && (
                   <Button variant="ghost" onClick={() => cancelOrder(o)}>{t("pur.cancelOrder")}</Button>
                 )}
+                {/* The printable purchase order itself - a supervisor prints this,
+                    not the register that lists it. */}
+                <Button variant="ghost" onClick={() => PurchasesExports.orderPdf(o.id)()}>
+                  {t("common.pdf")}
+                </Button>
               </div>
             </div>
+
+            {expanded === o.id && editError && <p className="text-sm text-red-600 mt-3">{editError}</p>}
+
+            {expanded === o.id && editing === o.id && (
+              <Card className="p-4 mt-4 bg-gray-50">
+                <h4 className="text-sm font-semibold mb-3">{t("pur.editOrder")}</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">{t("pur.expectedDelivery")}</label>
+                    <Input type="date" value={editExpected} onChange={(e) => setEditExpected(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">{t("common.notes")}</label>
+                    <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+                  </div>
+                </div>
+                <Button className="mt-3" disabled={saveHeader.isPending} onClick={() => saveHeader.mutate(o)}>
+                  {saveHeader.isPending ? t("common.saving") : t("common.save")}
+                </Button>
+                {o.status === "Submitted" && (
+                  <p className="text-xs text-gray-500 mt-2">{t("pur.editSubmittedHint", "تعديل أمر مُرسل يُعيده إلى مسودة لاعتماده من جديد")}</p>
+                )}
+              </Card>
+            )}
 
             {expanded === o.id && (
               <div className="mt-4">
@@ -355,25 +451,66 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                     {o.lines.map((l) => (
                       <tr key={l.id} className="border-b border-gray-50 last:border-0">
                         <td className="py-2">{l.materialCode} - {l.materialName}</td>
-                        <td className="py-2 ltr-nums">{l.quantity} {l.unit}</td>
-                        <td className="py-2 ltr-nums">{money(l.unitPrice)}</td>
+                        <td className="py-2 ltr-nums">
+                          {editing === o.id && canEditLine(o.status) && l.receivedQuantity === 0 ? (
+                            <Input
+                              className="w-24" type="number" step="0.001" min="0"
+                              value={editLines[l.id]?.quantity ?? String(l.quantity)}
+                              onChange={(e) => setEditLines((p) => ({
+                                ...p, [l.id]: { quantity: e.target.value, unitPrice: p[l.id]?.unitPrice ?? String(l.unitPrice) }
+                              }))}
+                            />
+                          ) : `${l.quantity} ${l.unit}`}
+                        </td>
+                        <td className="py-2 ltr-nums">
+                          {editing === o.id && canEditLine(o.status) && l.receivedQuantity === 0 ? (
+                            <Input
+                              className="w-24" type="number" step="0.0001" min="0"
+                              value={editLines[l.id]?.unitPrice ?? String(l.unitPrice)}
+                              onChange={(e) => setEditLines((p) => ({
+                                ...p, [l.id]: { quantity: p[l.id]?.quantity ?? String(l.quantity), unitPrice: e.target.value }
+                              }))}
+                            />
+                          ) : money(l.unitPrice)}
+                        </td>
                         <td className="py-2 ltr-nums">{money(l.lineValue)}</td>
                         <td className="py-2 ltr-nums">{l.receivedQuantity}</td>
                         <td className="py-2 ltr-nums font-medium">{l.outstandingQuantity}</td>
                         <td className="py-2">
-                          {(o.status === "Draft" || o.status === "Submitted") && l.receivedQuantity === 0 && (
-                            <button
-                              className="text-red-600 hover:underline text-xs font-semibold"
-                              onClick={() => removeLine.mutate({ orderId: o.id, lineId: l.id })}
-                            >
-                              {t("pur.removeLine")}
-                            </button>
+                          {canEditLine(o.status) && l.receivedQuantity === 0 && (
+                            <div className="flex items-center gap-3">
+                              {editing === o.id && (
+                                <button
+                                  className="text-brand-600 hover:underline text-xs font-semibold"
+                                  onClick={() => saveLine.mutate({
+                                    orderId: o.id, lineId: l.id,
+                                    quantity: Number(editLines[l.id]?.quantity ?? l.quantity),
+                                    unitPrice: Number(editLines[l.id]?.unitPrice ?? l.unitPrice)
+                                  })}
+                                >
+                                  {t("pur.editLine")}
+                                </button>
+                              )}
+                              <button
+                                className="text-red-600 hover:underline text-xs font-semibold"
+                                onClick={() => removeLine.mutate({ orderId: o.id, lineId: l.id })}
+                              >
+                                {t("pur.removeLine")}
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Private attachments for this purchase order (spec section 47). */}
+            {expanded === o.id && (
+              <div className="mt-4">
+                <AttachmentsPanel entityType="PurchaseOrder" entityId={o.id} />
               </div>
             )}
           </Card>
@@ -475,7 +612,13 @@ function ReceiptsTab() {
   return (
     <>
       <Card className="p-4 mb-4">
-        <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pur.newReceipt")}</Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pur.newReceipt")}</Button>
+          <ExportButtons
+            labels={{ excel: t("pur.exportReceipts"), pdf: t("common.pdf") }}
+            onExport={(format) => PurchasesExports.receipts[format]({ supplierId: supplierId || undefined })}
+          />
+        </div>
         <p className="text-xs text-gray-500 mt-2">{t("pur.receiptHint")}</p>
       </Card>
 
@@ -629,7 +772,10 @@ function ReceiptsTab() {
               )}
               <span className="text-gray-400">·</span>
               <span className="text-sm text-gray-500 ltr-nums">{new Date(r.receiptDate).toLocaleDateString("en-GB")}</span>
-              <span className="ms-auto text-sm font-semibold ltr-nums">{money(r.totalValue)}</span>
+              <span className="text-sm font-semibold ltr-nums">{money(r.totalValue)}</span>
+              <Button variant="ghost" onClick={() => PurchasesExports.receiptPdf(r.id)()}>
+                {t("common.pdf")}
+              </Button>
             </div>
             <table className="w-full text-sm">
               <thead>
@@ -740,6 +886,10 @@ function InvoicesTab() {
           {t("pur.overdueOnly")}
         </label>
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pur.newInvoice")}</Button>
+        <ExportButtons
+          labels={{ excel: t("pur.exportInvoices"), pdf: t("common.pdf") }}
+          onExport={(format) => PurchasesExports.supplierInvoices[format]()}
+        />
         <span className="text-xs text-gray-500">{t("pur.invoiceHint")}</span>
       </Card>
 
@@ -896,6 +1046,11 @@ function InvoicesTab() {
             {invoices?.map((i) => (
               <tr key={i.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium ltr-nums">{i.invoiceNumber}</td>
+                <td className="px-4 py-3">
+                  <Button variant="ghost" onClick={() => PurchasesExports.supplierInvoicePdf(i.id)()}>
+                    {t("common.pdf")}
+                  </Button>
+                </td>
                 <td className="px-4 py-3">{i.supplierCode} - {i.supplierName}</td>
                 <td className="px-4 py-3 ltr-nums">{new Date(i.invoiceDate).toLocaleDateString("en-GB")}</td>
                 <td className="px-4 py-3 ltr-nums">{new Date(i.dueDate).toLocaleDateString("en-GB")}</td>
@@ -1032,6 +1187,13 @@ function PaymentsTab() {
 
       {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 
+      <Card className="p-4 mb-4">
+        <ExportButtons
+          labels={{ excel: t("pur.exportPayments"), pdf: t("common.pdf") }}
+          onExport={(format) => PurchasesExports.supplierPayments[format]({ supplierId: supplierId || undefined, from: undefined, to: undefined })}
+        />
+      </Card>
+
       <Card>
         <table className="w-full text-sm">
           <thead>
@@ -1093,10 +1255,16 @@ function BalancesTab() {
   return (
     <>
       <Card className="p-4 mb-4">
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={withBalanceOnly} onChange={(e) => setWithBalanceOnly(e.target.checked)} />
-          {t("pur.withBalanceOnly")}
-        </label>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={withBalanceOnly} onChange={(e) => setWithBalanceOnly(e.target.checked)} />
+            {t("pur.withBalanceOnly")}
+          </label>
+          <ExportButtons
+            labels={{ excel: t("pur.exportBalances"), pdf: t("common.pdf") }}
+            onExport={(format) => PurchasesExports.supplierBalances[format]({ withBalanceOnly: withBalanceOnly || undefined })}
+          />
+        </div>
       </Card>
 
       <Card className="mb-6">

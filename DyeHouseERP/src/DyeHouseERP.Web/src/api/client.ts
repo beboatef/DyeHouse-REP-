@@ -405,17 +405,43 @@ export interface RawExternalRelease {
   notes: string | null;
   createdBy: string;
   createdAtUtc: string;
+  // External Processing workflow (spec section 21)
+  productionOrderId: string | null;
+  productionOrderNumber: string | null;
+  externalProcessingStage: string | null;
+  externalProcessingCost: number | null;
+  expectedReturnDate: string | null;
+  actualReturnDate: string | null;
+  returnedQuantityKg: number | null;
+  returnedQuantityMeter: number | null;
+  cancellationReason: string | null;
+  status: ExternalProcessingStatus;
 }
 
+export type ExternalProcessingStatus =
+  | "NotApplicable" | "AwaitingReturn" | "PartiallyReturned" | "Returned" | "Cancelled";
+
 export const RawExternalReleasesApi = {
-  list: (params?: { customerId?: string }) =>
+  list: (params?: { customerId?: string; reason?: RawReleaseReason; status?: ExternalProcessingStatus }) =>
     api.get<RawExternalRelease[]>("/raw-external-releases", { params }).then((r) => r.data),
   create: (body: {
     customerId: string; itemId: string; rawMessageId: string;
     quantityKg?: number; quantityMeter?: number; reason: RawReleaseReason;
     externalParty?: string; notes?: string;
     overrideNegativeStock?: boolean; overrideReason?: string;
-  }) => api.post<RawExternalRelease>("/raw-external-releases", body).then((r) => r.data)
+    productionOrderId?: string; externalProcessingStage?: string;
+    externalProcessingCost?: number; expectedReturnDate?: string;
+  }) => api.post<RawExternalRelease>("/raw-external-releases", body).then((r) => r.data),
+  /** Material back from the outside processor - posts an IN ledger row. */
+  recordReturn: (id: string, body: {
+    returnedQuantityKg?: number; returnedQuantityMeter?: number;
+    actualReturnDate: string; notes?: string;
+  }) => api.post<RawExternalRelease>(`/raw-external-releases/${id}/return`, body).then((r) => r.data),
+  setExternalProcessing: (id: string, body: {
+    externalParty?: string; stage?: string; cost?: number; expectedReturnDate?: string;
+  }) => api.put<RawExternalRelease>(`/raw-external-releases/${id}/external-processing`, body).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<RawExternalRelease>(`/raw-external-releases/${id}/cancel`, { reason }).then((r) => r.data)
 };
 
 // ---------------- Customer-to-Customer Transfers ----------------
@@ -497,14 +523,29 @@ export const StockAdjustmentsApi = {
 
 export type MaterialUnit = "KG" | "Gram" | "Liter";
 
+/**
+ * Chemical (issued to a Job Order) vs OperatingSupply (issued to a department)
+ * - spec sections 23 + 27. Same master, two different stores and workflows.
+ */
+export type MaterialKind = "Chemical" | "OperatingSupply";
+
 export interface Material {
   id: string; code: string; name: string; unit: MaterialUnit; purchasePrice: number; isActive: boolean;
+  kind: MaterialKind;
+  /** Null means "low-stock tracking not configured" - never treated as zero. */
+  reorderLevel: number | null;
+  /** Live on-hand quantity from the material ledger. */
+  currentBalance: number;
 }
 
 export const MaterialsApi = {
-  list: (params?: { activeOnly?: boolean }) => api.get<Material[]>("/materials", { params }).then((r) => r.data),
-  create: (body: { code: string; name: string; unit: MaterialUnit; purchasePrice: number }) =>
-    api.post<Material>("/materials", body).then((r) => r.data)
+  /** <paramref>kind</paramref> separates production chemicals from the supplies store (spec sections 23 + 27). */
+  list: (params?: { activeOnly?: boolean; kind?: MaterialKind }) =>
+    api.get<Material[]>("/materials", { params }).then((r) => r.data),
+  create: (body: {
+    code: string; name: string; unit: MaterialUnit; purchasePrice: number;
+    kind?: MaterialKind; reorderLevel?: number;
+  }) => api.post<Material>("/materials", body).then((r) => r.data)
 };
 
 export interface MaterialTransfer {
@@ -639,7 +680,33 @@ export interface TreasuryAccount {
   id: string; code: string; name: string; kind: string; isActive: boolean; balance: number;
 }
 
+export interface TreasuryStatementLine {
+  transactionDate: string;
+  sourceDocumentNumber: string;
+  sourceDocumentType: string;
+  description: string | null;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  createdBy: string;
+}
+
+export interface TreasuryAccountStatement {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  kind: string;
+  openingBalance: number;
+  totalIn: number;
+  totalOut: number;
+  closingBalance: number;
+  lines: TreasuryStatementLine[];
+}
+
 export const TreasuryAccountsApi = {
+  /** كشف الحساب - opening balance, every movement with a running balance, and the closing total. */
+  statement: (id: string, params?: { from?: string; to?: string }) =>
+    api.get<TreasuryAccountStatement>(`/treasury-accounts/${id}/statement`, { params }).then((r) => r.data),
   list: () => api.get<TreasuryAccount[]>("/treasury-accounts").then((r) => r.data),
   create: (body: { code: string; name: string; kind: TreasuryAccountKind }) =>
     api.post<TreasuryAccount>("/treasury-accounts", body).then((r) => r.data)
@@ -685,16 +752,256 @@ export type CostCategory = "Labor" | "Electricity" | "Fuel" | "Maintenance" | "O
 
 export interface ProductionOrderCost {
   productionOrderId: string; productionOrderNumber: string;
-  materialCost: number; preparationCost: number; laborCost: number; electricityCost: number;
-  fuelCost: number; maintenanceCost: number; otherCost: number; totalCost: number;
+  materialCost: number; preparationCost: number; externalProcessingCost: number;
+  laborCost: number; electricityCost: number;
+  fuelCost: number; maintenanceCost: number; otherCost: number;
+  /** ACTUAL cost - always the live rollup of posted transactions. */
+  totalCost: number;
+  estimatedCost: number | null;
+  approvedCost: number | null;
+  costApprovedBy: string | null;
+  costApprovedAtUtc: string | null;
+  costingNotes: string | null;
+  approvedVariance: number | null;
   outputKg: number | null; outputMeter: number | null; costPerKg: number | null; costPerMeter: number | null;
   processingValue: number; profit: number; marginPercent: number | null;
 }
 
+// ---------------------------------------------------------------- approvals (§44)
+
+export interface ApprovalItem {
+  category: string;
+  id: string;
+  documentNumber: string;
+  date: string;
+  party: string | null;
+  summary: string | null;
+  amount: number | null;
+  requestedBy: string;
+  requestedAtUtc: string | null;
+  requiredPermission: string;
+  linkPath: string;
+  informational: boolean;
+}
+
+export interface ApprovalCenter {
+  items: ApprovalItem[];
+  countsByCategory: Record<string, number>;
+  totalPending: number;
+}
+
+export const ApprovalsApi = {
+  get: (recentDays = 30) => api.get<ApprovalCenter>("/approvals", { params: { recentDays } }).then((r) => r.data)
+};
+
+// ------------------------------------------------------------- attachments (§47)
+
+export interface Attachment {
+  id: string;
+  entityType: string;
+  entityId: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  description: string | null;
+  uploadedBy: string;
+  uploadedAtUtc: string;
+}
+
+export const AttachmentsApi = {
+  list: (entityType: string, entityId: string) =>
+    api.get<Attachment[]>("/attachments", { params: { entityType, entityId } }).then((r) => r.data),
+  upload: (entityType: string, entityId: string, file: File, description?: string) => {
+    const form = new FormData();
+    form.append("entityType", entityType);
+    form.append("entityId", entityId);
+    if (description) form.append("description", description);
+    form.append("file", file);
+    return api.post<Attachment>("/attachments", form, {
+      headers: { "Content-Type": "multipart/form-data" }
+    }).then((r) => r.data);
+  },
+  updateDescription: (id: string, description: string | null) =>
+    api.put<Attachment>(`/attachments/${id}`, { description }).then((r) => r.data),
+  remove: (id: string) => api.delete(`/attachments/${id}`).then((r) => r.data),
+  /** Downloads through the API so the permission check always applies. */
+  download: async (id: string, fileName: string) => {
+    const res = await api.get(`/attachments/${id}/content`, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data as Blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+};
+
+// ----------------------------------------------------- operating supplies (§27)
+
+export type SupplyIssueStatus = "Draft" | "Posted" | "Cancelled";
+
+export interface SupplyIssueLine {
+  id: string;
+  materialId: string;
+  materialCode: string;
+  materialName: string;
+  quantity: number;
+  unit: MaterialUnit;
+  unitCost: number;
+  totalCost: number;
+  availableBalance: number;
+  notes: string | null;
+}
+
+export interface SupplyIssueTimelineEntry {
+  action: string;
+  user: string | null;
+  atUtc: string | null;
+  detail: string | null;
+}
+
+export interface SupplyIssue {
+  id: string;
+  issueNumber: string;
+  issueDate: string;
+  warehouseId: string;
+  warehouseName: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  issuedTo: string;
+  purpose: string;
+  notes: string | null;
+  status: SupplyIssueStatus;
+  totalCost: number;
+  isEditable: boolean;
+  postedBy: string | null;
+  postedAtUtc: string | null;
+  cancelledBy: string | null;
+  cancelledAtUtc: string | null;
+  cancellationReason: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+  modifiedBy: string | null;
+  modifiedAtUtc: string | null;
+  lines: SupplyIssueLine[];
+  timeline: SupplyIssueTimelineEntry[];
+}
+
+export const SuppliesApi = {
+  list: (params?: { status?: SupplyIssueStatus; warehouseId?: string; search?: string; from?: string; to?: string }) =>
+    api.get<SupplyIssue[]>("/supplies", { params }).then((r) => r.data),
+  get: (id: string) => api.get<SupplyIssue>(`/supplies/${id}`).then((r) => r.data),
+  create: (body: {
+    issueDate: string;
+    warehouseId: string;
+    issuedTo: string;
+    purpose: string;
+    departmentId?: string;
+    notes?: string;
+  }) => api.post<SupplyIssue>("/supplies", body).then((r) => r.data),
+  addLine: (id: string, body: { materialId: string; quantity: number; unitCost?: number; notes?: string }) =>
+    api.post<SupplyIssue>(`/supplies/${id}/lines`, { supplyIssueId: id, ...body }).then((r) => r.data),
+  removeLine: (id: string, lineId: string) =>
+    api.delete<SupplyIssue>(`/supplies/${id}/lines/${lineId}`).then((r) => r.data),
+  post: (id: string) => api.post<SupplyIssue>(`/supplies/${id}/post`).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<SupplyIssue>(`/supplies/${id}/cancel`, { reason }).then((r) => r.data)
+};
+
+// ------------------------------------------------------ material sales (§26)
+
+export type MaterialSaleStatus = "Draft" | "Posted" | "Cancelled";
+
+export interface MaterialSaleLine {
+  id: string;
+  materialId: string;
+  materialCode: string;
+  materialName: string;
+  quantity: number;
+  unit: MaterialUnit;
+  unitPrice: number;
+  lineTotal: number;
+  availableBalance: number;
+  description: string | null;
+}
+
+export interface MaterialSale {
+  id: string;
+  saleNumber: string;
+  saleDate: string;
+  warehouseId: string;
+  warehouseName: string;
+  customerId: string | null;
+  customerCode: string | null;
+  buyerName: string;
+  treasuryAccountId: string | null;
+  treasuryAccountName: string | null;
+  paymentMethod: string | null;
+  discount: number;
+  tax: number;
+  subTotal: number;
+  total: number;
+  notes: string | null;
+  status: MaterialSaleStatus;
+  isEditable: boolean;
+  postedBy: string | null;
+  postedAtUtc: string | null;
+  cancelledBy: string | null;
+  cancelledAtUtc: string | null;
+  cancellationReason: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+  lines: MaterialSaleLine[];
+}
+
+export const MaterialSalesApi = {
+  list: (params?: { status?: MaterialSaleStatus; customerId?: string; from?: string; to?: string; search?: string }) =>
+    api.get<MaterialSale[]>("/material-sales", { params }).then((r) => r.data),
+  get: (id: string) => api.get<MaterialSale>(`/material-sales/${id}`).then((r) => r.data),
+  create: (body: {
+    saleDate: string;
+    warehouseId: string;
+    buyerName: string;
+    customerId?: string;
+    treasuryAccountId?: string;
+    paymentMethod?: string;
+    discount?: number;
+    tax?: number;
+    notes?: string;
+  }) => api.post<MaterialSale>("/material-sales", body).then((r) => r.data),
+  addLine: (id: string, body: { materialId: string; quantity: number; unitPrice?: number; description?: string }) =>
+    api.post<MaterialSale>(`/material-sales/${id}/lines`, { materialSaleId: id, ...body }).then((r) => r.data),
+  removeLine: (id: string, lineId: string) =>
+    api.delete<MaterialSale>(`/material-sales/${id}/lines/${lineId}`).then((r) => r.data),
+  setTerms: (id: string, body: { discount: number; tax: number; treasuryAccountId: string | null; paymentMethod?: string }) =>
+    api.put<MaterialSale>(`/material-sales/${id}/terms`, { id, ...body }).then((r) => r.data),
+  post: (id: string) => api.post<MaterialSale>(`/material-sales/${id}/post`).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<MaterialSale>(`/material-sales/${id}/cancel`, { reason }).then((r) => r.data)
+};
+
+const downloadBlob = async (url: string, params: Record<string, unknown>, fileName: string) => {
+  const res = await api.get(url, { params, responseType: "blob" });
+  const objectUrl = URL.createObjectURL(res.data as Blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(objectUrl);
+};
+
 export const CostAccountingApi = {
   get: (productionOrderId: string) => api.get<ProductionOrderCost>(`/production-orders/${productionOrderId}/cost`).then((r) => r.data),
   addEntry: (productionOrderId: string, body: { category: CostCategory; amount: number; entryDate: string; description?: string }) =>
-    api.post(`/production-orders/${productionOrderId}/cost/entries`, body)
+    api.post(`/production-orders/${productionOrderId}/cost/entries`, body),
+  /** Estimated cost - advisory, revisable while the order is open (spec section 34). */
+  setEstimate: (productionOrderId: string, body: { estimatedCost: number | null; costingNotes?: string }) =>
+    api.put<ProductionOrderCost>(`/production-orders/${productionOrderId}/cost/estimate`, body).then((r) => r.data),
+  /** Approved cost - only once the order is completed; records who signed it off and when. */
+  approve: (productionOrderId: string, body: { approvedCost: number; costingNotes?: string }) =>
+    api.post<ProductionOrderCost>(`/production-orders/${productionOrderId}/cost/approve`, body).then((r) => r.data),
+  exportFile: (productionOrderId: string, format: "excel" | "pdf", fileName: string) =>
+    downloadBlob(`/production-orders/${productionOrderId}/cost/export`, { productionOrderId, format }, fileName)
 };
 
 // ---------------- Customer Portal (Production Requests) ----------------
@@ -753,6 +1060,9 @@ export const UsersApi = {
   list: () => api.get<User[]>("/users").then((r) => r.data),
   create: (body: { username: string; password: string; displayName: string; roles: string[] }) =>
     api.post<User>("/users", body).then((r) => r.data),
+  /** Display name + permission set of an existing login (spec section 41). */
+  update: (id: string, body: { displayName: string; roles: string[] }) =>
+    api.put<User>(`/users/${id}`, body).then((r) => r.data),
   deactivate: (id: string) => api.post(`/users/${id}/deactivate`),
   changePassword: (id: string, newPassword: string) => api.post(`/users/${id}/change-password`, { newPassword })
 };
@@ -863,6 +1173,16 @@ export const SettingsApi = {
 
 // ---------------- Dashboard ----------------
 
+export interface RecentTransaction {
+  documentType: string;
+  documentNumber: string;
+  date: string;
+  party: string | null;
+  summary: string | null;
+  amount: number | null;
+  linkPath: string;
+}
+
 export interface DashboardSummary {
   activeCustomers: number;
   activeProductionOrders: number;
@@ -879,13 +1199,29 @@ export interface DashboardSummary {
   activeSuppliers: number;
   productionOrdersByStatus: { status: string; count: number }[];
   rawReceiptsLast14Days: { date: string; totalKg: number }[];
+  // Spec section 51 operational KPIs
+  customerRawMaterialKg: number;
+  materialStockKg: number;
+  lowStockMaterialCount: number;
+  operatingSupplyStockKg: number;
+  workInProgressOrders: number;
+  externalProcessingOutstandingCount: number;
+  outstandingSupplierBalance: number;
+  outstandingCustomerBalance: number;
+  pendingApprovalsCount: number;
+  recentTransactions: RecentTransaction[];
 }
 
 export const DashboardApi = {
   summary: () => api.get<DashboardSummary>("/dashboard/summary").then((r) => r.data)
 };
 
-// ---------------- Document PDFs (print/download) ----------------
+// ---------------- Customers Excel import ----------------
+// Customers, Items, Materials, Suppliers, Warehouses and Employees all share the
+// same server-side import contract (ImportPreviewDto / ImportExecuteResultDto),
+// so the UI shares one wizard: components/ImportPanel.tsx, with the endpoints
+// declared in api/exports.ts. The Items import below still carries its own DTO
+// shape and therefore its own small client.
 
 export const DocumentPdfApi = {
   invoice: (id: string, number: string) => downloadFile(`/invoices/${id}/pdf`, `invoice-${number}.pdf`),
@@ -895,44 +1231,6 @@ export const DocumentPdfApi = {
 };
 
 // ---------------- Customers Excel import ----------------
-
-export interface ImportRowResult {
-  rowNumber: number;
-  isValid: boolean;
-  error: string | null;
-  values: Record<string, string | null>;
-}
-
-export interface CustomerImportPreview {
-  rows: ImportRowResult[];
-  validCount: number;
-  invalidCount: number;
-}
-
-export interface CustomerImportExecuteResult {
-  createdCount: number;
-  skippedInvalidCount: number;
-  errors: ImportRowResult[];
-}
-
-export const CustomerImportApi = {
-  preview: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return api.post<CustomerImportPreview>("/customers/import/preview", form, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);
-  },
-  execute: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return api.post<CustomerImportExecuteResult>("/customers/import/execute", form, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);
-  },
-  exportExcel: (params?: { activeOnly?: boolean; search?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.activeOnly) query.set("activeOnly", "true");
-    if (params?.search) query.set("search", params.search);
-    return downloadFile(`/customers/export/excel?${query.toString()}`, "customers.xlsx");
-  }
-};
 
 // ---------------- Period Closing ----------------
 

@@ -83,9 +83,9 @@ export default function CustomerPortalPage() {
             {r.convertedOrderNumber && <p className="text-xs text-gray-500 mt-1">أمر التشغيل: <span className="ltr-nums font-medium">{r.convertedOrderNumber}</span></p>}
 
             {r.status === "Pending" && (
-              <div className="flex gap-2 mt-3 items-center">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button variant="secondary" onClick={() => approveMutation.mutate(r.id)}>اعتماد</Button>
-                <Input placeholder="سبب الرفض..." value={reasonById[r.id] ?? ""} onChange={(e) => setReasonById((p) => ({ ...p, [r.id]: e.target.value }))} className="max-w-xs" />
+                <Input placeholder="سبب الرفض..." value={reasonById[r.id] ?? ""} onChange={(e) => setReasonById((p) => ({ ...p, [r.id]: e.target.value }))} className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs" />
                 <Button variant="ghost" disabled={!reasonById[r.id]} onClick={() => rejectMutation.mutate({ id: r.id, reason: reasonById[r.id] })}>رفض</Button>
               </div>
             )}

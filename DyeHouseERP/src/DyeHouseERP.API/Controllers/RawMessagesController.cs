@@ -1,7 +1,9 @@
+using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.RawReceipts.Commands;
 using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Application.RawReceipts.Queries;
 using DyeHouseERP.API.Authorization;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +30,33 @@ public class RawMessagesController : ControllerBase
     public async Task<ActionResult<List<RawMessageDto>>> Get(
         [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] bool onlyWithBalance = false)
         => Ok(await _mediator.Send(new GetRawMessagesQuery(customerId, itemId, onlyWithBalance)));
+
+    /// <summary>
+    /// Raw receipt messages ("warehouse receipts") as Excel or PDF. Honours the same
+    /// filters as GET, and with onlyWithBalance=true it becomes the warehouse
+    /// balances report: one row per message line with its live remaining KG/Meter.
+    /// </summary>
+    [HttpGet("export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] Guid? itemId,
+        [FromQuery] bool onlyWithBalance = false, [FromQuery] string format = "excel",
+        [FromServices] IReportExportService export = null!)
+    {
+        var messages = await _mediator.Send(new GetRawMessagesQuery(customerId, itemId, onlyWithBalance));
+
+        var headers = new[] { "Message", "Date", "Customer", "Warehouse", "Item", "Received KG", "Received M", "Remaining KG", "Remaining M", "Inspection", "Status" };
+        var rows = messages
+            .SelectMany(m => m.Lines.Select(l => new object?[]
+            {
+                m.MessageNumber, m.ReceiptDate.ToString("yyyy-MM-dd"), $"{m.CustomerCode} - {m.CustomerName}",
+                m.WarehouseName, $"{l.ItemCode} - {l.ItemName}", l.QuantityKg, l.QuantityMeter,
+                l.RemainingKg, l.RemainingMeter, m.InspectionStatus.ToString(), m.Status.ToString()
+            }))
+            .ToList();
+
+        var title = onlyWithBalance ? "Warehouse Balances (raw material)" : "Raw Receipt Messages";
+        return ExportFileHelper.ToFile(export, format, title, "DyeHouse ERP", headers, rows, onlyWithBalance ? "warehouse-balances" : "raw-messages", "Receipts");
+    }
 
     /// <summary>Single-message lookup - feeds the print-preview screen and the QR scan view (spec sections 39-40).</summary>
     [HttpGet("{id:guid}")]

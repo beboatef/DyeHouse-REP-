@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomersApi, ItemsApi, JobOrderType, ProductionOrdersApi, ProductionPriority } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { ExportButtons, DocumentActions } from "@/components/ExportButtons";
+import { ProductionOrdersExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 const statusTone: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> = {
@@ -59,7 +61,15 @@ export default function ProductionOrdersPage() {
       <PageHeader
         title={t("nav.jobOrders")}
         subtitle={t("jo.subtitle")}
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("fr.new")}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ label: t("common.export"), action: ProductionOrdersExports.excel }}
+              pdf={{ label: t("common.exportPdf"), action: ProductionOrdersExports.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("fr.new")}</Button>
+          </div>
+        }
       />
 
       <Card className="p-4 mb-4">
@@ -148,24 +158,24 @@ export default function ProductionOrdersPage() {
         {!isLoading && orders?.length === 0 && <Card className="p-6 text-center text-gray-400">لا توجد أوامر تشغيل بعد</Card>}
 
         {orders?.map((o) => (
-          <Link key={o.id} to={`/production-orders/${o.id}`}>
-            <Card className="p-4 hover:border-brand-300 transition-colors">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <span className="font-bold ltr-nums">{o.orderNumber}</span>
-                  <span className="text-gray-400 mx-2">·</span>
-                  <span className="text-sm text-gray-600">{o.customerCode} - {o.customerName}</span>
-                  <span className="text-gray-400 mx-2">·</span>
-                  <span className="text-sm text-gray-600">{o.itemCode} - {o.itemName}</span>
-                  {o.color && <><span className="text-gray-400 mx-2">·</span><span className="text-sm text-gray-600">{o.color}</span></>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge>
-                  <Badge tone="gray">{priorityLabel[o.priority]}</Badge>
-                  <Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge>
-                </div>
+          <Card key={o.id} className="p-4 hover:border-brand-300 transition-colors">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Link to={`/production-orders/${o.id}`} className="min-w-0">
+                <span className="font-bold ltr-nums">{o.orderNumber}</span>
+                <span className="text-gray-400 mx-2">·</span>
+                <span className="text-sm text-gray-600">{o.customerCode} - {o.customerName}</span>
+                <span className="text-gray-400 mx-2">·</span>
+                <span className="text-sm text-gray-600">{o.itemCode} - {o.itemName}</span>
+                {o.color && <><span className="text-gray-400 mx-2">·</span><span className="text-sm text-gray-600">{o.color}</span></>}
+              </Link>
+              <div className="flex items-center gap-2">
+                <Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge>
+                <Badge tone="gray">{priorityLabel[o.priority]}</Badge>
+                <Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge>
               </div>
-              <div className="mt-2 text-xs text-gray-400">
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs text-gray-400">
                 {o.stageExecutions.filter((s) => s.status === "Completed").length} / {o.stageExecutions.length} مراحل مكتملة
                 {o.formationRequestNumber && (
                   <>
@@ -175,8 +185,15 @@ export default function ProductionOrdersPage() {
                   </>
                 )}
               </div>
-            </Card>
-          </Link>
+              {/* The job-order card, not the detail screen, is where a supervisor
+                  actually prints from - so both the PDF and the print preview
+                  have to be one click away here. */}
+              <DocumentActions
+                pdf={ProductionOrdersExports.documentPdf(o.id)}
+                printTo={`/print/production-order/${o.id}`}
+              />
+            </div>
+          </Card>
         ))}
       </div>
     </>

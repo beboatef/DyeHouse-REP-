@@ -1,3 +1,5 @@
+using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.API.Common;
 using DyeHouseERP.Application.ProductionOrders.Commands;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
@@ -33,6 +35,36 @@ public class ProductionOrdersController : ControllerBase
         => Ok(await _mediator.Send(new GetProductionOrderByIdQuery(id)));
 
     /// <summary>Printable production order PDF (spec section 39) - stage route + raw allocations, for the floor or a customer request.</summary>
+    /// <summary>
+    /// Job orders / production records as Excel or PDF (spec section 39), with the
+    /// current stage and completed quantity per order so it doubles as the
+    /// production-register report. Honours the same filters as the list.
+    /// </summary>
+    [HttpGet("export")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] ProductionOrderStatus? status,
+        [FromQuery] JobOrderType? jobOrderType, [FromQuery] Guid? formationRequestId,
+        [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
+    {
+        var orders = await _mediator.Send(new GetProductionOrdersQuery(customerId, status, jobOrderType, formationRequestId));
+
+        var headers = new[] { "Job order", "Date", "Customer", "Item", "Color", "Requested KG", "Requested M", "Stage", "Completed KG", "Status", "Type" };
+        var rows = orders.Select(o =>
+        {
+            var completedKg = o.StageExecutions.Where(s => s.Status == StageExecutionStatus.Completed).Sum(s => s.OutputKg ?? 0);
+            var current = o.StageExecutions.FirstOrDefault(s => s.Status == StageExecutionStatus.InProgress)
+                ?? o.StageExecutions.FirstOrDefault(s => s.Status == StageExecutionStatus.Pending);
+            return new object?[]
+            {
+                o.OrderNumber, o.OrderDate.ToString("yyyy-MM-dd"), $"{o.CustomerCode} - {o.CustomerName}",
+                $"{o.ItemCode} - {o.ItemName}", o.Color, o.RequestedQuantityKg, o.RequestedQuantityMeter,
+                current?.StageName, completedKg, o.Status.ToString(), o.JobOrderType.ToString()
+            };
+        }).ToList();
+
+        return ExportFileHelper.ToFile(export, format, "Job Orders", "DyeHouse ERP", headers, rows, "job-orders", "JobOrders");
+    }
+
     [HttpGet("{id:guid}/pdf")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetPdf(Guid id, [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export)

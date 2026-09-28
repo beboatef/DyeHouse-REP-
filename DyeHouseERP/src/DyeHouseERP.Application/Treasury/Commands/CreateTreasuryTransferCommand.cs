@@ -26,14 +26,19 @@ public class CreateTreasuryTransferCommandHandler : IRequestHandler<CreateTreasu
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IDocumentNumberGenerator _numberGenerator;
+    private readonly IPeriodCloseService _periodClose;
 
-    public CreateTreasuryTransferCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator)
+    public CreateTreasuryTransferCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
+        IDocumentNumberGenerator numberGenerator, IPeriodCloseService periodClose)
     {
-        _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator;
+        _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _periodClose = periodClose;
     }
 
     public async Task<TreasuryTransferDto> Handle(CreateTreasuryTransferCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: a transfer between cash/bank accounts moves money on its own date.
+        await _periodClose.EnsureOpenAsync(request.TransferDate, cancellationToken);
+
         var fromAccount = await _db.TreasuryAccounts.FirstOrDefaultAsync(a => a.Id == request.FromAccountId, cancellationToken)
             ?? throw new NotFoundException("TreasuryAccount", request.FromAccountId);
         var toAccount = await _db.TreasuryAccounts.FirstOrDefaultAsync(a => a.Id == request.ToAccountId, cancellationToken)

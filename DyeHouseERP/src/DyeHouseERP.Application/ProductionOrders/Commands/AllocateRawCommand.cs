@@ -53,18 +53,24 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
     private readonly ICurrentUserService _currentUser;
     private readonly IInventoryLedgerService _ledger;
     private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
 
     public AllocateRawCommandHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser, IInventoryLedgerService ledger, IDateTime clock)
+        IApplicationDbContext db, ICurrentUserService currentUser, IInventoryLedgerService ledger, IDateTime clock,
+        IPeriodCloseService periodClose)
     {
         _db = db;
         _currentUser = currentUser;
         _ledger = ledger;
         _clock = clock;
+        _periodClose = periodClose;
     }
 
     public async Task<ProductionOrderDto> Handle(AllocateRawCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: allocating raw material to production is a stock posting.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 

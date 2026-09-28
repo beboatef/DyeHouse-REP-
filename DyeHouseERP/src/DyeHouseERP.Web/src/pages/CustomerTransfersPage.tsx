@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomersApi, CustomerTransfersApi, ItemsApi, RawMessagesApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { CustomerTransfersExports } from "@/api/exports";
 
 export default function CustomerTransfersPage() {
   const qc = useQueryClient();
@@ -55,7 +57,15 @@ export default function CustomerTransfersPage() {
       <PageHeader
         title="تحويل الخام بين العملاء"
         subtitle="لا يتم تعديل بيانات الرسالة الأصلية أبدًا - كل تحويل يُسجَّل كحركة مستقلة وقابلة للتتبع بالكامل"
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تحويل جديد"}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ action: CustomerTransfersExports.excel }}
+              pdf={{ action: CustomerTransfersExports.pdf }}
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تحويل جديد"}</Button>
+          </div>
+        }
       />
 
       {showForm && (

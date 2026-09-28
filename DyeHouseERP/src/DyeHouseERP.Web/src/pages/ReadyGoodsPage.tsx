@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProductionOrdersApi, ReadyGoodsApi, WarehousesApi } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select } from "@/components/ui";
+import { ExportButtons } from "@/components/ExportButtons";
+import { ReadyGoodsExports } from "@/api/exports";
 
 export default function ReadyGoodsPage() {
   const qc = useQueryClient();
@@ -38,7 +40,20 @@ export default function ReadyGoodsPage() {
       <PageHeader
         title="المخزون الجاهز"
         subtitle="ترحيل الإنتاج المكتمل إلى مخزن الجاهز، والرصيد المتاح لكل أمر تشغيل"
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ ترحيل جديد"}</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              excel={{ label: "تصدير الأرصدة Excel", action: ReadyGoodsExports.balance.excel }}
+              pdf={{ label: "تصدير الأرصدة PDF", action: ReadyGoodsExports.balance.pdf }}
+              extra={
+                <Button variant="ghost" onClick={() => ReadyGoodsExports.transfers.excel()}>
+                  تصدير حركات الترحيل Excel
+                </Button>
+              }
+            />
+            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ ترحيل جديد"}</Button>
+          </div>
+        }
       />
 
       {showForm && (

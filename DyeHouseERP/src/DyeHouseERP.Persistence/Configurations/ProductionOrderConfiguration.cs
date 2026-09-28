@@ -32,6 +32,14 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
         // it is filtered, reported, costed and delivered against (spec section 16).
         builder.Property(o => o.JobOrderType).HasConversion<string>().HasMaxLength(20).IsRequired();
 
+        // Job Order costing (spec section 34). Only the ESTIMATE and the
+        // APPROVED figure are stored; the ACTUAL cost is always rolled up live
+        // from posted transactions so it can never drift from them.
+        builder.Property(o => o.EstimatedCost).HasPrecision(18, 2);
+        builder.Property(o => o.ApprovedCost).HasPrecision(18, 2);
+        builder.Property(o => o.CostApprovedBy).HasMaxLength(100);
+        builder.Property(o => o.CostingNotes).HasMaxLength(2000);
+
         builder.HasIndex(o => o.CustomerId);
         builder.HasIndex(o => o.ItemId);
         builder.HasIndex(o => o.Status);

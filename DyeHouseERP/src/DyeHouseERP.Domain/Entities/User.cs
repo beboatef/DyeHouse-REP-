@@ -41,4 +41,27 @@ public class User : AuditableEntity
     }
 
     public void Deactivate(string modifiedBy) { IsActive = false; ModifiedBy = modifiedBy; ModifiedAtUtc = DateTime.UtcNow; }
+
+    /// <summary>
+    /// Changes the display name and the permission/role list (spec section 41).
+    /// Roles stay a flat comma-separated list of permission names - this is the
+    /// existing model, intentionally NOT replaced by a Role table.
+    /// </summary>
+    public void SetProfile(string displayName, IEnumerable<string> roles, string modifiedBy)
+    {
+        if (string.IsNullOrWhiteSpace(displayName)) throw new ArgumentException("Display name is required.", nameof(displayName));
+
+        DisplayName = displayName.Trim();
+
+        // Normalise: trim, drop blanks, de-duplicate, keep a stable (sorted)
+        // order so two identical permission sets always serialise the same way.
+        Roles = string.Join(",", roles
+            .Select(r => r.Trim())
+            .Where(r => r.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(r => r, StringComparer.OrdinalIgnoreCase));
+
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
 }

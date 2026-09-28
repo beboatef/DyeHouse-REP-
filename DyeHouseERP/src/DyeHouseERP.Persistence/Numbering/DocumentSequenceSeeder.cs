@@ -36,6 +36,8 @@ public static class DocumentSequenceSeeder
         (DocumentType.SupplierInvoice,          "SINV",6, true,  false),
         (DocumentType.SupplierPayment,          "SPAY",6, true,  false),
         (DocumentType.PayrollRun,               "PRL", 6, true,  false),
+        (DocumentType.SupplyIssue,              "SUP", 6, true,  false),
+        (DocumentType.MaterialSale,             "MSL", 6, true,  false),
     };
 
     public static async Task SeedAsync(ApplicationDbContext context, CancellationToken cancellationToken = default)
