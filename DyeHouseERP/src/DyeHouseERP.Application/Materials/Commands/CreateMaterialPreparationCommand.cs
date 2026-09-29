@@ -34,13 +34,14 @@ public class CreateMaterialPreparationCommandHandler : IRequestHandler<CreateMat
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateMaterialPreparationCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
         IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock,
-        IPeriodCloseService periodClose)
+        IPeriodCloseService periodClose, IAllocationLockService stockLock)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
-        _periodClose = periodClose;
+        _periodClose = periodClose; _stockLock = stockLock;
     }
 
     public async Task<MaterialPreparationDto> Handle(CreateMaterialPreparationCommand request, CancellationToken cancellationToken)
@@ -50,6 +51,12 @@ public class CreateMaterialPreparationCommandHandler : IRequestHandler<CreateMat
 
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.OriginalMaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.OriginalMaterialId);
+
+        // H6: dilution consumes the original material's stock, so the check and
+        // the consuming OUT row run under that (warehouse, material) lock.
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.MaterialLot(request.WarehouseId, request.OriginalMaterialId), cancellationToken))
+        {
 
         var balance = await _ledger.GetBalanceAsync(request.OriginalMaterialId, request.WarehouseId, cancellationToken);
         if (request.OriginalQuantity > balance)
@@ -79,5 +86,6 @@ public class CreateMaterialPreparationCommandHandler : IRequestHandler<CreateMat
             ResultingQuantity = preparation.ResultingQuantity, Concentration = preparation.Concentration,
             Cost = preparation.Cost, ProductionOrderId = preparation.ProductionOrderId, Notes = preparation.Notes
         };
+        }
     }
 }

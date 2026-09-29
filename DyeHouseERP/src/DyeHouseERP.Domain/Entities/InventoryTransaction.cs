@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 
@@ -40,6 +41,15 @@ public class InventoryTransaction : BaseEntity
 
     /// <summary>Set when this row is itself a reversal of an earlier row.</summary>
     public Guid? ReversesTransactionId { get; private set; }
+
+    /// <summary>
+    /// H1 optimistic concurrency token, maintained by SQL Server. Ledger rows are
+    /// append-only and never updated, so this costs nothing in normal operation -
+    /// but it makes any accidental UPDATE of a posted row (a bug, a rogue script)
+    /// fail loudly instead of rewriting history.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private InventoryTransaction() { } // EF Core
 

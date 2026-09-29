@@ -34,13 +34,14 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateMaterialIssueCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
         IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock,
-        IPeriodCloseService periodClose)
+        IPeriodCloseService periodClose, IAllocationLockService stockLock)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
-        _periodClose = periodClose;
+        _periodClose = periodClose; _stockLock = stockLock;
     }
 
     public async Task<MaterialIssueDto> Handle(CreateMaterialIssueCommand request, CancellationToken cancellationToken)
@@ -52,6 +53,13 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
             ?? throw new NotFoundException("Material", request.MaterialId);
         var order = await _db.ProductionOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
+
+        // H6: material stock is guarded by the same lock mechanism as raw
+        // inventory, keyed on (warehouse, material) - the exact dimension the
+        // balance query below reads.
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.MaterialLot(request.WarehouseId, request.MaterialId), cancellationToken))
+        {
 
         var balance = await _ledger.GetBalanceAsync(request.MaterialId, request.WarehouseId, cancellationToken);
         if (request.Quantity > balance)
@@ -76,7 +84,8 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
             Id = issue.Id, IssueNumber = issue.IssueNumber, IssueDate = issue.IssueDate,
             MaterialId = material.Id, MaterialCode = material.Code, MaterialName = material.Name,
             WarehouseId = issue.WarehouseId, ProductionOrderId = order.Id, ProductionOrderNumber = order.OrderNumber,
-            Quantity = issue.Quantity, UnitCost = issue.UnitCost, TotalCost = issue.TotalCost, Notes = issue.Notes
+            Quantity = issue.Quantity, UnitCost = issue.UnitCost,            TotalCost = issue.TotalCost, Notes = issue.Notes
         };
+        }
     }
 }

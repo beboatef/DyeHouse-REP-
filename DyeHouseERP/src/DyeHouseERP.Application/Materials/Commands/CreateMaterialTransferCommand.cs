@@ -32,13 +32,14 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateMaterialTransferCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
         IDocumentNumberGenerator numberGenerator, IMaterialLedgerService ledger, IDateTime clock,
-        IPeriodCloseService periodClose)
+        IPeriodCloseService periodClose, IAllocationLockService stockLock)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
-        _periodClose = periodClose;
+        _periodClose = periodClose; _stockLock = stockLock;
     }
 
     public async Task<MaterialTransferDto> Handle(CreateMaterialTransferCommand request, CancellationToken cancellationToken)
@@ -48,6 +49,17 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
 
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);
+
+        // H6: lock both warehouses in one deterministic acquisition so a
+        // simultaneous transfer of the same material the other way round cannot
+        // deadlock, and so both the source check and the IN/OUT pair are atomic
+        // against other movements.
+        await using (await _stockLock.AcquireManyAsync(new[]
+        {
+            StockLockKey.MaterialLot(request.FromWarehouseId, request.MaterialId),
+            StockLockKey.MaterialLot(request.ToWarehouseId, request.MaterialId)
+        }, cancellationToken))
+        {
 
         var balance = await _ledger.GetBalanceAsync(request.MaterialId, request.FromWarehouseId, cancellationToken);
         if (request.Quantity > balance)
@@ -79,5 +91,6 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
             ToWarehouseId = request.ToWarehouseId, ToWarehouseName = toWh?.Name ?? "",
             Quantity = transfer.Quantity, Notes = transfer.Notes
         };
+        }
     }
 }

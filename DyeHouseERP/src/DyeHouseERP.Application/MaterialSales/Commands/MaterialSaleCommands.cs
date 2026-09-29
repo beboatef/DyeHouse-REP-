@@ -179,10 +179,12 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public PostMaterialSaleCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IMaterialLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose)
-    { _db = db; _currentUser = currentUser; _ledger = ledger; _clock = clock; _periodClose = periodClose; }
+        IMaterialLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
+        IAllocationLockService stockLock)
+    { _db = db; _currentUser = currentUser; _ledger = ledger; _clock = clock; _periodClose = periodClose; _stockLock = stockLock; }
 
     public async Task<MaterialSaleDto> Handle(PostMaterialSaleCommand request, CancellationToken cancellationToken)
     {
@@ -192,6 +194,15 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
             .FirstOrDefaultAsync(s => s.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("MaterialSale", request.Id);
 
+        // H6: lock every material this sale consumes, then re-check availability
+        // and post under those locks.
+        var lockKeys = sale.Lines
+            .Select(l => StockLockKey.MaterialLot(sale.WarehouseId, l.MaterialId))
+            .Distinct()
+            .ToList();
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
+        {
         foreach (var line in sale.Lines)
         {
             var balance = await _ledger.GetBalanceAsync(line.MaterialId, sale.WarehouseId, cancellationToken);
@@ -232,6 +243,7 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return (await MaterialSaleDtoBuilder.BuildManyAsync(_db, new[] { sale }, cancellationToken))[0];
     }

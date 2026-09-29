@@ -3,6 +3,7 @@ using System.Text.Json;
 using DyeHouseERP.Application.Auth.Commands;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Domain.Exceptions;
+using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.API.Middleware;
 
@@ -67,6 +68,20 @@ public class ExceptionHandlingMiddleware
                     currentBalance = stockEx.CurrentBalance,
                     requestedQuantity = stockEx.RequestedQuantity,
                     shortage = stockEx.Shortage
+                };
+                break;
+
+            case DbUpdateConcurrencyException:
+                // H1: someone else committed a change to the same row first.
+                // That is a normal "you are working on stale data" conflict, not
+                // a server fault - report it as 409 so the client reloads
+                // instead of showing an opaque 500.
+                context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+                payload = new
+                {
+                    title = "This record was changed by someone else while you were working on it. Reload and try again.",
+                    status = 409,
+                    code = "CONCURRENT_UPDATE"
                 };
                 break;
 

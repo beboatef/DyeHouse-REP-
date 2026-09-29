@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -16,6 +17,16 @@ public class Delivery : AuditableEntity
     public Guid CustomerId { get; private set; }
     public DeliveryStatus Status { get; private set; } = DeliveryStatus.Draft;
     public string? Notes { get; private set; }
+
+    /// <summary>
+    /// H1 optimistic concurrency token, maintained by SQL Server. Two operators
+    /// acting on the same delivery (e.g. delivering and cancelling at the same
+    /// time) can no longer both commit: the second UPDATE matches zero rows and
+    /// EF raises DbUpdateConcurrencyException instead of silently overwriting
+    /// the first one's state.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private readonly List<DeliveryLine> _lines = new();
     public IReadOnlyCollection<DeliveryLine> Lines => _lines.AsReadOnly();

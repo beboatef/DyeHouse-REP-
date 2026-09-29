@@ -1,11 +1,16 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using DyeHouseERP.API.Middleware;
 using DyeHouseERP.Application;
+using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Infrastructure;
 using DyeHouseERP.Persistence;
 using DyeHouseERP.Persistence.Numbering;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
@@ -63,6 +68,58 @@ builder.Services
             ValidAudience = jwtSection["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
+
+        // H5: a JWT is self-contained, so on its own it keeps working for its
+        // full 8-hour lifetime even after the account is deactivated or its
+        // permissions are changed. Re-check the live user row on every request
+        // so revocation takes effect immediately. This costs one indexed
+        // primary-key lookup and runs before the controller, not after.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var validator = context.HttpContext.RequestServices.GetRequiredService<IUserSessionValidator>();
+                var userId = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                             ?? context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (!Guid.TryParse(userId, out var parsedUserId))
+                {
+                    context.Fail("The token does not identify a user.");
+                    return;
+                }
+
+                var session = await validator.GetSessionStateAsync(parsedUserId, context.HttpContext.RequestAborted);
+
+                if (session is null)
+                {
+                    context.Fail("The account no longer exists.");
+                    return;
+                }
+
+                if (!session.IsActive)
+                {
+                    context.Fail("The account has been deactivated.");
+                    return;
+                }
+
+                // Permissions changed after the token was issued: the token's
+                // role claims no longer describe what the user may do, so the
+                // session is rejected instead of running with stale rights.
+                // Both the mapped and the raw claim type are read so the check
+                // behaves identically whether or not inbound claim mapping is on.
+                var tokenRoles = context.Principal!.FindAll(ClaimTypes.Role)
+                    .Concat(context.Principal!.FindAll("role"))
+                    .Select(c => c.Value)
+                    .OrderBy(r => r, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var liveRoles = session.Roles
+                    .OrderBy(r => r, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (!tokenRoles.SequenceEqual(liveRoles, StringComparer.OrdinalIgnoreCase))
+                    context.Fail("The account's permissions have changed - sign in again.");
+            }
+        };
     });
 builder.Services.AddAuthorization();
 
@@ -116,6 +173,37 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// ---------- Reverse proxy / real client IP (M8) ----------
+// Behind a reverse proxy every request otherwise arrives with the PROXY's IP,
+// which would (a) make the login throttle treat all users as one client and
+// (b) make the audit log record the wrong actor IP.
+//
+// Forwarded headers are only honored for explicitly trusted hops. Trusting
+// X-Forwarded-For from unknown senders would let any caller forge a fresh IP on
+// every request and walk straight through the brute-force throttle, so an
+// empty/absent configuration means the headers stay ignored and the connection
+// IP is used. When no section is present at all, loopback is assumed - the
+// development topology (Vite dev proxy on 127.0.0.1) - which is safe because a
+// remote attacker can never present a loopback socket address.
+var knownProxies = builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<IPAddress[]>();
+if (knownProxies is null)
+    knownProxies = new[] { IPAddress.Loopback, IPAddress.IPv6Loopback };
+
+if (knownProxies.Length > 0)
+{
+    var forwardedOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+        // No KnownNetworks: networks are range-based and easy to over-grant, so
+        // trust is expressed as an explicit proxy list only.
+        RequireHeaderSymmetry = true
+    };
+    foreach (var proxy in knownProxies)
+        forwardedOptions.KnownProxies.Add(proxy);
+
+    app.UseForwardedHeaders(forwardedOptions);
+}
 
 // ---------- Global exception handling -> consistent JSON error envelope ----------
 app.UseMiddleware<ExceptionHandlingMiddleware>();

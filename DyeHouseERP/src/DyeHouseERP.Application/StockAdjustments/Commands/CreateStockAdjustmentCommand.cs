@@ -43,12 +43,15 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
     private readonly IInventoryLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateStockAdjustmentCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
-        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose)
+        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
+        IAllocationLockService stockLock)
     {
-        _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock; _periodClose = periodClose;
+        _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
+        _periodClose = periodClose; _stockLock = stockLock;
     }
 
     public async Task<StockAdjustmentDto> Handle(CreateStockAdjustmentCommand request, CancellationToken cancellationToken)
@@ -58,6 +61,11 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
 
         await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
 
+        // H6: the balance read, the negative-stock decision and the ledger write
+        // must not interleave with any other movement on the same raw lot.
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.RawLot(message.WarehouseId, request.ItemId, request.CustomerId, message.Id), cancellationToken))
+        {
         var (beforeKg, beforeMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, message.WarehouseId, cancellationToken);
 
         if (request.Type == AdjustmentType.Decrease)
@@ -115,5 +123,6 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
             Reason = adjustment.Reason, Notes = adjustment.Notes, ApprovedBy = adjustment.ApprovedBy,
             CreatedBy = adjustment.CreatedBy, CreatedAtUtc = adjustment.CreatedAtUtc
         };
+        }
     }
 }

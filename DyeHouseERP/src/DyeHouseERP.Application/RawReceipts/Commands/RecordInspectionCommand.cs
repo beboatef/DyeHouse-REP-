@@ -52,17 +52,14 @@ public class RecordInspectionCommandValidator : AbstractValidator<RecordInspecti
 public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCommand, Unit>
 {
     private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IDateTime _clock;
+    private readonly ICurrentUserService _currentUser;    private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public RecordInspectionCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock,
-        IPeriodCloseService periodClose)
+        IPeriodCloseService periodClose, IAllocationLockService stockLock)
     {
-        _db = db;
-        _currentUser = currentUser;
-        _clock = clock;
-        _periodClose = periodClose;
+        _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose; _stockLock = stockLock;
     }
 
     public async Task<Unit> Handle(RecordInspectionCommand request, CancellationToken cancellationToken)
@@ -78,6 +75,19 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
 
         if (request.Rejections is { Count: > 0 })
         {
+            // H6: a rejected quantity posts a correcting OUT row on the same raw
+            // lot, so it takes the same lot locks the allocation/adjustment paths
+            // use - a rejection and a concurrent allocation can no longer both
+            // act on a stale view of the same balance.
+            var lockKeys = request.Rejections
+                .Select(r => message.Lines.FirstOrDefault(l => l.Id == r.LineId))
+                .Where(l => l is not null)
+                .Select(l => StockLockKey.RawLot(message.WarehouseId, l!.ItemId, message.CustomerId, message.Id))
+                .Distinct()
+                .ToList();
+
+            await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
+            {
             foreach (var rejection in request.Rejections)
             {
                 var (deltaKg, deltaMeter) = message.RecordLineRejection(
@@ -97,7 +107,8 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
                     _clock.UtcNow, message.WarehouseId, message.CustomerId, line.ItemId,
                     rawMessageId: message.Id, productionOrderId: null,
                     quantityKg: deltaKg, quantityMeter: deltaMeter,
-                    direction: TransactionDirection.Out, createdBy: _currentUser.UserName));
+                    direction: TransactionDirection.Out,                    createdBy: _currentUser.UserName));
+            }
             }
         }
 

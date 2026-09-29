@@ -45,10 +45,12 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
     private readonly IInventoryLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateRawExternalReleaseCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
-        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose)
+        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
+        IAllocationLockService stockLock)
     {
         _db = db;
         _currentUser = currentUser;
@@ -56,6 +58,7 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
         _ledger = ledger;
         _clock = clock;
         _periodClose = periodClose;
+        _stockLock = stockLock;
     }
 
     public async Task<RawExternalReleaseDto> Handle(CreateRawExternalReleaseCommand request, CancellationToken cancellationToken)
@@ -69,6 +72,13 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
         if (!message.IsAvailableForAllocation)
             throw new DomainException(
                 $"Message '{message.MessageNumber}' is not available for release (status: {message.Status}).");
+
+        // H6: releasing material to an external processor is an OUT from the same
+        // raw lot the allocation path locks, so the two cannot oversubscribe it
+        // concurrently.
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.RawLot(message.WarehouseId, request.ItemId, request.CustomerId, message.Id), cancellationToken))
+        {
 
         var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, message.WarehouseId, cancellationToken);
 
@@ -143,5 +153,6 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
             ExpectedReturnDate = release.ExpectedReturnDate,
             Status = release.Status
         };
+        }
     }
 }

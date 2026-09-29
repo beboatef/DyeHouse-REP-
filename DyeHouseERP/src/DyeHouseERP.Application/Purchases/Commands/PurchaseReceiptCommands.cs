@@ -61,12 +61,14 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IPeriodCloseService _periodClose;
     private readonly ISender _mediator;
+    private readonly IAllocationLockService _stockLock;
 
     public CreatePurchaseReceiptCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IDocumentNumberGenerator numberGenerator, IPeriodCloseService periodClose, ISender mediator)
+        IDocumentNumberGenerator numberGenerator, IPeriodCloseService periodClose, ISender mediator,
+        IAllocationLockService stockLock)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator;
-        _periodClose = periodClose; _mediator = mediator;
+        _periodClose = periodClose; _mediator = mediator; _stockLock = stockLock;
     }
 
     public async Task<PurchaseReceiptDto> Handle(CreatePurchaseReceiptCommand request, CancellationToken cancellationToken)
@@ -89,6 +91,17 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
             if (order.Status is PurchaseOrderStatus.Draft or PurchaseOrderStatus.Submitted or PurchaseOrderStatus.Cancelled)
                 throw new DomainException("Stock can only be received against an approved purchase order.");
         }
+
+        // H6: receiving stock posts IN rows on the same material lots other
+        // movements lock, so a receipt and a concurrent issue of the same
+        // material can no longer interleave between check and write.
+        var lockKeys = (request.Lines ?? new List<PurchaseReceiptLineInput>())
+            .Select(l => StockLockKey.MaterialLot(request.WarehouseId, l.MaterialId))
+            .Distinct()
+            .ToList();
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
+        {
 
         var receiptNumber = await _numberGenerator.NextAsync(DocumentType.PurchaseReceipt, cancellationToken: cancellationToken);
 
@@ -133,5 +146,6 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
         await _db.SaveChangesAsync(cancellationToken);
 
         return await _mediator.Send(new GetPurchaseReceiptByIdQuery(receipt.Id), cancellationToken);
+        }
     }
 }

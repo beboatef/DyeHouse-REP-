@@ -47,10 +47,12 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
     private readonly IInventoryLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateCustomerTransferCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
-        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose)
+        IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
+        IAllocationLockService stockLock)
     {
         _db = db;
         _currentUser = currentUser;
@@ -58,6 +60,7 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         _ledger = ledger;
         _clock = clock;
         _periodClose = periodClose;
+        _stockLock = stockLock;
     }
 
     public async Task<CustomerTransferDto> Handle(CreateCustomerTransferCommand request, CancellationToken cancellationToken)
@@ -67,6 +70,16 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
 
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
+
+        // H6: lock both ownership dimensions (sender and receiver) for the whole
+        // validate-then-post window, so a concurrent movement cannot change the
+        // sender's balance between the check and the OUT row.
+        await using (await _stockLock.AcquireManyAsync(new[]
+        {
+            StockLockKey.RawLot(message.WarehouseId, request.ItemId, request.FromCustomerId, message.Id),
+            StockLockKey.RawLot(message.WarehouseId, request.ItemId, request.ToCustomerId, message.Id)
+        }, cancellationToken))
+        {
 
         var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.FromCustomerId, message.WarehouseId, cancellationToken);
 
@@ -145,5 +158,6 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
             CreatedBy = transfer.CreatedBy,
             CreatedAtUtc = transfer.CreatedAtUtc
         };
+        }
     }
 }

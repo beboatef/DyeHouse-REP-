@@ -39,19 +39,22 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateRawMessageCommandHandler(
         IApplicationDbContext db,
         ICurrentUserService currentUser,
         IDocumentNumberGenerator numberGenerator,
         IDateTime clock,
-        IPeriodCloseService periodClose)
+        IPeriodCloseService periodClose,
+        IAllocationLockService stockLock)
     {
         _db = db;
         _currentUser = currentUser;
         _numberGenerator = numberGenerator;
         _clock = clock;
         _periodClose = periodClose;
+        _stockLock = stockLock;
     }
 
     public async Task<RawMessageDto> Handle(CreateRawMessageCommand request, CancellationToken cancellationToken)
@@ -67,6 +70,18 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
         var message = new RawMessage(
             messageNumber, request.ReceiptDate, request.CustomerId, request.WarehouseId,
             _currentUser.UserName, _currentUser.UserName, request.Notes);
+
+        // H6: receipts are stock postings like every other movement, so the IN
+        // rows commit under the same per-lot locks the outbound paths take. A
+        // receipt and a concurrent allocation of the same customer/lot can no
+        // longer interleave between their reads and their writes.
+        var lockKeys = request.Lines
+            .Select(l => StockLockKey.RawLot(request.WarehouseId, l.ItemId, request.CustomerId, message.Id))
+            .Distinct()
+            .ToList();
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
+        {
 
         foreach (var line in request.Lines)
             message.AddLine(line.ItemId, line.QuantityKg, line.QuantityMeter, line.PieceCount, line.Notes);
@@ -86,6 +101,7 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return new RawMessageDto
         {

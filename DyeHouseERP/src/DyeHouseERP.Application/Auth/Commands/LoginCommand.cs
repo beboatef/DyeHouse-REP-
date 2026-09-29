@@ -11,10 +11,18 @@ public record LoginCommand(string Username, string Password) : IRequest<LoginRes
 
 public class LoginCommandValidator : AbstractValidator<LoginCommand>
 {
+    /// <summary>
+    /// M8: hard length ceilings on the login payload. Without them a caller can
+    /// post megabytes of "username", which bloats the audit row written on every
+    /// failure and turns the login endpoint into a cheap memory/IO amplifier.
+    /// </summary>
+    public const int MaxUsernameLength = 100;
+    public const int MaxPasswordLength = 200;
+
     public LoginCommandValidator()
     {
-        RuleFor(x => x.Username).NotEmpty();
-        RuleFor(x => x.Password).NotEmpty();
+        RuleFor(x => x.Username).NotEmpty().MaximumLength(MaxUsernameLength);
+        RuleFor(x => x.Password).NotEmpty().MaximumLength(MaxPasswordLength);
     }
 }
 

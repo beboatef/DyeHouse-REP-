@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -34,6 +35,14 @@ public class ProductionOrderStageExecution : BaseEntity
     public bool ApprovalRequired { get; private set; }
     public string? ApprovedBy { get; private set; }
     public DateTime? ApprovedAtUtc { get; private set; }
+
+    /// <summary>
+    /// H1 optimistic concurrency token, maintained by SQL Server. Quantities and
+    /// status on a stage feed production output and separates, so two operators
+    /// recording the same stage at once must not silently overwrite each other.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private ProductionOrderStageExecution() { } // EF Core
 

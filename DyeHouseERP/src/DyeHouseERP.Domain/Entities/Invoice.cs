@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -18,6 +19,14 @@ public class Invoice : AuditableEntity
     public decimal Discount { get; private set; }
     public decimal Tax { get; private set; }
     public string? Notes { get; private set; }
+
+    /// <summary>
+    /// H1 optimistic concurrency token, maintained by SQL Server. This matters
+    /// most for payment allocation: two receipts resolving the same invoice at
+    /// the same time cannot both write the same status/balance derivation.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private readonly List<InvoiceLine> _lines = new();
     public IReadOnlyCollection<InvoiceLine> Lines => _lines.AsReadOnly();

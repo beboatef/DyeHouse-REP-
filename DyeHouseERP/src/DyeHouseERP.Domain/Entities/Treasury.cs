@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -76,6 +77,14 @@ public class Receipt : AuditableEntity
     public string? PaymentMethod { get; private set; }
     public string? Description { get; private set; }
     public TreasuryDocumentStatus Status { get; private set; } = TreasuryDocumentStatus.Posted;
+
+    /// <summary>
+    /// H1 optimistic concurrency token, maintained by SQL Server. B4 requires a
+    /// posted receipt to be immutable; this makes a concurrent cancel-vs-post
+    /// attempt fail explicitly rather than resurrecting a cancelled document.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private Receipt() { } // EF Core
 

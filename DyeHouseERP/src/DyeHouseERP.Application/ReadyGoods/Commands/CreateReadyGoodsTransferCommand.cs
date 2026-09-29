@@ -39,13 +39,14 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CreateReadyGoodsTransferCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
-        IDateTime clock, IPeriodCloseService periodClose)
+        IDateTime clock, IPeriodCloseService periodClose, IAllocationLockService stockLock)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _clock = clock;
-        _periodClose = periodClose;
+        _periodClose = periodClose; _stockLock = stockLock;
     }
 
     public async Task<ReadyGoodsTransferDto> Handle(CreateReadyGoodsTransferCommand request, CancellationToken cancellationToken)
@@ -55,6 +56,14 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
 
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
+
+        // H6: the "already transferred" check and the IN posting run under the
+        // ready-lot lock, so two concurrent requests for the same production
+        // order cannot both observe "not yet transferred" and both post stock.
+        // (The unique index on ProductionOrderId remains the DB-level backstop.)
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.ReadyLot(request.WarehouseId, order.ItemId, order.CustomerId, order.Id), cancellationToken))
+        {
 
         var alreadyTransferred = await _db.ReadyGoodsTransfers.AnyAsync(t => t.ProductionOrderId == order.Id, cancellationToken);
         if (alreadyTransferred)
@@ -108,5 +117,6 @@ foreach (var allocation in allocations)
             QuantityKg = transfer.QuantityKg, QuantityMeter = transfer.QuantityMeter, PieceCount = transfer.PieceCount,
             Status = transfer.Status.ToString()
         };
+        }
     }
 }

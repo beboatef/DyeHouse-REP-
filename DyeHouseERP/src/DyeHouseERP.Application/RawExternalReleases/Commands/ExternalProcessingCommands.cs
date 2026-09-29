@@ -39,10 +39,11 @@ public class RecordExternalProcessingReturnCommandHandler
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public RecordExternalProcessingReturnCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IDateTime clock, IPeriodCloseService periodClose)
-    { _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose; }
+        IDateTime clock, IPeriodCloseService periodClose, IAllocationLockService stockLock)
+    { _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose; _stockLock = stockLock; }
 
     public async Task<RawExternalReleaseDto> Handle(RecordExternalProcessingReturnCommand request, CancellationToken cancellationToken)
     {
@@ -57,6 +58,13 @@ public class RecordExternalProcessingReturnCommandHandler
             .FirstOrDefaultAsync(m => m.Id == release.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", release.RawMessageId);
 
+        // H6: the return posts an IN into the same raw lot the release took out
+        // of, under that lot's lock.
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.RawLot(message.WarehouseId, release.ItemId, release.CustomerId, release.RawMessageId),
+            cancellationToken))
+        {
+
         release.RecordReturn(request.ReturnedQuantityKg, request.ReturnedQuantityMeter,
             request.ActualReturnDate, _currentUser.UserName);
 
@@ -68,6 +76,7 @@ public class RecordExternalProcessingReturnCommandHandler
             direction: TransactionDirection.In, createdBy: _currentUser.UserName));
 
         await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return await RawExternalReleaseDtoBuilder.BuildAsync(_db, release, cancellationToken);
     }

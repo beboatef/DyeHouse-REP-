@@ -35,19 +35,22 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public DeleteReadyGoodsTransferCommandHandler(
         IApplicationDbContext db,
         IInventoryMovementPermissionService permissionService,
         ICurrentUserService currentUser,
         IDateTime clock,
-        IPeriodCloseService periodClose)
+        IPeriodCloseService periodClose,
+        IAllocationLockService stockLock)
     {
         _db = db;
         _permissionService = permissionService;
         _currentUser = currentUser;
         _clock = clock;
         _periodClose = periodClose;
+        _stockLock = stockLock;
     }
 
     public async Task<ReadyGoodsTransferDto> Handle(
@@ -72,6 +75,16 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
             .Where(t => t.SourceDocumentId == transfer.Id && t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)
             .ToListAsync(cancellationToken);
 
+        // H6: the reversal credits the same ready lot the transfer debited, so
+        // it runs under that lot's lock - a cancellation can no longer interleave
+        // with a delivery or a second transfer of the same production order.
+        var lockKeys = originalRows
+            .Select(r => StockLockKey.ReadyLot(r.WarehouseId, r.ItemId, r.CustomerId, r.ProductionOrderId ?? transfer.ProductionOrderId))
+            .Distinct()
+            .ToList();
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
+        {
         foreach (var row in originalRows)
         {
             _db.InventoryTransactions.Add(new InventoryTransaction(
@@ -85,6 +98,7 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
         transfer.Cancel(request.Reason, _currentUser.UserName);
 
         await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return await LoadDtoAsync(_db, transfer.Id, cancellationToken);
     }

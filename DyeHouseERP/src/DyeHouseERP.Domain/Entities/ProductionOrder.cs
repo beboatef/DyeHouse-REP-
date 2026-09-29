@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -32,6 +33,15 @@ public class ProductionOrder : AuditableEntity
     /// delivered against - never inferred from free text.
     /// </summary>
     public JobOrderType JobOrderType { get; private set; } = JobOrderType.ClosedLine;
+
+    /// <summary>
+    /// H1 optimistic concurrency token, maintained by SQL Server. Job orders are
+    /// touched by many workflows at once (allocations, stage execution,
+    /// separate, ready-goods transfer), so a stale in-memory copy can no longer
+    /// overwrite a concurrent change.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     /// <summary>
     /// Set when this Job Order was created from an approved Formation Request

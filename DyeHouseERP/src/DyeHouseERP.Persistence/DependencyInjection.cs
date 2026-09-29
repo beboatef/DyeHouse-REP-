@@ -34,6 +34,10 @@ public static class DependencyInjection
         services.AddScoped<IInventoryLedgerService, InventoryLedgerService>();
         services.AddScoped<IMaterialLedgerService, MaterialLedgerService>();
         services.AddScoped<IPeriodCloseService, PeriodCloseService>();
+        // H5: live user-state lookup used by the JWT validation event so a
+        // deactivated account (or a changed permission set) stops working
+        // immediately instead of at token expiry.
+        services.AddScoped<IUserSessionValidator, UserSessionValidator>();
 
         return services;
     }

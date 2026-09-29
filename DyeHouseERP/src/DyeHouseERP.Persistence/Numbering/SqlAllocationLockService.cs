@@ -8,37 +8,124 @@ namespace DyeHouseERP.Persistence.Numbering;
 /// <summary>
 /// sp_getapplock-based serialization for the balance-check-then-post window,
 /// using the same locking pattern as SqlDocumentNumberGenerator: an exclusive,
-/// session-scoped app lock keyed by (RawMessage, Item, Customer), held until
-/// dispose. The allocation handler does its read + SaveChanges while the lock
-/// is held, so two concurrent allocations for the same stock dimension cannot
-/// both pass the negative-stock check (spec sections 13 and 18).
+/// session-scoped app lock, held until dispose.
+///
+/// H6: the lock is no longer specific to raw allocation. Every inventory and
+/// material posting path acquires the SAME kind of lock through this service,
+/// keyed by the full stock dimension (warehouse, item, customer, production
+/// order, raw message, material). Two writers that touch the same dimension
+/// therefore serialize, whichever code path they live in; two writers on
+/// different dimensions never block each other.
 ///
 /// The lock is taken on the scoped DbContext's own connection - the handler's
 /// subsequent queries and SaveChangesAsync run on that same open connection,
-/// so the critical section genuinely covers the ledger write. A 15-second
-/// wait fails loudly instead of queueing a slow request forever.
+/// so the critical section genuinely covers the ledger write. A 15-second wait
+/// fails loudly instead of queueing a slow request forever.
 /// </summary>
 public class SqlAllocationLockService : IAllocationLockService
 {
     private const int LockTimeoutSeconds = 15;
 
+    /// <summary>Namespace for caller-chosen, non-stock document locks.</summary>
+    private const string NamedResourcePrefix = "Doc:";
+
     private readonly ApplicationDbContext _context;
 
     public SqlAllocationLockService(ApplicationDbContext context) => _context = context;
 
+    public async Task<IAsyncDisposable> AcquireAsync(StockLockKey key, CancellationToken cancellationToken = default)
+    {
+        var connection = await OpenConnectionAsync(cancellationToken);
+        var guard = await TryAcquireAsync(connection, key.Resource, cancellationToken);
+        return guard ?? throw Timeout(key.Resource);
+    }
+
+    public async Task<IAsyncDisposable> AcquireManyAsync(
+        IEnumerable<StockLockKey> keys, CancellationToken cancellationToken = default)
+    {
+        // Deterministic acquisition order: two handlers that lock several
+        // dimensions in different orders would otherwise be able to deadlock.
+        var resources = keys
+            .Select(k => k.Resource)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(r => r, StringComparer.Ordinal)
+            .ToList();
+
+        if (resources.Count == 0)
+            return NoopLock.Instance;
+
+        var connection = await OpenConnectionAsync(cancellationToken);
+        var acquired = new List<SessionAppLockGuard>();
+
+        try
+        {
+            foreach (var resource in resources)
+            {
+                var guard = await TryAcquireAsync(connection, resource, cancellationToken);
+                if (guard is null)
+                {
+                    // Release what we already hold before failing, so a timeout
+                    // on the second dimension cannot strand the first one.
+                    foreach (var held in acquired) await held.DisposeAsync();
+                    throw Timeout(resource);
+                }
+
+                acquired.Add(guard);
+            }
+        }
+        catch
+        {
+            foreach (var held in acquired) await held.DisposeAsync();
+            throw;
+        }
+
+        return new CompositeAppLockGuard(acquired);
+    }
+
+    public async Task<IAsyncDisposable> AcquireNamedAsync(string resource, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(resource))
+            throw new ArgumentException("A lock resource name is required.", nameof(resource));
+
+        var connection = await OpenConnectionAsync(cancellationToken);
+        var fullResource = NamedResourcePrefix + resource.Trim();
+        var guard = await TryAcquireAsync(connection, fullResource, cancellationToken);
+        return guard ?? throw Timeout(fullResource);
+    }
+
+    /// <summary>
+    /// A4 raw-allocation lock. The resource string is deliberately unchanged so
+    /// the existing allocation behavior (and its unit tests) keep working
+    /// exactly as before.
+    /// </summary>
     public async Task<IAsyncDisposable> AcquireAsync(
         Guid rawMessageId, Guid itemId, Guid customerId, CancellationToken cancellationToken = default)
+    {
+        var connection = await OpenConnectionAsync(cancellationToken);
+        var lockResource = $"Alloc:{rawMessageId}:{itemId}:{customerId}";
+
+        var guard = await TryAcquireAsync(connection, lockResource, cancellationToken);
+        return guard ?? throw new TimeoutException(
+            $"Could not acquire the allocation lock for message '{rawMessageId}' within {LockTimeoutSeconds}s " +
+            $"(sp_getapplock returned a negative result). Another allocation on the same material may be in progress - retry.");
+    }
+
+    private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = (SqlConnection)_context.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
+        return connection;
+    }
 
-        var lockResource = $"Alloc:{rawMessageId}:{itemId}:{customerId}";
-
+    /// <summary>Returns null when the lock could not be taken within the timeout.</summary>
+    private static async Task<SessionAppLockGuard?> TryAcquireAsync(
+        SqlConnection connection, string resource, CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.CommandText = "sp_getapplock";
         command.CommandType = CommandType.StoredProcedure;
-        command.Parameters.Add(new SqlParameter("@Resource", lockResource));
+        command.Parameters.Add(new SqlParameter("@Resource", resource));
         command.Parameters.Add(new SqlParameter("@LockMode", "Exclusive"));
         // Session-scoped: it survives across the handler's individual EF
         // commands and is released deterministically by sp_releaseapplock
@@ -51,11 +138,32 @@ public class SqlAllocationLockService : IAllocationLockService
         await command.ExecuteNonQueryAsync(cancellationToken);
 
         var result = (int)returnParam.Value;
-        if (result < 0)
-            throw new TimeoutException(
-                $"Could not acquire the allocation lock for message '{rawMessageId}' within {LockTimeoutSeconds}s (sp_getapplock returned {result}). Another allocation on the same material may be in progress - retry.");
+        return result < 0 ? null : new SessionAppLockGuard(connection, resource);
+    }
 
-        return new SessionAppLockGuard(connection, lockResource);
+    private static TimeoutException Timeout(string resource)
+        => new($"Could not acquire the stock lock '{resource}' within {LockTimeoutSeconds}s " +
+               $"(sp_getapplock returned a negative result). Another operation on the same stock is in progress - retry.");
+
+    private sealed class CompositeAppLockGuard : IAsyncDisposable
+    {
+        private readonly IReadOnlyList<SessionAppLockGuard> _guards;
+        private bool _released;
+
+        public CompositeAppLockGuard(IReadOnlyList<SessionAppLockGuard> guards) => _guards = guards;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_released) return;
+            _released = true;
+            foreach (var guard in _guards) await guard.DisposeAsync();
+        }
+    }
+
+    private sealed class NoopLock : IAsyncDisposable
+    {
+        public static readonly NoopLock Instance = new();
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class SessionAppLockGuard : IAsyncDisposable

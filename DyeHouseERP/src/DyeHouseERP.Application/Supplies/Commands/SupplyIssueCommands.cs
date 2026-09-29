@@ -148,10 +148,12 @@ public class PostSupplyIssueCommandHandler : IRequestHandler<PostSupplyIssueComm
     private readonly IMaterialLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public PostSupplyIssueCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IMaterialLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose)
-    { _db = db; _currentUser = currentUser; _ledger = ledger; _clock = clock; _periodClose = periodClose; }
+        IMaterialLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
+        IAllocationLockService stockLock)
+    { _db = db; _currentUser = currentUser; _ledger = ledger; _clock = clock; _periodClose = periodClose; _stockLock = stockLock; }
 
     public async Task<SupplyIssueDto> Handle(PostSupplyIssueCommand request, CancellationToken cancellationToken)
     {
@@ -164,6 +166,15 @@ public class PostSupplyIssueCommandHandler : IRequestHandler<PostSupplyIssueComm
 
         // Re-check availability at posting time: stock may have moved since the
         // lines were typed. Negative stock is never allowed implicitly.
+        // H6: lock every material this issue consumes before re-checking
+        // availability and posting the OUT rows.
+        var lockKeys = issue.Lines
+            .Select(l => StockLockKey.MaterialLot(issue.WarehouseId, l.MaterialId))
+            .Distinct()
+            .ToList();
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
+        {
         foreach (var line in issue.Lines)
         {
             var balance = await _ledger.GetBalanceAsync(line.MaterialId, issue.WarehouseId, cancellationToken);
@@ -181,6 +192,7 @@ public class PostSupplyIssueCommandHandler : IRequestHandler<PostSupplyIssueComm
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return (await SupplyIssueDtoBuilder.BuildManyAsync(_db, new[] { issue }, cancellationToken))[0];
     }

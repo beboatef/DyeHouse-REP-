@@ -36,10 +36,13 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
     private readonly ICurrentUserService _currentUser;
     private readonly IDocumentNumberGenerator _numberGenerator;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _documentLock;
 
-    public CreateReceiptCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator, IPeriodCloseService periodClose)
+    public CreateReceiptCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
+        IDocumentNumberGenerator numberGenerator, IPeriodCloseService periodClose, IAllocationLockService documentLock)
     {
-        _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _periodClose = periodClose;
+        _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator;
+        _periodClose = periodClose; _documentLock = documentLock;
     }
 
     public async Task<ReceiptDto> Handle(CreateReceiptCommand request, CancellationToken cancellationToken)
@@ -49,6 +52,55 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
         var account = await _db.TreasuryAccounts.FirstOrDefaultAsync(a => a.Id == request.TreasuryAccountId, cancellationToken)
             ?? throw new NotFoundException("TreasuryAccount", request.TreasuryAccountId);
 
+        // ------------------------------------------------------------------
+        // Validation happens BEFORE anything is staged for saving: no receipt,
+        // no treasury row and no customer-ledger row is created until the
+        // target invoice is proven to exist, be payable, and belong to the
+        // customer named in the request.
+        // ------------------------------------------------------------------
+        Invoice? invoice = null;
+        if (request.InvoiceId.HasValue)
+        {
+            invoice = await _db.Invoices.Include(i => i.Lines)
+                .FirstOrDefaultAsync(i => i.Id == request.InvoiceId, cancellationToken)
+                ?? throw new NotFoundException("Invoice", request.InvoiceId.Value);
+
+            // B5: the target invoice must be live. A cancelled or draft invoice
+            // cannot legitimately receive money against it.
+            if (invoice.Status == InvoiceStatus.Cancelled)
+                throw new DomainException($"Invoice {invoice.InvoiceNumber} is cancelled and cannot receive payments.");
+            if (invoice.Status == InvoiceStatus.Draft)
+                throw new DomainException($"Invoice {invoice.InvoiceNumber} is still a draft - issue it before recording receipts against it.");
+
+            // H4 ownership check: money received against an invoice may only be
+            // credited to THAT invoice's customer. Without this, a receipt could
+            // post a credit to one customer's statement while settling another
+            // customer's invoice - the ledger and the invoice would disagree.
+            if (request.CustomerId.HasValue && request.CustomerId.Value != invoice.CustomerId)
+                throw new DomainException(
+                    $"Customer does not match invoice {invoice.InvoiceNumber}. The receipt names a different customer, " +
+                    "so the payment would post to the wrong statement.");
+        }
+
+        // H4 race guard: two receipts for the SAME invoice both read the same
+        // "already paid" sum and would both pass the overpayment guard, letting
+        // the pair collectively overpay. Serializing on the invoice makes the
+        // second request re-read the first one's committed rows.
+        if (request.InvoiceId.HasValue)
+        {
+            await using (await _documentLock.AcquireNamedAsync($"Invoice:{request.InvoiceId.Value}", cancellationToken))
+            {
+                var dto = await PostAsync(request, account, invoice, cancellationToken);
+                return dto;
+            }
+        }
+
+        return await PostAsync(request, account, invoice, cancellationToken);
+    }
+
+    private async Task<ReceiptDto> PostAsync(
+        CreateReceiptCommand request, TreasuryAccount account, Invoice? invoice, CancellationToken cancellationToken)
+    {
         var receiptNumber = await _numberGenerator.NextAsync(DocumentType.Receipt, cancellationToken: cancellationToken);
 
         var receipt = new Receipt(receiptNumber, request.ReceiptDate, request.TreasuryAccountId, request.Amount,
@@ -59,21 +111,6 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
             request.TreasuryAccountId, request.ReceiptDate, DocumentType.Receipt, receiptNumber, receipt.Id,
             request.Amount, TreasuryDirection.In, request.Description, _currentUser.UserName));
 
-        Invoice? invoice = null;
-        if (request.InvoiceId.HasValue)
-        {
-            // B5: the target invoice must be live. A cancelled or draft invoice
-            // cannot legitimately receive money against it.
-            invoice = await _db.Invoices.Include(i => i.Lines)
-                .FirstOrDefaultAsync(i => i.Id == request.InvoiceId, cancellationToken)
-                ?? throw new NotFoundException("Invoice", request.InvoiceId.Value);
-
-            if (invoice.Status == InvoiceStatus.Cancelled)
-                throw new DomainException($"Invoice {invoice.InvoiceNumber} is cancelled and cannot receive payments.");
-            if (invoice.Status == InvoiceStatus.Draft)
-                throw new DomainException($"Invoice {invoice.InvoiceNumber} is still a draft - issue it before recording receipts against it.");
-        }
-
         if (request.CustomerId.HasValue)
         {
             _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
@@ -81,21 +118,19 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
                 debit: 0, credit: request.Amount, description: $"Receipt {receiptNumber}", createdBy: _currentUser.UserName));
         }
 
-        if (request.InvoiceId.HasValue)
+        if (invoice is not null)
         {
             // B5 overpayment rule: the system has no customer-advance model,
             // so a receipt against a live invoice may not exceed that
             // invoice's total minus what previous live receipts already paid.
-            // Computed server-side inside the same SaveChanges scope, not
-            // trusted from the frontend. (Race safety: the guard runs on live
-            // data just before the single atomic SaveChangesAsync - the same
-            // convention as every other posting command in this codebase.)
+            // Re-read here, INSIDE the invoice lock, so the sum includes any
+            // receipt that committed while this request was queueing.
             var priorLiveReceipts = await _db.Receipts
-                .Where(r => r.InvoiceId == request.InvoiceId && r.Status != TreasuryDocumentStatus.Cancelled)
+                .Where(r => r.InvoiceId == invoice.Id && r.Status != TreasuryDocumentStatus.Cancelled)
                 .SumAsync(r => (decimal?)r.Amount, cancellationToken) ?? 0;
             var totalPaid = priorLiveReceipts + request.Amount;
 
-            var lines = invoice!.Lines.ToList();
+            var lines = invoice.Lines.ToList();
             var invoiceTotal = lines.Sum(l => l.Quantity * l.ProcessingPrice) - invoice.Discount + invoice.Tax;
             if (totalPaid > invoiceTotal)
                 throw new DomainException(

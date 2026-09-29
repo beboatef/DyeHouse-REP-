@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -25,6 +26,13 @@ public class Separate : AuditableEntity
 
     /// <summary>Set once a reprocessing order has been created from this separate (spec section 23).</summary>
     public Guid? ReprocessingProductionOrderId { get; private set; }
+
+    /// <summary>
+    /// H1 optimistic concurrency token, maintained by SQL Server. A separate can
+    /// be reprocessed or scrapped at the same moment; only the first commit wins.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private Separate() { } // EF Core
 
