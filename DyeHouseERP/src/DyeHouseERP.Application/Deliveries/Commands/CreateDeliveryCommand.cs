@@ -1,10 +1,13 @@
+using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Deliveries.Queries;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.Deliveries.Commands;
 
@@ -40,6 +43,29 @@ public class CreateDeliveryCommandHandler : IRequestHandler<CreateDeliveryComman
 
     public async Task<DeliveryDto> Handle(CreateDeliveryCommand request, CancellationToken cancellationToken)
     {
+        // R2: a delivery line names a production order, and finished goods belong
+        // to the order's own customer. Accepting an order that belongs to a
+        // DIFFERENT customer would let a delivery (and its ledger rows, which are
+        // written under the delivery's customer) consume and record another
+        // customer's stock. Verified here, before anything is created.
+        var lineOrderIds = request.Lines.Select(l => l.ProductionOrderId).Distinct().ToList();
+
+        var ordersById = await _db.ProductionOrders
+            .AsNoTracking()
+            .Where(o => lineOrderIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => new { o.CustomerId, o.OrderNumber }, cancellationToken);
+
+        foreach (var orderId in lineOrderIds)
+        {
+            if (!ordersById.TryGetValue(orderId, out var order))
+                throw new NotFoundException("ProductionOrder", orderId);
+
+            if (order.CustomerId != request.CustomerId)
+                throw new DomainException(
+                    $"Production order '{order.OrderNumber}' does not belong to the delivery's customer. " +
+                    "A delivery may only contain finished goods for its own customer.");
+        }
+
         var deliveryNumber = await _numberGenerator.NextAsync(DocumentType.Delivery, cancellationToken: cancellationToken);
 
         var delivery = new Delivery(deliveryNumber, request.DeliveryDate, request.CustomerId, _currentUser.UserName, request.Notes);

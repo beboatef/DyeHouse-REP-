@@ -57,12 +57,13 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 
-        // H6: the "already transferred" check and the IN posting run under the
-        // ready-lot lock, so two concurrent requests for the same production
-        // order cannot both observe "not yet transferred" and both post stock.
-        // (The unique index on ProductionOrderId remains the DB-level backstop.)
+        // H6/R2: the "already transferred" check and the IN posting run under the
+        // ready-lot lock, keyed on the same (warehouse, item, production order)
+        // shape the delivery path uses, so two concurrent requests for the same
+        // production order cannot both observe "not yet transferred" and both
+        // post stock. (The unique index on ProductionOrderId is the DB backstop.)
         await using (await _stockLock.AcquireAsync(
-            StockLockKey.ReadyLot(request.WarehouseId, order.ItemId, order.CustomerId, order.Id), cancellationToken))
+            StockLockKey.ReadyLot(request.WarehouseId, order.ItemId, order.Id), cancellationToken))
         {
 
         var alreadyTransferred = await _db.ReadyGoodsTransfers.AnyAsync(t => t.ProductionOrderId == order.Id, cancellationToken);

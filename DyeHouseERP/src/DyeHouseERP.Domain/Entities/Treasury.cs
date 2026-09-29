@@ -130,6 +130,14 @@ public class Payment : AuditableEntity
     public string? Description { get; private set; }
     public TreasuryDocumentStatus Status { get; private set; } = TreasuryDocumentStatus.Posted;
 
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. An expense or
+    /// supplier payment is a posted treasury document (B4): a concurrent
+    /// cancel-vs-post must fail explicitly rather than resurrect it.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
+
     private Payment() { } // EF Core
 
     public Payment(string paymentNumber, DateTime paymentDate, Guid treasuryAccountId, decimal amount,

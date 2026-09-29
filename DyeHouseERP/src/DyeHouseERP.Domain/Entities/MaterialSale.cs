@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -37,6 +38,14 @@ public class MaterialSale : AuditableEntity
     public string? Notes { get; private set; }
 
     public MaterialSaleStatus Status { get; private set; } = MaterialSaleStatus.Draft;
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. Posting
+    /// deducts material stock and writes a customer/treasury leg, so a
+    /// post racing a cancel must not both succeed.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     public string? PostedBy { get; private set; }
     public DateTime? PostedAtUtc { get; private set; }

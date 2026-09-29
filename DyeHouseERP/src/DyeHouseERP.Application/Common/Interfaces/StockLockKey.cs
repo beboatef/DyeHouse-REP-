@@ -29,6 +29,20 @@ public readonly record struct StockLockKey
     public static StockLockKey ReadyLot(Guid warehouseId, Guid itemId, Guid customerId, Guid productionOrderId)
         => new() { WarehouseId = warehouseId, ItemId = itemId, CustomerId = customerId, ProductionOrderId = productionOrderId };
 
+    /// <summary>
+    /// R2: ready-goods dimension that matches the EXACT filter used when ready
+    /// balance is read - (warehouse, item, production order) with no customer
+    /// term.
+    ///
+    /// This matters: the ready-balance query filters on RawMessageId == null,
+    /// ProductionOrderId and ItemId only, so a lock keyed on a customer-supplied
+    /// value would NOT serialize two deliveries that read the same balance. With
+    /// this key, every request that reads or writes that order's ready lot -
+    /// whoever the delivery claims the customer is - queues behind the same lock.
+    /// </summary>
+    public static StockLockKey ReadyLot(Guid warehouseId, Guid itemId, Guid productionOrderId)
+        => new() { WarehouseId = warehouseId, ItemId = itemId, ProductionOrderId = productionOrderId };
+
     /// <summary>Material/supply dimension: (warehouse, material).</summary>
     public static StockLockKey MaterialLot(Guid warehouseId, Guid materialId)
         => new() { WarehouseId = warehouseId, MaterialId = materialId };

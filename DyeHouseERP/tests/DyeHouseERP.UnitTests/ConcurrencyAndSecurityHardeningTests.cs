@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Deliveries.Commands;
+using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Treasury.Commands;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -41,9 +42,6 @@ internal sealed class RecordingStockLock : IAllocationLockService
         NamedResources.Add(resource);
         return Task.FromResult<IAsyncDisposable>(Noop.Instance);
     }
-
-    public Task<IAsyncDisposable> AcquireAsync(Guid rawMessageId, Guid itemId, Guid customerId, CancellationToken cancellationToken = default)
-        => Task.FromResult<IAsyncDisposable>(Noop.Instance);
 
     private sealed class Noop : IAsyncDisposable
     {
@@ -273,6 +271,113 @@ public class CreateReceiptOwnershipTests
         verify.TreasuryTransactions.Should().ContainSingle();
         verify.CustomerLedgerEntries.Should().ContainSingle();
     }
+}
+
+/// <summary>
+/// R5: a receipt that names an invoice but no customer must be credited to the
+/// INVOICE's customer - otherwise the invoice is settled while the customer's
+/// statement never moves.
+/// </summary>
+public class CreateReceiptCustomerInferenceTests : IDisposable
+{
+    private readonly DbContextOptions<Persistence.ApplicationDbContext> _options =
+        new DbContextOptionsBuilder<Persistence.ApplicationDbContext>()
+            .UseInMemoryDatabase($"receipt-infer-{Guid.NewGuid()}")
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
+    [Fact]
+    public async Task Missing_Customer_Is_Inferred_From_The_Invoice()
+    {
+        var customer = new Customer("C-1", "Customer", "seed");
+        var account = new TreasuryAccount("BANK-1", "Main Bank", TreasuryAccountKind.Bank, "seed");
+        var invoice = new Invoice("INV-1", DateTime.UtcNow, customer.Id, "seed");
+        invoice.AddLine(null, Guid.NewGuid(), null, 1m, 100m, null);
+        invoice.Issue();
+
+        using (var db = new Persistence.ApplicationDbContext(_options))
+        {
+            db.Customers.Add(customer);
+            db.TreasuryAccounts.Add(account);
+            db.Invoices.Add(invoice);
+            db.SaveChanges();
+        }
+
+        using var handlerDb = new Persistence.ApplicationDbContext(_options);
+        var handler = new CreateReceiptCommandHandler(
+            handlerDb,
+            Mock.Of<ICurrentUserService>(u => u.UserName == "cashier"),
+            new FixedNumberGenerator(),
+            new OpenPeriod(),
+            new RecordingStockLock());
+
+        // CustomerId is deliberately null in the request.
+        var dto = await handler.Handle(
+            new CreateReceiptCommand(DateTime.UtcNow, account.Id, 50m, null, invoice.Id, "cash", null),
+            CancellationToken.None);
+
+        dto.CustomerId.Should().Be(customer.Id);
+
+        using var verify = new Persistence.ApplicationDbContext(_options);
+        var ledger = verify.CustomerLedgerEntries.Single();
+        ledger.CustomerId.Should().Be(customer.Id);
+        ledger.Credit.Should().Be(50m);
+    }
+
+    public void Dispose() { }
+}
+
+/// <summary>
+/// R2: a delivery may only contain production orders that belong to the
+/// delivery's own customer.
+/// </summary>
+public class CreateDeliveryCustomerOwnershipTests : IDisposable
+{
+    private readonly DbContextOptions<Persistence.ApplicationDbContext> _options =
+        new DbContextOptionsBuilder<Persistence.ApplicationDbContext>()
+            .UseInMemoryDatabase($"delivery-own-{Guid.NewGuid()}")
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
+    private static CreateDeliveryCommandHandler Handler(Persistence.ApplicationDbContext db) => new(
+        db,
+        Mock.Of<ICurrentUserService>(u => u.UserName == "planner"),
+        new FixedNumberGenerator());
+
+    [Fact]
+    public async Task Order_Belonging_To_Another_Customer_Is_Rejected()
+    {
+        var mine = new Customer("C-MINE", "Mine", "seed");
+        var theirs = new Customer("C-THEIRS", "Theirs", "seed");
+        var item = new Item("IT-1", "Item", default(UnitOfMeasure), "seed");
+        var theirOrder = new ProductionOrder("PRD-THEIRS", theirs.Id, item.Id, DateTime.UtcNow, "seed");
+
+        using (var db = new Persistence.ApplicationDbContext(_options))
+        {
+            db.Customers.AddRange(mine, theirs);
+            db.Items.Add(item);
+            db.ProductionOrders.Add(theirOrder);
+            db.SaveChanges();
+        }
+
+        using var handlerDb = new Persistence.ApplicationDbContext(_options);
+        var command = new CreateDeliveryCommand(
+            mine.Id, DateTime.UtcNow, null,
+            new List<DeliveryLineInput>
+            {
+                new() { ProductionOrderId = theirOrder.Id, ItemId = item.Id, QuantityKg = 10m }
+            });
+
+        var act = async () => await Handler(handlerDb).Handle(command, CancellationToken.None);
+
+        var ex = await act.Should().ThrowAsync<DomainException>();
+        ex.Which.Message.Should().Contain("does not belong to the delivery's customer");
+
+        using var verify = new Persistence.ApplicationDbContext(_options);
+        verify.Deliveries.Should().BeEmpty();
+    }
+
+    public void Dispose() { }
 }
 
 /// <summary>

@@ -16,8 +16,10 @@ public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
     public CreateUserCommandValidator()
     {
         RuleFor(x => x.Username).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Password).NotEmpty().MinimumLength(8)
-            .WithMessage("Password must be at least 8 characters.");
+        // R5: a length CEILING as well as a floor, so an unbounded password
+        // cannot be used to bloat the user row or the hashing cost.
+        RuleFor(x => x.Password).NotEmpty().MinimumLength(8).MaximumLength(200)
+            .WithMessage("Password must be between 8 and 200 characters.");
         RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(200);
     }
 }

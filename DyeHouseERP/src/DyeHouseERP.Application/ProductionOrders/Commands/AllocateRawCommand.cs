@@ -101,11 +101,13 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
             ?? throw new DomainException(
                 $"Item '{request.ItemId}' is not a line on message '{message.MessageNumber}'. Pick one of the message's item lines.");
 
-        // Serialize concurrent allocations against the same (message, item,
-        // customer) key: the balance check below and the ledger write must not
-        // interleave, or two simultaneous requests can both pass the check and
-        // jointly oversell the balance (defeating the negative-stock rule).
-        await using (await _allocationLock.AcquireAsync(message.Id, request.ItemId, order.CustomerId, cancellationToken))
+        // R1: lock on the UNIFIED stock dimension. The previous call used a
+        // bespoke (rawMessage, item, customer) overload whose resource string
+        // did not match the one every other stock path uses, so allocation and
+        // (for example) a stock adjustment on the same lot could run at the
+        // same time. One key type, one resource format, one lock table.
+        await using (await _allocationLock.AcquireAsync(
+            StockLockKey.RawLot(message.WarehouseId, request.ItemId, order.CustomerId, message.Id), cancellationToken))
         {
             var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(
                 message.Id, request.ItemId, order.CustomerId, message.WarehouseId, cancellationToken);

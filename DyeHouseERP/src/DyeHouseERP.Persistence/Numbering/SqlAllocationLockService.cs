@@ -94,21 +94,12 @@ public class SqlAllocationLockService : IAllocationLockService
     }
 
     /// <summary>
-    /// A4 raw-allocation lock. The resource string is deliberately unchanged so
-    /// the existing allocation behavior (and its unit tests) keep working
-    /// exactly as before.
+    /// R1: the legacy (rawMessage, item, customer) overload has been removed.
+    /// Every stock path - allocation included - now locks through
+    /// <see cref="AcquireAsync(StockLockKey, CancellationToken)"/>, so there is
+    /// exactly one resource format per dimension and no path can silently fall
+    /// back to a differently-named lock.
     /// </summary>
-    public async Task<IAsyncDisposable> AcquireAsync(
-        Guid rawMessageId, Guid itemId, Guid customerId, CancellationToken cancellationToken = default)
-    {
-        var connection = await OpenConnectionAsync(cancellationToken);
-        var lockResource = $"Alloc:{rawMessageId}:{itemId}:{customerId}";
-
-        var guard = await TryAcquireAsync(connection, lockResource, cancellationToken);
-        return guard ?? throw new TimeoutException(
-            $"Could not acquire the allocation lock for message '{rawMessageId}' within {LockTimeoutSeconds}s " +
-            $"(sp_getapplock returned a negative result). Another allocation on the same material may be in progress - retry.");
-    }
 
     private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {

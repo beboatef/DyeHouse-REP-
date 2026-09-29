@@ -122,8 +122,11 @@ public class CancelExternalProcessingCommandHandler
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    public CancelExternalProcessingCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
-    { _db = db; _currentUser = currentUser; }
+    private readonly IAllocationLockService _stockLock;
+
+    public CancelExternalProcessingCommandHandler(
+        IApplicationDbContext db, ICurrentUserService currentUser, IAllocationLockService stockLock)
+    { _db = db; _currentUser = currentUser; _stockLock = stockLock; }
 
     public async Task<RawExternalReleaseDto> Handle(CancelExternalProcessingCommand request, CancellationToken cancellationToken)
     {
@@ -131,8 +134,31 @@ public class CancelExternalProcessingCommandHandler
             .FirstOrDefaultAsync(r => r.Id == request.ReleaseId, cancellationToken)
             ?? throw new NotFoundException("RawExternalRelease", request.ReleaseId);
 
-        release.CancelExternalProcessing(request.Reason, _currentUser.UserName);
-        await _db.SaveChangesAsync(cancellationToken);
+        var message = await _db.RawMessages.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == release.RawMessageId, cancellationToken);
+
+        // R3: the reversal (an IN back to the same raw lot) runs under that lot's
+        // lock, and the status is re-read INSIDE the lock so a second cancel
+        // that was queueing behind it cannot post a duplicate reversal.
+        var lockKeys = new[]
+        {
+            StockLockKey.RawLot(message?.WarehouseId ?? Guid.Empty, release.ItemId, release.CustomerId, release.RawMessageId)
+        };
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
+        {
+            var liveStatus = await _db.RawExternalReleases.AsNoTracking()
+                .Where(r => r.Id == request.ReleaseId)
+                .Select(r => r.Status)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (liveStatus == ExternalProcessingStatus.Cancelled)
+                throw new DomainException(
+                    $"External processing release '{release.ReleaseNumber}' is already cancelled.");
+
+            release.CancelExternalProcessing(request.Reason, _currentUser.UserName);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return await RawExternalReleaseDtoBuilder.BuildAsync(_db, release, cancellationToken);
     }

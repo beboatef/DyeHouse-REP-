@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Exceptions;
 
@@ -30,6 +31,14 @@ public class ReadyGoodsTransfer : AuditableEntity
     public int? PieceCount { get; private set; }
     public string? Notes { get; private set; }
     public ReadyGoodsTransferStatus Status { get; private set; } = ReadyGoodsTransferStatus.Posted;
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. The cancel
+    /// path (A2) posts reversal rows from this document, so a cancel racing a
+    /// second cancel must fail at the database instead of double-reversing.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private ReadyGoodsTransfer() { } // EF Core
 

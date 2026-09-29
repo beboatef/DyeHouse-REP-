@@ -46,13 +46,4 @@ public interface IAllocationLockService
     /// per document.
     /// </summary>
     Task<IAsyncDisposable> AcquireNamedAsync(string resource, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Raw allocation lock, kept for the allocation path (A4). Identical
-    /// semantics to <see cref="AcquireAsync"/> with a raw-message dimension; the
-    /// resource name is unchanged so existing locking behavior is preserved
-    /// exactly.
-    /// </summary>
-    Task<IAsyncDisposable> AcquireAsync(
-        Guid rawMessageId, Guid itemId, Guid customerId, CancellationToken cancellationToken = default);
 }

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -45,6 +46,14 @@ public class Check : AuditableEntity
 
     /// <summary>Bank/cash account the check was deposited into, once deposited.</summary>
     public Guid? TreasuryAccountId { get; private set; }
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. Only the
+    /// Clear transition writes a treasury row, so two concurrent clears of the
+    /// same check must not both post money.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     public string? CustomerReference { get; private set; }
     public string? Notes { get; private set; }

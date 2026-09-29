@@ -81,9 +81,13 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             .FirstOrDefaultAsync(w => w.Kind == Domain.Entities.WarehouseKind.ReadyGoods, cancellationToken)
             ?? throw new DomainException("No Ready Goods warehouse is configured.");
 
-        // One lock per distinct stock dimension this delivery touches.
+        // R2: the key mirrors the balance query's own filter - (warehouse, item,
+        // production order), with NO customer term, because the query below does
+        // not filter on customer either. Locking on a customer the request
+        // supplied would let two deliveries reading the same order's ready
+        // balance take different locks and jointly over-deliver.
         var lockKeys = lines
-            .Select(l => StockLockKey.ReadyLot(readyWarehouse.Id, l.ItemId, delivery.CustomerId, l.ProductionOrderId))
+            .Select(l => StockLockKey.ReadyLot(readyWarehouse.Id, l.ItemId, l.ProductionOrderId))
             .Distinct()
             .ToList();
 
@@ -182,10 +186,11 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
                 .Where(t => t.SourceDocumentId == delivery.Id && t.SourceDocumentType == DocumentType.Delivery)
                 .ToListAsync(cancellationToken);
 
-            // Lock exactly the lots the reversal will credit back, for the same
-            // reason the delivery locks them before it deducts.
+            // Lock exactly the lots the reversal will credit back, using the
+            // same key shape the delivery itself locks (R2) so a cancel and a
+            // delivery of the same order are mutually exclusive.
             var lockKeys = originalRows
-                .Select(r => StockLockKey.ReadyLot(r.WarehouseId, r.ItemId, r.CustomerId, r.ProductionOrderId ?? Guid.Empty))
+                .Select(r => StockLockKey.ReadyLot(r.WarehouseId, r.ItemId, r.ProductionOrderId ?? Guid.Empty))
                 .Distinct()
                 .ToList();
 

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -34,6 +35,15 @@ public class SupplierPayment : AuditableEntity
 
     /// <summary>Posted or Cancelled (B4/B5) - a cancelled payment keeps its row with linked reversal entries; never deleted.</summary>
     public TreasuryDocumentStatus Status { get; private set; } = TreasuryDocumentStatus.Posted;
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. A supplier
+    /// payment moves treasury out and credits the supplier ledger; B4/B5
+    /// require that a posted payment cannot be cancelled twice, and this is the
+    /// database-level guarantee behind that rule.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private SupplierPayment() { } // EF Core
 

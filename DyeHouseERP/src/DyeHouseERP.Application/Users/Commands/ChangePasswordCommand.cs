@@ -10,7 +10,9 @@ public record ChangePasswordCommand(Guid UserId, string NewPassword) : IRequest<
 
 public class ChangePasswordCommandValidator : AbstractValidator<ChangePasswordCommand>
 {
-    public ChangePasswordCommandValidator() => RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8);
+    public ChangePasswordCommandValidator()
+        // R5: same ceiling as account creation - 8..200 characters.
+        => RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8).MaximumLength(200);
 }
 
 public class ChangePasswordCommandHandler : IRequestHandler<ChangePasswordCommand, Unit>

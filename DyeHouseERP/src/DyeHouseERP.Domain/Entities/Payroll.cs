@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -194,6 +195,14 @@ public class PayrollRun : AuditableEntity
     public string? CancelledBy { get; private set; }
     public DateTime? CancelledAtUtc { get; private set; }
     public string? CancellationReason { get; private set; }
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. A payroll run
+    /// moves real money out of the treasury, so approval/posting/cancellation
+    /// must be mutually exclusive at the database level.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private readonly List<PayrollRunLine> _lines = new();
     public IReadOnlyCollection<PayrollRunLine> Lines => _lines.AsReadOnly();

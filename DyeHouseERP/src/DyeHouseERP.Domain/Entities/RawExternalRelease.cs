@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -38,6 +39,14 @@ public class RawExternalRelease : AuditableEntity
     public string? ExternalProcessingStage { get; private set; }
     public decimal? ExternalProcessingCost { get; private set; }
     public DateTime? ExpectedReturnDate { get; private set; }
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. A release can
+    /// be returned, corrected or cancelled at the same moment; only the first
+    /// commit is allowed to move the ledger.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
     public DateTime? ActualReturnDate { get; private set; }
     public decimal? ReturnedQuantityKg { get; private set; }
     public decimal? ReturnedQuantityMeter { get; private set; }

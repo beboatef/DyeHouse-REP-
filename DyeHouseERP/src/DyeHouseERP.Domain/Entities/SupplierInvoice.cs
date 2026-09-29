@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -32,6 +33,14 @@ public class SupplierInvoice : AuditableEntity
     public string? CancelledBy { get; private set; }
     public DateTime? CancelledAtUtc { get; private set; }
     public string? CancellationReason { get; private set; }
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. Posting a
+    /// supplier invoice creates the payable leg that supplier payments settle
+    /// against, so a post racing a cancel must not both commit.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private readonly List<SupplierInvoiceLine> _lines = new();
     public IReadOnlyCollection<SupplierInvoiceLine> Lines => _lines.AsReadOnly();

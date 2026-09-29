@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -32,6 +33,13 @@ public class SupplyIssue : AuditableEntity
     public string? Notes { get; private set; }
 
     public SupplyIssueStatus Status { get; private set; } = SupplyIssueStatus.Draft;
+
+    /// <summary>
+    /// R3: optimistic concurrency token, maintained by SQL Server. Guards the
+    /// post (which deducts material stock) against a concurrent cancel.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     public string? PostedBy { get; private set; }
     public DateTime? PostedAtUtc { get; private set; }

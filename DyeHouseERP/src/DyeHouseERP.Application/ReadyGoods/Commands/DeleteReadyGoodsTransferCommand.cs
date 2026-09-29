@@ -75,16 +75,30 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
             .Where(t => t.SourceDocumentId == transfer.Id && t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)
             .ToListAsync(cancellationToken);
 
-        // H6: the reversal credits the same ready lot the transfer debited, so
-        // it runs under that lot's lock - a cancellation can no longer interleave
-        // with a delivery or a second transfer of the same production order.
+        // H6/R2: the reversal credits the same ready lot the transfer debited,
+        // locked with the same key shape the delivery path uses, so a
+        // cancellation cannot interleave with a delivery of the same order.
         var lockKeys = originalRows
-            .Select(r => StockLockKey.ReadyLot(r.WarehouseId, r.ItemId, r.CustomerId, r.ProductionOrderId ?? transfer.ProductionOrderId))
+            .Select(r => StockLockKey.ReadyLot(r.WarehouseId, r.ItemId, r.ProductionOrderId ?? transfer.ProductionOrderId))
             .Distinct()
             .ToList();
 
         await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
         {
+        // R3: re-read the document INSIDE the lock and re-check its status.
+        // Another request may have cancelled it while this one was queueing for
+        // the lock; without this re-check both would post reversal rows and the
+        // ready lot would be credited twice. The RowVersion token then makes a
+        // genuine simultaneous update fail at the database too.
+        var liveTransfer = await _db.ReadyGoodsTransfers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken)
+            ?? throw new KeyNotFoundException("Ready goods transfer not found.");
+
+        if (liveTransfer.Status == ReadyGoodsTransferStatus.Cancelled)
+            throw new DomainException(
+                $"Ready goods transfer '{liveTransfer.TransferNumber}' is already cancelled and cannot be cancelled again.");
+
         foreach (var row in originalRows)
         {
             _db.InventoryTransactions.Add(new InventoryTransaction(

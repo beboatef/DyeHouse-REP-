@@ -71,6 +71,21 @@ public class ExceptionHandlingMiddleware
                 };
                 break;
 
+            case TimeoutException:
+                // R4: the stock/document locks (sp_getapplock) throw a
+                // TimeoutException when another operation has held the same
+                // stock dimension past the wait budget. That is a "somebody else
+                // is working on this right now" condition, so it is reported as
+                // a conflict the client can retry - not as a server fault.
+                context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+                payload = new
+                {
+                    title = "This stock is locked by another operation in progress. Please retry in a moment.",
+                    status = 409,
+                    code = "LOCK_TIMEOUT"
+                };
+                break;
+
             case DbUpdateConcurrencyException:
                 // H1: someone else committed a change to the same row first.
                 // That is a normal "you are working on stale data" conflict, not

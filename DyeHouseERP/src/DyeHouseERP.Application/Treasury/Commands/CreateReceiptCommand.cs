@@ -59,6 +59,9 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
         // customer named in the request.
         // ------------------------------------------------------------------
         Invoice? invoice = null;
+        // R5: the effective customer - the request's, or the invoice's when the
+        // request omitted it.
+        var customerId = request.CustomerId;
         if (request.InvoiceId.HasValue)
         {
             invoice = await _db.Invoices.Include(i => i.Lines)
@@ -80,6 +83,14 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
                 throw new DomainException(
                     $"Customer does not match invoice {invoice.InvoiceNumber}. The receipt names a different customer, " +
                     "so the payment would post to the wrong statement.");
+
+            // R5: when the request names no customer but does name an invoice,
+            // the invoice IS the authority on who the money belongs to. Inferring
+            // it here means the receipt is always credited to the right
+            // statement instead of silently posting with no customer ledger leg
+            // at all (which would leave the invoice settled but the customer's
+            // statement untouched).
+            customerId = invoice.CustomerId;
         }
 
         // H4 race guard: two receipts for the SAME invoice both read the same
@@ -90,31 +101,31 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
         {
             await using (await _documentLock.AcquireNamedAsync($"Invoice:{request.InvoiceId.Value}", cancellationToken))
             {
-                var dto = await PostAsync(request, account, invoice, cancellationToken);
-                return dto;
+                return await PostAsync(request, account, invoice, customerId, cancellationToken);
             }
         }
 
-        return await PostAsync(request, account, invoice, cancellationToken);
+        return await PostAsync(request, account, invoice, customerId, cancellationToken);
     }
 
     private async Task<ReceiptDto> PostAsync(
-        CreateReceiptCommand request, TreasuryAccount account, Invoice? invoice, CancellationToken cancellationToken)
+        CreateReceiptCommand request, TreasuryAccount account, Invoice? invoice, Guid? customerId,
+        CancellationToken cancellationToken)
     {
         var receiptNumber = await _numberGenerator.NextAsync(DocumentType.Receipt, cancellationToken: cancellationToken);
 
         var receipt = new Receipt(receiptNumber, request.ReceiptDate, request.TreasuryAccountId, request.Amount,
-            _currentUser.UserName, request.CustomerId, request.InvoiceId, request.PaymentMethod, request.Description);
+            _currentUser.UserName, customerId, request.InvoiceId, request.PaymentMethod, request.Description);
         _db.Receipts.Add(receipt);
 
         _db.TreasuryTransactions.Add(new TreasuryTransaction(
             request.TreasuryAccountId, request.ReceiptDate, DocumentType.Receipt, receiptNumber, receipt.Id,
             request.Amount, TreasuryDirection.In, request.Description, _currentUser.UserName));
 
-        if (request.CustomerId.HasValue)
+        if (customerId.HasValue)
         {
             _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
-                request.CustomerId.Value, request.ReceiptDate, DocumentType.Receipt, receiptNumber, receipt.Id,
+                customerId.Value, request.ReceiptDate, DocumentType.Receipt, receiptNumber, receipt.Id,
                 debit: 0, credit: request.Amount, description: $"Receipt {receiptNumber}", createdBy: _currentUser.UserName));
         }
 
