@@ -1,0 +1,1619 @@
+[
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "360x800",
+  "theme": "light",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "360x800",
+  "theme": "dark",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "390x844",
+  "theme": "light",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "390x844",
+  "theme": "dark",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "412x915",
+  "theme": "light",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "412x915",
+  "theme": "dark",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "768x1024",
+  "theme": "light",
+  "vw": 768,
+  "vh": 1024,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "768x1024",
+  "theme": "dark",
+  "vw": 768,
+  "vh": 1024,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1024x768",
+  "theme": "light",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1024x768",
+  "theme": "dark",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": [
+   "SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document."
+  ]
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1280x800",
+  "theme": "light",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1280x800",
+  "theme": "dark",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1440x900",
+  "theme": "light",
+  "vw": 1440,
+  "vh": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": [
+   "SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document."
+  ]
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1440x900",
+  "theme": "dark",
+  "vw": 1440,
+  "vh": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1920x1080",
+  "theme": "light",
+  "vw": 1920,
+  "vh": 1080,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": [
+   "SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document."
+  ]
+ },
+ {
+  "screen": "08-job-orders",
+  "route": "/production-orders",
+  "vp": "1920x1080",
+  "theme": "dark",
+  "vw": 1920,
+  "vh": 1080,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "360x800",
+  "theme": "light",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "360x800",
+  "theme": "dark",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "390x844",
+  "theme": "light",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "390x844",
+  "theme": "dark",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "412x915",
+  "theme": "light",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "412x915",
+  "theme": "dark",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "768x1024",
+  "theme": "light",
+  "vw": 768,
+  "vh": 1024,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": false,
+  "pageErrors": [
+   "SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document."
+  ]
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "768x1024",
+  "theme": "dark",
+  "vw": 768,
+  "vh": 1024,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1024x768",
+  "theme": "light",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1024x768",
+  "theme": "dark",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 1,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1280x800",
+  "theme": "light",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1280x800",
+  "theme": "dark",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1440x900",
+  "theme": "light",
+  "vw": 1440,
+  "vh": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1440x900",
+  "theme": "dark",
+  "vw": 1440,
+  "vh": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1920x1080",
+  "theme": "light",
+  "vw": 1920,
+  "vh": 1080,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vp": "1920x1080",
+  "theme": "dark",
+  "vw": 1920,
+  "vh": 1080,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": {
+   "min": 32,
+   "max": 38
+  },
+  "tables": 1,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "360x800",
+  "theme": "light",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "360x800",
+  "theme": "dark",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "390x844",
+  "theme": "light",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "390x844",
+  "theme": "dark",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "412x915",
+  "theme": "light",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "412x915",
+  "theme": "dark",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "768x1024",
+  "theme": "light",
+  "vw": 768,
+  "vh": 1024,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "768x1024",
+  "theme": "dark",
+  "vw": 768,
+  "vh": 1024,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 32,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1024x768",
+  "theme": "light",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1024x768",
+  "theme": "dark",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 2,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1280x800",
+  "theme": "light",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1280x800",
+  "theme": "dark",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1440x900",
+  "theme": "light",
+  "vw": 1440,
+  "vh": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1440x900",
+  "theme": "dark",
+  "error": "Attempted to use detached Frame '56D648BE4EF2300F5D2CB66062449472'."
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1920x1080",
+  "theme": "light",
+  "vw": 1920,
+  "vh": 1080,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": [
+   "SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document."
+  ]
+ },
+ {
+  "screen": "10-ready-goods",
+  "route": "/ready-goods",
+  "vp": "1920x1080",
+  "theme": "dark",
+  "vw": 1920,
+  "vh": 1080,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 24,
+   "max": 38
+  },
+  "inputH": null,
+  "tables": 2,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ }
+]

@@ -218,15 +218,20 @@ function ReceiptsTab() {
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
             <th className="text-start px-4 py-3 font-medium">الرقم</th><th className="text-start px-4 py-3 font-medium">الحساب</th>
-            <th className="text-start px-4 py-3 font-medium">العميل</th><th className="text-start px-4 py-3 font-medium">الفاتورة</th><th className="text-start px-4 py-3 font-medium">المبلغ</th>
+            <th className="text-start px-4 py-3 font-medium">العميل</th><th className="text-start px-4 py-3 font-medium">الفاتورة</th><th className="text-start px-4 py-3 font-medium">المبلغ</th><th className="text-start px-4 py-3 font-medium">الحالة</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {receipts?.map((r) => (
-              <tr key={r.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={r.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${r.status === "Cancelled" ? "opacity-50" : ""}`}>
                 <td className="px-4 py-3 font-medium ltr-nums">{r.receiptNumber}</td><td className="px-4 py-3">{r.treasuryAccountName}</td>
                 <td className="px-4 py-3">{r.customerCode ?? "-"}</td><td className="px-4 py-3 ltr-nums">{r.invoiceNumber ?? "-"}</td>
                 <td className="px-4 py-3 ltr-nums font-medium">{r.amount}</td>
+                <td className="px-4 py-3">
+                  {r.status === "Cancelled"
+                    ? <span className="text-xs text-red-600 font-medium">ملغاة</span>
+                    : <CancelDocButton label="إلغاء" onConfirm={(reason) => ReceiptsApi.cancel(r.id, reason)} invalidate={["receipts", "treasury-accounts"]} />}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -270,14 +275,19 @@ function PaymentsTab() {
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
             <th className="text-start px-4 py-3 font-medium">الرقم</th><th className="text-start px-4 py-3 font-medium">الحساب</th>
-            <th className="text-start px-4 py-3 font-medium">البيان</th><th className="text-start px-4 py-3 font-medium">المبلغ</th>
+            <th className="text-start px-4 py-3 font-medium">البيان</th><th className="text-start px-4 py-3 font-medium">المبلغ</th><th className="text-start px-4 py-3 font-medium">الحالة</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {payments?.map((p) => (
-              <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={p.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${p.status === "Cancelled" ? "opacity-50" : ""}`}>
                 <td className="px-4 py-3 font-medium ltr-nums">{p.paymentNumber}</td><td className="px-4 py-3">{p.treasuryAccountName}</td>
                 <td className="px-4 py-3">{p.payeeDescription}</td><td className="px-4 py-3 ltr-nums font-medium">{p.amount}</td>
+                <td className="px-4 py-3">
+                  {p.status === "Cancelled"
+                    ? <span className="text-xs text-red-600 font-medium">ملغاة</span>
+                    : <CancelDocButton label="إلغاء" onConfirm={(reason) => PaymentsApi.cancel(p.id, reason)} invalidate={["payments", "treasury-accounts"]} />}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -337,5 +347,68 @@ function TransfersTab() {
         </table>
       </Card>
     </>
+  );
+}
+
+/// <summary>
+/// Cancel action for posted treasury documents (B4): asks for a reason, calls
+/// the cancel endpoint, then refreshes the affected lists. Only rendered for
+/// rows whose status is still Posted.
+/// </summary>
+function CancelDocButton({ label, onConfirm, invalidate }: {
+  label: string;
+  onConfirm: (reason: string) => Promise<unknown>;
+  invalidate: string[];
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const cancelMutation = useMutation({
+    mutationFn: () => onConfirm(reason),
+    onSuccess: () => {
+      invalidate.forEach((key) => qc.invalidateQueries({ queryKey: [key] }));
+      setOpen(false);
+      setReason("");
+      setError(null);
+    },
+    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر الإلغاء")
+  });
+
+  if (!open)
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs text-red-600 hover:text-red-800 font-medium"
+      >
+        {label}
+      </button>
+    );
+
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        autoFocus
+        placeholder="سبب الإلغاء..."
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && reason.trim()) cancelMutation.mutate(); }}
+        className="border rounded px-2 py-1 text-xs w-36"
+      />
+      <button
+        type="button"
+        disabled={!reason.trim() || cancelMutation.isPending}
+        onClick={() => cancelMutation.mutate()}
+        className="text-xs bg-red-600 text-white rounded px-2 py-1 disabled:opacity-40"
+      >
+        تأكيد
+      </button>
+      <button type="button" onClick={() => { setOpen(false); setError(null); }} className="text-xs text-gray-500 px-1">
+        ×
+      </button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </div>
   );
 }

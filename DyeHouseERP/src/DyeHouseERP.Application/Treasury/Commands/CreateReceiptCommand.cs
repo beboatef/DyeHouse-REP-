@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Exceptions;
+using DyeHouseERP.Domain.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Treasury.DTOs;
 using DyeHouseERP.Domain.Entities;
@@ -59,6 +60,20 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
             request.Amount, TreasuryDirection.In, request.Description, _currentUser.UserName));
 
         Invoice? invoice = null;
+        if (request.InvoiceId.HasValue)
+        {
+            // B5: the target invoice must be live. A cancelled or draft invoice
+            // cannot legitimately receive money against it.
+            invoice = await _db.Invoices.Include(i => i.Lines)
+                .FirstOrDefaultAsync(i => i.Id == request.InvoiceId, cancellationToken)
+                ?? throw new NotFoundException("Invoice", request.InvoiceId.Value);
+
+            if (invoice.Status == InvoiceStatus.Cancelled)
+                throw new DomainException($"Invoice {invoice.InvoiceNumber} is cancelled and cannot receive payments.");
+            if (invoice.Status == InvoiceStatus.Draft)
+                throw new DomainException($"Invoice {invoice.InvoiceNumber} is still a draft - issue it before recording receipts against it.");
+        }
+
         if (request.CustomerId.HasValue)
         {
             _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
@@ -68,11 +83,25 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
 
         if (request.InvoiceId.HasValue)
         {
-            invoice = await _db.Invoices.Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == request.InvoiceId, cancellationToken)
-                ?? throw new NotFoundException("Invoice", request.InvoiceId.Value);
+            // B5 overpayment rule: the system has no customer-advance model,
+            // so a receipt against a live invoice may not exceed that
+            // invoice's total minus what previous live receipts already paid.
+            // Computed server-side inside the same SaveChanges scope, not
+            // trusted from the frontend. (Race safety: the guard runs on live
+            // data just before the single atomic SaveChangesAsync - the same
+            // convention as every other posting command in this codebase.)
+            var priorLiveReceipts = await _db.Receipts
+                .Where(r => r.InvoiceId == request.InvoiceId && r.Status != TreasuryDocumentStatus.Cancelled)
+                .SumAsync(r => (decimal?)r.Amount, cancellationToken) ?? 0;
+            var totalPaid = priorLiveReceipts + request.Amount;
 
-            var priorReceipts = await _db.Receipts.Where(r => r.InvoiceId == request.InvoiceId).SumAsync(r => (decimal?)r.Amount, cancellationToken) ?? 0;
-            var totalPaid = priorReceipts + request.Amount;
+            var lines = invoice!.Lines.ToList();
+            var invoiceTotal = lines.Sum(l => l.Quantity * l.ProcessingPrice) - invoice.Discount + invoice.Tax;
+            if (totalPaid > invoiceTotal)
+                throw new DomainException(
+                    $"Receipt of {totalPaid:0.##} would exceed invoice {invoice.InvoiceNumber} total of {invoiceTotal:0.##} " +
+                    $"(already paid {priorLiveReceipts:0.##}). Overpayments are not supported; record the exact due amount.");
+
             invoice.ApplyPayment(totalPaid);
         }
 
@@ -83,7 +112,8 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
             Id = receipt.Id, ReceiptNumber = receipt.ReceiptNumber, ReceiptDate = receipt.ReceiptDate,
             CustomerId = receipt.CustomerId, TreasuryAccountId = account.Id, TreasuryAccountName = account.Name,
             InvoiceId = receipt.InvoiceId, InvoiceNumber = invoice?.InvoiceNumber,
-            Amount = receipt.Amount, PaymentMethod = receipt.PaymentMethod, Description = receipt.Description
+            Amount = receipt.Amount, PaymentMethod = receipt.PaymentMethod, Description = receipt.Description,
+            Status = receipt.Status.ToString()
         };
     }
 }

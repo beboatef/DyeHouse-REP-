@@ -103,7 +103,7 @@ public class ProductionOrdersController : ControllerBase
     public async Task<ActionResult<ProductionOrderDto>> AllocateRaw(Guid id, [FromBody] AllocateRawRequest request)
     {
         var result = await _mediator.Send(new AllocateRawCommand(
-            id, request.RawMessageId, request.QuantityKg, request.QuantityMeter,
+            id, request.RawMessageId, request.ItemId, request.QuantityKg, request.QuantityMeter,
             request.OverrideNegativeStock, request.OverrideReason));
         return Ok(result);
     }
@@ -140,7 +140,7 @@ public class ProductionOrdersController : ControllerBase
 }
 
 public record AllocateRawRequest(
-    Guid RawMessageId, decimal? QuantityKg, decimal? QuantityMeter,
+    Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,
     bool OverrideNegativeStock, string? OverrideReason);
 
 public record CompleteStageRequest(

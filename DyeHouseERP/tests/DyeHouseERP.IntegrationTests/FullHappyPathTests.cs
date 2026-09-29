@@ -67,7 +67,7 @@ public class FullHappyPathTests : IntegrationTestBase
 
         order = (await (await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/raw-allocations", new
         {
-            rawMessageId = message.Id, quantityKg = 1000m, overrideNegativeStock = false, overrideReason = (string?)null
+            rawMessageId = message.Id, itemId = item.Id, quantityKg = 1000m, overrideNegativeStock = false, overrideReason = (string?)null
         })).Content.ReadFromJsonAsync<ProductionOrderDto>())!;
 
         // ---- Complete the single stage ----

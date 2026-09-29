@@ -13,19 +13,24 @@ using Microsoft.EntityFrameworkCore;
 namespace DyeHouseERP.Application.ProductionOrders.Commands;
 
 /// <summary>
-/// Allocates raw material FROM A SPECIFIC, USER-CHOSEN RawMessage TO a
-/// Production Order (spec section 13). There is deliberately no "auto-pick
-/// the oldest/cheapest/whatever message" behavior anywhere in this handler
-/// or the domain layer beneath it (spec section 4 - NO FIFO). Callers may
-/// send this command multiple times against the same order to allocate from
-/// several messages, e.g.:
-///   Message 125 -> 400 KG
-///   Message 131 -> 200 KG
+/// Allocates raw material FROM A SPECIFIC, USER-CHOSEN RawMessage AND LINE to
+/// a Production Order (spec section 13). The caller must name the exact
+/// RawMessageLine (ItemId) - a message may carry several item lines, and the
+/// balance, the RawAllocation and the ledger row all key on (message, item),
+/// so guessing a line would silently post stock against the wrong item.
+/// There is deliberately no "auto-pick the oldest/cheapest/whatever line"
+/// behavior anywhere in this handler or the domain layer beneath it
+/// (spec section 4 - NO FIFO), and no KG↔Meter conversion. Callers may send
+/// this command multiple times against the same order to allocate from
+/// several messages/lines, e.g.:
+///   Message 125, line 400 KG -> order
+///   Message 131, line 200 KG -> order
 /// each call is recorded as its own RawAllocation row.
 /// </summary>
 public record AllocateRawCommand(
     Guid ProductionOrderId,
     Guid RawMessageId,
+    Guid ItemId,
     decimal? QuantityKg,
     decimal? QuantityMeter,
     bool OverrideNegativeStock = false,
@@ -37,6 +42,8 @@ public class AllocateRawCommandValidator : AbstractValidator<AllocateRawCommand>
     {
         RuleFor(x => x.ProductionOrderId).NotEmpty();
         RuleFor(x => x.RawMessageId).NotEmpty();
+        RuleFor(x => x.ItemId).NotEmpty()
+            .WithMessage("Specify the item line being allocated - a raw message may carry several items.");
         RuleFor(x => x)
             .Must(x => x.QuantityKg is > 0 || x.QuantityMeter is > 0)
             .WithMessage("Specify the quantity to allocate in KG and/or Meter - the user chooses this manually, it is never derived automatically.");
@@ -54,16 +61,18 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
     private readonly IInventoryLedgerService _ledger;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _allocationLock;
 
     public AllocateRawCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IInventoryLedgerService ledger, IDateTime clock,
-        IPeriodCloseService periodClose)
+        IPeriodCloseService periodClose, IAllocationLockService allocationLock)
     {
         _db = db;
         _currentUser = currentUser;
         _ledger = ledger;
         _clock = clock;
         _periodClose = periodClose;
+        _allocationLock = allocationLock;
     }
 
     public async Task<ProductionOrderDto> Handle(AllocateRawCommand request, CancellationToken cancellationToken)
@@ -74,38 +83,48 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 
-        var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
+        // Lines are loaded explicitly (no lazy loading in this app) so the
+        // item-line check below reads real rows, not an empty collection.
+        var message = await _db.RawMessages
+            .Include(m => m.Lines)
+            .FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 
         if (!message.IsAvailableForAllocation)
             throw new DomainException(
                 $"Message '{message.MessageNumber}' is not available for allocation (status: {message.Status}). Material cannot be used in production.");
 
-        // A message may carry several item lines; pick the line whose unit
-        // matches what's being requested (kept simple for this scaffold -
-        // once messages routinely carry multiple items, prefer passing an
-        // explicit ItemId in the command instead of inferring it here).
-        var line = message.Lines.FirstOrDefault(l =>
-            (request.QuantityKg.HasValue && l.QuantityKg.HasValue) ||
-            (request.QuantityMeter.HasValue && l.QuantityMeter.HasValue))
-            ?? throw new DomainException("The raw message has no line matching the requested unit (KG/Meter).");
+        // The caller must name an item that genuinely exists on this message -
+        // a multi-line message would otherwise make "first matching line" a
+        // silent guess that posts stock against the wrong item.
+        var line = message.Lines.FirstOrDefault(l => l.ItemId == request.ItemId)
+            ?? throw new DomainException(
+                $"Item '{request.ItemId}' is not a line on message '{message.MessageNumber}'. Pick one of the message's item lines.");
 
-        var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, line.ItemId, order.CustomerId, message.WarehouseId, cancellationToken);
+        // Serialize concurrent allocations against the same (message, item,
+        // customer) key: the balance check below and the ledger write must not
+        // interleave, or two simultaneous requests can both pass the check and
+        // jointly oversell the balance (defeating the negative-stock rule).
+        await using (await _allocationLock.AcquireAsync(message.Id, request.ItemId, order.CustomerId, cancellationToken))
+        {
+            var (balanceKg, balanceMeter) = await _ledger.GetCustomerBalanceAsync(
+                message.Id, request.ItemId, order.CustomerId, message.WarehouseId, cancellationToken);
 
-        await EnsureSufficientBalance(request, message, line.ItemId, order.CustomerId, balanceKg, balanceMeter, cancellationToken);
+            await EnsureSufficientBalance(request, message, request.ItemId, order.CustomerId, balanceKg, balanceMeter, cancellationToken);
 
-        var allocation = order.AllocateRaw(message.Id, line.ItemId, request.QuantityKg, request.QuantityMeter, _currentUser.UserName);
+            var allocation = order.AllocateRaw(message.Id, request.ItemId, request.QuantityKg, request.QuantityMeter, _currentUser.UserName);
 
-        _db.RawAllocations.Add(allocation);
+            _db.RawAllocations.Add(allocation);
 
-        _db.InventoryTransactions.Add(new InventoryTransaction(
-            DocumentType.ProductionOrder, order.OrderNumber, order.Id,
-            _clock.UtcNow, message.WarehouseId, order.CustomerId, line.ItemId,
-            rawMessageId: message.Id, productionOrderId: order.Id,
-            quantityKg: request.QuantityKg, quantityMeter: request.QuantityMeter,
-            direction: TransactionDirection.Out, createdBy: _currentUser.UserName));
+            _db.InventoryTransactions.Add(new InventoryTransaction(
+                DocumentType.ProductionOrder, order.OrderNumber, order.Id,
+                _clock.UtcNow, message.WarehouseId, order.CustomerId, request.ItemId,
+                rawMessageId: message.Id, productionOrderId: order.Id,
+                quantityKg: request.QuantityKg, quantityMeter: request.QuantityMeter,
+                direction: TransactionDirection.Out, createdBy: _currentUser.UserName));
 
-        await _db.SaveChangesAsync(cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return await GetProductionOrderByIdQueryHandler.LoadDtoAsync(_db, order.Id, cancellationToken);
     }
@@ -126,7 +145,10 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
         if (!request.OverrideNegativeStock)
             throw new NegativeStockException(available, requested);
 
-        if (!_currentUser.IsInRole(Permissions.InventoryAllowNegativeStock) || !_currentUser.IsInRole(Permissions.InventoryApproveNegativeStock))
+        // B6: authorization goes through the permission model (HasPermission,
+        // which includes the admin catch-all) - the same convention as every
+        // other business check in this codebase, not raw role-string lookups.
+        if (!_currentUser.HasPermission(Permissions.InventoryAllowNegativeStock) || !_currentUser.HasPermission(Permissions.InventoryApproveNegativeStock))
             throw new UnauthorizedAccessException(
                 $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 

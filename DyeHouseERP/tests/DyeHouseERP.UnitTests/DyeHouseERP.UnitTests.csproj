@@ -12,10 +12,16 @@
     <PackageReference Include="xunit" Version="2.9.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
+    <PackageReference Include="Moq" Version="4.20.70" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DyeHouseERP.Domain\DyeHouseERP.Domain.csproj" />
+    <ProjectReference Include="..\..\src\DyeHouseERP.API\DyeHouseERP.API.csproj" />
+    <!-- Referenced only for the audit-value redaction rules (B2) - the redactor is pure and needs no database. -->
+    <ProjectReference Include="..\..\src\DyeHouseERP.Infrastructure\DyeHouseERP.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\DyeHouseERP.Persistence\DyeHouseERP.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

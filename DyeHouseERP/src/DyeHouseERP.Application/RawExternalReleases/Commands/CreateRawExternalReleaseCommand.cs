@@ -83,7 +83,7 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
             if (!request.OverrideNegativeStock)
                 throw new NegativeStockException(available, requested);
 
-            if (!_currentUser.IsInRole(Permissions.InventoryAllowNegativeStock) || !_currentUser.IsInRole(Permissions.InventoryApproveNegativeStock))
+            if (!_currentUser.HasPermission(Permissions.InventoryAllowNegativeStock) || !_currentUser.HasPermission(Permissions.InventoryApproveNegativeStock))
                 throw new UnauthorizedAccessException(
                     $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 

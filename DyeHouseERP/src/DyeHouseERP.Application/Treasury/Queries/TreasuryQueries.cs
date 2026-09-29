@@ -57,7 +57,8 @@ public class GetReceiptsQueryHandler : IRequestHandler<GetReceiptsQuery, List<Re
             CustomerId = r.CustomerId, CustomerCode = r.CustomerId.HasValue ? customers.GetValueOrDefault(r.CustomerId.Value)?.Code : null,
             TreasuryAccountId = r.TreasuryAccountId, TreasuryAccountName = accounts.GetValueOrDefault(r.TreasuryAccountId)?.Name ?? "",
             InvoiceId = r.InvoiceId, InvoiceNumber = r.InvoiceId.HasValue ? invoices.GetValueOrDefault(r.InvoiceId.Value)?.InvoiceNumber : null,
-            Amount = r.Amount, PaymentMethod = r.PaymentMethod, Description = r.Description
+            Amount = r.Amount, PaymentMethod = r.PaymentMethod, Description = r.Description,
+            Status = r.Status.ToString()
         }).ToList();
     }
 }
@@ -80,7 +81,8 @@ public class GetPaymentsQueryHandler : IRequestHandler<GetPaymentsQuery, List<Pa
         {
             Id = p.Id, PaymentNumber = p.PaymentNumber, PaymentDate = p.PaymentDate,
             TreasuryAccountId = p.TreasuryAccountId, TreasuryAccountName = accounts.GetValueOrDefault(p.TreasuryAccountId)?.Name ?? "",
-            Amount = p.Amount, PayeeDescription = p.PayeeDescription, Description = p.Description
+            Amount = p.Amount, PayeeDescription = p.PayeeDescription, Description = p.Description,
+            Status = p.Status.ToString()
         }).ToList();
     }
 }

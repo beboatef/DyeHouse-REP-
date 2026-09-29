@@ -28,7 +28,8 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
             CustomerId = t.CustomerId, CustomerCode = customers.GetValueOrDefault(t.CustomerId)?.Code ?? "",
             ItemId = t.ItemId, ItemCode = items.GetValueOrDefault(t.ItemId)?.Code ?? "",
             Color = orders.GetValueOrDefault(t.ProductionOrderId)?.Color,
-            QuantityKg = t.QuantityKg, QuantityMeter = t.QuantityMeter, PieceCount = t.PieceCount
+            QuantityKg = t.QuantityKg, QuantityMeter = t.QuantityMeter, PieceCount = t.PieceCount,
+            Status = t.Status.ToString()
         }).ToList();
     }
 }

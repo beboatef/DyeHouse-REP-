@@ -30,6 +30,7 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<IDocumentNumberGenerator, SqlDocumentNumberGenerator>();
+        services.AddScoped<IAllocationLockService, SqlAllocationLockService>();
         services.AddScoped<IInventoryLedgerService, InventoryLedgerService>();
         services.AddScoped<IMaterialLedgerService, MaterialLedgerService>();
         services.AddScoped<IPeriodCloseService, PeriodCloseService>();

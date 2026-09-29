@@ -15,7 +15,9 @@ import { Factory, User, Lock, AlertCircle, Sun, Moon, Monitor } from "lucide-rea
  */
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState("admin");
+  // No default username is pre-filled: the UI must never hint at any real or
+  // seeded credential - the user types their own login.
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
@@ -92,7 +94,6 @@ export default function LoginPage() {
                 autoFocus
                 autoComplete="username"
                 className="ps-9"
-                placeholder="admin"
               />
             </div>
           </div>
@@ -130,7 +131,7 @@ export default function LoginPage() {
           )}
         </form>
 
-        <p className="mt-6 text-center text-2xs text-ink-subtle">بيئة التطوير: admin / Admin@12345</p>
+        <p className="mt-6 text-center text-2xs text-ink-subtle">أدخل اسم المستخدم وكلمة المرور الخاصة بك.</p>
       </div>
     </div>
   );

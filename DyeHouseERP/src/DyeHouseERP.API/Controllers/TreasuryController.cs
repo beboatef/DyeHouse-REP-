@@ -108,7 +108,16 @@ public class ReceiptsController : ControllerBase
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(Get), new { }, result);
     }
+
+    /// <summary>Cancels a posted receipt and writes the reversal rows (B4). Reason required; double cancel rejected.</summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.TreasuryCreate)]
+    [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ReceiptDto>> Cancel(Guid id, [FromBody] CancelReceiptRequest request)
+        => Ok(await _mediator.Send(new CancelReceiptCommand(id, request.Reason)));
 }
+
+public record CancelReceiptRequest(string Reason);
 
 [ApiController]
 [Route("api/payments")]
@@ -129,7 +138,16 @@ public class PaymentsController : ControllerBase
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(Get), new { }, result);
     }
+
+    /// <summary>Cancels a posted payment and writes the reversal rows (B4). Reason required; double cancel rejected.</summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.TreasuryCreate)]
+    [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PaymentDto>> Cancel(Guid id, [FromBody] CancelPaymentRequest request)
+        => Ok(await _mediator.Send(new CancelPaymentCommand(id, request.Reason)));
 }
+
+public record CancelPaymentRequest(string Reason);
 
 [ApiController]
 [Route("api/treasury-transfers")]

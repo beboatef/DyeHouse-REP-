@@ -105,7 +105,8 @@ foreach (var allocation in allocations)
             ProductionOrderId = order.Id, ProductionOrderNumber = order.OrderNumber,
             CustomerId = order.CustomerId, CustomerCode = customer?.Code ?? "",
             ItemId = order.ItemId, ItemCode = item?.Code ?? "", Color = order.Color,
-            QuantityKg = transfer.QuantityKg, QuantityMeter = transfer.QuantityMeter, PieceCount = transfer.PieceCount
+            QuantityKg = transfer.QuantityKg, QuantityMeter = transfer.QuantityMeter, PieceCount = transfer.PieceCount,
+            Status = transfer.Status.ToString()
         };
     }
 }

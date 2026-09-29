@@ -334,7 +334,7 @@ export const ProductionOrdersApi = {
   }) => api.post<ProductionOrder>("/production-orders", body).then((r) => r.data),
   allocateRaw: (
     id: string,
-    body: { rawMessageId: string; quantityKg?: number; quantityMeter?: number; overrideNegativeStock?: boolean; overrideReason?: string }
+    body: { rawMessageId: string; itemId: string; quantityKg?: number; quantityMeter?: number; overrideNegativeStock?: boolean; overrideReason?: string }
   ) => api.post<ProductionOrder>(`/production-orders/${id}/raw-allocations`, body).then((r) => r.data),
   startStage: (stageExecutionId: string) =>
     api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/start`).then((r) => r.data),
@@ -716,23 +716,29 @@ export interface Receipt {
   id: string; receiptNumber: string; receiptDate: string; customerId: string | null; customerCode: string | null;
   treasuryAccountId: string; treasuryAccountName: string; invoiceId: string | null; invoiceNumber: string | null;
   amount: number; paymentMethod: string | null; description: string | null;
+  status: "Posted" | "Cancelled";
 }
 
 export const ReceiptsApi = {
   list: (params?: { customerId?: string }) => api.get<Receipt[]>("/receipts", { params }).then((r) => r.data),
   create: (body: { receiptDate: string; treasuryAccountId: string; amount: number; customerId?: string; invoiceId?: string; paymentMethod?: string; description?: string }) =>
-    api.post<Receipt>("/receipts", body).then((r) => r.data)
+    api.post<Receipt>("/receipts", body).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<Receipt>(`/receipts/${id}/cancel`, { reason }).then((r) => r.data)
 };
 
 export interface Payment {
   id: string; paymentNumber: string; paymentDate: string; treasuryAccountId: string; treasuryAccountName: string;
   amount: number; payeeDescription: string; description: string | null;
+  status: "Posted" | "Cancelled";
 }
 
 export const PaymentsApi = {
   list: () => api.get<Payment[]>("/payments").then((r) => r.data),
   create: (body: { paymentDate: string; treasuryAccountId: string; amount: number; payeeDescription: string; paymentMethod?: string; description?: string }) =>
-    api.post<Payment>("/payments", body).then((r) => r.data)
+    api.post<Payment>("/payments", body).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<Payment>(`/payments/${id}/cancel`, { reason }).then((r) => r.data)
 };
 
 export interface TreasuryTransfer {
@@ -1732,6 +1738,7 @@ export interface SupplierPayment {
   paymentMethod: string | null;
   checkId: string | null;
   checkNumber: string | null;
+  status: "Posted" | "Cancelled";
   supplierInvoiceId: string | null;
   description: string | null;
   createdBy: string;

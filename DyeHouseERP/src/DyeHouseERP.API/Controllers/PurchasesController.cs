@@ -196,6 +196,13 @@ public class PurchasesController : ControllerBase
         return CreatedAtAction(nameof(GetPayments), new { }, result);
     }
 
+    /// <summary>Cancels a posted supplier payment and writes the reversal rows (B4/B5). Reason required; double cancel rejected.</summary>
+    [HttpPost("supplier-payments/{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesPay)]
+    [ProducesResponseType(typeof(SupplierPaymentDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<SupplierPaymentDto>> CancelSupplierPayment(Guid id, [FromBody] CancelSupplierPaymentRequest request)
+        => Ok(await _mediator.Send(new CancelSupplierPaymentCommand(id, request.Reason)));
+
     // -------------------------------------------------- accounts / reports
 
     /// <summary>Supplier account statement (spec sections 41 and 48) - a live sum over the append-only ledger.</summary>
@@ -430,3 +437,5 @@ public class PurchasesController : ControllerBase
 
 /// <summary>Shared body for the cancel actions that require a documented reason (spec section 46).</summary>
 public record CancelRequest(string Reason);
+
+public record CancelSupplierPaymentRequest(string Reason);

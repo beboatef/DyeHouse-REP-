@@ -32,6 +32,9 @@ public class SupplierPayment : AuditableEntity
     public Guid? SupplierInvoiceId { get; private set; }
     public string? Description { get; private set; }
 
+    /// <summary>Posted or Cancelled (B4/B5) - a cancelled payment keeps its row with linked reversal entries; never deleted.</summary>
+    public TreasuryDocumentStatus Status { get; private set; } = TreasuryDocumentStatus.Posted;
+
     private SupplierPayment() { } // EF Core
 
     public SupplierPayment(string paymentNumber, DateTime paymentDate, Guid supplierId, Guid treasuryAccountId,
@@ -58,5 +61,17 @@ public class SupplierPayment : AuditableEntity
         Currency = string.IsNullOrWhiteSpace(currency) ? "EGP" : currency.Trim().ToUpperInvariant();
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Flips to Cancelled with the reason recorded (Invoice.Cancel convention); reversal ledger rows are written by the handler.</summary>
+    public void Cancel(string reason, string cancelledBy)
+    {
+        if (Status == TreasuryDocumentStatus.Cancelled)
+            throw new DomainException($"Supplier payment '{PaymentNumber}' is already cancelled.");
+
+        Status = TreasuryDocumentStatus.Cancelled;
+        Description = string.IsNullOrWhiteSpace(Description) ? $"[Cancelled] {reason}" : $"{Description}\n[Cancelled] {reason}";
+        ModifiedBy = cancelledBy;
+        ModifiedAtUtc = DateTime.UtcNow;
     }
 }

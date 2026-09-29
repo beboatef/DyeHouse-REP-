@@ -24,5 +24,8 @@ public class InventoryTransactionConfiguration : IEntityTypeConfiguration<Invent
         builder.HasIndex(t => new { t.CustomerId, t.ItemId, t.WarehouseId });
         builder.HasIndex(t => t.ProductionOrderId);
         builder.HasIndex(t => t.TransactionDate);
+        // M1: every reversal/cancel looks up this ledger by its source document;
+        // without the index those lookups scan the whole table as it grows.
+        builder.HasIndex(t => t.SourceDocumentId);
     }
 }

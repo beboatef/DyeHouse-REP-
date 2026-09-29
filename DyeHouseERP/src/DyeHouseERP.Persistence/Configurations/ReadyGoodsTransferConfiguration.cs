@@ -17,6 +17,7 @@ public class ReadyGoodsTransferConfiguration : IEntityTypeConfiguration<ReadyGoo
         builder.Property(t => t.Notes).HasMaxLength(1000);
         builder.Property(t => t.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(t => t.ModifiedBy).HasMaxLength(100);
+        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
 
         // Prevent duplicate transfer for the same order (spec section 29).
         builder.HasIndex(t => t.ProductionOrderId).IsUnique();

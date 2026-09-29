@@ -2,16 +2,27 @@ using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ReadyGoods.DTOs;
 using DyeHouseERP.Domain.Entities;
+using DyeHouseERP.Domain.Exceptions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.ReadyGoods.Commands;
 
+/// <summary>
+/// Ready-goods transfers are posted atomically at creation: the transfer row
+/// and its InventoryTransaction IN rows commit together, and the ready
+/// balance is always a live sum over that ledger (spec sections 18, 29, 30).
+/// Editing the quantities of a posted document can never touch the ledger
+/// (the ledger is append-only), so any edit would silently split the
+/// document from the stock it claims. Corrections therefore follow the same
+/// path as every other stock-posting document in the system: cancel the
+/// transfer - which posts reversal rows - and create a new one if needed.
+/// Date and free-text notes (nothing that the ledger depends on) may still
+/// be corrected here; quantities and warehouse cannot.
+/// </summary>
 public sealed record UpdateReadyGoodsTransferCommand(
     Guid Id,
     DateTime TransferDate,
-    decimal? QuantityKg,
-    decimal? QuantityMeter,
     int? PieceCount,
     string? Notes) : IRequest<ReadyGoodsTransferDto>;
 
@@ -37,47 +48,15 @@ public sealed class UpdateReadyGoodsTransferCommandHandler
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken)
             ?? throw new KeyNotFoundException("Ready goods transfer not found.");
 
+        if (transfer.Status == ReadyGoodsTransferStatus.Cancelled)
+            throw new DomainException("A cancelled ready goods transfer cannot be edited.");
+
         _permissionService.EnsureCanEdit(transfer.ProductionOrderId);
 
-        if (request.QuantityKg is null && request.QuantityMeter is null)
-            throw new ArgumentException("KG and/or Meter quantity is required.");
-
-        transfer.UpdateDetails(
-            request.TransferDate,
-            request.QuantityKg,
-            request.QuantityMeter,
-            request.PieceCount,
-            request.Notes);
+        transfer.UpdateDetails(request.TransferDate, request.PieceCount, request.Notes);
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        var order = await _db.ProductionOrders
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == transfer.ProductionOrderId, cancellationToken);
-
-        var customer = await _db.Customers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == transfer.CustomerId, cancellationToken);
-
-        var item = await _db.Items
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == transfer.ItemId, cancellationToken);
-
-        return new ReadyGoodsTransferDto
-        {
-            Id = transfer.Id,
-            TransferNumber = transfer.TransferNumber,
-            TransferDate = transfer.TransferDate,
-            ProductionOrderId = order.Id,
-            ProductionOrderNumber = order.OrderNumber,
-            CustomerId = order.CustomerId,
-            CustomerCode = customer?.Code ?? "",
-            ItemId = order.ItemId,
-            ItemCode = item?.Code ?? "",
-            Color = order.Color,
-            QuantityKg = transfer.QuantityKg,
-            QuantityMeter = transfer.QuantityMeter,
-            PieceCount = transfer.PieceCount
-        };
+        return await DeleteReadyGoodsTransferCommandHandler.LoadDtoAsync(_db, transfer.Id, cancellationToken);
     }
 }

@@ -35,6 +35,7 @@ export default function ProductionOrderDetailPage() {
   });
 
   const [selectedMessageId, setSelectedMessageId] = useState("");
+  const [selectedLineItemId, setSelectedLineItemId] = useState("");
   const [allocKg, setAllocKg] = useState("");
   const [allocMeter, setAllocMeter] = useState("");
   const [allocError, setAllocError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export default function ProductionOrderDetailPage() {
     mutationFn: (overrideNegativeStock: boolean) =>
       ProductionOrdersApi.allocateRaw(id!, {
         rawMessageId: selectedMessageId,
+        itemId: selectedLineItemId,
         quantityKg: allocKg ? Number(allocKg) : undefined,
         quantityMeter: allocMeter ? Number(allocMeter) : undefined,
         overrideNegativeStock,
@@ -53,7 +55,7 @@ export default function ProductionOrderDetailPage() {
       }),
     onSuccess: () => {
       invalidate();
-      setSelectedMessageId(""); setAllocKg(""); setAllocMeter(""); setAllocError(null); setNegativeStockDetail(null);
+      setSelectedMessageId(""); setSelectedLineItemId(""); setAllocKg(""); setAllocMeter(""); setAllocError(null); setNegativeStockDetail(null);
     },
     onError: (err: any) => {
       if (err?.response?.data?.code === "NEGATIVE_STOCK") {
@@ -73,6 +75,7 @@ export default function ProductionOrderDetailPage() {
   if (isLoading || !order) return <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>;
 
   const selectedMessage = candidateMessages?.find((m) => m.id === selectedMessageId);
+  const selectedLine = selectedMessage?.lines.find((l) => l.itemId === selectedLineItemId);
 
   return (
     <>
@@ -123,11 +126,28 @@ export default function ProductionOrderDetailPage() {
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-gray-50 rounded-lg p-3">
           <div className="sm:col-span-2">
             <label className="block text-[11px] text-gray-500 mb-1">اختر الرسالة</label>
-            <Select value={selectedMessageId} onChange={(e) => setSelectedMessageId(e.target.value)}>
+            <Select
+              value={selectedMessageId}
+              onChange={(e) => {
+                setSelectedMessageId(e.target.value);
+                setSelectedLineItemId("");
+              }}
+            >
               <option value="">اختر رسالة استلام...</option>
               {candidateMessages?.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.messageNumber} - {m.lines.map((l) => `${l.itemCode}: ${l.remainingKg ?? l.remainingMeter ?? 0}`).join(", ")}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[11px] text-gray-500 mb-1">اختر الصنف (سطر الرسالة)</label>
+            <Select value={selectedLineItemId} onChange={(e) => setSelectedLineItemId(e.target.value)} disabled={!selectedMessage}>
+              <option value="">اختر الصنف...</option>
+              {selectedMessage?.lines.map((l) => (
+                <option key={l.id} value={l.itemId}>
+                  {l.itemCode} - {l.itemName} ({l.remainingKg != null ? `${l.remainingKg} كجم` : `${l.remainingMeter} م`})
                 </option>
               ))}
             </Select>
@@ -142,21 +162,19 @@ export default function ProductionOrderDetailPage() {
           </div>
         </div>
 
-        {selectedMessage && (
+        {selectedLine && (
           <p className="text-xs text-gray-500 mt-2">
-            الرصيد المتاح في هذه الرسالة:{" "}
-            {selectedMessage.lines.map((l) => (
-              <span key={l.id} className="ltr-nums font-medium">
-                {l.remainingKg != null && `${l.remainingKg} كجم `}
-                {l.remainingMeter != null && `${l.remainingMeter} م`}
-              </span>
-            ))}
+            الرصيد المتاح للصنف المحدد في هذه الرسالة:{" "}
+            <span className="ltr-nums font-medium">
+              {selectedLine.remainingKg != null && `${selectedLine.remainingKg} كجم `}
+              {selectedLine.remainingMeter != null && `${selectedLine.remainingMeter} م`}
+            </span>
           </p>
         )}
 
         <div className="mt-3">
           <Button
-            disabled={!selectedMessageId || (!allocKg && !allocMeter) || allocateMutation.isPending}
+            disabled={!selectedMessageId || !selectedLineItemId || (!allocKg && !allocMeter) || allocateMutation.isPending}
             onClick={() => allocateMutation.mutate(false)}
           >
             تخصيص

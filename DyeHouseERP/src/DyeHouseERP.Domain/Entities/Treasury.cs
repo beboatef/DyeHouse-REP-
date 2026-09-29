@@ -1,5 +1,6 @@
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Exceptions;
 
 namespace DyeHouseERP.Domain.Entities;
 
@@ -26,7 +27,7 @@ public class TreasuryAccount : AuditableEntity
     }
 }
 
-/// <summary>Append-only cash/bank ledger (spec sections 18 + 34).</summary>
+/// <summary>Append-only cash/bank ledger (spec sections 18 + 34). Rows are never edited or deleted; a correction is a linked reversal row (B4).</summary>
 public class TreasuryTransaction : BaseEntity
 {
     public Guid TreasuryAccountId { get; private set; }
@@ -40,11 +41,14 @@ public class TreasuryTransaction : BaseEntity
     public string CreatedBy { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
 
+    /// <summary>Set when this row is itself a reversal of an earlier row (B4) - keeps original↔reversal traceability.</summary>
+    public Guid? ReversesTransactionId { get; private set; }
+
     private TreasuryTransaction() { } // EF Core
 
     public TreasuryTransaction(Guid treasuryAccountId, DateTime transactionDate, DocumentType sourceDocumentType,
         string sourceDocumentNumber, Guid sourceDocumentId, decimal amount, TreasuryDirection direction,
-        string? description, string createdBy)
+        string? description, string createdBy, Guid? reversesTransactionId = null)
     {
         TreasuryAccountId = treasuryAccountId;
         TransactionDate = transactionDate;
@@ -56,10 +60,11 @@ public class TreasuryTransaction : BaseEntity
         Description = description;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
+        ReversesTransactionId = reversesTransactionId;
     }
 }
 
-/// <summary>Money received (typically from a customer, spec section 34) - may optionally apply against a specific Invoice.</summary>
+/// <summary>Money received (typically from a customer, spec section 34) - may optionally apply against a specific Invoice. Cancel is a status + linked reversal rows; the original is never edited or deleted (B4).</summary>
 public class Receipt : AuditableEntity
 {
     public string ReceiptNumber { get; private set; } = string.Empty;
@@ -70,6 +75,7 @@ public class Receipt : AuditableEntity
     public decimal Amount { get; private set; }
     public string? PaymentMethod { get; private set; }
     public string? Description { get; private set; }
+    public TreasuryDocumentStatus Status { get; private set; } = TreasuryDocumentStatus.Posted;
 
     private Receipt() { } // EF Core
 
@@ -89,9 +95,21 @@ public class Receipt : AuditableEntity
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
     }
+
+    /// <summary>Flips to Cancelled and records the reason in the notes (Invoice.Cancel convention). Reversal rows are written by the handler against the original ledger rows.</summary>
+    public void Cancel(string reason, string cancelledBy)
+    {
+        if (Status == TreasuryDocumentStatus.Cancelled)
+            throw new DomainException($"Receipt '{ReceiptNumber}' is already cancelled.");
+
+        Status = TreasuryDocumentStatus.Cancelled;
+        Description = string.IsNullOrWhiteSpace(Description) ? $"[Cancelled] {reason}" : $"{Description}\n[Cancelled] {reason}";
+        ModifiedBy = cancelledBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
 }
 
-/// <summary>Money paid out (supplier, expense, etc. - spec section 34).</summary>
+/// <summary>Money paid out (supplier, expense, etc. - spec section 34). Same cancellation model as Receipt (B4).</summary>
 public class Payment : AuditableEntity
 {
     public string PaymentNumber { get; private set; } = string.Empty;
@@ -101,6 +119,7 @@ public class Payment : AuditableEntity
     public string PayeeDescription { get; private set; } = string.Empty;
     public string? PaymentMethod { get; private set; }
     public string? Description { get; private set; }
+    public TreasuryDocumentStatus Status { get; private set; } = TreasuryDocumentStatus.Posted;
 
     private Payment() { } // EF Core
 
@@ -119,6 +138,29 @@ public class Payment : AuditableEntity
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
     }
+
+    public void Cancel(string reason, string cancelledBy)
+    {
+        if (Status == TreasuryDocumentStatus.Cancelled)
+            throw new DomainException($"Payment '{PaymentNumber}' is already cancelled.");
+
+        Status = TreasuryDocumentStatus.Cancelled;
+        Description = string.IsNullOrWhiteSpace(Description) ? $"[Cancelled] {reason}" : $"{Description}\n[Cancelled] {reason}";
+        ModifiedBy = cancelledBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+}
+
+/// <summary>
+/// Receipts/Payments are created and posted in the same atomic step (the
+/// document and its TreasuryTransaction row commit together), so unlike
+/// Invoice there is no Draft state - Posted, or Cancelled with reversal
+/// rows (B4).
+/// </summary>
+public enum TreasuryDocumentStatus
+{
+    Posted = 1,
+    Cancelled = 2
 }
 
 /// <summary>Transfer between two treasury accounts (spec section 34).</summary>

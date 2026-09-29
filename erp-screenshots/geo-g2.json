@@ -1,0 +1,2212 @@
+[
+ {
+  "name": "09-production-costing",
+  "route": "/production-orders/00000000-0000-0000-0000-000000000001",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 14,
+  "cardHeightsMin": 50,
+  "cardHeightsMax": 669,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 1120,
+    "h": 399.5,
+    "tag": "div",
+    "text": "تخصيص الخاميتم اختيار الرسالة (الم"
+   },
+   {
+    "w": 1078,
+    "h": 90.5,
+    "tag": "div",
+    "text": "اختر الرسالةاختر رسالة استلام...RA"
+   },
+   {
+    "w": 1120,
+    "h": 256,
+    "tag": "div",
+    "text": "مراحل التشغيل#—بند تفاصيلي#—بند تف"
+   },
+   {
+    "w": 1078,
+    "h": 50,
+    "tag": "div",
+    "text": "#—بند تفاصيلي"
+   },
+   {
+    "w": 1078,
+    "h": 50,
+    "tag": "div",
+    "text": "#—بند تفاصيلي"
+   },
+   {
+    "w": 1078,
+    "h": 50,
+    "tag": "div",
+    "text": "#—بند تفاصيلي"
+   }
+  ],
+  "buttons": {
+   "n": 22,
+   "min": 16,
+   "max": 56,
+   "avg": 31.68
+  },
+  "inputs": {
+   "n": 6,
+   "min": 32,
+   "max": 56,
+   "avg": 41.33
+  },
+  "buttonWidths": {
+   "n": 22,
+   "min": 22.14,
+   "max": 146.88,
+   "avg": 66.23
+  },
+  "tables": [
+   {
+    "w": 1078,
+    "h": 143,
+    "x": 53,
+    "right": 1131,
+    "cols": 3,
+    "rows": 3,
+    "fontSize": "14px",
+    "cellPad": "8px 1px 8px 1px",
+    "inScrollableWrapper": false
+   }
+  ],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 12
+   },
+   {
+    "v": "12px",
+    "n": 42
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 38
+   },
+   {
+    "v": "16px",
+    "n": 7
+   },
+   {
+    "v": "18px",
+    "n": 3
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 42
+   },
+   {
+    "v": "16.5px",
+    "n": 12
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 39
+   },
+   {
+    "v": "24px",
+    "n": 6
+   },
+   {
+    "v": "28px",
+    "n": 3
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ },
+ {
+  "name": "10-ready-goods",
+  "route": "/ready-goods",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 6,
+  "cardHeightsMin": 51,
+  "cardHeightsMax": 312,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 145.47,
+    "h": 51,
+    "tag": "button",
+    "text": "تصدير الأرصدة Excel"
+   },
+   {
+    "w": 1120,
+    "h": 312,
+    "tag": "div",
+    "text": "أمر التشغيلالعميلالصنفاللونالرصيدR"
+   },
+   {
+    "w": 1120,
+    "h": 312,
+    "tag": "div",
+    "text": "الرقمأمر التشغيلالعميلالكميةREA-20"
+   }
+  ],
+  "buttons": {
+   "n": 7,
+   "min": 16,
+   "max": 51,
+   "avg": 34.14
+  },
+  "inputs": null,
+  "buttonWidths": {
+   "n": 7,
+   "min": 22.14,
+   "max": 179.89,
+   "avg": 94.63
+  },
+  "tables": [
+   {
+    "w": 1118,
+    "h": 310,
+    "x": 33,
+    "right": 1151,
+    "cols": 5,
+    "rows": 6,
+    "fontSize": "14px",
+    "cellPad": "12px 16px 12px 16px",
+    "inScrollableWrapper": false
+   },
+   {
+    "w": 1118,
+    "h": 310,
+    "x": 33,
+    "right": 1151,
+    "cols": 4,
+    "rows": 6,
+    "fontSize": "14px",
+    "cellPad": "12px 16px 12px 16px",
+    "inScrollableWrapper": false
+   }
+  ],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 4
+   },
+   {
+    "v": "12px",
+    "n": 11
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 59
+   },
+   {
+    "v": "16px",
+    "n": 3
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 11
+   },
+   {
+    "v": "16.5px",
+    "n": 4
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 60
+   },
+   {
+    "v": "24px",
+    "n": 2
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ },
+ {
+  "name": "11-deliveries",
+  "route": "/deliveries",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 8,
+  "cardHeightsMin": 51.5,
+  "cardHeightsMax": 218,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 1120,
+    "h": 218,
+    "tag": "div",
+    "text": "DEL-2026-0001·CUS-001 - مصر للتجار"
+   },
+   {
+    "w": 1120,
+    "h": 218,
+    "tag": "div",
+    "text": "DEL-2026-0002·CUS-002 - الشرق للأق"
+   },
+   {
+    "w": 1120,
+    "h": 218,
+    "tag": "div",
+    "text": "DEL-2026-0003·CUS-003 - النيل للنس"
+   },
+   {
+    "w": 1120,
+    "h": 218,
+    "tag": "div",
+    "text": "DEL-2026-0004·CUS-004 - الأمل للمت"
+   },
+   {
+    "w": 1120,
+    "h": 218,
+    "tag": "div",
+    "text": "DEL-2026-0005·CUS-005 - الدلتا للص"
+   },
+   {
+    "w": 1120,
+    "h": 218,
+    "tag": "div",
+    "text": "DEL-2026-0006·CUS-006 - مصر للتجار"
+   }
+  ],
+  "buttons": {
+   "n": 24,
+   "min": 16,
+   "max": 51,
+   "avg": 35.46
+  },
+  "inputs": {
+   "n": 6,
+   "min": 38,
+   "max": 38,
+   "avg": 38
+  },
+  "buttonWidths": {
+   "n": 24,
+   "min": 22.14,
+   "max": 143.75,
+   "avg": 89.44
+  },
+  "tables": [
+   {
+    "w": 1086,
+    "h": 98,
+    "x": 49,
+    "right": 1135,
+    "cols": 0,
+    "rows": 3,
+    "fontSize": "14px",
+    "cellPad": "6px 1px 6px 1px",
+    "inScrollableWrapper": false
+   },
+   {
+    "w": 1086,
+    "h": 98,
+    "x": 49,
+    "right": 1135,
+    "cols": 0,
+    "rows": 3,
+    "fontSize": "14px",
+    "cellPad": "6px 1px 6px 1px",
+    "inScrollableWrapper": false
+   },
+   {
+    "w": 1086,
+    "h": 98,
+    "x": 49,
+    "right": 1135,
+    "cols": 0,
+    "rows": 3,
+    "fontSize": "14px",
+    "cellPad": "6px 1px 6px 1px",
+    "inScrollableWrapper": false
+   },
+   {
+    "w": 1086,
+    "h": 98,
+    "x": 49,
+    "right": 1135,
+    "cols": 0,
+    "rows": 3,
+    "fontSize": "14px",
+    "cellPad": "6px 1px 6px 1px",
+    "inScrollableWrapper": false
+   },
+   {
+    "w": 1086,
+    "h": 98,
+    "x": 49,
+    "right": 1135,
+    "cols": 0,
+    "rows": 3,
+    "fontSize": "14px",
+    "cellPad": "6px 1px 6px 1px",
+    "inScrollableWrapper": false
+   },
+   {
+    "w": 1086,
+    "h": 98,
+    "x": 49,
+    "right": 1135,
+    "cols": 0,
+    "rows": 3,
+    "fontSize": "14px",
+    "cellPad": "6px 1px 6px 1px",
+    "inScrollableWrapper": false
+   }
+  ],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 4
+   },
+   {
+    "v": "12px",
+    "n": 8
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 82
+   },
+   {
+    "v": "16px",
+    "n": 13
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 8
+   },
+   {
+    "v": "16.5px",
+    "n": 4
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 83
+   },
+   {
+    "v": "24px",
+    "n": 12
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ },
+ {
+  "name": "12-invoices",
+  "route": "/invoices",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 8,
+  "cardHeightsMin": 51.5,
+  "cardHeightsMax": 108,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 1120,
+    "h": 108,
+    "tag": "div",
+    "text": "INV-2026-0001·CUS-001 - مصر للتجار"
+   },
+   {
+    "w": 1120,
+    "h": 108,
+    "tag": "div",
+    "text": "INV-2026-0002·CUS-002 - الشرق للأق"
+   },
+   {
+    "w": 1120,
+    "h": 108,
+    "tag": "div",
+    "text": "INV-2026-0003·CUS-003 - النيل للنس"
+   },
+   {
+    "w": 1120,
+    "h": 108,
+    "tag": "div",
+    "text": "INV-2026-0004·CUS-004 - الأمل للمت"
+   },
+   {
+    "w": 1120,
+    "h": 108,
+    "tag": "div",
+    "text": "INV-2026-0005·CUS-005 - الدلتا للص"
+   },
+   {
+    "w": 1120,
+    "h": 108,
+    "tag": "div",
+    "text": "INV-2026-0006·CUS-006 - مصر للتجار"
+   }
+  ],
+  "buttons": {
+   "n": 26,
+   "min": 16,
+   "max": 51,
+   "avg": 36.23
+  },
+  "inputs": {
+   "n": 6,
+   "min": 38,
+   "max": 38,
+   "avg": 38
+  },
+  "buttonWidths": {
+   "n": 26,
+   "min": 22.14,
+   "max": 143.75,
+   "avg": 91.24
+  },
+  "tables": [],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 4
+   },
+   {
+    "v": "12px",
+    "n": 8
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 30
+   },
+   {
+    "v": "16px",
+    "n": 25
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 8
+   },
+   {
+    "v": "16.5px",
+    "n": 4
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 31
+   },
+   {
+    "v": "24px",
+    "n": 24
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ },
+ {
+  "name": "13-treasury",
+  "route": "/treasury",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 9,
+  "cardHeightsMin": 51.5,
+  "cardHeightsMax": 408,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 1120,
+    "h": 408,
+    "tag": "div",
+    "text": "الكودالاسمالنوعالرصيدكشف الحسابTRE"
+   },
+   {
+    "w": 1118,
+    "h": 61,
+    "tag": "tr",
+    "text": "TRE-2026-0001بند تفاصيليبنكي137.5ك"
+   },
+   {
+    "w": 1118,
+    "h": 61,
+    "tag": "tr",
+    "text": "TRE-2026-0002بند تفاصيليبنكي275كشف"
+   },
+   {
+    "w": 1118,
+    "h": 61,
+    "tag": "tr",
+    "text": "TRE-2026-0003بند تفاصيليبنكي412.5ك"
+   },
+   {
+    "w": 1118,
+    "h": 61,
+    "tag": "tr",
+    "text": "TRE-2026-0004بند تفاصيليبنكي550كشف"
+   },
+   {
+    "w": 1118,
+    "h": 61,
+    "tag": "tr",
+    "text": "TRE-2026-0005بند تفاصيليبنكي687.5ك"
+   }
+  ],
+  "buttons": {
+   "n": 20,
+   "min": 16,
+   "max": 38,
+   "avg": 32.75
+  },
+  "inputs": null,
+  "buttonWidths": {
+   "n": 20,
+   "min": 22.14,
+   "max": 108.81,
+   "avg": 74.5
+  },
+  "tables": [
+   {
+    "w": 1118,
+    "h": 406,
+    "x": 33,
+    "right": 1151,
+    "cols": 5,
+    "rows": 6,
+    "fontSize": "14px",
+    "cellPad": "12px 16px 12px 16px",
+    "inScrollableWrapper": false
+   }
+  ],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 4
+   },
+   {
+    "v": "12px",
+    "n": 13
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 30
+   },
+   {
+    "v": "16px",
+    "n": 1
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 13
+   },
+   {
+    "v": "16.5px",
+    "n": 4
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 31
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ },
+ {
+  "name": "14-checks",
+  "route": "/checks",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 16,
+  "cardHeightsMin": 51.5,
+  "cardHeightsMax": 81,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 149.7,
+    "h": 71.75,
+    "tag": "div",
+    "text": "شيكات بحوزتنا137.5"
+   },
+   {
+    "w": 149.72,
+    "h": 71.75,
+    "tag": "div",
+    "text": "شيكات مُودعة137.5"
+   },
+   {
+    "w": 149.72,
+    "h": 71.75,
+    "tag": "div",
+    "text": "شيكات مظهّرة137.5"
+   },
+   {
+    "w": 149.7,
+    "h": 71.75,
+    "tag": "div",
+    "text": "شيكات محصّلة137.5"
+   },
+   {
+    "w": 149.72,
+    "h": 71.75,
+    "tag": "div",
+    "text": "شيكات مرتجعة137.5"
+   },
+   {
+    "w": 149.72,
+    "h": 71.75,
+    "tag": "div",
+    "text": "تستحق خلال 7 أيام137.5"
+   }
+  ],
+  "buttons": {
+   "n": 25,
+   "min": 16,
+   "max": 36,
+   "avg": 19.88
+  },
+  "inputs": {
+   "n": 4,
+   "min": 13,
+   "max": 46,
+   "avg": 35.75
+  },
+  "buttonWidths": {
+   "n": 25,
+   "min": 21.17,
+   "max": 131.94,
+   "avg": 47.22
+  },
+  "tables": [],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 29
+   },
+   {
+    "v": "12px",
+    "n": 32
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 60
+   },
+   {
+    "v": "16px",
+    "n": 1
+   },
+   {
+    "v": "18px",
+    "n": 7
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "13.75px",
+    "n": 7
+   },
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 32
+   },
+   {
+    "v": "16.5px",
+    "n": 22
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 61
+   },
+   {
+    "v": "28px",
+    "n": 7
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ },
+ {
+  "name": "15-formation-requests",
+  "route": "/formation-requests",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 12,
+  "cardHeightsMin": 51.5,
+  "cardHeightsMax": 482,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 141.03,
+    "h": 110,
+    "tag": "button",
+    "text": "+ طلب تشكيل جديد"
+   },
+   {
+    "w": 1120,
+    "h": 80,
+    "tag": "div",
+    "text": "الكل - الحالةمسودةمُرسلمعتمدقيد ال"
+   },
+   {
+    "w": 1120,
+    "h": 482,
+    "tag": "div",
+    "text": "رقم الطلبالتاريخالعميلالصنفالمجموع"
+   },
+   {
+    "w": 1118,
+    "h": 56.5,
+    "tag": "tr",
+    "text": "رقم الطلبالتاريخالعميلالصنفالمجموع"
+   },
+   {
+    "w": 1118,
+    "h": 65,
+    "tag": "tr",
+    "text": "FOR-2026-0001PDF2026-09-01CUS-001 "
+   },
+   {
+    "w": 1118,
+    "h": 65,
+    "tag": "tr",
+    "text": "FOR-2026-0002PDF2026-09-02CUS-002 "
+   }
+  ],
+  "buttons": {
+   "n": 12,
+   "min": 16,
+   "max": 110,
+   "avg": 41.08
+  },
+  "inputs": {
+   "n": 2,
+   "min": 46,
+   "max": 46,
+   "avg": 46
+  },
+  "buttonWidths": {
+   "n": 12,
+   "min": 22.14,
+   "max": 141.03,
+   "avg": 63.72
+  },
+  "tables": [
+   {
+    "w": 1118,
+    "h": 480,
+    "x": 33,
+    "right": 1151,
+    "cols": 9,
+    "rows": 6,
+    "fontSize": "14px",
+    "cellPad": "12px 16px 12px 16px",
+    "inScrollableWrapper": false
+   }
+  ],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 4
+   },
+   {
+    "v": "12px",
+    "n": 17
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 58
+   },
+   {
+    "v": "16px",
+    "n": 1
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 17
+   },
+   {
+    "v": "16.5px",
+    "n": 4
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 59
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ },
+ {
+  "name": "16-external-processing",
+  "route": "/raw-external-releases",
+  "vw": 1440,
+  "vh": 900,
+  "docScrollW": 1440,
+  "docScrollH": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "overflowOffenders": [],
+  "sidebar": {
+   "w": 256,
+   "h": 900,
+   "x": 1184,
+   "y": 0
+  },
+  "nav": {
+   "w": 256,
+   "h": 718.5,
+   "x": 1184,
+   "y": 132.5
+  },
+  "header": null,
+  "main": {
+   "w": 1184,
+   "h": 900,
+   "x": 0,
+   "y": 0
+  },
+  "mainPad": {
+   "top": "0px",
+   "right": "0px",
+   "bottom": "0px",
+   "left": "0px",
+   "gap": "normal"
+  },
+  "bodyPad": "0px",
+  "cardCount": 10,
+  "cardHeightsMin": 51.5,
+  "cardHeightsMax": 839,
+  "mainCards": [
+   {
+    "w": 256,
+    "h": 81,
+    "tag": "div",
+    "text": "مصنع الغسيل والأصباغةنظام إدارة مص"
+   },
+   {
+    "w": 256,
+    "h": 51.5,
+    "tag": "div",
+    "text": "اللغةعEN"
+   },
+   {
+    "w": 1120,
+    "h": 839,
+    "tag": "div",
+    "text": "حالة التشغيل الخارجي:الكلبانتظار ا"
+   },
+   {
+    "w": 1118,
+    "h": 71,
+    "tag": "div",
+    "text": "حالة التشغيل الخارجي:الكلبانتظار ا"
+   },
+   {
+    "w": 1118,
+    "h": 121,
+    "tag": "tr",
+    "text": "RAW-2026-0001CUS-001 - مصر للتجارة"
+   },
+   {
+    "w": 1118,
+    "h": 121,
+    "tag": "tr",
+    "text": "RAW-2026-0002CUS-002 - الشرق للأقم"
+   },
+   {
+    "w": 1118,
+    "h": 121,
+    "tag": "tr",
+    "text": "RAW-2026-0003CUS-003 - النيل للنسج"
+   },
+   {
+    "w": 1118,
+    "h": 121,
+    "tag": "tr",
+    "text": "RAW-2026-0004CUS-004 - الأمل للمتل"
+   }
+  ],
+  "buttons": {
+   "n": 24,
+   "min": 16,
+   "max": 51,
+   "avg": 35.46
+  },
+  "inputs": {
+   "n": 1,
+   "min": 46,
+   "max": 46,
+   "avg": 46
+  },
+  "buttonWidths": {
+   "n": 24,
+   "min": 22.14,
+   "max": 115.77,
+   "avg": 89.37
+  },
+  "tables": [
+   {
+    "w": 1118,
+    "h": 766,
+    "x": 33,
+    "right": 1151,
+    "cols": 8,
+    "rows": 6,
+    "fontSize": "14px",
+    "cellPad": "12px 16px 12px 16px",
+    "inScrollableWrapper": false
+   }
+  ],
+  "fontSizes": [
+   {
+    "v": "10px",
+    "n": 11
+   },
+   {
+    "v": "11px",
+    "n": 4
+   },
+   {
+    "v": "12px",
+    "n": 29
+   },
+   {
+    "v": "13px",
+    "n": 31
+   },
+   {
+    "v": "14px",
+    "n": 52
+   },
+   {
+    "v": "16px",
+    "n": 1
+   },
+   {
+    "v": "24px",
+    "n": 1
+   }
+  ],
+  "lineHeights": [
+   {
+    "v": "15px",
+    "n": 11
+   },
+   {
+    "v": "16px",
+    "n": 29
+   },
+   {
+    "v": "16.5px",
+    "n": 4
+   },
+   {
+    "v": "19.5px",
+    "n": 31
+   },
+   {
+    "v": "20px",
+    "n": 53
+   },
+   {
+    "v": "32px",
+    "n": 1
+   }
+  ],
+  "worstText": [
+   {
+    "tag": "div",
+    "fontSize": "16px",
+    "weight": "700",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "مصنع الغسيل والأصباغة"
+   },
+   {
+    "tag": "div",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "نظام إدارة مصنع الصباغة وا"
+   },
+   {
+    "tag": "span",
+    "fontSize": "11px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.5)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "اللغة"
+   },
+   {
+    "tag": "span",
+    "fontSize": "12px",
+    "weight": "400",
+    "color": "rgba(255, 255, 255, 0.7)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "text",
+    "text": "المدير العام"
+   }
+  ],
+  "worstBtn": [
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgb(255, 255, 255)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "ع"
+   },
+   {
+    "tag": "button",
+    "fontSize": "11px",
+    "weight": "600",
+    "color": "rgba(255, 255, 255, 0.6)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "EN"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "لوحة التحكم"
+   },
+   {
+    "tag": "a",
+    "fontSize": "13px",
+    "weight": "500",
+    "color": "rgba(255, 255, 255, 0.75)",
+    "bg": "rgb(249,250,251)",
+    "ratio": 1.05,
+    "kind": "button",
+    "text": "مركز الموافقات"
+   }
+  ],
+  "fixed": [],
+  "widest": {
+   "tag": "div",
+   "cls": "max-w-7xl mx-auto p-8",
+   "w": 1184,
+   "right": 1184
+  },
+  "pageErrors": []
+ }
+]

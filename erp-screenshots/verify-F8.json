@@ -1,0 +1,527 @@
+[
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "360x800",
+  "theme": "light",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [
+   {
+    "tag": "button",
+    "w": 86.61,
+    "h": 20,
+    "txt": "إزالة الشعار"
+   }
+  ],
+  "smallCount": 1,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "360x800",
+  "theme": "dark",
+  "vw": 360,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [
+   {
+    "tag": "button",
+    "w": 86.61,
+    "h": 20,
+    "txt": "إزالة الشعار"
+   }
+  ],
+  "smallCount": 1,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "390x844",
+  "theme": "light",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [
+   {
+    "tag": "button",
+    "w": 86.61,
+    "h": 20,
+    "txt": "إزالة الشعار"
+   }
+  ],
+  "smallCount": 1,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "390x844",
+  "theme": "dark",
+  "vw": 390,
+  "vh": 844,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [
+   {
+    "tag": "button",
+    "w": 86.61,
+    "h": 20,
+    "txt": "إزالة الشعار"
+   }
+  ],
+  "smallCount": 1,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "412x915",
+  "theme": "light",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [
+   {
+    "tag": "button",
+    "w": 86.61,
+    "h": 20,
+    "txt": "إزالة الشعار"
+   }
+  ],
+  "smallCount": 1,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "412x915",
+  "theme": "dark",
+  "vw": 412,
+  "vh": 915,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [
+   {
+    "tag": "button",
+    "w": 86.61,
+    "h": 20,
+    "txt": "إزالة الشعار"
+   }
+  ],
+  "smallCount": 1,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "768x1024",
+  "theme": "light",
+  "error": "net::ERR_CERT_VERIFIER_CHANGED at https://5173-ia2m25359vrhd06qgmjes.e2b.app/settings"
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "768x1024",
+  "theme": "dark",
+  "vw": 768,
+  "vh": 1024,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [
+   {
+    "tag": "button",
+    "w": 86.61,
+    "h": 20,
+    "txt": "إزالة الشعار"
+   }
+  ],
+  "smallCount": 1,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 0,
+   "visible": false
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1024x768",
+  "theme": "light",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1024x768",
+  "theme": "dark",
+  "vw": 1024,
+  "vh": 768,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1280x800",
+  "theme": "light",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1280x800",
+  "theme": "dark",
+  "vw": 1280,
+  "vh": 800,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1440x900",
+  "theme": "light",
+  "vw": 1440,
+  "vh": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(247, 248, 250)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": false,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1440x900",
+  "theme": "dark",
+  "vw": 1440,
+  "vh": 900,
+  "hOverflow": 0,
+  "vOverflow": 0,
+  "outside": [],
+  "outsideCount": 0,
+  "smallTargets": [],
+  "smallCount": 0,
+  "whiteSurfaces": 0,
+  "dir": "rtl",
+  "font": "Cairo",
+  "bodyBg": "rgb(15, 23, 42)",
+  "sidebar": {
+   "w": 256,
+   "visible": true
+  },
+  "mainScrollX": 0,
+  "btnH": {
+   "min": 20,
+   "max": 38
+  },
+  "inputH": {
+   "min": 38,
+   "max": 38
+  },
+  "tables": 0,
+  "tableScrollable": 0,
+  "isDark": true,
+  "pageErrors": []
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1920x1080",
+  "theme": "light",
+  "error": "net::ERR_SOCKET_NOT_CONNECTED at https://5173-ia2m25359vrhd06qgmjes.e2b.app/settings"
+ },
+ {
+  "screen": "23-settings",
+  "route": "/settings",
+  "vp": "1920x1080",
+  "theme": "dark",
+  "error": "net::ERR_CERT_VERIFIER_CHANGED at https://5173-ia2m25359vrhd06qgmjes.e2b.app/settings"
+ }
+]

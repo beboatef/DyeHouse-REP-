@@ -32,6 +32,9 @@ public class TreasuryTransactionConfiguration : IEntityTypeConfiguration<Treasur
         builder.Property(t => t.Description).HasMaxLength(500);
         builder.Property(t => t.CreatedBy).HasMaxLength(100).IsRequired();
         builder.HasIndex(t => t.TreasuryAccountId);
+        // M1: cancellation/reversal finds the rows to reverse by SourceDocumentId;
+        // without the index those lookups scan the whole ledger as it grows.
+        builder.HasIndex(t => t.SourceDocumentId);
     }
 }
 

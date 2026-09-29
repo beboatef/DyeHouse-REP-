@@ -295,15 +295,46 @@ public class PaySupplierCommandHandler : IRequestHandler<PaySupplierCommand, Sup
         string? checkNumber = null;
         if (request.CheckId.HasValue)
         {
+            // B5: an endorsed check must be in a state that still represents
+            // spendable value for us - not cancelled, bounced, cleared, or
+            // already consumed by another posted payment.
             var check = await _db.Checks.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == request.CheckId.Value, cancellationToken)
                 ?? throw new NotFoundException("Check", request.CheckId.Value);
+
+            if (check.Status is CheckStatus.Cancelled or CheckStatus.Bounced or CheckStatus.Cleared)
+                throw new DomainException(
+                    $"Check {check.CheckNumber} is {check.Status} and cannot be used for a supplier payment.");
+
+            var alreadyUsed = await _db.SupplierPayments.AnyAsync(
+                p => p.CheckId == request.CheckId.Value && p.Status != TreasuryDocumentStatus.Cancelled, cancellationToken);
+            if (alreadyUsed)
+                throw new DomainException(
+                    $"Check {check.CheckNumber} is already used by another supplier payment.");
+
             checkNumber = check.CheckNumber;
         }
 
-        if (request.SupplierInvoiceId.HasValue &&
-            !await _db.SupplierInvoices.AnyAsync(i => i.Id == request.SupplierInvoiceId.Value, cancellationToken))
-            throw new NotFoundException("SupplierInvoice", request.SupplierInvoiceId.Value);
+        // B5: when the payment targets a supplier invoice, that invoice must
+        // be POSTED - a draft has no payable yet and a cancelled one must not
+        // be paid. Server-side only; the frontend value is never trusted.
+        // H3: it must also belong to the supplier being paid - otherwise a
+        // payment to supplier A would post the payable-reducing credit on
+        // supplier B's ledger, silently corrupting both balances.
+        if (request.SupplierInvoiceId.HasValue)
+        {
+            var invoice = await _db.SupplierInvoices.AsNoTracking()
+                .FirstOrDefaultAsync(i => i.Id == request.SupplierInvoiceId.Value, cancellationToken)
+                ?? throw new NotFoundException("SupplierInvoice", request.SupplierInvoiceId.Value);
+
+            if (invoice.SupplierId != request.SupplierId)
+                throw new DomainException(
+                    $"Supplier invoice {invoice.InvoiceNumber} belongs to a different supplier and cannot be paid on this payment.");
+
+            if (invoice.Status != SupplierInvoiceStatus.Posted)
+                throw new DomainException(
+                    $"Supplier invoice {invoice.InvoiceNumber} is {invoice.Status}; only a posted invoice can be paid.");
+        }
 
         var paymentNumber = await _numberGenerator.NextAsync(DocumentType.SupplierPayment, cancellationToken: cancellationToken);
 
@@ -408,5 +439,74 @@ public class GetSupplierPaymentsQueryHandler : IRequestHandler<GetSupplierPaymen
                 CreatedAtUtc = p.CreatedAtUtc
             };
         }).ToList();
+    }
+}
+
+/// <summary>
+/// Cancels a posted supplier payment (B4/B5): the payment row flips to
+/// Cancelled (never deleted), one opposite TreasuryTransaction is written
+/// per original row (linked by ReversesTransactionId), and the supplier
+/// ledger gets the balancing Debit so the payable is restored. Atomic - one
+/// SaveChanges; double reversal is blocked by the entity guard. The endorsed
+/// check, if any, is freed for reuse by the cancellation.
+/// </summary>
+public record CancelSupplierPaymentCommand(Guid PaymentId, string Reason) : IRequest<SupplierPaymentDto>;
+
+public class CancelSupplierPaymentCommandValidator : AbstractValidator<CancelSupplierPaymentCommand>
+{
+    public CancelSupplierPaymentCommandValidator() => RuleFor(x => x.Reason).NotEmpty();
+}
+
+public class CancelSupplierPaymentCommandHandler : IRequestHandler<CancelSupplierPaymentCommand, SupplierPaymentDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
+
+    public CancelSupplierPaymentCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
+        IDateTime clock, IPeriodCloseService periodClose)
+    {
+        _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose;
+    }
+
+    public async Task<SupplierPaymentDto> Handle(CancelSupplierPaymentCommand request, CancellationToken cancellationToken)
+    {
+        // Reversal rows are dated today - closed period blocks only if today is closed.
+        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+
+        var payment = await _db.SupplierPayments.FirstOrDefaultAsync(p => p.Id == request.PaymentId, cancellationToken)
+            ?? throw new NotFoundException("SupplierPayment", request.PaymentId);
+
+        payment.Cancel(request.Reason, _currentUser.UserName); // double-reversal guard
+
+        var originals = await _db.TreasuryTransactions
+            .Where(t => t.SourceDocumentId == payment.Id && t.SourceDocumentType == DocumentType.SupplierPayment)
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in originals)
+        {
+            _db.TreasuryTransactions.Add(new TreasuryTransaction(
+                row.TreasuryAccountId, _clock.UtcNow, DocumentType.SupplierPayment, payment.PaymentNumber, payment.Id,
+                row.Amount, row.Direction == TreasuryDirection.In ? TreasuryDirection.Out : TreasuryDirection.In,
+                $"Cancellation of supplier payment {payment.PaymentNumber}: {request.Reason}",
+                _currentUser.UserName, reversesTransactionId: row.Id));
+        }
+
+        // Restore the payable: the original payment posted a Credit; write the balancing Debit.
+        _db.SupplierLedgerEntries.Add(new SupplierLedgerEntry(
+            payment.SupplierId, _clock.UtcNow.Date, DocumentType.SupplierPayment,
+            $"{payment.PaymentNumber}-CANCEL", payment.Id,
+            debit: payment.Amount, credit: 0m,
+            description: $"Cancellation of supplier payment {payment.PaymentNumber}: {request.Reason}",
+            createdBy: _currentUser.UserName));
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // Reuse the existing projection for the updated row.
+        var query = new GetSupplierPaymentsQuery(payment.SupplierId);
+        var handler = new GetSupplierPaymentsQueryHandler(_db);
+        var list = await handler.Handle(query, cancellationToken);
+        return list.First(p => p.Id == payment.Id);
     }
 }

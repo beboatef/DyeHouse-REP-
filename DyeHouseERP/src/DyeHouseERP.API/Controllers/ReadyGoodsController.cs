@@ -80,22 +80,28 @@ public class ReadyGoodsController : ControllerBase
         Guid id,
         [FromBody] UpdateReadyGoodsTransferRequest request)
     {
+        // Quantities are deliberately absent: a posted transfer's stock effect
+        // is in the append-only ledger and can only be corrected by cancelling
+        // (which reverses) - see DeleteReadyGoodsTransferCommand.
         var command = new UpdateReadyGoodsTransferCommand(
             id,
             request.TransferDate,
-            request.QuantityKg,
-            request.QuantityMeter,
             request.PieceCount,
             request.Notes);
 
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>
+    /// Cancels a posted transfer and reverses its ledger rows. The endpoint
+    /// keeps the DELETE shape for compatibility, but nothing is physically
+    /// removed - the transfer stays listed with status Cancelled.
+    /// </summary>
     [HttpDelete("transfers/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryDelete)]
-    public async Task<IActionResult> DeleteTransfer(Guid id)
+    public async Task<IActionResult> DeleteTransfer(Guid id, [FromQuery] string reason)
     {
-        await _mediator.Send(new DeleteReadyGoodsTransferCommand(id));
+        await _mediator.Send(new DeleteReadyGoodsTransferCommand(id, reason));
         return NoContent();
     }
 
@@ -103,7 +109,5 @@ public class ReadyGoodsController : ControllerBase
 
 public sealed record UpdateReadyGoodsTransferRequest(
     DateTime TransferDate,
-    decimal? QuantityKg,
-    decimal? QuantityMeter,
     int? PieceCount,
     string? Notes);

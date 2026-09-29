@@ -10,12 +10,21 @@ namespace DyeHouseERP.Infrastructure.Services;
 public class JwtTokenService : ITokenService
 {
     private readonly IConfiguration _configuration;
+
     public JwtTokenService(IConfiguration configuration) => _configuration = configuration;
 
     public string GenerateToken(Guid userId, string username, IEnumerable<string> roles, out DateTime expiresAtUtc)
     {
+        // Mandatory, fail-fast: the signing key must come from configuration.
+        // There is deliberately no fallback - a missing/blank/placeholder
+        // 'Jwt:Key' is a configuration error and must stop the token flow
+        // (B1 + H2). Validation in Program.cs goes through the same validator,
+        // so issued tokens and accepted tokens always share one key.
+        var key = JwtKeyValidator.Validate(_configuration.GetSection("Jwt")["Key"], productionMinimums: false)
+            ?? throw new InvalidOperationException(
+                "JWT signing key is not configured. Set 'Jwt:Key' in appsettings, user secrets or an environment variable before issuing tokens.");
+
         var jwtSection = _configuration.GetSection("Jwt");
-        var key = jwtSection["Key"] ?? "dev-only-placeholder-key-change-me-0123456789";
         expiresAtUtc = DateTime.UtcNow.AddHours(8);
 
         var claims = new List<Claim>

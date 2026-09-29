@@ -24,6 +24,8 @@ public class ReceiptDto
     public decimal Amount { get; set; }
     public string? PaymentMethod { get; set; }
     public string? Description { get; set; }
+    /// <summary>Posted or Cancelled (B4 - cancelled receipts have linked reversal rows).</summary>
+    public string Status { get; set; } = "Posted";
 }
 
 public class PaymentDto
@@ -36,6 +38,8 @@ public class PaymentDto
     public decimal Amount { get; set; }
     public string PayeeDescription { get; set; } = string.Empty;
     public string? Description { get; set; }
+    /// <summary>Posted or Cancelled (B4 - cancelled payments have linked reversal rows).</summary>
+    public string Status { get; set; } = "Posted";
 }
 
 public class TreasuryTransferDto

@@ -81,7 +81,7 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
             if (!request.OverrideNegativeStock)
                 throw new NegativeStockException(available, requested);
 
-            if (!_currentUser.IsInRole(Permissions.InventoryAllowNegativeStock))
+            if (!_currentUser.HasPermission(Permissions.InventoryAllowNegativeStock))
                 throw new UnauthorizedAccessException(
                     $"Overriding negative stock requires the '{Permissions.InventoryAllowNegativeStock}' permission.");
 
