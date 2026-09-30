@@ -1,3 +1,4 @@
+using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ReadyGoods.DTOs;
@@ -19,6 +20,8 @@ namespace DyeHouseERP.Application.ReadyGoods.Commands;
 /// as CancelDeliveryCommand) keyed by ReversesTransactionId, so the balance
 /// stays correct and every correction stays traceable. The unique index on
 /// ProductionOrderId stays satisfied because the row is never removed.
+/// Ordering: lock first, re-read live status, THEN the permission/delivery-lock
+/// guard, so a delivery committing concurrently is still caught.
 /// </summary>
 public sealed record DeleteReadyGoodsTransferCommand(Guid Id, string Reason) : IRequest<ReadyGoodsTransferDto>;
 
@@ -62,24 +65,26 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
         // used by CancelDeliveryCommandHandler (spec section 43).
         await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
 
-        var transfer = await _db.ReadyGoodsTransfers
-            .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken)
-            ?? throw new KeyNotFoundException("Ready goods transfer not found.");
-
-        _permissionService.EnsureCanDelete(transfer.ProductionOrderId);
+        var transferExists = await _db.ReadyGoodsTransfers.AnyAsync(x => x.Id == request.Id, cancellationToken);
+        if (!transferExists)
+            throw new NotFoundException("ReadyGoodsTransfer", request.Id);
 
         // Exactly the rows this transfer created when it posted. Keyed on the
         // source-document identity rather than the warehouse dimension so the
         // reversal is complete and only covers this transfer's own rows.
         var originalRows = await _db.InventoryTransactions
-            .Where(t => t.SourceDocumentId == transfer.Id && t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)
+            .Where(t => t.SourceDocumentId == request.Id && t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)
             .ToListAsync(cancellationToken);
 
         // H6/R2: the reversal credits the same ready lot the transfer debited,
         // locked with the same key shape the delivery path uses, so a
         // cancellation cannot interleave with a delivery of the same order.
+        // The permission/delivery-lock guard runs INSIDE the lock: if it ran
+        // before, a delivery could commit between the check and the reversal
+        // and the transfer would be cancelled against stock that was already
+        // delivered.
         var lockKeys = originalRows
-            .Select(r => StockLockKey.ReadyLot(r.WarehouseId, r.ItemId, r.ProductionOrderId ?? transfer.ProductionOrderId))
+            .Select(r => StockLockKey.ReadyLot(r.ItemId, r.ProductionOrderId ?? Guid.Empty))
             .Distinct()
             .ToList();
 
@@ -90,14 +95,17 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
         // the lock; without this re-check both would post reversal rows and the
         // ready lot would be credited twice. The RowVersion token then makes a
         // genuine simultaneous update fail at the database too.
-        var liveTransfer = await _db.ReadyGoodsTransfers
-            .AsNoTracking()
+        var transfer = await _db.ReadyGoodsTransfers
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken)
-            ?? throw new KeyNotFoundException("Ready goods transfer not found.");
+            ?? throw new NotFoundException("ReadyGoodsTransfer", request.Id);
 
-        if (liveTransfer.Status == ReadyGoodsTransferStatus.Cancelled)
+        if (transfer.Status == ReadyGoodsTransferStatus.Cancelled)
             throw new DomainException(
-                $"Ready goods transfer '{liveTransfer.TransferNumber}' is already cancelled and cannot be cancelled again.");
+                $"Ready goods transfer '{transfer.TransferNumber}' is already cancelled and cannot be cancelled again.");
+
+        // Permission + delivery/invoice lock guard - re-evaluated under the
+        // stock lock so a Delivered delivery that commits concurrently is seen.
+        _permissionService.EnsureCanDelete(transfer.ProductionOrderId);
 
         foreach (var row in originalRows)
         {
@@ -114,7 +122,7 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
         await _db.SaveChangesAsync(cancellationToken);
         }
 
-        return await LoadDtoAsync(_db, transfer.Id, cancellationToken);
+        return await LoadDtoAsync(_db, request.Id, cancellationToken);
     }
 
     internal static async Task<ReadyGoodsTransferDto> LoadDtoAsync(
@@ -122,7 +130,7 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
     {
         var transfer = await db.ReadyGoodsTransfers.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
-            ?? throw new KeyNotFoundException("Ready goods transfer not found.");
+            ?? throw new NotFoundException("ReadyGoodsTransfer", id);
 
         var order = await db.ProductionOrders.AsNoTracking()
             .FirstAsync(o => o.Id == transfer.ProductionOrderId, cancellationToken);

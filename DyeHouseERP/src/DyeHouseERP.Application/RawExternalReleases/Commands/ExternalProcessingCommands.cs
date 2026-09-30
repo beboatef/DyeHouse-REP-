@@ -109,7 +109,19 @@ public class SetExternalProcessingDetailsCommandHandler
     }
 }
 
-/// <summary>Cancels an outstanding external-processing release (spec section 10 - history is never deleted).</summary>
+/// <summary>
+/// Cancels an outstanding external-processing release (spec section 10 - history
+/// is never deleted).
+///
+/// BUSINESS RULE: external processing is a PRODUCTION STAGE, not a separate
+/// raw-material release workflow. The quantity left the raw lot when the
+/// movement was created (its OUT row belongs to the Production Order / WIP
+/// flow), so cancelling is a WORKFLOW-STATE cancellation only: it posts NO
+/// ledger rows, never returns stock to the customer's raw-material warehouse,
+/// and never restores the customer's raw-material balance. (A genuine return
+/// from the processor is posted by RecordExternalProcessingReturnCommand,
+/// which is the only path that credits the raw lot back.)
+/// </summary>
 public record CancelExternalProcessingCommand(Guid ReleaseId, string Reason) : IRequest<RawExternalReleaseDto>;
 
 public class CancelExternalProcessingCommandValidator : AbstractValidator<CancelExternalProcessingCommand>
@@ -134,15 +146,18 @@ public class CancelExternalProcessingCommandHandler
             .FirstOrDefaultAsync(r => r.Id == request.ReleaseId, cancellationToken)
             ?? throw new NotFoundException("RawExternalRelease", request.ReleaseId);
 
+        // The lock key names the raw lot this movement was issued from, so a
+        // cancel serializes against a concurrent return on the same lot.
         var message = await _db.RawMessages.AsNoTracking()
-            .FirstOrDefaultAsync(m => m.Id == release.RawMessageId, cancellationToken);
+            .FirstOrDefaultAsync(m => m.Id == release.RawMessageId, cancellationToken)
+            ?? throw new NotFoundException("RawMessage", release.RawMessageId);
 
-        // R3: the reversal (an IN back to the same raw lot) runs under that lot's
-        // lock, and the status is re-read INSIDE the lock so a second cancel
-        // that was queueing behind it cannot post a duplicate reversal.
+        // R3: the status is re-read INSIDE the lock so a second cancel that was
+        // queueing behind the first cannot run twice. NO reversal rows are
+        // posted here - see the business rule on the command record above.
         var lockKeys = new[]
         {
-            StockLockKey.RawLot(message?.WarehouseId ?? Guid.Empty, release.ItemId, release.CustomerId, release.RawMessageId)
+            StockLockKey.RawLot(message.WarehouseId, release.ItemId, release.CustomerId, release.RawMessageId)
         };
 
         await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
@@ -156,6 +171,10 @@ public class CancelExternalProcessingCommandHandler
                 throw new DomainException(
                     $"External processing release '{release.ReleaseNumber}' is already cancelled.");
 
+            // Status change only. Deliberately NO InventoryTransaction rows:
+            // the OUT row posted at creation stays in the ledger as the
+            // production/WIP consumption, and the customer's raw-material
+            // balance must NOT be restored by a cancellation.
             release.CancelExternalProcessing(request.Reason, _currentUser.UserName);
             await _db.SaveChangesAsync(cancellationToken);
         }

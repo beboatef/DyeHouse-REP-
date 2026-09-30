@@ -76,18 +76,22 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             ?? throw new NotFoundException("Delivery", request.DeliveryId);
         var lines = await _db.DeliveryLines.Where(l => l.DeliveryId == delivery.Id).ToListAsync(cancellationToken);
 
-        // Validate ready balance per line before posting anything.
+        // Validate ready balance per line before posting anything. The lookup is
+        // deterministic (OrderBy Id) so two requests resolving "the" ready
+        // warehouse always pick the same row and post against the same dimension.
         var readyWarehouse = await _db.Warehouses.AsNoTracking()
-            .FirstOrDefaultAsync(w => w.Kind == Domain.Entities.WarehouseKind.ReadyGoods, cancellationToken)
+            .Where(w => w.Kind == Domain.Entities.WarehouseKind.ReadyGoods)
+            .OrderBy(w => w.Id)
+            .FirstOrDefaultAsync(cancellationToken)
             ?? throw new DomainException("No Ready Goods warehouse is configured.");
 
-        // R2: the key mirrors the balance query's own filter - (warehouse, item,
-        // production order), with NO customer term, because the query below does
-        // not filter on customer either. Locking on a customer the request
-        // supplied would let two deliveries reading the same order's ready
-        // balance take different locks and jointly over-deliver.
+        // R2: the key mirrors the balance query's own filter - (item, production
+        // order), with NO warehouse and NO customer term, because the query below
+        // does not filter on either. Locking on a warehouse would let a delivery
+        // and a ready-goods transfer that resolved different warehouses read the
+        // same balance concurrently and jointly overdraw it.
         var lockKeys = lines
-            .Select(l => StockLockKey.ReadyLot(readyWarehouse.Id, l.ItemId, l.ProductionOrderId))
+            .Select(l => StockLockKey.ReadyLot(l.ItemId, l.ProductionOrderId))
             .Distinct()
             .ToList();
 
@@ -190,7 +194,7 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
             // same key shape the delivery itself locks (R2) so a cancel and a
             // delivery of the same order are mutually exclusive.
             var lockKeys = originalRows
-                .Select(r => StockLockKey.ReadyLot(r.WarehouseId, r.ItemId, r.ProductionOrderId ?? Guid.Empty))
+                .Select(r => StockLockKey.ReadyLot(r.ItemId, r.ProductionOrderId ?? Guid.Empty))
                 .Distinct()
                 .ToList();
 

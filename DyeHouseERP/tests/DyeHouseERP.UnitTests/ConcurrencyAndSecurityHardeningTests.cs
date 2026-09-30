@@ -103,11 +103,32 @@ public class StockLockKeyTests
             StockLockKey.RawLot(warehouse, Guid.NewGuid(), customer, message).Resource,
             StockLockKey.RawLot(Guid.NewGuid(), item, customer, message).Resource,
             StockLockKey.RawLot(warehouse, item, customer, Guid.NewGuid()).Resource,
-            StockLockKey.ReadyLot(warehouse, item, customer, Guid.NewGuid()).Resource,
+            StockLockKey.ReadyLot(item, Guid.NewGuid()).Resource,
+            StockLockKey.ReadyLot(Guid.NewGuid(), Guid.NewGuid()).Resource,
             StockLockKey.MaterialLot(warehouse, item).Resource
         };
 
         resources.Distinct().Should().HaveCount(resources.Length);
+    }
+
+    [Fact]
+    public void ReadyLot_Same_Item_And_Order_Is_The_Same_Key_Regardless_Of_Warehouse()
+    {
+        var item = Guid.NewGuid();
+        var order = Guid.NewGuid();
+
+        // Two paths resolving DIFFERENT ready warehouses (or one passing the
+        // request's warehouse and one the lookup's) must still serialize.
+        var viaWarehouseA = StockLockKey.ReadyLot(item, order);
+        var viaWarehouseB = StockLockKey.ReadyLot(item, order);
+
+        viaWarehouseA.Resource.Should().Be(viaWarehouseB.Resource);
+        viaWarehouseA.WarehouseId.Should().BeNull();
+        viaWarehouseA.CustomerId.Should().BeNull();
+
+        // A different order (or item) is a different dimension.
+        StockLockKey.ReadyLot(item, Guid.NewGuid()).Resource.Should().NotBe(viaWarehouseA.Resource);
+        StockLockKey.ReadyLot(Guid.NewGuid(), order).Resource.Should().NotBe(viaWarehouseA.Resource);
     }
 
     [Fact]

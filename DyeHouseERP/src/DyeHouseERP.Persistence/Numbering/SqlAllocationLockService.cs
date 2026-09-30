@@ -1,4 +1,5 @@
 using System.Data;
+using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -132,9 +133,10 @@ public class SqlAllocationLockService : IAllocationLockService
         return result < 0 ? null : new SessionAppLockGuard(connection, resource);
     }
 
-    private static TimeoutException Timeout(string resource)
-        => new($"Could not acquire the stock lock '{resource}' within {LockTimeoutSeconds}s " +
-               $"(sp_getapplock returned a negative result). Another operation on the same stock is in progress - retry.");
+    private static StockLockTimeoutException Timeout(string resource)
+        => new(resource,
+            $"Could not acquire the stock lock '{resource}' within {LockTimeoutSeconds}s " +
+            $"(sp_getapplock returned a negative result). Another operation on the same stock is in progress - retry.");
 
     private sealed class CompositeAppLockGuard : IAsyncDisposable
     {
