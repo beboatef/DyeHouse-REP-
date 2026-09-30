@@ -204,7 +204,7 @@ export default function RawExternalReleasesPage() {
   return (
     <>
       <PageHeader
-        title="إفراج الخام الخارجي"
+        title="تشغيل خارجي"
         subtitle="إرجاع للعميل، تشغيل خارجي، أو بيع خام - كل حركة تُسحب من رسالة محددة يختارها المستخدم"
         action={
           <div className="flex items-center gap-2">

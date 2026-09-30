@@ -57,7 +57,7 @@ export const Permissions: PermissionOption[] = [
   { value: "raw.inspect", group: "استلام الخام", label: "فحص الخام" },
   { value: "raw.consume", group: "استلام الخام", label: "استهلاك الخام" },
   { value: "raw.return", group: "استلام الخام", label: "إرجاع الخام" },
-  { value: "raw.external_release", group: "استلام الخام", label: "إفراج خام خارجي" },
+  { value: "raw.external_release", group: "استلام الخام", label: "تشغيل خارجي" },
   { value: "raw.transfer", group: "استلام الخام", label: "تحويل خام بين العملاء" },
 
   { value: "production.view", group: "الإنتاج", label: "عرض الإنتاج" },

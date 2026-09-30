@@ -29,9 +29,10 @@ public class RawExternalReleasesController : ControllerBase
         => Ok(await _mediator.Send(new GetRawExternalReleasesQuery(customerId, reason, status)));
 
     /// <summary>
-    /// External releases (returns to customer, external processing, raw sales) as
-    /// Excel or PDF - the warehouse issues / returns register, including the
-    /// external-processing status, cost and returned quantities per release.
+    /// External processing movements (returns to customer, external
+    /// processing, raw sales) as Excel or PDF - the warehouse issues / returns
+    /// register, including the external-processing status, cost and returned
+    /// quantities per movement.
     /// </summary>
     [HttpGet("export")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]

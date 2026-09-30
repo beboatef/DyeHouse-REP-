@@ -64,9 +64,9 @@ public class RawExternalRelease : AuditableEntity
         decimal? externalProcessingCost = null, DateTime? expectedReturnDate = null)
     {
         if (quantityKg is null && quantityMeter is null)
-            throw new ArgumentException("A raw external release must specify a KG and/or Meter quantity.");
+            throw new ArgumentException("An external processing movement must specify a KG and/or Meter quantity.");
         if (approvalRequired && string.IsNullOrWhiteSpace(approvedBy))
-            throw new ArgumentException("This release requires approval - provide an approver.", nameof(approvedBy));
+            throw new ArgumentException("This movement requires approval - provide an approver.", nameof(approvedBy));
         if (externalProcessingCost is < 0)
             throw new ArgumentException("External processing cost cannot be negative.", nameof(externalProcessingCost));
 
@@ -99,7 +99,7 @@ public class RawExternalRelease : AuditableEntity
         DateTime? expectedReturnDate, string modifiedBy)
     {
         if (Reason != RawReleaseReason.ExternalProcessing)
-            throw new DomainException("Only an external processing release carries processing details.");
+            throw new DomainException("Only an external processing movement carries processing details.");
         if (Status == ExternalProcessingStatus.Returned || Status == ExternalProcessingStatus.Cancelled)
             throw new DocumentLockedException("External Processing release", ReleaseNumber);
         if (cost is < 0) throw new ArgumentException("External processing cost cannot be negative.", nameof(cost));
@@ -120,9 +120,9 @@ public class RawExternalRelease : AuditableEntity
     public void RecordReturn(decimal? returnedKg, decimal? returnedMeter, DateTime actualReturnDate, string modifiedBy)
     {
         if (Reason != RawReleaseReason.ExternalProcessing)
-            throw new DomainException("Only an external processing release can be returned.");
+            throw new DomainException("Only an external processing movement can be returned.");
         if (Status == ExternalProcessingStatus.Cancelled)
-            throw new DomainException("A cancelled external processing release cannot receive a return.");
+            throw new DomainException("A cancelled external processing movement cannot receive a return.");
         if (returnedKg is null && returnedMeter is null)
             throw new ArgumentException("Specify the returned quantity in KG and/or Meter.");
 
@@ -150,9 +150,9 @@ public class RawExternalRelease : AuditableEntity
     public void CancelExternalProcessing(string reason, string modifiedBy)
     {
         if (Reason != RawReleaseReason.ExternalProcessing)
-            throw new DomainException("Only an external processing release can be cancelled this way.");
+            throw new DomainException("Only an external processing movement can be cancelled this way.");
         if (Status == ExternalProcessingStatus.Cancelled)
-            throw new DomainException("This external processing release is already cancelled.");
+            throw new DomainException("This external processing movement is already cancelled.");
         if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A cancellation reason is required.", nameof(reason));
 
         Status = ExternalProcessingStatus.Cancelled;
