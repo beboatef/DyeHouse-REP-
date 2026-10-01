@@ -16,6 +16,7 @@ namespace DyeHouseERP.IntegrationTests;
 /// (negative stock is blocked by default, and only proceeds with an
 /// explicit override + permission).
 /// </summary>
+[Collection("IntegrationDatabase")]
 public class RawAllocationAndNegativeStockTests : IntegrationTestBase
 {
     private async Task<(Guid CustomerId, Guid ItemId, Guid WarehouseId)> SeedMasterDataAsync()

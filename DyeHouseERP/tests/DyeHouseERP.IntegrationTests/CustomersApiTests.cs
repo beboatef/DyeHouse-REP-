@@ -6,6 +6,7 @@ using Xunit;
 
 namespace DyeHouseERP.IntegrationTests;
 
+[Collection("IntegrationDatabase")]
 public class CustomersApiTests : IntegrationTestBase
 {
     [Fact]

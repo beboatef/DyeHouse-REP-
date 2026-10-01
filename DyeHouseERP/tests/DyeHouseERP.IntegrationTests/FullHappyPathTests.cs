@@ -22,6 +22,7 @@ namespace DyeHouseERP.IntegrationTests;
 /// pass - if any module posts to the wrong dimension (wrong warehouse,
 /// wrong customer, wrong direction), the final balance assertion catches it.
 /// </summary>
+[Collection("IntegrationDatabase")]
 public class FullHappyPathTests : IntegrationTestBase
 {
     [Fact]

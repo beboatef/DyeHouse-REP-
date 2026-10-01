@@ -139,6 +139,7 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
 
 /// <summary>T1: allocation vs external-processing release race on the same raw lot, stock covers only one.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class AllocateVersusExternalReleaseRaceTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -188,6 +189,7 @@ public class AllocateVersusExternalReleaseRaceTests : SqlServerConcurrencyTestBa
 
 /// <summary>T2: ten parallel allocations over stock covering only three.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class TenParallelAllocationTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -222,6 +224,7 @@ public class TenParallelAllocationTests : SqlServerConcurrencyTestBase
 
 /// <summary>T3: two deliveries race for the same order's ready stock.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class TwoDeliveriesRaceTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -254,6 +257,7 @@ public class TwoDeliveriesRaceTests : SqlServerConcurrencyTestBase
 
 /// <summary>T4: one delivery whose duplicate lines jointly overdraw the lot.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class DuplicateLineDeliveryTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -286,6 +290,7 @@ public class DuplicateLineDeliveryTests : SqlServerConcurrencyTestBase
 
 /// <summary>T5: two concurrent cancellations of the same transfer create exactly one reversal set.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class DoubleCancellationTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -317,6 +322,7 @@ public class DoubleCancellationTests : SqlServerConcurrencyTestBase
 
 /// <summary>T6: delivery races transfer cancellation; ready balance must never go negative.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class DeliveryVersusCancellationTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -357,6 +363,7 @@ public class DeliveryVersusCancellationTests : SqlServerConcurrencyTestBase
 
 /// <summary>T7: two receipts race one invoice; combined amount exceeds the total.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class ReceiptOverpaymentRaceTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -401,6 +408,7 @@ public class ReceiptOverpaymentRaceTests : SqlServerConcurrencyTestBase
 
 /// <summary>T8: MarkDelivered twice must deduct exactly once.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class DoubleDeliveryTests : SqlServerConcurrencyTestBase
 {
     [Fact]
@@ -425,6 +433,7 @@ public class DoubleDeliveryTests : SqlServerConcurrencyTestBase
 
 /// <summary>T9/T10: issued JWTs die with the account's active flag / permission set.</summary>
 [Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
 public class JwtSessionInvalidationTests : SqlServerConcurrencyTestBase
 {
     private async Task<(Guid UserId, string Token)> CreateAndLoginAsync(List<string> roles)
