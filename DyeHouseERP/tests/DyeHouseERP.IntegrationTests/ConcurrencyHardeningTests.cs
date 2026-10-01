@@ -411,7 +411,7 @@ public class ReceiptOverpaymentRaceTests : SqlServerConcurrencyTestBase
         start.SetResult();
         var statuses = await Task.WhenAll(tasks);
 
-        statuses.Count(s => s == HttpStatusCode.OK).Should().Be(1, "only 1000 of the 1600 requested fits");
+        statuses.Count(s => s == HttpStatusCode.Created).Should().Be(1, "only 1000 of the 1600 requested fits - POST /api/receipts returns 201 Created");
         statuses.Count(s => s == HttpStatusCode.UnprocessableEntity).Should().Be(1, "the overpayment guard throws DomainException (422)");
 
         var receipts = (await Client.GetFromJsonAsync<List<ReceiptDto>>($"/api/receipts?customerId={customerId}", Json))!

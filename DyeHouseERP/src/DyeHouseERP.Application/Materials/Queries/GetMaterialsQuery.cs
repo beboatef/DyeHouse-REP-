@@ -32,7 +32,7 @@ public class GetMaterialsQueryHandler : IRequestHandler<GetMaterialsQuery, List<
         // so the list can show what is actually on hand (spec section 10).
         var balances = await _db.MaterialTransactions.AsNoTracking()
             .GroupBy(t => t.MaterialId)
-            .Select(g => new { MaterialId = g.Key, Balance = g.Sum(t => t.Quantity * (int)t.Direction) })
+            .Select(g => new { MaterialId = g.Key, Balance = g.Sum(t => t.Direction == MaterialTransactionDirection.In ? t.Quantity : -t.Quantity) })
             .ToDictionaryAsync(x => x.MaterialId, x => x.Balance, cancellationToken);
 
         foreach (var material in materials)

@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.ReadyGoods.DTOs;
+using DyeHouseERP.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -58,8 +59,8 @@ public class GetReadyGoodsBalanceQueryHandler : IRequestHandler<GetReadyGoodsBal
             .Select(g => new
             {
                 g.Key.ProductionOrderId, g.Key.ItemId, g.Key.CustomerId,
-                Kg = g.Sum(t => (t.QuantityKg ?? 0) * (int)t.Direction),
-                Meter = g.Sum(t => (t.QuantityMeter ?? 0) * (int)t.Direction)
+                Kg = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityKg ?? 0) : -(t.QuantityKg ?? 0)),
+                Meter = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityMeter ?? 0) : -(t.QuantityMeter ?? 0))
             })
             .Where(g => g.Kg > 0 || g.Meter > 0)
             .ToListAsync(cancellationToken);

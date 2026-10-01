@@ -1,6 +1,7 @@
 using DyeHouseERP.Application.Approvals.Queries;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Dashboard.DTOs;
+using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +34,7 @@ public class GetDashboardSummaryQueryHandler : IRequestHandler<GetDashboardSumma
 
         var readyGoodsKg = await _db.InventoryTransactions.AsNoTracking()
             .Where(t => t.RawMessageId == null && t.ProductionOrderId != null)
-            .SumAsync(t => (decimal?)((t.QuantityKg ?? 0) * (int)t.Direction), cancellationToken) ?? 0;
+            .SumAsync(t => (decimal?)(t.Direction == TransactionDirection.In ? (t.QuantityKg ?? 0) : -(t.QuantityKg ?? 0)), cancellationToken) ?? 0;
 
         var openInvoices = await _db.Invoices.AsNoTracking()
             .Where(i => i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.PartiallyPaid)
@@ -74,11 +75,11 @@ public class GetDashboardSummaryQueryHandler : IRequestHandler<GetDashboardSumma
         // (RawMessageId set), never mixed with factory material or ready goods.
         var customerRawMaterialKg = await _db.InventoryTransactions.AsNoTracking()
             .Where(t => t.RawMessageId != null)
-            .SumAsync(t => (decimal?)((t.QuantityKg ?? 0) * (int)t.Direction), cancellationToken) ?? 0;
+            .SumAsync(t => (decimal?)(t.Direction == TransactionDirection.In ? (t.QuantityKg ?? 0) : -(t.QuantityKg ?? 0)), cancellationToken) ?? 0;
 
         var materialBalances = await _db.MaterialTransactions.AsNoTracking()
             .GroupBy(t => t.MaterialId)
-            .Select(g => new { MaterialId = g.Key, Balance = g.Sum(t => t.Quantity * (int)t.Direction) })
+            .Select(g => new { MaterialId = g.Key, Balance = g.Sum(t => t.Direction == MaterialTransactionDirection.In ? t.Quantity : -t.Quantity) })
             .ToListAsync(cancellationToken);
 
         var materialMasters = await _db.Materials.AsNoTracking()

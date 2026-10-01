@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Treasury.DTOs;
+using DyeHouseERP.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +21,7 @@ public class GetTreasuryAccountsQueryHandler : IRequestHandler<GetTreasuryAccoun
 
         var balances = await _db.TreasuryTransactions.AsNoTracking()
             .GroupBy(t => t.TreasuryAccountId)
-            .Select(g => new { AccountId = g.Key, Balance = g.Sum(t => t.Amount * (int)t.Direction) })
+            .Select(g => new { AccountId = g.Key, Balance = g.Sum(t => t.Direction == TreasuryDirection.In ? t.Amount : -t.Amount) })
             .ToDictionaryAsync(x => x.AccountId, x => x.Balance, cancellationToken);
 
         return accounts.Select(a => new TreasuryAccountDto

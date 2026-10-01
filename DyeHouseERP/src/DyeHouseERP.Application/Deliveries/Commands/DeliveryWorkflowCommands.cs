@@ -74,6 +74,16 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
 
         var delivery = await _db.Deliveries.FirstOrDefaultAsync(d => d.Id == request.DeliveryId, cancellationToken)
             ?? throw new NotFoundException("Delivery", request.DeliveryId);
+
+        // RC#3: reject on document state BEFORE the ready-balance check. After
+        // the first successful delivery the lot balance is zero, so a duplicate
+        // request used to surface as NegativeStockException (409) instead of the
+        // state machine's DomainException (422). This is only a check reordering:
+        // locking, balance validation and the stock deduction below are all
+        // unchanged, and MarkDelivered's own state guard remains as a backstop.
+        if (delivery.Status != DeliveryStatus.Prepared)
+            throw new DomainException($"Delivery is {delivery.Status}, expected Prepared.");
+
         var lines = await _db.DeliveryLines.Where(l => l.DeliveryId == delivery.Id).ToListAsync(cancellationToken);
 
         // Validate ready balance per line before posting anything. The lookup is

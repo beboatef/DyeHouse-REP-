@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.RawReceipts.DTOs;
+using DyeHouseERP.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -76,8 +77,8 @@ public class GetRawMessagesQueryHandler : IRequestHandler<GetRawMessagesQuery, L
             {
                 g.Key.RawMessageId,
                 g.Key.ItemId,
-                Kg = g.Sum(t => (t.QuantityKg ?? 0) * (int)t.Direction),
-                Meter = g.Sum(t => (t.QuantityMeter ?? 0) * (int)t.Direction)
+                Kg = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityKg ?? 0) : -(t.QuantityKg ?? 0)),
+                Meter = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityMeter ?? 0) : -(t.QuantityMeter ?? 0))
             })
             .ToListAsync(cancellationToken);
 
