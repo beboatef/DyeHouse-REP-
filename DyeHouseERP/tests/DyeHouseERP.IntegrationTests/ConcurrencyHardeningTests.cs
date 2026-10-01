@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using DyeHouseERP.API.Controllers;
 using DyeHouseERP.Application.Customers.DTOs;
 using DyeHouseERP.Application.Deliveries.DTOs;
@@ -34,6 +35,20 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
     private static int _stageSequence = 1;
 
     /// <summary>
+    /// JSON options matching the API's serializer contract. The API registers
+    /// JsonStringEnumConverter in Program.cs, so every enum in a response body
+    /// (e.g. ItemDto.BaseUnit = "KG") is a STRING; System.Net.Http.Json's
+    /// default options only accept enum NUMBERS, which is why deserializing
+    /// ItemDto threw "The JSON value could not be converted to UnitOfMeasure"
+    /// on $.baseUnit. Posting still works without these options (the server's
+    /// converter accepts numbers too), but every response read must use them.
+    /// </summary>
+    protected static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    /// <summary>
     /// Barrier point for concurrent workers: seeding is already complete when
     /// InitializeAsync returns (tests run sequentially inside a class), so
     /// this is intentionally trivial - the race comes from the workers firing
@@ -58,13 +73,13 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
         });
 
         var customer = (await (await Client.PostAsJsonAsync("/api/customers", new { code = $"{prefix}C{suffix}", name = "Conc Customer" }))
-            .Content.ReadFromJsonAsync<CustomerDto>())!;
+            .Content.ReadFromJsonAsync<CustomerDto>(Json))!;
         var item = (await (await Client.PostAsJsonAsync("/api/items", new { code = $"{prefix}I{suffix}", name = "Conc Fabric", baseUnit = UnitOfMeasure.KG }))
-            .Content.ReadFromJsonAsync<ItemDto>())!;
+            .Content.ReadFromJsonAsync<ItemDto>(Json))!;
         var rawWarehouse = (await (await Client.PostAsJsonAsync("/api/warehouses", new { code = $"{prefix}W{suffix}", name = "Raw WH", kind = WarehouseKind.RawMaterial }))
-            .Content.ReadFromJsonAsync<WarehouseDto>())!;
+            .Content.ReadFromJsonAsync<WarehouseDto>(Json))!;
         var readyWarehouse = (await (await Client.PostAsJsonAsync("/api/warehouses", new { code = $"{prefix}R{suffix}", name = "Ready WH", kind = WarehouseKind.ReadyGoods }))
-            .Content.ReadFromJsonAsync<WarehouseDto>())!;
+            .Content.ReadFromJsonAsync<WarehouseDto>(Json))!;
         return (customer.Id, item.Id, rawWarehouse.Id, readyWarehouse.Id);
     }
 
@@ -74,7 +89,7 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
         {
             receiptDate = DateTime.UtcNow, customerId, warehouseId,
             lines = new[] { new { itemId, quantityKg = kg } }
-        })).Content.ReadFromJsonAsync<RawMessageDto>())!;
+        })).Content.ReadFromJsonAsync<RawMessageDto>(Json))!;
         (await Client.PostAsJsonAsync($"/api/raw-messages/{message.Id}/inspection", new { result = InspectionStatus.Accepted, notes = (string?)null }))
             .EnsureSuccessStatusCode();
         return message.Id;
@@ -86,7 +101,7 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
         {
             customerId, itemId, orderDate = DateTime.UtcNow,
             requestedQuantityKg = requestedKg, priority = ProductionPriority.Normal
-        })).Content.ReadFromJsonAsync<ProductionOrderDto>())!;
+        })).Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
         return order.Id;
     }
 
@@ -100,7 +115,7 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
     /// <summary>Completes all stages and posts the ready-goods transfer; returns (orderId, transferId).</summary>
     protected async Task<(Guid OrderId, Guid TransferId)> ProduceAndTransferAsync(Guid orderId, Guid readyWarehouseId, decimal inputKg, decimal outputKg)
     {
-        var order = await Client.GetFromJsonAsync<ProductionOrderDto>($"/api/production-orders/{orderId}");
+        var order = await Client.GetFromJsonAsync<ProductionOrderDto>($"/api/production-orders/{orderId}", Json);
         foreach (var stage in order!.StageExecutions)
         {
             await Client.PostAsync($"/api/production-orders/stage-executions/{stage.Id}/start", null);
@@ -112,7 +127,7 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
         var transferResponse = await Client.PostAsJsonAsync("/api/ready-goods/transfers", new
         { productionOrderId = orderId, warehouseId = readyWarehouseId, quantityKg = outputKg });
         transferResponse.EnsureSuccessStatusCode();
-        var transfer = await transferResponse.Content.ReadFromJsonAsync<ReadyGoodsTransferDto>();
+        var transfer = await transferResponse.Content.ReadFromJsonAsync<ReadyGoodsTransferDto>(Json);
         return (orderId, transfer!.Id);
     }
 
@@ -122,14 +137,14 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
         {
             customerId, deliveryDate = DateTime.UtcNow,
             lines = new[] { new { productionOrderId = orderId, itemId, quantityKg = kg } }
-        })).Content.ReadFromJsonAsync<DeliveryDto>())!;
+        })).Content.ReadFromJsonAsync<DeliveryDto>(Json))!;
         (await Client.PostAsync($"/api/deliveries/{delivery.Id}/prepare", null)).EnsureSuccessStatusCode();
         return delivery;
     }
 
     protected async Task<decimal> ReadyBalanceAsync(Guid customerId, Guid orderId)
     {
-        var balance = await Client.GetFromJsonAsync<List<ReadyGoodsBalanceDto>>($"/api/ready-goods/balance?customerId={customerId}");
+        var balance = await Client.GetFromJsonAsync<List<ReadyGoodsBalanceDto>>($"/api/ready-goods/balance?customerId={customerId}", Json);
         return balance!.FirstOrDefault(b => b.ProductionOrderId == orderId)?.RemainingKg ?? 0m;
     }
 
@@ -182,7 +197,7 @@ public class AllocateVersusExternalReleaseRaceTests : SqlServerConcurrencyTestBa
         statuses.Count(s => s == HttpStatusCode.OK).Should().Be(1, "stock covers only one 600 KG operation");
         statuses.Count(s => s == HttpStatusCode.Conflict).Should().Be(1, "the loser fails with NEGATIVE_STOCK (409)");
 
-        var messages = await Client.GetFromJsonAsync<List<RawMessageDto>>($"/api/raw-messages?customerId={customerId}");
+        var messages = await Client.GetFromJsonAsync<List<RawMessageDto>>($"/api/raw-messages?customerId={customerId}", Json);
         BalanceKgOf(messages!, messageId).Should().Be(400m, "balance lands exactly at 1000 - 600, never negative");
     }
 }
@@ -217,7 +232,7 @@ public class TenParallelAllocationTests : SqlServerConcurrencyTestBase
         statuses.Count(s => s == HttpStatusCode.OK).Should().Be(3, "stock of 300 covers exactly three 100 KG allocations");
         statuses.Count(s => s == HttpStatusCode.Conflict).Should().Be(7, "the rest fail with NEGATIVE_STOCK");
 
-        var messages = await Client.GetFromJsonAsync<List<RawMessageDto>>($"/api/raw-messages?customerId={customerId}");
+        var messages = await Client.GetFromJsonAsync<List<RawMessageDto>>($"/api/raw-messages?customerId={customerId}", Json);
         BalanceKgOf(messages!, messageId).Should().Be(0m, "all stock is consumed exactly once");
     }
 }
@@ -278,7 +293,7 @@ public class DuplicateLineDeliveryTests : SqlServerConcurrencyTestBase
                 new { productionOrderId = orderId, itemId, quantityKg = 300m },
                 new { productionOrderId = orderId, itemId, quantityKg = 300m }
             }
-        })).Content.ReadFromJsonAsync<DeliveryDto>())!;
+        })).Content.ReadFromJsonAsync<DeliveryDto>(Json))!;
         (await Client.PostAsync($"/api/deliveries/{delivery.Id}/prepare", null)).EnsureSuccessStatusCode();
 
         var response = await Client.PostAsync($"/api/deliveries/{delivery.Id}/deliver", null);
@@ -372,14 +387,14 @@ public class ReceiptOverpaymentRaceTests : SqlServerConcurrencyTestBase
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var (customerId, itemId, _, _) = await SeedMasterDataAsync("t7");
         var account = (await (await Client.PostAsJsonAsync("/api/treasury-accounts", new { code = $"A{suffix}", name = "Main Cash", kind = TreasuryAccountKind.Cash }))
-            .Content.ReadFromJsonAsync<TreasuryAccountDto>())!;
+            .Content.ReadFromJsonAsync<TreasuryAccountDto>(Json))!;
 
         var invoice = (await (await Client.PostAsJsonAsync("/api/invoices", new
         {
             customerId, invoiceDate = DateTime.UtcNow, discount = 0m, tax = 0m,
             lines = new[] { new { itemId, quantity = 500m, processingPrice = 2m } } // total 1000
-        })).Content.ReadFromJsonAsync<InvoiceDto>())!;
-        invoice = (await (await Client.PostAsync($"/api/invoices/{invoice.Id}/issue", null)).Content.ReadFromJsonAsync<InvoiceDto>())!;
+        })).Content.ReadFromJsonAsync<InvoiceDto>(Json))!;
+        invoice = (await (await Client.PostAsync($"/api/invoices/{invoice.Id}/issue", null)).Content.ReadFromJsonAsync<InvoiceDto>(Json))!;
 
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var tasks = Enumerable.Range(0, 2).Select(_ => Task.Run(async () =>
@@ -399,7 +414,7 @@ public class ReceiptOverpaymentRaceTests : SqlServerConcurrencyTestBase
         statuses.Count(s => s == HttpStatusCode.OK).Should().Be(1, "only 1000 of the 1600 requested fits");
         statuses.Count(s => s == HttpStatusCode.UnprocessableEntity).Should().Be(1, "the overpayment guard throws DomainException (422)");
 
-        var receipts = (await Client.GetFromJsonAsync<List<ReceiptDto>>($"/api/receipts?customerId={customerId}"))!
+        var receipts = (await Client.GetFromJsonAsync<List<ReceiptDto>>($"/api/receipts?customerId={customerId}", Json))!
             .Where(r => r.InvoiceId == invoice.Id && r.Status != TreasuryDocumentStatus.Cancelled.ToString())
             .ToList();
         receipts.Sum(r => r.Amount).Should().Be(800m, "exactly one receipt posted - no overpayment persisted");
@@ -442,11 +457,11 @@ public class JwtSessionInvalidationTests : SqlServerConcurrencyTestBase
         var createResponse = await Client.PostAsJsonAsync("/api/users", new
         { username, password = "P@ssw0rd-Test-123", displayName = "Session User", roles });
         createResponse.EnsureSuccessStatusCode();
-        var user = (await createResponse.Content.ReadFromJsonAsync<UserDto>())!;
+        var user = (await createResponse.Content.ReadFromJsonAsync<UserDto>(Json))!;
 
         var loginResponse = await Client.PostAsJsonAsync("/api/auth/login", new { username, password = "P@ssw0rd-Test-123" });
         loginResponse.EnsureSuccessStatusCode();
-        var login = await loginResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var login = await loginResponse.Content.ReadFromJsonAsync<JsonElement>(Json);
         return (user.Id, login.GetProperty("token").GetString()!);
     }
 
@@ -460,7 +475,13 @@ public class JwtSessionInvalidationTests : SqlServerConcurrencyTestBase
     [Fact]
     public async Task Deactivated_User_JWT_Is_Rejected_On_Next_Request()
     {
-        var (userId, token) = await CreateAndLoginAsync(new List<string> { "users.manage" });
+                // UsersController carries [Authorize(Roles = "admin")] at CLASS level
+        // plus the Permission:users.manage policy on the endpoint - ASP.NET
+        // requires BOTH, so the user must hold the admin role (class gate) AND
+        // the users.manage permission claim (policy gate). With only
+        // "users.manage" the class-level role gate returned 403 before the
+        // permission check ever ran.
+        var (userId, token) = await CreateAndLoginAsync(new List<string> { "admin", "users.manage" });
 
         (await CallAsUserAsync(Client, token)).StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -472,7 +493,13 @@ public class JwtSessionInvalidationTests : SqlServerConcurrencyTestBase
     [Fact]
     public async Task Permission_Change_Invalidates_Still_Valid_JWT()
     {
-        var (userId, token) = await CreateAndLoginAsync(new List<string> { "users.manage" });
+                // UsersController carries [Authorize(Roles = "admin")] at CLASS level
+        // plus the Permission:users.manage policy on the endpoint - ASP.NET
+        // requires BOTH, so the user must hold the admin role (class gate) AND
+        // the users.manage permission claim (policy gate). With only
+        // "users.manage" the class-level role gate returned 403 before the
+        // permission check ever ran.
+        var (userId, token) = await CreateAndLoginAsync(new List<string> { "admin", "users.manage" });
 
         (await CallAsUserAsync(Client, token)).StatusCode.Should().Be(HttpStatusCode.OK);
 
