@@ -1,8 +1,7 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Domain.Entities;
-using MediatR;
-using Microsoft.EntityFrameworkCore;
+using MediatR;using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.RawReceipts.Queries;
 
@@ -46,7 +45,14 @@ public class GetRawMessagesQueryHandler : IRequestHandler<GetRawMessagesQuery, L
             messagesQuery = messagesQuery.Where(m => relevantMessageIds.Contains(m.Id));
         }
 
-        var messages = await messagesQuery.OrderByDescending(m => m.ReceiptDate).ToListAsync(cancellationToken);
+        // Lines MUST be eager-loaded: this query is AsNoTracking() and the
+        // context has no lazy loading, so without Include the Lines navigation
+        // materializes empty - every line's RemainingKg/RemainingMeter and
+        // ItemCode/ItemName in the response silently disappear.
+        var messages = await messagesQuery
+            .Include(m => m.Lines)
+            .OrderByDescending(m => m.ReceiptDate)
+            .ToListAsync(cancellationToken);
         if (messages.Count == 0) return new List<RawMessageDto>();
 
         var messageIds = messages.Select(m => m.Id).ToList();

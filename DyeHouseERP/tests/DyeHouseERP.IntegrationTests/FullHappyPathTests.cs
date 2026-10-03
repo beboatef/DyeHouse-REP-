@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using DyeHouseERP.API.Controllers;
 using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Invoices.DTOs;
@@ -25,22 +26,33 @@ namespace DyeHouseERP.IntegrationTests;
 [Collection("IntegrationDatabase")]
 public class FullHappyPathTests : IntegrationTestBase
 {
+    /// <summary>
+    /// JSON options matching the API's serializer contract (JsonStringEnumConverter
+    /// in Program.cs): every enum in a response body (e.g. ItemDto.BaseUnit = "KG")
+    /// arrives as a STRING. System.Net.Http.Json's default options only accept enum
+    /// NUMBERS, which made deserializing ItemDto throw on $.baseUnit.
+    /// </summary>
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     [Fact]
     public async Task RawReceipt_Through_CustomerStatement_ClearsToZero()
     {
         // ---- Master data ----
         var customerCode = $"C{Guid.NewGuid():N}"[..10];
         var customer = (await (await Client.PostAsJsonAsync("/api/customers", new { code = customerCode, name = "Happy Path Customer" }))
-            .Content.ReadFromJsonAsync<DyeHouseERP.Application.Customers.DTOs.CustomerDto>())!;
+            .Content.ReadFromJsonAsync<DyeHouseERP.Application.Customers.DTOs.CustomerDto>(Json))!;
 
         var item = (await (await Client.PostAsJsonAsync("/api/items", new { code = $"I{Guid.NewGuid():N}"[..10], name = "Poly Fabric", baseUnit = UnitOfMeasure.KG }))
-            .Content.ReadFromJsonAsync<ItemDto>())!;
+            .Content.ReadFromJsonAsync<ItemDto>(Json))!;
 
         var rawWarehouse = (await (await Client.PostAsJsonAsync("/api/warehouses", new { code = $"W{Guid.NewGuid():N}"[..10], name = "Raw WH", kind = WarehouseKind.RawMaterial }))
-            .Content.ReadFromJsonAsync<WarehouseDto>())!;
+            .Content.ReadFromJsonAsync<WarehouseDto>(Json))!;
 
         var readyWarehouse = (await (await Client.PostAsJsonAsync("/api/warehouses", new { code = $"W{Guid.NewGuid():N}"[..10], name = "Ready WH", kind = WarehouseKind.ReadyGoods }))
-            .Content.ReadFromJsonAsync<WarehouseDto>())!;
+            .Content.ReadFromJsonAsync<WarehouseDto>(Json))!;
 
         // One active stage keeps the happy path short - the stage engine itself is covered by domain unit tests.
         await Client.PostAsJsonAsync("/api/production-stages", new
@@ -55,7 +67,7 @@ public class FullHappyPathTests : IntegrationTestBase
         {
             receiptDate = DateTime.UtcNow, customerId = customer.Id, warehouseId = rawWarehouse.Id,
             lines = new[] { new { itemId = item.Id, quantityKg = 1000m } }
-        })).Content.ReadFromJsonAsync<RawMessageDto>())!;
+        })).Content.ReadFromJsonAsync<RawMessageDto>(Json))!;
 
         await Client.PostAsJsonAsync($"/api/raw-messages/{message.Id}/inspection", new { result = InspectionStatus.Accepted, notes = (string?)null });
 
@@ -64,12 +76,12 @@ public class FullHappyPathTests : IntegrationTestBase
         {
             customerId = customer.Id, itemId = item.Id, orderDate = DateTime.UtcNow,
             requestedQuantityKg = 1000m, priority = ProductionPriority.Normal
-        })).Content.ReadFromJsonAsync<ProductionOrderDto>())!;
+        })).Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
 
         order = (await (await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/raw-allocations", new
         {
             rawMessageId = message.Id, itemId = item.Id, quantityKg = 1000m, overrideNegativeStock = false, overrideReason = (string?)null
-        })).Content.ReadFromJsonAsync<ProductionOrderDto>())!;
+        })).Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
 
         // ---- Complete the single stage ----
         var stage = order.StageExecutions.Single();
@@ -89,7 +101,7 @@ public class FullHappyPathTests : IntegrationTestBase
         });
         readyTransferResponse.EnsureSuccessStatusCode();
 
-        var balance = await Client.GetFromJsonAsync<List<ReadyGoodsBalanceDto>>($"/api/ready-goods/balance?customerId={customer.Id}");
+        var balance = await Client.GetFromJsonAsync<List<ReadyGoodsBalanceDto>>($"/api/ready-goods/balance?customerId={customer.Id}", Json);
         balance!.Single(b => b.ProductionOrderId == order.Id).RemainingKg.Should().Be(950m);
 
         // ---- Delivery: create -> prepare -> deliver ----
@@ -97,7 +109,7 @@ public class FullHappyPathTests : IntegrationTestBase
         {
             customerId = customer.Id, deliveryDate = DateTime.UtcNow,
             lines = new[] { new { productionOrderId = order.Id, itemId = item.Id, quantityKg = 950m } }
-        })).Content.ReadFromJsonAsync<DeliveryDto>())!;
+        })).Content.ReadFromJsonAsync<DeliveryDto>(Json))!;
 
         await Client.PostAsync($"/api/deliveries/{delivery.Id}/prepare", null);
         var deliverResponse = await Client.PostAsync($"/api/deliveries/{delivery.Id}/deliver", null);
@@ -108,16 +120,16 @@ public class FullHappyPathTests : IntegrationTestBase
         {
             customerId = customer.Id, invoiceDate = DateTime.UtcNow, discount = 0m, tax = 0m,
             lines = new[] { new { itemId = item.Id, quantity = 950m, processingPrice = 2m } } // 1900 total
-        })).Content.ReadFromJsonAsync<InvoiceDto>())!;
+        })).Content.ReadFromJsonAsync<InvoiceDto>(Json))!;
 
-        invoice = (await (await Client.PostAsync($"/api/invoices/{invoice.Id}/issue", null)).Content.ReadFromJsonAsync<InvoiceDto>())!;
+        invoice = (await (await Client.PostAsync($"/api/invoices/{invoice.Id}/issue", null)).Content.ReadFromJsonAsync<InvoiceDto>(Json))!;
         invoice.Total.Should().Be(1900m);
 
         // ---- Treasury account + full receipt against the invoice ----
         var account = (await (await Client.PostAsJsonAsync("/api/treasury-accounts", new
         {
             code = $"A{Guid.NewGuid():N}"[..10], name = "Main Cash", kind = TreasuryAccountKind.Cash
-        })).Content.ReadFromJsonAsync<TreasuryAccountDto>())!;
+        })).Content.ReadFromJsonAsync<TreasuryAccountDto>(Json))!;
 
         var receiptResponse = await Client.PostAsJsonAsync("/api/receipts", new
         {
@@ -127,7 +139,7 @@ public class FullHappyPathTests : IntegrationTestBase
         receiptResponse.EnsureSuccessStatusCode();
 
         // ---- Customer statement should net to zero: Debit 1900 (invoice) - Credit 1900 (receipt) ----
-        var statement = await Client.GetFromJsonAsync<List<DyeHouseERP.Application.Invoices.DTOs.CustomerStatementLineDto>>($"/api/customers/{customer.Id}/statement");
+        var statement = await Client.GetFromJsonAsync<List<DyeHouseERP.Application.Invoices.DTOs.CustomerStatementLineDto>>($"/api/customers/{customer.Id}/statement", Json);
         statement!.Last().RunningBalance.Should().Be(0m);
     }
 }
