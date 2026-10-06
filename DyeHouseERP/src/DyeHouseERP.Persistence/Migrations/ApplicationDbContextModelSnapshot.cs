@@ -437,10 +437,18 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ContactPerson")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -467,6 +475,14 @@ namespace DyeHouseERP.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TaxNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
@@ -532,6 +548,172 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasIndex("EntryDate");
 
                     b.ToTable("CustomerLedgerEntries", (string)null);
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerReturn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("ReturnDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReturnNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("ReturnDate");
+
+                    b.HasIndex("ReturnNumber")
+                        .IsUnique();
+
+                    b.ToTable("CustomerReturns", (string)null);
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerReturnLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerReturnId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("FormationGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("ProductionOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("QuantityKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal?>("QuantityMeter")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("RawMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerReturnId");
+
+                    b.HasIndex("FormationGroupId");
+
+                    b.HasIndex("ProductionOrderId");
+
+                    b.HasIndex("RawMessageId");
+
+                    b.ToTable("CustomerReturnLines", (string)null);
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerServicePrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("PricePerUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("StageDefinitionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("StageDefinitionId", "CustomerId", "Unit")
+                        .IsUnique()
+                        .HasFilter("[CustomerId] IS NOT NULL");
+
+                    b.ToTable("CustomerServicePrices", (string)null);
                 });
 
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerTransfer", b =>
@@ -947,6 +1129,102 @@ namespace DyeHouseERP.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_Employees_BasicSalaryNotNegative", "[BasicSalary] >= 0");
                         });
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.FormationBasin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("BasinNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CustomerInstructions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("FormationGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Gsm")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("InternalInstructions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("LabInstructions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<decimal?>("MetersPerKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<decimal>("PlannedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("ProducedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("QualityInstructions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("SpecificationSnapshotAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SpecificationTemplateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SpecificationTemplateName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("TubCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TubFormat")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal?>("WidthCm")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("WindingTapeFormat")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecificationTemplateId");
+
+                    b.HasIndex("FormationGroupId", "BasinNumber")
+                        .IsUnique();
+
+                    b.ToTable("FormationBasins", (string)null);
                 });
 
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.FormationGroup", b =>
@@ -2355,6 +2633,9 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<Guid?>("FormationBasinId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("FormationGroupId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2426,6 +2707,10 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("FormationBasinId");
+
+                    b.HasIndex("FormationGroupId");
+
                     b.HasIndex("FormationRequestId");
 
                     b.HasIndex("ItemId");
@@ -2440,6 +2725,77 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("ProductionOrders", (string)null);
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.ProductionOrderServicePrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsOverride")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("OverrideReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("PreviousPricePerUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("PricePerUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("PricedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PricedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("ProductionOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceCustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("StageDefinitionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StageDefinitionId");
+
+                    b.HasIndex("ProductionOrderId", "Unit")
+                        .IsUnique();
+
+                    b.ToTable("ProductionOrderServicePrices", (string)null);
                 });
 
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.ProductionOrderStageExecution", b =>
@@ -2457,6 +2813,12 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<string>("ApprovedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("BaselineKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("BaselineMeter")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("datetime2");
@@ -2476,6 +2838,12 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<decimal?>("LossMeter")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal?>("LossPercentKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("LossPercentMeter")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
@@ -2645,7 +3013,13 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsFormationStage")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReadyGoodsStage")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("ModifiedAtUtc")
@@ -2936,6 +3310,74 @@ namespace DyeHouseERP.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_PurchaseReceiptLines_QuantityPositive", "[Quantity] > 0");
                         });
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.PurchaseUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("BaseUnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<decimal?>("ConversionFactor")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystemDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BaseUnitId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("PurchaseUnits", (string)null);
                 });
 
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.RawAllocation", b =>
@@ -3553,6 +3995,59 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("Separates", (string)null);
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.StageCostRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("CostPerUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("StageDefinitionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("StageDefinitionId", "Unit")
+                        .IsUnique();
+
+                    b.ToTable("StageCostRates", (string)null);
                 });
 
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.StockAdjustment", b =>
@@ -4457,6 +4952,23 @@ namespace DyeHouseERP.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerReturnLine", b =>
+                {
+                    b.HasOne("DyeHouseERP.Domain.Entities.CustomerReturn", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("CustomerReturnId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerServicePrice", b =>
+                {
+                    b.HasOne("DyeHouseERP.Domain.Entities.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerTransfer", b =>
                 {
                     b.HasOne("DyeHouseERP.Domain.Entities.Customer", null)
@@ -4477,6 +4989,15 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasOne("DyeHouseERP.Domain.Entities.Delivery", null)
                         .WithMany("Lines")
                         .HasForeignKey("DeliveryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.FormationBasin", b =>
+                {
+                    b.HasOne("DyeHouseERP.Domain.Entities.FormationGroup", null)
+                        .WithMany("Basins")
+                        .HasForeignKey("FormationGroupId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -4544,6 +5065,14 @@ namespace DyeHouseERP.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.PurchaseUnit", b =>
+                {
+                    b.HasOne("DyeHouseERP.Domain.Entities.PurchaseUnit", null)
+                        .WithMany()
+                        .HasForeignKey("BaseUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.RawAllocation", b =>
                 {
                     b.HasOne("DyeHouseERP.Domain.Entities.ProductionOrder", null)
@@ -4596,9 +5125,19 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Navigation("Movements");
                 });
 
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.CustomerReturn", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.Delivery", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.FormationGroup", b =>
+                {
+                    b.Navigation("Basins");
                 });
 
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.FormationRequest", b =>

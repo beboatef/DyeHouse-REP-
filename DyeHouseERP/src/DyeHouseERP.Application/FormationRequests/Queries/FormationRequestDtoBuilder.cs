@@ -79,6 +79,7 @@ internal static class FormationRequestDtoBuilder
                 ModifiedBy = r.ModifiedBy,
                 ModifiedAtUtc = r.ModifiedAtUtc,
                 ProducedQuantity = r.Groups.Sum(g => g.ProducedQuantity),
+                BasinCount = r.Groups.Sum(g => g.Basins.Count),
                 Groups = r.Groups.OrderBy(g => g.GroupNumber).Select(MapGroup).ToList()
             };
         }).ToList();
@@ -102,6 +103,9 @@ internal static class FormationRequestDtoBuilder
         Unit = g.Unit,
         TubCount = g.TubCount,
         Color = g.Color,
+        PlannedBasinQuantity = g.PlannedBasinQuantity,
+        ProducedBasinQuantity = g.ProducedBasinQuantity,
+        Basins = g.Basins.OrderBy(b => b.BasinNumber).Select(MapBasin).ToList(),
         WidthCm = g.WidthCm,
         MetersPerKg = g.MetersPerKg,
         Gsm = g.Gsm,
@@ -115,5 +119,32 @@ internal static class FormationRequestDtoBuilder
         SpecificationTemplateId = g.SpecificationTemplateId,
         SpecificationTemplateName = g.SpecificationTemplateName,
         SpecificationSnapshotAtUtc = g.SpecificationSnapshotAtUtc
+    };
+
+    private static FormationBasinDto MapBasin(FormationBasin b) => new()
+    {
+        Id = b.Id,
+        FormationGroupId = b.FormationGroupId,
+        BasinNumber = b.BasinNumber,
+        Name = b.Name,
+        PlannedQuantity = b.PlannedQuantity,
+        ProducedQuantity = b.ProducedQuantity,
+        RemainingQuantity = b.RemainingQuantity,
+        Unit = b.Unit,
+        TubCount = b.TubCount,
+        Color = b.Color,
+        WidthCm = b.WidthCm,
+        MetersPerKg = b.MetersPerKg,
+        Gsm = b.Gsm,
+        TubFormat = b.TubFormat,
+        WindingTapeFormat = b.WindingTapeFormat,
+        QualityInstructions = b.QualityInstructions,
+        LabInstructions = b.LabInstructions,
+        InternalInstructions = b.InternalInstructions,
+        CustomerInstructions = b.CustomerInstructions,
+        Notes = b.Notes,
+        SpecificationTemplateId = b.SpecificationTemplateId,
+        SpecificationTemplateName = b.SpecificationTemplateName,
+        SpecificationSnapshotAtUtc = b.SpecificationSnapshotAtUtc
     };
 }

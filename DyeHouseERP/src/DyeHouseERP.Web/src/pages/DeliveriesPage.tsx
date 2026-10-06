@@ -22,6 +22,12 @@ export default function DeliveriesPage() {
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [error, setError] = useState<string | null>(null);
   const [cancelReasonById, setCancelReasonById] = useState<Record<string, string>>({});
+  // Post-approval correction (spec section 30): which delivery's editor is open,
+  // and the new quantity typed for each of its existing lines.
+  const [correctingId, setCorrectingId] = useState<string | null>(null);
+  const [correctQty, setCorrectQty] = useState<Record<string, string>>({});
+  const [correctReason, setCorrectReason] = useState("");
+  const [correctError, setCorrectError] = useState<string | null>(null);
 
   const { data: customers } = useQuery({ queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true }) });
   const { data: readyBalance } = useQuery({
@@ -55,6 +61,31 @@ export default function DeliveriesPage() {
     mutationFn: (vars: { id: string; reason: string }) => DeliveriesApi.cancel(vars.id, vars.reason), onSuccess: invalidate
   });
 
+  /**
+   * Corrects an approved delivery (spec section 30). Only quantities are sent -
+   * the API decides the compensating movement, so the screen cannot accidentally
+   * imply that editing a line "just changes a number" without touching stock.
+   */
+  const correctMutation = useMutation({
+    mutationFn: (vars: { id: string; lines: { lineId: string; quantityKg?: number; quantityMeter?: number }[]; reason: string }) =>
+      DeliveriesApi.correctApprovedLines(vars.id, vars),
+    onSuccess: () => {
+      invalidate();
+      setCorrectingId(null);
+      setCorrectQty({});
+      setCorrectReason("");
+      setCorrectError(null);
+    },
+    onError: (err: any) => setCorrectError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "تعذر حفظ التصحيح")
+  });
+
+  const openCorrection = (id: string) => {
+    setCorrectingId(id);
+    setCorrectQty({});
+    setCorrectReason("");
+    setCorrectError(null);
+  };
+
   const updateLine = (idx: number, patch: Partial<LineDraft>) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
 
   return (
@@ -78,27 +109,27 @@ export default function DeliveriesPage() {
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">العميل</label>
+                <label className="field-label">العميل</label>
                 <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
                   <option value="">اختر...</option>{customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">تاريخ التسليم</label>
+                <label className="field-label">تاريخ التسليم</label>
                 <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} required />
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-medium text-gray-600">بنود التسليم (من الرصيد الجاهز)</label>
+                <label className="field-label">بنود التسليم (من الرصيد الجاهز)</label>
                 <Button type="button" variant="ghost" onClick={() => setLines((p) => [...p, emptyLine()])}>+ إضافة بند</Button>
               </div>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
                   <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-gray-50 rounded-lg p-3">
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-gray-500 mb-1">أمر التشغيل (الرصيد الجاهز)</label>
+                      <label className="field-label">أمر التشغيل (الرصيد الجاهز)</label>
                       <Select value={line.productionOrderId} onChange={(e) => updateLine(idx, { productionOrderId: e.target.value })} required disabled={!customerId}>
                         <option value="">اختر...</option>
                         {readyBalance?.map((b) => (
@@ -108,15 +139,15 @@ export default function DeliveriesPage() {
                         ))}
                       </Select>
                     </div>
-                    <div><label className="block text-[11px] text-gray-500 mb-1">كمية (كجم)</label><Input type="number" step="0.001" min="0" value={line.quantityKg} onChange={(e) => updateLine(idx, { quantityKg: e.target.value })} /></div>
-                    <div><label className="block text-[11px] text-gray-500 mb-1">كمية (متر)</label><Input type="number" step="0.001" min="0" value={line.quantityMeter} onChange={(e) => updateLine(idx, { quantityMeter: e.target.value })} /></div>
+                    <div><label className="field-label">كمية (كجم)</label><Input type="number" step="0.001" min="0" value={line.quantityKg} onChange={(e) => updateLine(idx, { quantityKg: e.target.value })} /></div>
+                    <div><label className="field-label">كمية (متر)</label><Input type="number" step="0.001" min="0" value={line.quantityMeter} onChange={(e) => updateLine(idx, { quantityMeter: e.target.value })} /></div>
                   </div>
                 ))}
               </div>
             </div>
 
             <Button type="submit" disabled={createMutation.isPending}>{createMutation.isPending ? "جارٍ الحفظ..." : "حفظ كمسودة"}</Button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="form-error">{error}</p>}
           </form>
         </Card>
       )}
@@ -160,6 +191,11 @@ export default function DeliveriesPage() {
               <Link to={`/print/delivery/${d.id}`} target="_blank"><Button type="button" variant="ghost">معاينة قبل الطباعة</Button></Link>
               <Button variant="ghost" onClick={DeliveriesExports.documentPdf(d.id)}>تنزيل PDF</Button>
               {d.status === "Prepared" && <Button variant="secondary" onClick={() => deliverMutation.mutate(d.id)}>تسليم</Button>}
+              {d.status === "Delivered" && correctingId !== d.id && (
+                <Button variant="secondary" onClick={() => openCorrection(d.id)}>
+                  {t("del.correctApproved", "تصحيح بعد الاعتماد")}
+                </Button>
+              )}
               {(d.status === "Draft" || d.status === "Prepared" || d.status === "Delivered") && (
                 <>
                   <Input
@@ -172,6 +208,101 @@ export default function DeliveriesPage() {
                 </>
               )}
             </div>
+
+            {/* Post-approval correction editor. Each line keeps its delivered
+                quantity until the user changes it, and the difference is shown
+                per line so the effect on Ready Goods is never a surprise. */}
+            {d.status === "Delivered" && correctingId === d.id && (
+              <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
+                <p className="mb-2 text-2xs text-ink-subtle">{t("del.correctHint")}</p>
+                <div className="table-wrap">
+                  <table className="table table-dense">
+                    <thead>
+                      <tr>
+                        <th>{t("prod.jobOrder", "أمر التشغيل")}</th>
+                        <th>{t("common.item", "الصنف")}</th>
+                        <th>{t("common.quantity", "الكمية المعتمدة")}</th>
+                        <th>{t("del.newQuantity", "الكمية الصحيحة")}</th>
+                        <th>{t("del.difference", "الفرق")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.lines.map((l) => {
+                        const isKg = l.quantityKg != null;
+                        const original = Number(isKg ? l.quantityKg : l.quantityMeter);
+                        const typed = correctQty[l.id];
+                        const next = typed === undefined ? original : Number(typed);
+                        const diff = Number.isFinite(next) ? next - original : 0;
+                        return (
+                          <tr key={l.id}>
+                            <td className="ltr-nums">{l.productionOrderNumber}</td>
+                            <td>{l.itemCode}{l.color ? ` (${l.color})` : ""}</td>
+                            <td className="ltr-nums">
+                              {isKg ? `${l.quantityKg} كجم` : `${l.quantityMeter} م`}
+                            </td>
+                            <td>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                className="max-w-[9rem]"
+                                value={typed ?? String(original)}
+                                onChange={(e) => setCorrectQty((p) => ({ ...p, [l.id]: e.target.value }))}
+                              />
+                            </td>
+                            <td className="ltr-nums">
+                              {diff === 0 ? (
+                                <span className="text-ink-subtle">—</span>
+                              ) : (
+                                <span className={diff < 0 ? "text-success-ink" : "text-warning-ink"}>
+                                  {diff > 0 ? "+" : ""}
+                                  {diff.toLocaleString("en-US")}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {correctError && <p className="mt-2 text-sm text-danger-ink">{correctError}</p>}
+
+                <div className="mt-3 flex flex-wrap items-end gap-2">
+                  <div className="min-w-[14rem] flex-1">
+                    <label className="field-label">
+                      {t("del.correctReason", "سبب التصحيح")}
+                    </label>
+                    <Input value={correctReason} onChange={(e) => setCorrectReason(e.target.value)} />
+                  </div>
+                  <Button
+                    disabled={correctReason.trim() === "" || correctMutation.isPending}
+                    onClick={() =>
+                      correctMutation.mutate({
+                        id: d.id,
+                        reason: correctReason.trim(),
+                        lines: d.lines.map((l) => {
+                          const isKg = l.quantityKg != null;
+                          const original = Number(isKg ? l.quantityKg : l.quantityMeter);
+                          const typed = correctQty[l.id];
+                          return {
+                            lineId: l.id,
+                            quantityKg: isKg ? (typed === undefined ? original : Number(typed)) : undefined,
+                            quantityMeter: isKg ? undefined : (typed === undefined ? original : Number(typed))
+                          };
+                        })
+                      })
+                    }
+                  >
+                    {t("common.save", "حفظ")}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setCorrectingId(null)}>
+                    {t("common.close", "إغلاق")}
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         ))}
       </div>

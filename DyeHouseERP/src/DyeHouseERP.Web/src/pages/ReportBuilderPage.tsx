@@ -45,7 +45,7 @@ export default function ReportBuilderPage() {
 
       <Card className="p-5 mb-6">
         <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-600 mb-1">الكيان</label>
+          <label className="field-label">الكيان</label>
           <Select value={entityKey} onChange={(e) => { setEntityKey(e.target.value); setColumns([]); }}>
             <option value="">اختر...</option>
             {entities?.map((en) => <option key={en.entityKey} value={en.entityKey}>{en.label}</option>)}
@@ -54,7 +54,7 @@ export default function ReportBuilderPage() {
 
         {currentEntity && (
           <div className="mb-4">
-            <label className="block text-xs font-medium text-gray-600 mb-2">الأعمدة</label>
+            <label className="field-label">الأعمدة</label>
             <div className="flex flex-wrap gap-3">
               {currentEntity.columns.map((c) => (
                 <label key={c} className="flex items-center gap-1.5 text-sm">
@@ -75,17 +75,17 @@ export default function ReportBuilderPage() {
         </div>
 
         <div className="flex items-end gap-2 mt-4 pt-4 border-t border-gray-100">
-          <div><label className="block text-[11px] text-gray-500 mb-1">اسم القالب (عربي)</label><Input value={templateNameAr} onChange={(e) => setTemplateNameAr(e.target.value)} className="w-40" /></div>
-          <div><label className="block text-[11px] text-gray-500 mb-1">اسم القالب (إنجليزي)</label><Input value={templateNameEn} onChange={(e) => setTemplateNameEn(e.target.value)} className="w-40" dir="ltr" /></div>
+          <div><label className="field-label">اسم القالب (عربي)</label><Input value={templateNameAr} onChange={(e) => setTemplateNameAr(e.target.value)} className="w-40" /></div>
+          <div><label className="field-label">اسم القالب (إنجليزي)</label><Input value={templateNameEn} onChange={(e) => setTemplateNameEn(e.target.value)} className="w-40" dir="ltr" /></div>
           <Button variant="ghost" disabled={!entityKey || columns.length === 0 || !templateNameAr || !templateNameEn} onClick={() => saveMutation.mutate()}>حفظ كقالب</Button>
         </div>
       </Card>
 
       {runMutation.data && (
         <Card>
-          <table className="w-full text-sm">
+          <table className="table table-plain">
             <thead>
-              <tr className="border-b border-gray-200 text-gray-500 text-xs">
+              <tr>
                 {runMutation.data.headers.map((h) => <th key={h} className="text-start px-4 py-3 font-medium">{h}</th>)}
               </tr>
             </thead>

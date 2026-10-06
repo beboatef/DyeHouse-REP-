@@ -137,7 +137,73 @@ public class ProductionOrdersController : ControllerBase
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductionOrderDto>> Complete(Guid id)
         => Ok(await _mediator.Send(new CompleteProductionOrderCommand(id)));
+
+    /// <summary>
+    /// Pauses the order (موقوف مؤقتًا) and releases the user's chosen quantity of
+    /// UNUSED raw material back to the customer's own raw stock (spec section 19).
+    /// The release is bounded by allocated-minus-consumed and posted as new
+    /// compensating IN movements; nothing already posted is edited or deleted.
+    /// </summary>
+    /// <summary>
+    /// Moves the Job Order to the next stage the USER selects (spec sections 13-17).
+    /// One call closes the current stage (recording output, loss and loss %),
+    /// locks it, and activates only the chosen stage with the previous output as
+    /// its baseline. There is no separate "End Stage" button. Selecting the stage
+    /// marked IsReadyGoodsStage instead moves the output to the Ready Goods
+    /// warehouse and completes the order - there is no separate "End Job Order"
+    /// button either.
+    /// </summary>
+    [HttpPost("stage-executions/{stageExecutionId:guid}/transfer")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> TransferStage(Guid stageExecutionId, [FromBody] TransferStageRequest request)
+        => Ok(await _mediator.Send(new TransferToNextStageCommand(
+            stageExecutionId, request.NextStageDefinitionId,
+            request.OutputKg, request.OutputMeter, request.SeparatesKg, request.SeparatesMeter, request.Notes)));
+
+    /// <summary>
+    /// Edits the OPEN stage's output weight (spec section 16). No approval needed,
+    /// but the previous and new figures are audited, and the stage's baseline is
+    /// never touched - so the loss is always measured from the original weight.
+    /// </summary>
+    [HttpPost("stage-executions/{stageExecutionId:guid}/output")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> UpdateStageOutput(Guid stageExecutionId, [FromBody] UpdateStageOutputRequest request)
+        => Ok(await _mediator.Send(new UpdateStageOutputCommand(stageExecutionId, request.OutputKg, request.OutputMeter, request.Reason)));
+
+    [HttpPost("{id:guid}/pause")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> Pause(Guid id, [FromBody] PauseProductionOrderRequest request)
+        => Ok(await _mediator.Send(new PauseProductionOrderCommand(id, request.ReleaseKg, request.ReleaseMeter, request.Reason)));
+
+    /// <summary>
+    /// Resumes a paused order with a NEW raw material issue (spec section 19). The
+    /// SAME order continues; the response carries the previous cycle's loss
+    /// percentage and the expected output it implies as the basis for this cycle.
+    /// </summary>
+    [HttpPost("{id:guid}/resume")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawConsume)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> Resume(Guid id, [FromBody] ResumeProductionOrderRequest request)
+        => Ok(await _mediator.Send(new ResumeProductionOrderCommand(
+            id, request.RawMessageId, request.ItemId, request.QuantityKg, request.QuantityMeter,
+            request.OverrideNegativeStock, request.OverrideReason)));
 }
+
+public record TransferStageRequest(
+    Guid NextStageDefinitionId,
+    decimal? OutputKg, decimal? OutputMeter,
+    decimal? SeparatesKg, decimal? SeparatesMeter, string? Notes);
+
+public record UpdateStageOutputRequest(decimal? OutputKg, decimal? OutputMeter, string? Reason);
+
+public record PauseProductionOrderRequest(decimal? ReleaseKg, decimal? ReleaseMeter, string Reason);
+
+public record ResumeProductionOrderRequest(
+    Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,
+    bool OverrideNegativeStock = false, string? OverrideReason = null);
 
 public record AllocateRawRequest(
     Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,

@@ -297,7 +297,7 @@ export default function ChecksPage() {
         </label>
       </Card>
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-3">
         {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
@@ -341,7 +341,7 @@ export default function ChecksPage() {
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-500 mt-1.5">
+            <div className="text-2xs text-slate-500 mt-1.5">
               {t("checks.originalHolder")}: {check.originalHolder} → {t("checks.currentHolder")}: {check.currentHolder}
               {check.customerCode && <> · {t("common.customer")}: <span className="ltr-nums">{check.customerCode}</span></>}
               {check.supplierCode && <> · {t("common.supplier")}: <span className="ltr-nums">{check.supplierCode}</span></>}
@@ -420,7 +420,7 @@ export default function ChecksPage() {
                     </Button>
                   </>
                 )}
-                <span className="text-[11px] text-slate-400 w-full mt-1">{t("checks.transferNote")} · {t("checks.clearNote")}</span>
+                <span className="text-2xs text-slate-400 w-full mt-1">{t("checks.transferNote")} · {t("checks.clearNote")}</span>
               </div>
             )}
 
@@ -451,7 +451,7 @@ function Kpi({ label, value, tone = "slate" }: { label: string; value: number; t
     tone === "red" ? "text-red-600" : tone === "amber" ? "text-amber-600" : "text-slate-800";
   return (
     <Card className="p-3">
-      <div className="text-[11px] text-slate-500 mb-1 leading-tight">{label}</div>
+      <div className="text-2xs text-slate-500 mb-1 leading-tight">{label}</div>
       <div className={`text-lg font-bold ltr-nums ${color}`}>{value.toLocaleString()}</div>
     </Card>
   );
@@ -460,7 +460,7 @@ function Kpi({ label, value, tone = "slate" }: { label: string; value: number; t
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] font-medium text-gray-600 mb-1">{label}</label>
+      <label className="field-label">{label}</label>
       {children}
     </div>
   );

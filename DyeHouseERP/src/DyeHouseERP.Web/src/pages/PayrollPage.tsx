@@ -123,34 +123,34 @@ function DepartmentsTab() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.code")}</label>
+              <label className="field-label">{t("common.code")}</label>
               <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required maxLength={30} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.nameAr")}</label>
+              <label className="field-label">{t("common.nameAr")}</label>
               <Input value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.nameEn")}</label>
+              <label className="field-label">{t("common.nameEn")}</label>
               <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} maxLength={200} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </form>
-          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+          {error && <p className="form-error mt-3">{error}</p>}
         </Card>
       )}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("common.code")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.name")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pay.departmentCount")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("common.code")}</th>
+              <th>{t("common.name")}</th>
+              <th>{t("pay.departmentCount")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -166,15 +166,15 @@ function DepartmentsTab() {
             )}
             {departments?.map((d) => (
               <tr key={d.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{d.code}</td>
-                <td className="px-4 py-3">{pick(d.nameAr, d.nameEn, d.name)}</td>
-                <td className="px-4 py-3 ltr-nums">{d.employeeCount}</td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{d.code}</td>
+                <td>{pick(d.nameAr, d.nameEn, d.name)}</td>
+                <td className="ltr-nums">{d.employeeCount}</td>
+                <td>
                   <Badge tone={d.isActive ? "green" : "gray"}>{d.isActive ? t("common.active") : t("common.inactive")}</Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <button
-                    className="text-brand-600 hover:underline text-xs font-semibold"
+                    className="btn-link"
                     onClick={() => toggleMutation.mutate({ id: d.id, isActive: !d.isActive })}
                   >
                     {d.isActive ? t("common.inactive") : t("common.active")}
@@ -274,7 +274,7 @@ function EmployeesTab() {
 
       <Card className="p-4 mb-4 flex flex-wrap items-end gap-3">
         <div className="w-56">
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.department")}</label>
+          <label className="field-label">{t("pay.department")}</label>
           <Select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
             <option value="">{t("common.all")}</option>
             {departments?.map((d) => (
@@ -283,7 +283,7 @@ function EmployeesTab() {
           </Select>
         </div>
         <div className="w-64">
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.search")}</label>
+          <label className="field-label">{t("common.search")}</label>
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("common.searchPlaceholder")} />
         </div>
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pay.newEmployee")}</Button>
@@ -299,19 +299,19 @@ function EmployeesTab() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.employeeCode")}</label>
+              <label className="field-label">{t("pay.employeeCode")}</label>
               <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required maxLength={30} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.nameAr")}</label>
+              <label className="field-label">{t("common.nameAr")}</label>
               <Input value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.nameEn")}</label>
+              <label className="field-label">{t("common.nameEn")}</label>
               <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.department")}</label>
+              <label className="field-label">{t("pay.department")}</label>
               <Select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} required>
                 <option value="">{t("common.select")}</option>
                 {departments?.map((d) => (
@@ -320,52 +320,52 @@ function EmployeesTab() {
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.jobTitle")}</label>
+              <label className="field-label">{t("pay.jobTitle")}</label>
               <Input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} maxLength={150} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.basicSalary")}</label>
+              <label className="field-label">{t("pay.basicSalary")}</label>
               <Input
                 type="number" step="0.01" min="0" value={form.basicSalary}
                 onChange={(e) => setForm({ ...form, basicSalary: e.target.value })} required
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.hireDate")}</label>
+              <label className="field-label">{t("pay.hireDate")}</label>
               <Input type="date" value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} required />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("customers.phone")}</label>
+              <label className="field-label">{t("customers.phone")}</label>
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} maxLength={40} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">National ID</label>
+              <label className="field-label">National ID</label>
               <Input value={form.nationalId} onChange={(e) => setForm({ ...form, nationalId: e.target.value })} maxLength={40} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Bank account</label>
+              <label className="field-label">Bank account</label>
               <Input value={form.bankAccountNumber} onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })} maxLength={60} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </form>
-          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+          {error && <p className="form-error mt-3">{error}</p>}
         </Card>
       )}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("pay.employeeCode")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.name")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pay.department")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pay.jobTitle")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pay.basicSalary")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pay.hireDate")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("pay.employeeCode")}</th>
+              <th>{t("common.name")}</th>
+              <th>{t("pay.department")}</th>
+              <th>{t("pay.jobTitle")}</th>
+              <th>{t("pay.basicSalary")}</th>
+              <th>{t("pay.hireDate")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -381,16 +381,16 @@ function EmployeesTab() {
             )}
             {employees?.map((e) => (
               <tr key={e.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{e.code}</td>
-                <td className="px-4 py-3">{pick(e.nameAr, e.nameEn, e.name)}</td>
-                <td className="px-4 py-3">{e.departmentName}</td>
-                <td className="px-4 py-3 text-gray-600">{e.jobTitle ?? "—"}</td>
-                <td className="px-4 py-3 ltr-nums">{money(e.basicSalary)}</td>
-                <td className="px-4 py-3 ltr-nums">{new Date(e.hireDate).toLocaleDateString("en-GB")}</td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{e.code}</td>
+                <td>{pick(e.nameAr, e.nameEn, e.name)}</td>
+                <td>{e.departmentName}</td>
+                <td className="text-ink-muted">{e.jobTitle ?? "—"}</td>
+                <td className="ltr-nums">{money(e.basicSalary)}</td>
+                <td className="ltr-nums">{new Date(e.hireDate).toLocaleDateString("en-GB")}</td>
+                <td>
                   <Badge tone={statusTone[e.status]}>{t(`pay.empStatus.${e.status}`)}</Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   {e.status === "Active" ? (
                     <button
                       className="text-amber-600 hover:underline text-xs font-semibold"
@@ -400,7 +400,7 @@ function EmployeesTab() {
                     </button>
                   ) : (
                     <button
-                      className="text-brand-600 hover:underline text-xs font-semibold"
+                      className="btn-link"
                       onClick={() => statusMutation.mutate({ id: e.id, status: "Active" })}
                     >
                       {t("pay.empStatus.Active")}
@@ -511,11 +511,11 @@ function RunsTab() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.periodYear")}</label>
+              <label className="field-label">{t("pay.periodYear")}</label>
               <Input type="number" min="2000" max="2200" value={periodYear} onChange={(e) => setPeriodYear(e.target.value)} required />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.periodMonth")}</label>
+              <label className="field-label">{t("pay.periodMonth")}</label>
               <Select value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} required>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                   <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
@@ -523,7 +523,7 @@ function RunsTab() {
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pay.selectAccount")}</label>
+              <label className="field-label">{t("pay.selectAccount")}</label>
               <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 <option value="">{t("common.select")}</option>
                 {accounts?.map((a) => (
@@ -532,7 +532,7 @@ function RunsTab() {
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.notes")}</label>
+              <label className="field-label">{t("common.notes")}</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>
@@ -543,7 +543,7 @@ function RunsTab() {
         </Card>
       )}
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-4">
         {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
@@ -602,16 +602,16 @@ function RunsTab() {
 
             {expanded === r.id && (
               <div className="mt-4">
-                <table className="w-full text-sm">
+                <table className="table">
                   <thead>
-                    <tr className="text-gray-400 text-xs border-b border-gray-100">
-                      <th className="text-start py-2 font-medium">{t("pay.employee")}</th>
-                      <th className="text-start py-2 font-medium">{t("pay.department")}</th>
-                      <th className="text-start py-2 font-medium">{t("pay.basicSalary")}</th>
-                      <th className="text-start py-2 font-medium">{t("pay.allowances")}</th>
-                      <th className="text-start py-2 font-medium">{t("pay.deductions")}</th>
-                      <th className="text-start py-2 font-medium">{t("pay.net")}</th>
-                      <th className="text-start py-2 font-medium" />
+                    <tr>
+                      <th>{t("pay.employee")}</th>
+                      <th>{t("pay.department")}</th>
+                      <th>{t("pay.basicSalary")}</th>
+                      <th>{t("pay.allowances")}</th>
+                      <th>{t("pay.deductions")}</th>
+                      <th>{t("pay.net")}</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -619,10 +619,10 @@ function RunsTab() {
                       const editing = editLine?.runId === r.id && editLine.lineId === l.id;
                       return (
                         <tr key={l.id} className="border-b border-gray-50 last:border-0">
-                          <td className="py-2">{l.employeeCode} - {l.employeeName}</td>
-                          <td className="py-2 text-gray-600">{l.departmentName ?? "—"}</td>
-                          <td className="py-2 ltr-nums">{money(l.basicSalary)}</td>
-                          <td className="py-2 ltr-nums">
+                          <td>{l.employeeCode} - {l.employeeName}</td>
+                          <td className="text-gray-600">{l.departmentName ?? "—"}</td>
+                          <td className="ltr-nums">{money(l.basicSalary)}</td>
+                          <td className="ltr-nums">
                             {editing ? (
                               <Input
                                 type="number" step="0.01" min="0" value={editValues.allowances}
@@ -632,7 +632,7 @@ function RunsTab() {
                               money(l.allowances)
                             )}
                           </td>
-                          <td className="py-2 ltr-nums">
+                          <td className="ltr-nums">
                             {editing ? (
                               <Input
                                 type="number" step="0.01" min="0" value={editValues.deductions}
@@ -642,8 +642,8 @@ function RunsTab() {
                               money(l.deductions)
                             )}
                           </td>
-                          <td className="py-2 ltr-nums font-medium">{money(l.netPay)}</td>
-                          <td className="py-2">
+                          <td className="ltr-nums font-medium">{money(l.netPay)}</td>
+                          <td>
                             {r.status !== "Cancelled" && (
                               <button
                                 className="text-gray-600 hover:underline text-xs font-semibold"
@@ -655,7 +655,7 @@ function RunsTab() {
                             {r.status === "Draft" && !editing && (
                               <>
                                 <button
-                                  className="text-brand-600 hover:underline text-xs font-semibold"
+                                  className="btn-link"
                                   onClick={() => {
                                     setEditLine({ runId: r.id, lineId: l.id });
                                     setEditValues({ allowances: String(l.allowances), deductions: String(l.deductions) });
@@ -674,7 +674,7 @@ function RunsTab() {
                             {editing && (
                               <>
                                 <button
-                                  className="text-brand-600 hover:underline text-xs font-semibold"
+                                  className="btn-link"
                                   onClick={() =>
                                     lineMutation.mutate({
                                       run: r,

@@ -107,31 +107,31 @@ function MaterialMasterTab() {
       {showForm && (
         <Card className="p-5 mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الكود</label><Input value={code} onChange={(e) => setCode(e.target.value)} required /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الاسم</label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
+            <div><label className="field-label">الكود</label><Input value={code} onChange={(e) => setCode(e.target.value)} required /></div>
+            <div><label className="field-label">الاسم</label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">الوحدة</label>
+              <label className="field-label">الوحدة</label>
               <Select value={unit} onChange={(e) => setUnit(e.target.value as MaterialUnit)}>
                 <option value="KG">كجم</option><option value="Gram">جرام</option><option value="Liter">لتر</option>
               </Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">سعر الشراء</label><Input type="number" step="0.0001" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} /></div>
+            <div><label className="field-label">سعر الشراء</label><Input type="number" step="0.0001" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} /></div>
             <Button type="submit" disabled={createMutation.isPending}>حفظ</Button>
           </form>
         </Card>
       )}
       <Card>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
-            <th className="text-start px-4 py-3 font-medium">الكود</th><th className="text-start px-4 py-3 font-medium">الاسم</th>
-            <th className="text-start px-4 py-3 font-medium">الوحدة</th><th className="text-start px-4 py-3 font-medium">سعر الشراء</th>
+        <table className="table">
+          <thead><tr>
+            <th>الكود</th><th>الاسم</th>
+            <th>الوحدة</th><th>سعر الشراء</th>
           </tr></thead>
           <tbody>
             {isLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {materials?.map((m) => (
               <tr key={m.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{m.code}</td><td className="px-4 py-3">{m.name}</td>
-                <td className="px-4 py-3"><Badge tone="blue">{m.unit}</Badge></td><td className="px-4 py-3 ltr-nums">{m.purchasePrice}</td>
+                <td className="font-medium ltr-nums">{m.code}</td><td>{m.name}</td>
+                <td><Badge tone="blue">{m.unit}</Badge></td><td className="ltr-nums">{m.purchasePrice}</td>
               </tr>
             ))}
           </tbody>
@@ -166,39 +166,39 @@ function MaterialTransfersTab() {
       {showForm && (
         <Card className="p-5 mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">المادة</label>
+            <div><label className="field-label">المادة</label>
               <Select value={materialId} onChange={(e) => setMaterialId(e.target.value)} required>
                 <option value="">اختر...</option>{materials?.map((m) => <option key={m.id} value={m.id}>{m.code} - {m.name}</option>)}
               </Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">من مخزن</label>
+            <div><label className="field-label">من مخزن</label>
               <Select value={fromWarehouseId} onChange={(e) => setFromWarehouseId(e.target.value)} required>
                 <option value="">اختر...</option>{warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">إلى مخزن</label>
+            <div><label className="field-label">إلى مخزن</label>
               <Select value={toWarehouseId} onChange={(e) => setToWarehouseId(e.target.value)} required>
                 <option value="">اختر...</option>{warehouses?.filter((w) => w.id !== fromWarehouseId).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الكمية</label><Input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required /></div>
+            <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required /></div>
             <Button type="submit" disabled={createMutation.isPending}>حفظ</Button>
           </form>
-          {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+          {error && <p className="form-error mt-2">{error}</p>}
         </Card>
       )}
       <Card>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
-            <th className="text-start px-4 py-3 font-medium">الرقم</th><th className="text-start px-4 py-3 font-medium">المادة</th>
-            <th className="text-start px-4 py-3 font-medium">من</th><th className="text-start px-4 py-3 font-medium">إلى</th><th className="text-start px-4 py-3 font-medium">الكمية</th>
+        <table className="table">
+          <thead><tr>
+            <th>الرقم</th><th>المادة</th>
+            <th>من</th><th>إلى</th><th>الكمية</th>
           </tr></thead>
           <tbody>
             {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {transfers?.map((t) => (
               <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{t.transferNumber}</td><td className="px-4 py-3">{t.materialCode}</td>
-                <td className="px-4 py-3">{t.fromWarehouseName}</td><td className="px-4 py-3">{t.toWarehouseName}</td><td className="px-4 py-3 ltr-nums">{t.quantity}</td>
+                <td className="font-medium ltr-nums">{t.transferNumber}</td><td>{t.materialCode}</td>
+                <td>{t.fromWarehouseName}</td><td>{t.toWarehouseName}</td><td className="ltr-nums">{t.quantity}</td>
               </tr>
             ))}
           </tbody>
@@ -235,34 +235,34 @@ function MaterialIssuesTab() {
       {showForm && (
         <Card className="p-5 mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">المادة</label>
+            <div><label className="field-label">المادة</label>
               <Select value={materialId} onChange={(e) => setMaterialId(e.target.value)} required><option value="">اختر...</option>{materials?.map((m) => <option key={m.id} value={m.id}>{m.code} - {m.name}</option>)}</Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">المخزن</label>
+            <div><label className="field-label">المخزن</label>
               <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required><option value="">اختر...</option>{warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">أمر التشغيل</label>
+            <div><label className="field-label">أمر التشغيل</label>
               <Select value={productionOrderId} onChange={(e) => setProductionOrderId(e.target.value)} required><option value="">اختر...</option>{orders?.map((o) => <option key={o.id} value={o.id}>{o.orderNumber}</option>)}</Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الكمية</label><Input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">تكلفة الوحدة (اختياري)</label><Input type="number" step="0.0001" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} /></div>
+            <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required /></div>
+            <div><label className="field-label">تكلفة الوحدة (اختياري)</label><Input type="number" step="0.0001" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} /></div>
             <Button type="submit" disabled={createMutation.isPending}>حفظ</Button>
           </form>
-          {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+          {error && <p className="form-error mt-2">{error}</p>}
         </Card>
       )}
       <Card>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
-            <th className="text-start px-4 py-3 font-medium">الرقم</th><th className="text-start px-4 py-3 font-medium">المادة</th>
-            <th className="text-start px-4 py-3 font-medium">أمر التشغيل</th><th className="text-start px-4 py-3 font-medium">الكمية</th><th className="text-start px-4 py-3 font-medium">التكلفة الإجمالية</th>
+        <table className="table">
+          <thead><tr>
+            <th>الرقم</th><th>المادة</th>
+            <th>أمر التشغيل</th><th>الكمية</th><th>التكلفة الإجمالية</th>
           </tr></thead>
           <tbody>
             {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {issues?.map((i) => (
               <tr key={i.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{i.issueNumber}</td><td className="px-4 py-3">{i.materialCode}</td>
-                <td className="px-4 py-3 ltr-nums">{i.productionOrderNumber}</td><td className="px-4 py-3 ltr-nums">{i.quantity}</td><td className="px-4 py-3 ltr-nums">{i.totalCost}</td>
+                <td className="font-medium ltr-nums">{i.issueNumber}</td><td>{i.materialCode}</td>
+                <td className="ltr-nums">{i.productionOrderNumber}</td><td className="ltr-nums">{i.quantity}</td><td className="ltr-nums">{i.totalCost}</td>
               </tr>
             ))}
           </tbody>
@@ -301,33 +301,33 @@ function MaterialPreparationsTab() {
       {showForm && (
         <Card className="p-5 mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">المادة الأصلية</label>
+            <div><label className="field-label">المادة الأصلية</label>
               <Select value={originalMaterialId} onChange={(e) => setOriginalMaterialId(e.target.value)} required><option value="">اختر...</option>{materials?.map((m) => <option key={m.id} value={m.id}>{m.code} - {m.name}</option>)}</Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">المخزن</label>
+            <div><label className="field-label">المخزن</label>
               <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required><option value="">اختر...</option>{warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الكمية الأصلية</label><Input type="number" step="0.001" min="0" value={originalQuantity} onChange={(e) => setOriginalQuantity(e.target.value)} required /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">كمية الماء/المذيب</label><Input type="number" step="0.001" min="0" value={waterQuantity} onChange={(e) => setWaterQuantity(e.target.value)} /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الكمية الناتجة</label><Input type="number" step="0.001" min="0" value={resultingQuantity} onChange={(e) => setResultingQuantity(e.target.value)} required /></div>
+            <div><label className="field-label">الكمية الأصلية</label><Input type="number" step="0.001" min="0" value={originalQuantity} onChange={(e) => setOriginalQuantity(e.target.value)} required /></div>
+            <div><label className="field-label">كمية الماء/المذيب</label><Input type="number" step="0.001" min="0" value={waterQuantity} onChange={(e) => setWaterQuantity(e.target.value)} /></div>
+            <div><label className="field-label">الكمية الناتجة</label><Input type="number" step="0.001" min="0" value={resultingQuantity} onChange={(e) => setResultingQuantity(e.target.value)} required /></div>
             <Button type="submit" disabled={createMutation.isPending}>حفظ</Button>
           </form>
-          {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+          {error && <p className="form-error mt-2">{error}</p>}
         </Card>
       )}
       <Card>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
-            <th className="text-start px-4 py-3 font-medium">الرقم</th><th className="text-start px-4 py-3 font-medium">المادة</th>
-            <th className="text-start px-4 py-3 font-medium">الأصلية</th><th className="text-start px-4 py-3 font-medium">الماء</th><th className="text-start px-4 py-3 font-medium">الناتج</th><th className="text-start px-4 py-3 font-medium">التكلفة</th>
+        <table className="table">
+          <thead><tr>
+            <th>الرقم</th><th>المادة</th>
+            <th>الأصلية</th><th>الماء</th><th>الناتج</th><th>التكلفة</th>
           </tr></thead>
           <tbody>
             {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {preparations?.map((p) => (
               <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{p.preparationNumber}</td><td className="px-4 py-3">{p.originalMaterialCode}</td>
-                <td className="px-4 py-3 ltr-nums">{p.originalQuantity}</td><td className="px-4 py-3 ltr-nums">{p.waterQuantity}</td>
-                <td className="px-4 py-3 ltr-nums">{p.resultingQuantity}</td><td className="px-4 py-3 ltr-nums">{p.cost ?? "-"}</td>
+                <td className="font-medium ltr-nums">{p.preparationNumber}</td><td>{p.originalMaterialCode}</td>
+                <td className="ltr-nums">{p.originalQuantity}</td><td className="ltr-nums">{p.waterQuantity}</td>
+                <td className="ltr-nums">{p.resultingQuantity}</td><td className="ltr-nums">{p.cost ?? "-"}</td>
               </tr>
             ))}
           </tbody>

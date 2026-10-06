@@ -160,18 +160,18 @@ export default function SuppliesPage() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.warehouse")}</label>
+              <label className="field-label">{t("common.warehouse")}</label>
               <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required>
                 <option value="">—</option>
                 {warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("sup.issuedTo")}</label>
+              <label className="field-label">{t("sup.issuedTo")}</label>
               <Input value={issuedTo} onChange={(e) => setIssuedTo(e.target.value)} required maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("sup.department")}</label>
+              <label className="field-label">{t("sup.department")}</label>
               <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
                 <option value="">—</option>
                 {departments?.map((d) => (
@@ -180,15 +180,15 @@ export default function SuppliesPage() {
               </Select>
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("sup.purpose")}</label>
+              <label className="field-label">{t("sup.purpose")}</label>
               <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} required maxLength={500} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.date")}</label>
+              <label className="field-label">{t("common.date")}</label>
               <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.notes")}</label>
+              <label className="field-label">{t("common.notes")}</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
             </div>
             <Button type="submit" disabled={create.isPending}>
@@ -200,7 +200,7 @@ export default function SuppliesPage() {
 
       <Card className="p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-end">
         <div className="w-full sm:w-56">
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.status")}</label>
+          <label className="field-label">{t("common.status")}</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "" | SupplyIssueStatus)}>
             <option value="">{t("common.all")}</option>
             <option value="Draft">{t("sup.draft")}</option>
@@ -211,20 +211,20 @@ export default function SuppliesPage() {
         <p className="text-xs text-gray-400 sm:mb-2">{t("sup.onlySupplies")}</p>
       </Card>
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("approvals.document")}</th>
-              <th className="text-start px-4 py-3 font-medium">PDF</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.date")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("sup.issuedTo")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("sup.purpose")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("sup.totalCost")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("approvals.document")}</th>
+              <th>PDF</th>
+              <th>{t("common.date")}</th>
+              <th>{t("sup.issuedTo")}</th>
+              <th>{t("sup.purpose")}</th>
+              <th>{t("sup.totalCost")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -241,21 +241,21 @@ export default function SuppliesPage() {
             {issues?.map((issue: SupplyIssue) => (
               <Fragment key={issue.id}>
                 <tr className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium ltr-nums">{issue.issueNumber}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium ltr-nums">{issue.issueNumber}</td>
+                  <td>
                     <Button variant="ghost" onClick={SuppliesExports.documentPdf(issue.id)}>PDF</Button>
                   </td>
-                  <td className="px-4 py-3 ltr-nums">{new Date(issue.issueDate).toLocaleDateString("en-GB")}</td>
-                  <td className="px-4 py-3">
+                  <td className="ltr-nums">{new Date(issue.issueDate).toLocaleDateString("en-GB")}</td>
+                  <td>
                     <div>{issue.issuedTo}</div>
                     {issue.departmentName && <div className="text-xs text-gray-400">{issue.departmentName}</div>}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{issue.purpose}</td>
-                  <td className="px-4 py-3 ltr-nums">{money(issue.totalCost)}</td>
-                  <td className="px-4 py-3">
+                  <td className="text-ink-muted">{issue.purpose}</td>
+                  <td className="ltr-nums">{money(issue.totalCost)}</td>
+                  <td>
                     <Badge tone={statusTone(issue.status)}>{statusLabel(issue.status)}</Badge>
                   </td>
-                  <td className="px-4 py-3 flex flex-wrap gap-2">
+                  <td className="flex flex-wrap gap-2">
                     <Button variant="ghost" onClick={() => setExpanded(expanded === issue.id ? null : issue.id)}>
                       {expanded === issue.id ? t("common.close") : t("common.details")}
                     </Button>
@@ -275,14 +275,14 @@ export default function SuppliesPage() {
                 {expanded === issue.id && (
                   <tr className="bg-gray-50/60">
                     <td colSpan={8} className="px-4 py-4">
-                      <table className="w-full text-sm mb-4">
+                      <table className="table mb-4">
                         <thead>
-                          <tr className="text-gray-500 text-xs border-b border-gray-200">
-                            <th className="text-start py-2 font-medium">{t("common.item")}</th>
-                            <th className="text-start py-2 font-medium">{t("common.quantity")}</th>
-                            <th className="text-start py-2 font-medium">{t("pur.unitPrice")}</th>
-                            <th className="text-start py-2 font-medium">{t("common.total")}</th>
-                            <th className="text-start py-2 font-medium">{t("common.actions")}</th>
+                          <tr>
+                            <th>{t("common.item")}</th>
+                            <th>{t("common.quantity")}</th>
+                            <th>{t("pur.unitPrice")}</th>
+                            <th>{t("common.total")}</th>
+                            <th>{t("common.actions")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -293,14 +293,14 @@ export default function SuppliesPage() {
                           )}
                           {issue.lines.map((l) => (
                             <tr key={l.id} className="border-b border-gray-100 last:border-0">
-                              <td className="py-2">
+                              <td>
                                 <span className="ltr-nums text-gray-500 me-2">{l.materialCode}</span>
                                 {l.materialName}
                               </td>
-                              <td className="py-2 ltr-nums">{l.quantity} {l.unit}</td>
-                              <td className="py-2 ltr-nums">{money(l.unitCost)}</td>
-                              <td className="py-2 ltr-nums">{money(l.totalCost)}</td>
-                              <td className="py-2">
+                              <td className="ltr-nums">{l.quantity} {l.unit}</td>
+                              <td className="ltr-nums">{money(l.unitCost)}</td>
+                              <td className="ltr-nums">{money(l.totalCost)}</td>
+                              <td>
                                 {issue.isEditable && (
                                   <button
                                     className="text-red-500 hover:underline text-xs font-semibold"
@@ -324,7 +324,7 @@ export default function SuppliesPage() {
                           }}
                         >
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.item")}</label>
+                            <label className="field-label">{t("common.item")}</label>
                             <Select value={materialId} onChange={(e) => setMaterialId(e.target.value)} required>
                               <option value="">—</option>
                               {supplyMaterials?.map((m) => (
@@ -335,7 +335,7 @@ export default function SuppliesPage() {
                             </Select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                            <label className="field-label">
                               {t("common.quantity")} {materialId ? `(${unitFor(materialId)})` : ""}
                             </label>
                             <Input
@@ -348,7 +348,7 @@ export default function SuppliesPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                            <label className="field-label">
                               {t("pur.unitPrice")}
                             </label>
                             <Input type="number" step="0.0001" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />

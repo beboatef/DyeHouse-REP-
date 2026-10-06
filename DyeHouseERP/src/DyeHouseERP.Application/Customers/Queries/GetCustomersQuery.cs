@@ -20,11 +20,25 @@ public class GetCustomersQueryHandler : IRequestHandler<GetCustomersQuery, List<
             query = query.Where(c => c.IsActive);
 
         if (!string.IsNullOrWhiteSpace(request.Search))
-            query = query.Where(c => c.Code.Contains(request.Search) || c.Name.Contains(request.Search));
+            query = query.Where(c => c.Code.Contains(request.Search)
+                || c.Name.Contains(request.Search)
+                || (c.Phone != null && c.Phone.Contains(request.Search))
+                || (c.ContactPerson != null && c.ContactPerson.Contains(request.Search))
+                || (c.TaxNumber != null && c.TaxNumber.Contains(request.Search)));
 
         return await query
             .OrderBy(c => c.Code)
-            .Select(c => new CustomerDto { Id = c.Id, Code = c.Code, Name = c.Name, IsActive = c.IsActive })
+            .Select(c => new CustomerDto
+            {
+                Id = c.Id,
+                Code = c.Code,
+                Name = c.Name,
+                IsActive = c.IsActive,
+                Phone = c.Phone,
+                Address = c.Address,
+                ContactPerson = c.ContactPerson,
+                TaxNumber = c.TaxNumber
+            })
             .ToListAsync(cancellationToken);
     }
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PurchasesApi, type SupplierLedgerEntry } from "@/api/client";
 import { StatementsExports } from "@/api/exports";
-import { Button, Card, Select } from "@/components/ui";
+import { Button, Card, Input, Select } from "@/components/ui";
 
 /**
  * كشف حساب المورد (spec section 35) - the supplier statement document.
@@ -41,7 +41,7 @@ export default function SupplierStatementPanel() {
     <Card className="mb-6">
       <div className="flex flex-wrap items-end gap-3 p-4 border-b border-gray-100">
         <div className="w-64">
-          <label className="block text-xs font-medium text-gray-600 mb-1">كشف حساب مورد</label>
+          <label className="field-label">كشف حساب مورد</label>
           <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             <option value="">اختر موردًا...</option>
             {balances?.map((b) => (
@@ -50,12 +50,12 @@ export default function SupplierStatementPanel() {
           </Select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">من</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+          <label className="field-label">من</label>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">إلى</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+          <label className="field-label">إلى</label>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         {supplierId && (
           <div className="flex flex-wrap gap-2">
@@ -87,31 +87,33 @@ export default function SupplierStatementPanel() {
             <span className="text-green-700">إجمالي المدفوع (دائن): <b className="ltr-nums">{money(totalIn)}</b></span>
             <span>الرصيد الجاري: <b className="ltr-nums">{money(totalOut - totalIn)}</b></span>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-gray-500 text-xs border-b border-gray-200">
-                <th className="text-start py-2 font-medium">التاريخ</th>
-                <th className="text-start py-2 font-medium">المستند</th>
-                <th className="text-start py-2 font-medium">البيان</th>
-                <th className="text-start py-2 font-medium">مدين</th>
-                <th className="text-start py-2 font-medium">دائن</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.length === 0 && (
-                <tr><td colSpan={5} className="py-6 text-center text-gray-400">لا توجد حركات</td></tr>
-              )}
-              {lines.map((l) => (
-                <tr key={l.id} className="border-b border-gray-50 last:border-0">
-                  <td className="py-2 ltr-nums">{new Date(l.entryDate).toLocaleDateString("en-GB")}</td>
-                  <td className="py-2 ltr-nums">{l.sourceDocumentNumber}</td>
-                  <td className="py-2">{l.description ?? l.sourceDocumentType}</td>
-                  <td className="py-2 ltr-nums">{l.debit || ""}</td>
-                  <td className="py-2 ltr-nums">{l.credit || ""}</td>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>المستند</th>
+                  <th>البيان</th>
+                  <th>مدين</th>
+                  <th>دائن</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lines.length === 0 && (
+                  <tr><td colSpan={5} className="py-6 text-center text-ink-subtle">لا توجد حركات</td></tr>
+                )}
+                {lines.map((l) => (
+                  <tr key={l.id}>
+                    <td className="ltr-nums">{new Date(l.entryDate).toLocaleDateString("en-GB")}</td>
+                    <td className="ltr-nums">{l.sourceDocumentNumber}</td>
+                    <td>{l.description ?? l.sourceDocumentType}</td>
+                    <td className="ltr-nums">{l.debit || ""}</td>
+                    <td className="ltr-nums">{l.credit || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

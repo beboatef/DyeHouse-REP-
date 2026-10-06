@@ -109,6 +109,10 @@ public class ExecuteCustomerImportCommandHandler : IRequestHandler<ExecuteCustom
             var accountNumber = row.Values.GetValueOrDefault("AccountNumber");
             if (!string.IsNullOrWhiteSpace(accountNumber) && !string.Equals(accountNumber, code, StringComparison.OrdinalIgnoreCase))
                 newCustomer.SetAccountNumber(accountNumber!);
+            newCustomer.SetContact(
+                row.Values.GetValueOrDefault("Phone"), row.Values.GetValueOrDefault("Address"),
+                row.Values.GetValueOrDefault("ContactPerson"), row.Values.GetValueOrDefault("TaxNumber"),
+                _currentUser.UserName);
             if (!CustomerImportValidator.IsActive(row, defaultValue: true))
                 newCustomer.Deactivate(_currentUser.UserName);
 
@@ -130,10 +134,14 @@ public class ExecuteCustomerImportCommandHandler : IRequestHandler<ExecuteCustom
         };
     }
 
-    /// <summary>Only the descriptive fields. Code and AccountNumber are identity, not data.</summary>
+    /// <summary>Only the descriptive/contact fields. Code and AccountNumber are identity, not data.</summary>
     private static void ApplyUpdate(Customer customer, ImportRowPreview row, string userName)
     {
-        customer.SetName(row.Values.GetValueOrDefault("Name")!);
+        customer.SetName(row.Values.GetValueOrDefault("Name")!, userName);
+        customer.SetContact(
+            row.Values.GetValueOrDefault("Phone"), row.Values.GetValueOrDefault("Address"),
+            row.Values.GetValueOrDefault("ContactPerson"), row.Values.GetValueOrDefault("TaxNumber"),
+            userName);
 
         if (CustomerImportValidator.IsActive(row, defaultValue: customer.IsActive))
             customer.Activate(userName);
@@ -145,12 +153,13 @@ public class ExecuteCustomerImportCommandHandler : IRequestHandler<ExecuteCustom
 /// <summary>The downloadable template - the exact columns the validator reads (spec section 38, step 1).</summary>
 public static class CustomerImportTemplate
 {
-    public static readonly string[] Headers = { "Code", "Name", "AccountNumber", "IsActive" };
+    public static readonly string[] Headers =
+        { "Code", "Name", "AccountNumber", "Phone", "Address", "ContactPerson", "TaxNumber", "IsActive" };
 
     public static List<object?[]> SampleRows() => new()
     {
-        new object?[] { "CUS-001", "عميل تجريبي", "CUS-001", true },
-        new object?[] { "CUS-002", "Sample Customer", "CUS-002", true }
+        new object?[] { "CUS-001", "عميل تجريبي", "CUS-001", "01000000000", "القاهرة", "مسؤول المبيعات", "T-123", true },
+        new object?[] { "CUS-002", "Sample Customer", "CUS-002", "", "", "", "", true }
     };
 }
 
@@ -161,6 +170,10 @@ internal static class CustomerImportValidator
     private static readonly string[] NameHeaders = { "Name", "اسم", "Customer Name", "اسم العميل" };
     private static readonly string[] AccountHeaders = { "AccountNumber", "Account Number", "رقم الحساب" };
     private static readonly string[] ActiveHeaders = { "IsActive", "Active", "نشط" };
+    private static readonly string[] PhoneHeaders = { "Phone", "Telephone", "Mobile", "هاتف", "تليفون" };
+    private static readonly string[] AddressHeaders = { "Address", "العنوان" };
+    private static readonly string[] ContactHeaders = { "ContactPerson", "Contact", "مسؤول", "مندوب" };
+    private static readonly string[] TaxHeaders = { "TaxNumber", "Tax No", "الرقم الضريبي" };
 
     public static async Task<List<ImportRowPreview>> ValidateAsync(
         byte[] fileBytes, IApplicationDbContext db, IExcelImportReader reader, bool allowUpdate, CancellationToken cancellationToken)
@@ -181,6 +194,10 @@ internal static class CustomerImportValidator
             var name = ImportSheet.Value(raw, headers, NameHeaders);
             var accountNumber = ImportSheet.Value(raw, headers, AccountHeaders);
             var isActive = IsActive(raw, headers, defaultValue: true);
+            var phone = ImportSheet.Value(raw, headers, PhoneHeaders);
+            var address = ImportSheet.Value(raw, headers, AddressHeaders);
+            var contactPerson = ImportSheet.Value(raw, headers, ContactHeaders);
+            var taxNumber = ImportSheet.Value(raw, headers, TaxHeaders);
 
             var errors = new List<string>();
             if (string.IsNullOrWhiteSpace(code)) errors.Add("Code is required.");
@@ -208,6 +225,10 @@ internal static class CustomerImportValidator
                     ["Code"] = code,
                     ["Name"] = name,
                     ["AccountNumber"] = accountNumber ?? code,
+                    ["Phone"] = phone,
+                    ["Address"] = address,
+                    ["ContactPerson"] = contactPerson,
+                    ["TaxNumber"] = taxNumber,
                     ["IsActive"] = isActive ? "true" : "false"
                 }
             });

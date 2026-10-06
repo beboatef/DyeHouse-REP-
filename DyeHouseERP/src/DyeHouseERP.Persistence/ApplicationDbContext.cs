@@ -20,6 +20,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<CheckMovement> CheckMovements => Set<CheckMovement>();
     public DbSet<FormationRequest> FormationRequests => Set<FormationRequest>();
     public DbSet<FormationGroup> FormationGroups => Set<FormationGroup>();
+    public DbSet<FormationBasin> FormationBasins => Set<FormationBasin>();
     public DbSet<FormationSpecTemplate> FormationSpecTemplates => Set<FormationSpecTemplate>();
     public DbSet<Item> Items => Set<Item>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
@@ -84,6 +85,18 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     // Factory-owned materials sales (spec section 26)
     public DbSet<MaterialSale> MaterialSales => Set<MaterialSale>();
     public DbSet<MaterialSaleLine> MaterialSaleLines => Set<MaterialSaleLine>();
+
+    // Purchase units of measure (spec section 44)
+    public DbSet<PurchaseUnit> PurchaseUnits => Set<PurchaseUnit>();
+
+    // Customer returns of processed goods to the raw material warehouse (spec sections 32-33)
+    public DbSet<CustomerReturn> CustomerReturns => Set<CustomerReturn>();
+    public DbSet<CustomerReturnLine> CustomerReturnLines => Set<CustomerReturnLine>();
+
+    // Commercial price lists + the per-Job-Order price snapshot (spec sections 34A, 34, 36)
+    public DbSet<StageCostRate> StageCostRates => Set<StageCostRate>();
+    public DbSet<CustomerServicePrice> CustomerServicePrices => Set<CustomerServicePrice>();
+    public DbSet<ProductionOrderServicePrice> ProductionOrderServicePrices => Set<ProductionOrderServicePrice>();
 
     // Private attachments on business documents (spec section 47)
     public DbSet<Attachment> Attachments => Set<Attachment>();

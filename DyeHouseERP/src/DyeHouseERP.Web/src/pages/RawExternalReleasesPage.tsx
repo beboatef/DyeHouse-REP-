@@ -228,21 +228,21 @@ export default function RawExternalReleasesPage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">العميل</label>
+                <label className="field-label">العميل</label>
                 <Select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setRawMessageId(""); }} required>
                   <option value="">اختر العميل...</option>
                   {customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الصنف</label>
+                <label className="field-label">الصنف</label>
                 <Select value={itemId} onChange={(e) => setItemId(e.target.value)} required>
                   <option value="">اختر الصنف...</option>
                   {items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">السبب</label>
+                <label className="field-label">السبب</label>
                 <Select value={reason} onChange={(e) => setReason(e.target.value as RawReleaseReason)}>
                   <option value="ReturnToCustomer">إرجاع للعميل</option>
                   <option value="ExternalProcessing">تشغيل خارجي</option>
@@ -250,7 +250,7 @@ export default function RawExternalReleasesPage() {
                 </Select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">الرسالة (المرسال)</label>
+                <label className="field-label">الرسالة (المرسال)</label>
                 <Select value={rawMessageId} onChange={(e) => setRawMessageId(e.target.value)} required disabled={!customerId}>
                   <option value="">اختر الرسالة...</option>
                   {messages?.map((m) => (
@@ -261,42 +261,42 @@ export default function RawExternalReleasesPage() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الطرف الخارجي (اختياري)</label>
+                <label className="field-label">الطرف الخارجي (اختياري)</label>
                 <Input value={externalParty} onChange={(e) => setExternalParty(e.target.value)} placeholder="مصنع التشغيل الخارجي / المشتري" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الكمية (كجم)</label>
+                <label className="field-label">الكمية (كجم)</label>
                 <Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الكمية (متر)</label>
+                <label className="field-label">الكمية (متر)</label>
                 <Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} />
               </div>
               {isExternal && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">مرحلة التشغيل الخارجي</label>
+                    <label className="field-label">مرحلة التشغيل الخارجي</label>
                     <Input value={stage} onChange={(e) => setStage(e.target.value)} placeholder="مثال: صباغة خارجية" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">تكلفة التشغيل المتوقعة</label>
+                    <label className="field-label">تكلفة التشغيل المتوقعة</label>
                     <Input type="number" step="0.01" min="0" value={cost} onChange={(e) => setCost(e.target.value)} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">تاريخ العودة المتوقع</label>
+                    <label className="field-label">تاريخ العودة المتوقع</label>
                     <Input type="date" value={expectedReturnDate} onChange={(e) => setExpectedReturnDate(e.target.value)} />
                   </div>
                 </>
               )}
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">ملاحظات</label>
+              <label className="field-label">ملاحظات</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="form-error">{error}</p>}
 
             {negativeStockDetail && (
               <Card className="p-4 border-yellow-300 bg-yellow-50">
@@ -328,17 +328,17 @@ export default function RawExternalReleasesPage() {
             <option value="Cancelled">ملغاة</option>
           </Select>
         </div>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">رقم الحركة</th>
-              <th className="text-start px-4 py-3 font-medium">العميل</th>
-              <th className="text-start px-4 py-3 font-medium">الصنف</th>
-              <th className="text-start px-4 py-3 font-medium">الرسالة المصدر</th>
-              <th className="text-start px-4 py-3 font-medium">الكمية</th>
-              <th className="text-start px-4 py-3 font-medium">السبب</th>
-              <th className="text-start px-4 py-3 font-medium">الحالة</th>
-              <th className="text-start px-4 py-3 font-medium">إجراءات</th>
+            <tr>
+              <th>رقم الحركة</th>
+              <th>العميل</th>
+              <th>الصنف</th>
+              <th>الرسالة المصدر</th>
+              <th>الكمية</th>
+              <th>السبب</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -346,11 +346,11 @@ export default function RawExternalReleasesPage() {
             {!isLoading && releases?.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">لا توجد حركات بعد</td></tr>}
             {releases?.map((r) => (
               <tr key={r.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 align-top">
-                <td className="px-4 py-3 font-medium ltr-nums">{r.releaseNumber}</td>
-                <td className="px-4 py-3">{r.customerCode} - {r.customerName}</td>
-                <td className="px-4 py-3">{r.itemCode} - {r.itemName}</td>
-                <td className="px-4 py-3 ltr-nums">{r.messageNumber}</td>
-                <td className="px-4 py-3 ltr-nums">
+                <td className="font-medium ltr-nums">{r.releaseNumber}</td>
+                <td>{r.customerCode} - {r.customerName}</td>
+                <td>{r.itemCode} - {r.itemName}</td>
+                <td className="ltr-nums">{r.messageNumber}</td>
+                <td className="ltr-nums">
                   {r.quantityKg != null && `${r.quantityKg} كجم `}
                   {r.quantityMeter != null && `${r.quantityMeter} م`}
                   {r.returnedQuantityKg != null && (
@@ -360,9 +360,9 @@ export default function RawExternalReleasesPage() {
                     <div className="text-xs text-green-700">عائد: {r.returnedQuantityMeter} م</div>
                   )}
                 </td>
-                <td className="px-4 py-3"><Badge tone={reasonTone[r.reason]}>{reasonLabel[r.reason]}</Badge></td>
-                <td className="px-4 py-3"><Badge tone={statusTone[r.status]}>{statusLabel[r.status]}</Badge></td>
-                <td className="px-4 py-3">
+                <td><Badge tone={reasonTone[r.reason]}>{reasonLabel[r.reason]}</Badge></td>
+                <td><Badge tone={statusTone[r.status]}>{statusLabel[r.status]}</Badge></td>
+                <td>
                   <ExternalProcessingActions release={r} />
                 </td>
               </tr>

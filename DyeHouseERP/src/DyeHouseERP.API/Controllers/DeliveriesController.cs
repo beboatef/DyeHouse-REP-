@@ -86,6 +86,26 @@ public class DeliveriesController : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
     public async Task<ActionResult<DeliveryDto>> Cancel(Guid id, [FromBody] CancelDeliveryRequest request)
         => Ok(await _mediator.Send(new CancelDeliveryCommand(id, request.Reason)));
+
+    /// <summary>
+    /// Corrects an ALREADY APPROVED delivery (spec section 30). The original
+    /// posted stock movements are never touched: the difference is posted as a
+    /// compensating movement (a reduction returns stock to Ready Goods, an
+    /// increase draws it out) and every changed line is written to the audit log
+    /// with its before/after figures, user, time and reason.
+    /// </summary>
+    [HttpPost("{id:guid}/lines/corrections")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyEditPostApproval)]
+    [ProducesResponseType(typeof(DeliveryDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<DeliveryDto>> CorrectApprovedLines(Guid id, [FromBody] EditDeliveredDeliveryRequest request)
+        => Ok(await _mediator.Send(new EditDeliveredDeliveryCommand(
+            id, request.Lines.Select(l => new DeliveryLineQuantity(l.LineId, l.QuantityKg, l.QuantityMeter)).ToList(),
+            request.Reason)));
 }
 
 public record CancelDeliveryRequest(string Reason);
+
+/// <summary>Request body for correcting an approved delivery's line quantities.</summary>
+public record EditDeliveredDeliveryLineRequest(Guid LineId, decimal? QuantityKg, decimal? QuantityMeter);
+
+public record EditDeliveredDeliveryRequest(IReadOnlyList<EditDeliveredDeliveryLineRequest> Lines, string Reason);

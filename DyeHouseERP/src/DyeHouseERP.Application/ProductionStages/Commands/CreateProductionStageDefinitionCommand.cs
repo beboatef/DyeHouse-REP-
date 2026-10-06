@@ -12,7 +12,7 @@ public record CreateProductionStageDefinitionCommand(
     string Code, string Name, int Sequence,
     bool RequiresInputQuantity, bool RequiresOutputQuantity, bool RequiresApproval,
     bool AllowSkip, bool AllowRepeat, bool AllowRework, bool AllowReturn,
-    string? Notes) : IRequest<ProductionStageDefinitionDto>;
+    string? Notes, bool IsFormationStage = false) : IRequest<ProductionStageDefinitionDto>;
 
 public class CreateProductionStageDefinitionCommandValidator : AbstractValidator<CreateProductionStageDefinitionCommand>
 {
@@ -45,7 +45,13 @@ public class CreateProductionStageDefinitionCommandHandler
         var stage = new ProductionStageDefinition(
             request.Code, request.Name, request.Sequence, _currentUser.UserName,
             request.RequiresInputQuantity, request.RequiresOutputQuantity, request.RequiresApproval,
-            request.AllowSkip, request.AllowRepeat, request.AllowRework, request.AllowReturn, request.Notes);
+            request.AllowSkip, request.AllowRepeat, request.AllowRework, request.AllowReturn,
+            request.Notes, request.IsFormationStage);
+
+        // At most one stage may be the formation stage (التشكيل), so creating a new
+        // formation stage moves the flag rather than adding a second one.
+        if (request.IsFormationStage)
+            await ClearOtherFormationStagesAsync(_db, null, _currentUser.UserName, cancellationToken);
 
         _db.ProductionStageDefinitions.Add(stage);
         await _db.SaveChangesAsync(cancellationToken);
@@ -67,6 +73,40 @@ public class CreateProductionStageDefinitionCommandHandler
         AllowRepeat = s.AllowRepeat,
         AllowRework = s.AllowRework,
         AllowReturn = s.AllowReturn,
+        IsFormationStage = s.IsFormationStage,
+        IsReadyGoodsStage = s.IsReadyGoodsStage,
         Notes = s.Notes
     };
+
+    /// <summary>
+    /// Clears IsFormationStage on every stage other than <paramref name="exceptStageId"/>,
+    /// so the "which stage is التشكيل" answer can never be ambiguous.
+    /// </summary>
+    internal static async Task ClearOtherFormationStagesAsync(
+        IApplicationDbContext db, Guid? exceptStageId, string modifiedBy, CancellationToken cancellationToken)
+    {
+        var others = await db.ProductionStageDefinitions
+            .Where(s => s.IsFormationStage && (exceptStageId == null || s.Id != exceptStageId.Value))
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in others)
+            other.SetFormationStage(false, modifiedBy);
+    }
+
+    /// <summary>
+    /// Clears the ready-goods flag from every stage except one, so "الجاهز" is
+    /// always exactly one stage - the same move-the-flag approach the formation
+    /// stage uses. Keeping the two symmetric is what stops a route from having
+    /// an ambiguous start or an ambiguous end.
+    /// </summary>
+    internal static async Task ClearOtherReadyGoodsStagesAsync(
+        IApplicationDbContext db, Guid? exceptStageId, string modifiedBy, CancellationToken cancellationToken)
+    {
+        var others = await db.ProductionStageDefinitions
+            .Where(s => s.IsReadyGoodsStage && (exceptStageId == null || s.Id != exceptStageId.Value))
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in others)
+            other.SetReadyGoodsStage(false, modifiedBy);
+    }
 }

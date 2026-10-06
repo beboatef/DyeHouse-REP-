@@ -8,8 +8,8 @@ import {
   LayoutDashboard, Users, Package, Warehouse,
   ClipboardList, Layers3, GitBranch, FlaskConical, PackageCheck, Truck, Receipt,
   Wallet, FileBarChart, ScrollText, UserCog, Settings, LogOut, Factory,
-  FormInput, Ruler, BadgeDollarSign, LifeBuoy, Languages, ShieldCheck,
-  ShoppingCart, Banknote, Handshake, ClipboardCheck,
+  FormInput, Ruler, BadgeDollarSign, LifeBuoy, Languages, ShieldCheck, PackageOpen,
+  ShoppingCart, Banknote, Handshake, ClipboardCheck, Tags,
   Menu, X, PanelLeftClose, PanelLeftOpen, Sun, Moon, Monitor,
   ChevronRight, ChevronLeft, Search
 } from "lucide-react";
@@ -40,12 +40,18 @@ const navGroups: NavGroup[] = [
       { to: "/suppliers", labelKey: "nav.suppliers", icon: <Handshake size={18} /> },
       { to: "/items", labelKey: "nav.items", icon: <Package size={18} /> },
       { to: "/warehouses", labelKey: "nav.warehouses", icon: <Warehouse size={18} /> },
+      { to: "/purchase-units", labelKey: "nav.purchaseUnits", icon: <Ruler size={18} /> },
       { to: "/production-stages", labelKey: "nav.productionStages", icon: <Layers3 size={18} /> }
     ]
   },
   {
     titleKey: "nav.group.warehouse",
-    items: [{ to: "/warehouse", labelKey: "nav.warehouseHub", icon: <Warehouse size={18} /> }]
+    items: [
+      { to: "/warehouse", labelKey: "nav.warehouseHub", icon: <Warehouse size={18} /> },
+      // Customer returns are a raw-material receipt (spec section 32), so they sit
+      // with the warehouse module rather than with deliveries.
+      { to: "/customer-returns", labelKey: "nav.customerReturns", icon: <PackageOpen size={18} /> }
+    ]
   },
   {
     titleKey: "nav.group.formation",
@@ -77,7 +83,10 @@ const navGroups: NavGroup[] = [
       { to: "/deliveries", labelKey: "nav.delivery", icon: <Truck size={18} /> },
       { to: "/invoices", labelKey: "nav.invoices", icon: <Receipt size={18} /> },
       { to: "/treasury", labelKey: "nav.treasury", icon: <Wallet size={18} /> },
-      { to: "/checks", labelKey: "nav.checks", icon: <BadgeDollarSign size={18} /> }
+      { to: "/checks", labelKey: "nav.checks", icon: <BadgeDollarSign size={18} /> },
+      // The two commercial lists: what each stage costs US, and what the customer
+      // is charged (spec sections 34 + 36).
+      { to: "/price-lists", labelKey: "nav.priceLists", icon: <Tags size={18} /> }
     ]
   },
   {
@@ -187,7 +196,7 @@ export default function Layout() {
       {navGroups.map((group) => (
         <div key={group.titleKey}>
           {!collapsed && (
-            <div className="mb-1.5 px-3 text-2xs font-semibold uppercase tracking-wide text-ink-subtle">
+            <div className="mb-1.5 animate-fade-in px-3 text-2xs font-semibold uppercase tracking-wide text-ink-subtle">
               {t(group.titleKey)}
             </div>
           )}
@@ -204,7 +213,7 @@ export default function Layout() {
                 }
               >
                 <span className="shrink-0">{item.icon}</span>
-                {!collapsed && <span className="truncate">{t(item.labelKey)}</span>}
+                {!collapsed && <span className="animate-fade-in truncate">{t(item.labelKey)}</span>}
               </NavLink>
             ))}
           </div>
@@ -224,7 +233,7 @@ export default function Layout() {
           </div>
         )}
         {!collapsed && (
-          <div className="min-w-0">
+          <div className="min-w-0 animate-fade-in">
             <div className="truncate text-sm font-bold leading-tight text-ink">{companyName}</div>
             <div className="mt-0.5 truncate text-2xs text-ink-subtle">{t("app.subtitle")}</div>
           </div>
@@ -242,7 +251,7 @@ export default function Layout() {
 
       <div className="border-t border-line px-3 py-3">
         {!collapsed && (
-          <div className="mb-2 flex items-center gap-2 px-2">
+          <div className="mb-2 flex animate-fade-in items-center gap-2 px-2">
             <Languages size={15} className="shrink-0 text-ink-subtle" />
             <span className="text-2xs text-ink-subtle">{t("app.language")}</span>
             <div className="ms-auto flex overflow-hidden rounded-lg border border-line-strong">
@@ -351,14 +360,20 @@ export default function Layout() {
           <div className="flex shrink-0 items-center gap-1">
             {/* Search is a jump-to-module control: it filters the existing nav
                 rather than querying the API, so it adds no backend surface. */}
-            <NavSearch groups={navGroups} t={t} />
+            <NavSearch groups={navGroups} t={t} isRtl={isRtl} />
             <ThemeToggle theme={theme} setTheme={setTheme} t={t} />
           </div>
         </header>
 
         <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div className="page p-4 sm:p-6 lg:p-8">
-            <Outlet />
+            {/* One page-transition point for all 42 pages. Keying on the
+                pathname remounts the subtree on a real navigation, which
+                replays the entrance; a query-only change (?tab=...) keeps the
+                same pathname and correctly does NOT replay it. */}
+            <div key={location.pathname} className="animate-page-enter">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>
@@ -367,7 +382,15 @@ export default function Layout() {
 }
 
 /* ------------------------------------------------------------------ search */
-function NavSearch({ groups, t }: { groups: NavGroup[]; t: (k: string, f?: string) => string }) {
+function NavSearch({
+  groups,
+  t,
+  isRtl
+}: {
+  groups: NavGroup[];
+  t: (k: string, f?: string) => string;
+  isRtl: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
@@ -394,7 +417,13 @@ function NavSearch({ groups, t }: { groups: NavGroup[]; t: (k: string, f?: strin
       {open && (
         <>
           <button className="fixed inset-0 z-30 cursor-default" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="absolute end-0 z-40 mt-2 w-72 rounded-lg border border-line bg-surface p-2 shadow-pop">
+          {/* Direction-aware dropdown: fade + slight scale from the corner it
+              is anchored to, so it opens "out of" the trigger in both RTL
+              (top-left) and LTR (top-right) without a hardcoded side. */}
+          <div
+            className="animate-pop-in absolute end-0 z-40 mt-2 w-72 rounded-lg border border-line bg-surface p-2 shadow-pop"
+            style={{ transformOrigin: isRtl ? "top left" : "top right" }}
+          >
             <input
               autoFocus
               value={query}

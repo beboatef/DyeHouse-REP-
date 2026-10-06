@@ -49,6 +49,15 @@ public static class Permissions
     public const string ReadyTransfer = "ready.transfer";
     public const string ReadyDeliver = "ready.deliver";
 
+    /// <summary>
+    /// Authorizes correcting an ALREADY APPROVED (delivered) delivery
+    /// (spec sections 30 + 49). Deliberately NOT part of <see cref="ReadyDeliver"/>:
+    /// creating and posting a delivery is normal operation, whereas changing one
+    /// after customers have been charged against it is a sensitive correction that
+    /// moves stock back into Ready Goods and needs its own right.
+    /// </summary>
+    public const string ReadyEditPostApproval = "ready.edit_post_approval";
+
     public const string InvoicesView = "invoices.view";
     public const string InvoicesCreate = "invoices.create";
     public const string InvoicesIssue = "invoices.issue";
@@ -118,6 +127,13 @@ public static class Permissions
     /// <summary>Signing off the approved cost of a completed Job Order - a financial decision, kept separate from editing the estimate.</summary>
     public const string CostingApprove = "costing.approve";
 
+    // ---- Commercial price lists (spec sections 34A + 36) ----
+    // Kept separate from costing: reading the cost list, reading the service price
+    // list, and changing either are four different rights. A factory costs its own
+    // work; only commercial staff set what a customer is charged.
+    public const string PricingView = "pricing.view";
+    public const string PricingManage = "pricing.manage";
+
     // ---- Operating supplies internal issue (spec section 27) ----
     public const string SuppliesView = "supplies.view";
     public const string SuppliesIssue = "supplies.issue";
@@ -153,7 +169,7 @@ public static class Permissions
         RawReceive, RawInspect, RawConsume, RawReturn, RawExternalRelease, RawTransfer,
         ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, StageRequiresApproval,
         InventoryView, InventoryEdit, InventoryDelete, InventoryAdjust, InventoryAllowNegativeStock, InventoryApproveNegativeStock,
-        ReadyView, ReadyTransfer, ReadyDeliver,
+        ReadyView, ReadyTransfer, ReadyDeliver, ReadyEditPostApproval,
         InvoicesView, InvoicesCreate, InvoicesIssue, InvoicesCancel,
         TreasuryView, TreasuryCreate,
         FormationView, FormationCreate, FormationEdit, FormationSubmit, FormationApprove,
@@ -165,6 +181,7 @@ public static class Permissions
         PurchasesReceive, PurchasesCancel, PurchasesInvoice, PurchasesPay, PurchasesExport,
         PayrollView, PayrollManageEmployees, PayrollCreate, PayrollApprove, PayrollPost, PayrollCancel,
         CostingView, CostingEditEstimate, CostingApprove,
+        PricingView, PricingManage,
         SuppliesView, SuppliesIssue, SuppliesCancel,
         MaterialSalesView, MaterialSalesCreate, MaterialSalesPost, MaterialSalesCancel,
         ApprovalsView,

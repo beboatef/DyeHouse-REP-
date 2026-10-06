@@ -79,28 +79,28 @@ export default function CustomerTransfersPage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">من عميل</label>
+                <label className="field-label">من عميل</label>
                 <Select value={fromCustomerId} onChange={(e) => { setFromCustomerId(e.target.value); setRawMessageId(""); }} required>
                   <option value="">اختر...</option>
                   {customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">إلى عميل</label>
+                <label className="field-label">إلى عميل</label>
                 <Select value={toCustomerId} onChange={(e) => setToCustomerId(e.target.value)} required>
                   <option value="">اختر...</option>
                   {customers?.filter((c) => c.id !== fromCustomerId).map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الصنف</label>
+                <label className="field-label">الصنف</label>
                 <Select value={itemId} onChange={(e) => setItemId(e.target.value)} required>
                   <option value="">اختر الصنف...</option>
                   {items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}
                 </Select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">الرسالة (المرسال)</label>
+                <label className="field-label">الرسالة (المرسال)</label>
                 <Select value={rawMessageId} onChange={(e) => setRawMessageId(e.target.value)} required disabled={!fromCustomerId}>
                   <option value="">اختر الرسالة...</option>
                   {messages?.map((m) => (
@@ -111,26 +111,26 @@ export default function CustomerTransfersPage() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الكمية (كجم)</label>
+                <label className="field-label">الكمية (كجم)</label>
                 <Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الكمية (متر)</label>
+                <label className="field-label">الكمية (متر)</label>
                 <Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">سبب التحويل</label>
+                <label className="field-label">سبب التحويل</label>
                 <Input value={reason} onChange={(e) => setReason(e.target.value)} required />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">ملاحظات</label>
+              <label className="field-label">ملاحظات</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="form-error">{error}</p>}
 
             {negativeStockDetail && (
               <Card className="p-4 border-yellow-300 bg-yellow-50">
@@ -152,15 +152,15 @@ export default function CustomerTransfersPage() {
       )}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">رقم التحويل</th>
-              <th className="text-start px-4 py-3 font-medium">من</th>
-              <th className="text-start px-4 py-3 font-medium">إلى</th>
-              <th className="text-start px-4 py-3 font-medium">الصنف</th>
-              <th className="text-start px-4 py-3 font-medium">الرسالة</th>
-              <th className="text-start px-4 py-3 font-medium">الكمية</th>
+            <tr>
+              <th>رقم التحويل</th>
+              <th>من</th>
+              <th>إلى</th>
+              <th>الصنف</th>
+              <th>الرسالة</th>
+              <th>الكمية</th>
             </tr>
           </thead>
           <tbody>
@@ -168,12 +168,12 @@ export default function CustomerTransfersPage() {
             {!isLoading && transfers?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد تحويلات بعد</td></tr>}
             {transfers?.map((t) => (
               <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{t.transferNumber}</td>
-                <td className="px-4 py-3">{t.fromCustomerCode}</td>
-                <td className="px-4 py-3">{t.toCustomerCode}</td>
-                <td className="px-4 py-3">{t.itemCode}</td>
-                <td className="px-4 py-3 ltr-nums">{t.messageNumber}</td>
-                <td className="px-4 py-3 ltr-nums">
+                <td className="font-medium ltr-nums">{t.transferNumber}</td>
+                <td>{t.fromCustomerCode}</td>
+                <td>{t.toCustomerCode}</td>
+                <td>{t.itemCode}</td>
+                <td className="ltr-nums">{t.messageNumber}</td>
+                <td className="ltr-nums">
                   {t.quantityKg != null && `${t.quantityKg} كجم `}
                   {t.quantityMeter != null && `${t.quantityMeter} م`}
                 </td>

@@ -60,7 +60,7 @@ public class CreateProductionOrderCommandHandler : IRequestHandler<CreateProduct
             .OrderBy(s => s.Sequence)
             .ToListAsync(cancellationToken);
 
-        order.BuildStageRoute(activeStages);
+        order.BuildStageRoute(activeStages, _currentUser.UserName);
 
         _db.ProductionOrders.Add(order);
         await _db.SaveChangesAsync(cancellationToken);

@@ -35,14 +35,38 @@ public class CustomersController : ControllerBase
         return CreatedAtAction(nameof(Get), new { }, result);
     }
 
+    /// <summary>
+    /// Updates a customer's name and contact details (spec section 7). The Code is never
+    /// editable - it is the key every downstream document already refers to.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersEdit)]
+    public async Task<ActionResult<CustomerDto>> Update(Guid id, [FromBody] UpdateCustomerCommand command)
+    {
+        if (id != command.Id) command = command with { Id = id };
+        return Ok(await _mediator.Send(command));
+    }
+
+    /// <summary>
+    /// Deactivation, never deletion: a customer that owns raw material, invoices and deliveries
+    /// must stay resolvable so old documents keep resolving.
+    /// </summary>
+    [HttpPost("{id:guid}/active")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersEdit)]
+    public async Task<ActionResult<CustomerDto>> SetActive(Guid id, [FromBody] SetCustomerActiveRequest request)
+        => Ok(await _mediator.Send(new SetCustomerActiveCommand(id, request.IsActive)));
+
     /// <summary>Excel export of the current customer list (spec section 37) - respects the same activeOnly/search filters as GET.</summary>
     [HttpGet("export/excel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportExcel([FromQuery] bool? activeOnly, [FromQuery] string? search, [FromServices] Application.Common.Interfaces.IReportExportService export)
     {
         var customers = await _mediator.Send(new GetCustomersQuery(activeOnly, search));
-        var headers = new List<string> { "Code", "Name", "Active" };
-        var rows = customers.Select(c => new object?[] { c.Code, c.Name, c.IsActive ? "Yes" : "No" }).ToList();
+        var headers = new List<string> { "Code", "Name", "Phone", "Address", "ContactPerson", "TaxNumber", "Active" };
+        var rows = customers.Select(c => new object?[]
+        {
+            c.Code, c.Name, c.Phone, c.Address, c.ContactPerson, c.TaxNumber, c.IsActive ? "Yes" : "No"
+        }).ToList();
         var bytes = export.GenerateExcel("Customers", headers, rows);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "customers.xlsx");
     }
@@ -58,9 +82,9 @@ public class CustomersController : ControllerBase
         [FromQuery] string format = "excel", [FromServices] Application.Common.Interfaces.IReportExportService export = null!)
     {
         var customers = await _mediator.Send(new GetCustomersQuery(activeOnly, search));
-        var headers = new List<string> { "Code", "Name", "Active" };
+        var headers = new List<string> { "Code", "Name", "Phone", "Address", "ContactPerson", "TaxNumber", "Active" };
         var rows = customers
-            .Select(c => new object?[] { c.Code, c.Name, c.IsActive ? "Yes" : "No" })
+            .Select(c => new object?[] { c.Code, c.Name, c.Phone, c.Address, c.ContactPerson, c.TaxNumber, c.IsActive ? "Yes" : "No" })
             .ToList();
 
         return Common.ExportFileHelper.ToFile(export, format, "Customer List", "DyeHouse ERP",
@@ -110,3 +134,5 @@ public class CustomersController : ControllerBase
         => Ok(await _mediator.Send(new ExecuteCustomerImportCommand(
             await Common.ExportFileHelper.ReadUploadAsync(file), AllowUpdate: true)));
 }
+
+public record SetCustomerActiveRequest(bool IsActive);

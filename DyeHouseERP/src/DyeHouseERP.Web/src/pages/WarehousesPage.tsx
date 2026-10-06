@@ -79,15 +79,15 @@ export default function WarehousesPage() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">كود المخزن</label>
+              <label className="field-label">كود المخزن</label>
               <Input value={code} onChange={(e) => setCode(e.target.value)} required maxLength={30} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">اسم المخزن</label>
+              <label className="field-label">اسم المخزن</label>
               <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">نوع المخزن</label>
+              <label className="field-label">نوع المخزن</label>
               <Select value={kind} onChange={(e) => setKind(e.target.value)}>
                 {kinds.map((k) => (
                   <option key={k.value} value={k.value}>{k.label}</option>
@@ -98,18 +98,18 @@ export default function WarehousesPage() {
               {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
           </form>
-          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+          {error && <p className="form-error mt-3">{error}</p>}
         </Card>
       )}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">الكود</th>
-              <th className="text-start px-4 py-3 font-medium">الاسم</th>
-              <th className="text-start px-4 py-3 font-medium">النوع</th>
-              <th className="text-start px-4 py-3 font-medium">الحالة</th>
+            <tr>
+              <th>الكود</th>
+              <th>الاسم</th>
+              <th>النوع</th>
+              <th>الحالة</th>
             </tr>
           </thead>
           <tbody>
@@ -121,10 +121,10 @@ export default function WarehousesPage() {
             )}
             {warehouses?.map((w) => (
               <tr key={w.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{w.code}</td>
-                <td className="px-4 py-3">{w.name}</td>
-                <td className="px-4 py-3"><Badge tone="blue">{kindLabel(w.kind)}</Badge></td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{w.code}</td>
+                <td>{w.name}</td>
+                <td><Badge tone="blue">{kindLabel(w.kind)}</Badge></td>
+                <td>
                   <Badge tone={w.isActive ? "green" : "gray"}>{w.isActive ? "نشط" : "غير نشط"}</Badge>
                 </td>
               </tr>

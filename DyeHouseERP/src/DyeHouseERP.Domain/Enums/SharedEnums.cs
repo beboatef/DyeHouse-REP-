@@ -73,7 +73,13 @@ public enum DocumentType
     SupplyIssue = 24,
 
     // ---- Materials/chemicals sold to third parties (spec section 26) ----
-    MaterialSale = 25
+    MaterialSale = 25,
+
+    // ---- Customer returns of processed goods to the raw material warehouse (spec sections 32-33) ----
+    CustomerReturn = 26,
+
+    // ---- Release of unused raw material when a Job Order is paused (spec section 19) ----
+    ProductionOrderPause = 27
 }
 
 /// <summary>
@@ -151,7 +157,15 @@ public enum ProductionOrderStatus
     RawAllocated = 2,    // raw material allocated from message(s), not yet started
     InProduction = 3,    // at least one stage started
     Completed = 4,       // all required stages completed / transferred to ready goods
-    Cancelled = 5
+    Cancelled = 5,
+
+    /// <summary>
+    /// موقوف مؤقتًا - paused, NOT cancelled (spec section 19).
+    /// Unused raw material has been released back to the customer's raw stock and
+    /// the order can still be resumed, which re-issues material and returns the
+    /// order to التشكيل. A cancelled order cannot come back.
+    /// </summary>
+    Paused = 6
 }
 
 public enum ProductionPriority
@@ -245,13 +259,34 @@ public enum InvoiceStatus
 }
 
 /// <summary>Operating cost categories assignable to a Production Order (spec section 35) - Materials and Preparation costs are derived from MaterialIssue/MaterialPreparation instead of this, to avoid double counting.</summary>
+/// <summary>
+/// Categories of an additional Job Order cost line (spec section 35).
+///
+/// "تشغيل خارجي" (external processing) is deliberately NOT a category here: that
+/// cost is already DERIVED from the RawExternalRelease rows that recorded the
+/// actual outside charge, so allowing it as a hand-entered cost entry as well
+/// would double-count the same money. The categories below are the ones the spec
+/// expects a user to add manually.
+///
+/// Stored as a string (nvarchar) by CostEntryConfiguration, so adding members
+/// here is not a schema change.
+/// </summary>
 public enum CostCategory
 {
     Labor = 1,
     Electricity = 2,
     Fuel = 3,
     Maintenance = 4,
-    Other = 5
+    Other = 5,
+
+    /// <summary>نقل - transport / freight.</summary>
+    Transport = 6,
+
+    /// <summary>تعبئة - packaging.</summary>
+    Packaging = 7,
+
+    /// <summary>إصلاح - repairs.</summary>
+    Repair = 8
 }
 
 /// <summary>Lifecycle of a customer-submitted processing request (spec section 36) before it becomes an internal Production Order.</summary>

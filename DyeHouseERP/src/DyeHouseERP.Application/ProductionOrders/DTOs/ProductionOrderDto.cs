@@ -59,6 +59,22 @@ public class ProductionOrderDto
 
     public DateTime OrderDate { get; set; }
     public ProductionOrderStatus Status { get; set; }
+
+    /// <summary>
+    /// The previous cycle's loss percentage (spec section 19). Populated when a
+    /// paused order is resumed, so the resumed cycle starts from the figure the
+    /// factory actually achieved last time rather than a guess.
+    /// </summary>
+    public decimal? PreviousCycleLossPercent { get; set; }
+
+    /// <summary>
+    /// Expected output for a resumed cycle, derived from the previous cycle's
+    /// output and loss percentage. ADVISORY ONLY: the user still enters the actual
+    /// output and the actual loss is recalculated from it.
+    /// </summary>
+    public decimal? ExpectedOutputKg { get; set; }
+
+    public decimal? ExpectedOutputMeter { get; set; }
     public Guid? ReprocessingOfProductionOrderId { get; set; }
 
     /// <summary>Set when this Job Order fulfils an approved Formation Request (spec section 31).</summary>
@@ -66,6 +82,10 @@ public class ProductionOrderDto
     public string? FormationRequestNumber { get; set; }
     public Guid? FormationGroupId { get; set; }
     public int? FormationGroupNumber { get; set; }
+
+    /// <summary>The formation basin this order fulfils, when it was converted from one (spec sections 10-11).</summary>
+    public Guid? FormationBasinId { get; set; }
+    public int? FormationBasinNumber { get; set; }
     public List<RawAllocationDto> RawAllocations { get; set; } = new();
     public List<StageExecutionDto> StageExecutions { get; set; } = new();
 }

@@ -30,28 +30,28 @@ export default function ApprovalCenterPage() {
 
   const renderRow = (item: ApprovalItem) => (
     <tr key={`${item.category}-${item.id}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-      <td className="px-4 py-3">
+      <td>
         <div className="font-medium text-gray-800 ltr-nums">{item.documentNumber}</div>
         <div className="text-xs text-gray-400">{new Date(item.date).toLocaleDateString("en-GB")}</div>
       </td>
-      <td className="px-4 py-3">
+      <td>
         <Badge tone={item.informational ? "gray" : "yellow"}>
           {t(`approvals.cat.${item.category}`, item.category)}
         </Badge>
       </td>
-      <td className="px-4 py-3 text-gray-700">{item.party ?? "—"}</td>
-      <td className="px-4 py-3 text-gray-600">
+      <td className="text-gray-700">{item.party ?? "—"}</td>
+      <td className="text-ink-muted">
         <div>{item.summary ?? "—"}</div>
         {item.amount != null && <div className="text-xs text-gray-500 ltr-nums">{money(item.amount)}</div>}
         {item.informational && <div className="text-xs text-gray-400">{t("approvals.informational")}</div>}
       </td>
-      <td className="px-4 py-3 text-gray-600">
+      <td className="text-ink-muted">
         <div>{item.requestedBy}</div>
         {item.requestedAtUtc && (
           <div className="text-xs text-gray-400">{new Date(item.requestedAtUtc).toLocaleString("en-GB")}</div>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td>
         <Button variant="secondary" onClick={() => navigate(item.linkPath)}>
           {t("approvals.open")} {isRtl ? <ArrowLeft size={14} /> : <ArrowRight size={14} />}
         </Button>
@@ -77,15 +77,15 @@ export default function ApprovalCenterPage() {
       </div>
 
       <Card className="mb-6">
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("approvals.document")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("approvals.category")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("approvals.party")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("approvals.summary")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("approvals.requestedBy")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("approvals.document")}</th>
+              <th>{t("approvals.category")}</th>
+              <th>{t("approvals.party")}</th>
+              <th>{t("approvals.summary")}</th>
+              <th>{t("approvals.requestedBy")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -110,15 +110,15 @@ export default function ApprovalCenterPage() {
             {t("approvals.cat.NegativeStockException")}
           </div>
           <p className="px-4 pt-1 text-xs text-gray-400">{t("approvals.informational")}</p>
-          <table className="w-full text-sm">
+          <table className="table">
             <thead>
-              <tr className="border-b border-gray-200 text-gray-500 text-xs">
-                <th className="text-start px-4 py-3 font-medium">{t("approvals.document")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("approvals.category")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("approvals.party")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("approvals.summary")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("approvals.requestedBy")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+              <tr>
+                <th>{t("approvals.document")}</th>
+                <th>{t("approvals.category")}</th>
+                <th>{t("approvals.party")}</th>
+                <th>{t("approvals.summary")}</th>
+                <th>{t("approvals.requestedBy")}</th>
+                <th>{t("common.actions")}</th>
               </tr>
             </thead>
             <tbody>{recorded.map(renderRow)}</tbody>

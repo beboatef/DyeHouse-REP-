@@ -28,6 +28,24 @@ public class ProductionOrderStageExecution : BaseEntity
     public decimal? SeparatesKg { get; private set; }
     public decimal? SeparatesMeter { get; private set; }
 
+    /// <summary>
+    /// The IMMUTABLE weight this stage started from (spec section 15).
+    /// For the first stage it is the Job Order's actual weight; for every later
+    /// stage it is the previous stage's final output. It is written once when the
+    /// stage is activated and is NEVER overwritten - the output may be edited
+    /// before transfer, but the baseline the loss is measured against stays put,
+    /// so 783 baseline / 775 then 778 edited reads as a real 1.02% then 0.64%.
+    /// </summary>
+    public decimal? BaselineKg { get; private set; }
+    public decimal? BaselineMeter { get; private set; }
+
+    /// <summary>
+    /// Loss as a percentage of the baseline, recorded when the stage is closed.
+    /// Null while the stage is still open, because there is no final figure yet.
+    /// </summary>
+    public decimal? LossPercentKg { get; private set; }
+    public decimal? LossPercentMeter { get; private set; }
+
     public string? Operator { get; private set; }
     public string? Notes { get; private set; }
     public DateTime? StartedAtUtc { get; private set; }
@@ -51,6 +69,86 @@ public class ProductionOrderStageExecution : BaseEntity
         ProductionOrderId = productionOrderId;
         StageDefinitionId = stageDefinitionId;
         Sequence = sequence;
+    }
+
+    /// <summary>
+    /// Activates this stage with its starting weight (spec section 14). This is
+    /// the ONLY moment a baseline is set, which is what makes it immutable
+    /// afterwards: once the stage has run, its baseline is history.
+    /// </summary>
+    public void Activate(decimal? baselineKg, decimal? baselineMeter, string startedBy)
+    {
+        if (Status != StageExecutionStatus.Pending)
+            throw new DomainException($"Stage is {Status} and cannot be activated.");
+
+        BaselineKg = baselineKg;
+        BaselineMeter = baselineMeter;
+        Status = StageExecutionStatus.InProgress;
+        Operator = startedBy;
+        StartedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Closes the stage by recording its final output and deriving the loss from
+    /// the immutable baseline (spec sections 14-15). Loss = baseline - output;
+    /// loss % = loss / baseline x 100. KG and Meter are handled independently -
+    /// they are never converted into one another.
+    ///
+    /// A completed stage is LOCKED: this throws once the stage is Completed, so
+    /// an ordinary re-entry cannot rewrite a finished stage's figures.
+    /// </summary>
+    public void CloseWithOutput(
+        decimal? outputKg, decimal? outputMeter, decimal? separatesKg, decimal? separatesMeter,
+        string? notes, string completedBy)
+    {
+        if (Status == StageExecutionStatus.Completed)
+            throw new DomainException(
+                "This stage is already closed and locked. A finished stage is corrected with a compensating movement, never by re-entering its figures.");
+
+        if (outputKg is null && outputMeter is null)
+            throw new DomainException("Enter the final output quantity for this stage.");
+
+        OutputKg = outputKg;
+        OutputMeter = outputMeter;
+        SeparatesKg = separatesKg;
+        SeparatesMeter = separatesMeter;
+        Notes = notes;
+        Operator = completedBy;
+
+        LossKg = BaselineKg.HasValue && outputKg.HasValue ? BaselineKg - outputKg : null;
+        LossMeter = BaselineMeter.HasValue && outputMeter.HasValue ? BaselineMeter - outputMeter : null;
+
+        // Guard against a divide-by-zero on a zero baseline; a zero baseline
+        // simply has no meaningful percentage and stays null.
+        LossPercentKg = BaselineKg is > 0 && LossKg is not null
+            ? Math.Round(LossKg.Value / BaselineKg.Value * 100, 2)
+            : null;
+        LossPercentMeter = BaselineMeter is > 0 && LossMeter is not null
+            ? Math.Round(LossMeter.Value / BaselineMeter.Value * 100, 2)
+            : null;
+
+        Status = StageExecutionStatus.Completed;
+        CompletedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Edits the stage's output WHILE it is still open (spec section 16). No
+    /// approval is needed for this, but the baseline is untouched and the caller
+    /// records the previous/new figures in the audit log. Once the stage is
+    /// closed this is refused, which is what makes a completed stage locked.
+    /// </summary>
+    public void UpdateOutputWhileOpen(decimal? outputKg, decimal? outputMeter)
+    {
+        if (Status == StageExecutionStatus.Completed)
+            throw new DomainException(
+                "This stage is closed and locked; its output can no longer be edited.");
+        if (outputKg is null && outputMeter is null)
+            throw new DomainException("Enter the output quantity for this stage.");
+        if (outputKg is < 0 || outputMeter is < 0)
+            throw new DomainException("A stage output cannot be negative.");
+
+        OutputKg = outputKg;
+        OutputMeter = outputMeter;
     }
 
     public void Start(string operatorName)

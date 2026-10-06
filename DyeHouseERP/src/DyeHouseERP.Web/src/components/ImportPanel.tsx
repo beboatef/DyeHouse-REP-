@@ -167,10 +167,10 @@ export default function ImportPanel({
         </Button>
       </div>
 
-      {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+      {error && <div className="motion-rise mt-3 text-sm text-red-600">{error}</div>}
 
       {preview && !result && (
-        <div className="mt-4">
+        <div className="motion-rise mt-4">
           <div className="flex flex-wrap gap-4 text-sm">
             <span>إجمالي الصفوف: <b className="ltr-nums">{preview.totalRows}</b></span>
             <span className="text-green-700">صالحة: <b className="ltr-nums">{preview.validRows}</b></span>
@@ -185,29 +185,29 @@ export default function ImportPanel({
             </div>
           )}
 
-          <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-gray-200">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-gray-50">
+          <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-line">
+            <table className="table table-dense">
+              <thead>
                 <tr>
-                  <th className="px-2 py-2 text-start">#</th>
-                  <th className="px-2 py-2 text-start">الإجراء</th>
-                  {columns.map((c) => <th key={c} className="px-2 py-2 text-start">{c}</th>)}
-                  <th className="px-2 py-2 text-start">الأخطاء</th>
+                  <th>#</th>
+                  <th>الإجراء</th>
+                  {columns.map((c) => <th key={c}>{c}</th>)}
+                  <th>الأخطاء</th>
                 </tr>
               </thead>
               <tbody>
                 {preview.rows.map((row) => (
-                  <tr key={row.rowNumber} className={row.isValid ? "border-t border-gray-100" : "border-t border-red-100 bg-red-50/50"}>
-                    <td className="px-2 py-1 ltr-nums">{row.rowNumber}</td>
-                    <td className="px-2 py-1">
+                  <tr key={row.rowNumber} className={row.isValid ? "" : "bg-danger-soft/60"}>
+                    <td className="ltr-nums">{row.rowNumber}</td>
+                    <td>
                       {row.isValid
                         ? (row.action === "Update" ? "تحديث" : "إضافة")
                         : "تخطي"}
                     </td>
                     {columns.map((c) => (
-                      <td key={c} className="px-2 py-1">{row.values[c] ?? ""}</td>
+                      <td key={c}>{row.values[c] ?? ""}</td>
                     ))}
-                    <td className="px-2 py-1 text-red-600">{row.errors.join(" • ")}</td>
+                    <td className="text-red-600">{row.errors.join(" • ")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -225,7 +225,7 @@ export default function ImportPanel({
       )}
 
       {result && (
-        <div className="mt-4">
+        <div className="motion-rise mt-4">
           <div className="flex items-center gap-2 font-semibold text-green-700">
             <CircleCheck size={18} /> تم الاستيراد
           </div>

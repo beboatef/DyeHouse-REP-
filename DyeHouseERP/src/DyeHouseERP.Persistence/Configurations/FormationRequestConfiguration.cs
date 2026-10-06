@@ -72,9 +72,59 @@ public class FormationGroupConfiguration : IEntityTypeConfiguration<FormationGro
         builder.Property(g => g.SpecificationTemplateName).HasMaxLength(200);
 
         builder.Ignore(g => g.RemainingQuantity);
+        builder.Ignore(g => g.PlannedBasinQuantity);
+        builder.Ignore(g => g.ProducedBasinQuantity);
+        builder.Ignore(g => g.RemainingBasinQuantity);
+        builder.Ignore(g => g.HasBasins);
+
+        // Basins (spec sections 10-11) are part of the group aggregate: loaded, written and renumbered
+        // with their parent, never edited from the outside. The relationship is declared here so a basin
+        // always has exactly one cell as its parent.
+        builder.Metadata.FindNavigation(nameof(FormationGroup.Basins))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(g => g.Basins)
+            .WithOne()
+            .HasForeignKey(b => b.FormationGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(g => new { g.FormationRequestId, g.GroupNumber }).IsUnique();
         builder.HasIndex(g => g.SpecificationTemplateId);
+    }
+}
+
+/// <summary>
+/// A basin / detail under a Formation Group (spec sections 10-11). Purely additive: a group that has no basin
+/// rows keeps working exactly as before, so no existing Formation Group is rewritten or migrated.
+/// </summary>
+public class FormationBasinConfiguration : IEntityTypeConfiguration<FormationBasin>
+{
+    public void Configure(EntityTypeBuilder<FormationBasin> builder)
+    {
+        builder.ToTable("FormationBasins");
+        builder.HasKey(b => b.Id);
+
+        builder.Property(b => b.Name).HasMaxLength(200);
+        builder.Property(b => b.PlannedQuantity).HasPrecision(18, 3);
+        builder.Property(b => b.ProducedQuantity).HasPrecision(18, 3);
+        builder.Property(b => b.Unit).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(b => b.Color).HasMaxLength(100);
+        builder.Property(b => b.WidthCm).HasPrecision(18, 3);
+        builder.Property(b => b.MetersPerKg).HasPrecision(18, 4);
+        builder.Property(b => b.Gsm).HasPrecision(18, 3);
+        builder.Property(b => b.TubFormat).HasMaxLength(100);
+        builder.Property(b => b.WindingTapeFormat).HasMaxLength(100);
+        builder.Property(b => b.QualityInstructions).HasMaxLength(2000);
+        builder.Property(b => b.LabInstructions).HasMaxLength(2000);
+        builder.Property(b => b.InternalInstructions).HasMaxLength(2000);
+        builder.Property(b => b.CustomerInstructions).HasMaxLength(2000);
+        builder.Property(b => b.Notes).HasMaxLength(2000);
+        builder.Property(b => b.SpecificationTemplateName).HasMaxLength(200);
+
+        builder.Ignore(b => b.RemainingQuantity);
+
+        builder.HasIndex(b => new { b.FormationGroupId, b.BasinNumber }).IsUnique();
+        builder.HasIndex(b => b.SpecificationTemplateId);
     }
 }
 

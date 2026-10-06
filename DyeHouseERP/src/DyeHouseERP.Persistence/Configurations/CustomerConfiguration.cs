@@ -18,6 +18,13 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         // HasDefaultValueSql here - the value always arrives from the domain layer.
         builder.Property(c => c.AccountNumber).HasMaxLength(50).IsRequired();
         builder.HasIndex(c => c.AccountNumber).IsUnique();
+
+        // Contact/tax details (spec section 7). All optional and nullable, so every
+        // existing customer row stays valid without a data backfill.
+        builder.Property(c => c.Phone).HasMaxLength(50);
+        builder.Property(c => c.Address).HasMaxLength(500);
+        builder.Property(c => c.ContactPerson).HasMaxLength(200);
+        builder.Property(c => c.TaxNumber).HasMaxLength(50);
         builder.Property(c => c.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(c => c.ModifiedBy).HasMaxLength(100);
 

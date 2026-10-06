@@ -116,19 +116,19 @@ export default function ItemsPage() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("items.code")}</label>
+              <label className="field-label">{t("items.code")}</label>
               <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required maxLength={30} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("items.nameAr")}</label>
+              <label className="field-label">{t("items.nameAr")}</label>
               <Input value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("items.nameEn")}</label>
+              <label className="field-label">{t("items.nameEn")}</label>
               <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("items.category")}</label>
+              <label className="field-label">{t("items.category")}</label>
               <Input
                 value={form.category}
                 placeholder={t("items.categoryPlaceholder")}
@@ -136,7 +136,7 @@ export default function ItemsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.baseUnit")}</label>
+              <label className="field-label">{t("common.baseUnit")}</label>
               <Select value={form.baseUnit} onChange={(e) => setForm({ ...form, baseUnit: e.target.value as UnitOfMeasure })}>
                 <option value="KG">{t("common.kg")} (KG)</option>
                 <option value="Meter">{t("common.meter")} (Meter)</option>
@@ -146,8 +146,8 @@ export default function ItemsPage() {
               <Button type="submit" disabled={createMutation.isPending || !form.code || (!form.nameAr && !form.nameEn)}>
                 {createMutation.isPending ? t("common.saving") : t("common.save")}
               </Button>
-              <span className="text-[11px] text-slate-400">{t("items.baseUnitHint")}</span>
-              {error && <span className="text-sm text-red-600">{error}</span>}
+              <span className="text-2xs text-slate-400">{t("items.baseUnitHint")}</span>
+              {error && <span className="form-error">{error}</span>}
             </div>
           </form>
         </Card>
@@ -156,8 +156,8 @@ export default function ItemsPage() {
       {/* ---------------- Excel import (template -> preview -> confirm -> result) ---------------- */}
       <Card className="p-5 mb-6">
         <h3 className="text-sm font-bold text-slate-800">{t("items.importTitle")}</h3>
-        <p className="text-[11px] text-slate-500 mt-1">{t("items.importHint")}</p>
-        <p className="text-[11px] text-amber-600 mt-0.5">{t("items.importUpdateHint")}</p>
+        <p className="text-2xs text-slate-500 mt-1">{t("items.importHint")}</p>
+        <p className="text-2xs text-amber-600 mt-0.5">{t("items.importUpdateHint")}</p>
 
         <div className="flex flex-wrap items-center gap-3 mt-3">
           <input
@@ -185,7 +185,7 @@ export default function ItemsPage() {
           </Button>
         </div>
 
-        {importError && <p className="text-sm text-red-600 mt-3">{importError}</p>}
+        {importError && <p className="form-error mt-3">{importError}</p>}
 
         {preview && (
           <div className="mt-4">
@@ -198,28 +198,28 @@ export default function ItemsPage() {
             </div>
 
             <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg">
-              <table className="w-full text-xs">
+              <table className="table table-dense">
                 <thead className="bg-slate-50">
                   <tr className="text-gray-500">
-                    <th className="text-start px-3 py-2 font-medium">{t("common.row")}</th>
-                    <th className="text-start px-3 py-2 font-medium">{t("common.code")}</th>
-                    <th className="text-start px-3 py-2 font-medium">{t("common.nameAr")}</th>
-                    <th className="text-start px-3 py-2 font-medium">{t("common.nameEn")}</th>
-                    <th className="text-start px-3 py-2 font-medium">{t("common.category")}</th>
-                    <th className="text-start px-3 py-2 font-medium">{t("common.baseUnit")}</th>
-                    <th className="text-start px-3 py-2 font-medium">{t("common.status")}</th>
+                    <th>{t("common.row")}</th>
+                    <th>{t("common.code")}</th>
+                    <th>{t("common.nameAr")}</th>
+                    <th>{t("common.nameEn")}</th>
+                    <th>{t("common.category")}</th>
+                    <th>{t("common.baseUnit")}</th>
+                    <th>{t("common.status")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {preview.rows.map((row) => (
                     <tr key={row.rowNumber} className="border-t border-slate-100">
-                      <td className="px-3 py-2 ltr-nums">{row.rowNumber}</td>
-                      <td className="px-3 py-2 ltr-nums">{row.code}</td>
-                      <td className="px-3 py-2">{row.nameAr}</td>
-                      <td className="px-3 py-2">{row.nameEn}</td>
-                      <td className="px-3 py-2">{row.category ?? "—"}</td>
-                      <td className="px-3 py-2 ltr-nums">{row.baseUnit}</td>
-                      <td className="px-3 py-2">
+                      <td className="ltr-nums">{row.rowNumber}</td>
+                      <td className="ltr-nums">{row.code}</td>
+                      <td>{row.nameAr}</td>
+                      <td>{row.nameEn}</td>
+                      <td>{row.category ?? "—"}</td>
+                      <td className="ltr-nums">{row.baseUnit}</td>
+                      <td>
                         {row.isValid ? (
                           <Badge tone={row.action === "Update" ? "yellow" : "green"}>{row.action}</Badge>
                         ) : (
@@ -276,15 +276,15 @@ export default function ItemsPage() {
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("common.code")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.nameAr")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.nameEn")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.category")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.baseUnit")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
+            <tr>
+              <th>{t("common.code")}</th>
+              <th>{t("common.nameAr")}</th>
+              <th>{t("common.nameEn")}</th>
+              <th>{t("common.category")}</th>
+              <th>{t("common.baseUnit")}</th>
+              <th>{t("common.status")}</th>
             </tr>
           </thead>
           <tbody>
@@ -296,14 +296,14 @@ export default function ItemsPage() {
             )}
             {items?.map((item) => (
               <tr key={item.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{item.code}</td>
-                <td className="px-4 py-3">{item.nameAr || pick(item.nameAr, item.nameEn, item.name)}</td>
-                <td className="px-4 py-3">{item.nameEn || "—"}</td>
-                <td className="px-4 py-3 text-gray-600">{item.category ?? "—"}</td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{item.code}</td>
+                <td>{item.nameAr || pick(item.nameAr, item.nameEn, item.name)}</td>
+                <td>{item.nameEn || "—"}</td>
+                <td className="text-ink-muted">{item.category ?? "—"}</td>
+                <td>
                   <Badge tone="blue">{item.baseUnit === "KG" ? t("common.kg") : t("common.meter")}</Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <Badge tone={item.isActive ? "green" : "gray"}>{item.isActive ? t("common.active") : t("common.inactive")}</Badge>
                 </td>
               </tr>

@@ -53,16 +53,23 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
         // Customer -> Message -> Formation Request -> Job Order stays navigable.
         string? formationRequestNumber = null;
         int? formationGroupNumber = null;
+        int? formationBasinNumber = null;
         if (order.FormationRequestId.HasValue)
         {
             var formationRequest = await db.FormationRequests.AsNoTracking()
-                .Include(r => r.Groups)
+                .Include(r => r.Groups).ThenInclude(g => g.Basins)
                 .FirstOrDefaultAsync(r => r.Id == order.FormationRequestId.Value, cancellationToken);
 
             formationRequestNumber = formationRequest?.RequestNumber;
             if (order.FormationGroupId.HasValue && formationRequest is not null)
-                formationGroupNumber = formationRequest.Groups
-                    .FirstOrDefault(g => g.Id == order.FormationGroupId.Value)?.GroupNumber;
+            {
+                var group = formationRequest.Groups.FirstOrDefault(g => g.Id == order.FormationGroupId.Value);
+                formationGroupNumber = group?.GroupNumber;
+
+                if (order.FormationBasinId.HasValue)
+                    formationBasinNumber = group?.Basins
+                        .FirstOrDefault(b => b.Id == order.FormationBasinId.Value)?.BasinNumber;
+            }
         }
 
         return new ProductionOrderDto
@@ -89,6 +96,8 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             FormationRequestNumber = formationRequestNumber,
             FormationGroupId = order.FormationGroupId,
             FormationGroupNumber = formationGroupNumber,
+            FormationBasinId = order.FormationBasinId,
+            FormationBasinNumber = formationBasinNumber,
             RawAllocations = allocations.Select(a => new RawAllocationDto
             {
                 Id = a.Id,

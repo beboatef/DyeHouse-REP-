@@ -23,7 +23,7 @@ internal static class FormationProductionSync
     {
         if (!order.FormationRequestId.HasValue) return;
 
-        var request = await db.FormationRequests.Include(r => r.Groups)
+        var request = await db.FormationRequests.Include(r => r.Groups).ThenInclude(g => g.Basins)
             .FirstOrDefaultAsync(r => r.Id == order.FormationRequestId.Value, cancellationToken);
 
         if (request is null) return;
@@ -37,25 +37,34 @@ internal static class FormationProductionSync
     {
         if (!order.FormationRequestId.HasValue || !order.FormationGroupId.HasValue) return;
 
-        var request = await db.FormationRequests.Include(r => r.Groups)
+        var request = await db.FormationRequests.Include(r => r.Groups).ThenInclude(g => g.Basins)
             .FirstOrDefaultAsync(r => r.Id == order.FormationRequestId.Value, cancellationToken);
         if (request is null) return;
 
         var group = request.Groups.FirstOrDefault(g => g.Id == order.FormationGroupId.Value);
         if (group is null) return;
 
+        // A Job Order created for one basin (spec sections 10-11) reports against that basin, never against
+        // the whole group - otherwise the group's quantity would be counted once per basin.
+        var basin = order.FormationBasinId.HasValue
+            ? group.Basins.FirstOrDefault(b => b.Id == order.FormationBasinId.Value)
+            : null;
+
         var produced = await ResolveProducedQuantityAsync(db, order, cancellationToken);
         if (produced <= 0) return;
 
         // Only the increment: the same physical quantity is never counted twice (spec section 53).
-        var increment = produced - group.ProducedQuantity;
+        var increment = produced - (basin?.ProducedQuantity ?? group.ProducedQuantity);
         if (increment <= 0) return;
 
-        // Never claim more than the group planned - the surplus is waste/over-run, not more planned output.
-        var capped = Math.Min(increment, group.RemainingQuantity);
+        // Never claim more than planned - the surplus is waste/over-run, not more planned output.
+        var capped = Math.Min(increment, basin?.RemainingQuantity ?? group.RemainingQuantity);
         if (capped <= 0) return;
 
-        request.RecordGroupProduction(group.Id, capped, user);
+        if (basin is not null)
+            request.RecordBasinProduction(group.Id, basin.Id, capped, user);
+        else
+            request.RecordGroupProduction(group.Id, capped, user);
     }
 
     /// <summary>

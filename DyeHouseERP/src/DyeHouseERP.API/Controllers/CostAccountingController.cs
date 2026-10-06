@@ -2,6 +2,9 @@ using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.CostAccounting.Commands;
 using DyeHouseERP.Application.CostAccounting.DTOs;
 using DyeHouseERP.Application.CostAccounting.Queries;
+using DyeHouseERP.Application.PriceLists.Commands;
+using DyeHouseERP.Application.PriceLists.DTOs;
+using DyeHouseERP.Application.PriceLists.Queries;
 using DyeHouseERP.API.Authorization;
 using DyeHouseERP.Domain.Common;
 using MediatR;
@@ -42,6 +45,27 @@ public class CostAccountingController : ControllerBase
     public async Task<ActionResult<ProductionOrderCostDto>> ApproveCost(Guid productionOrderId, [FromBody] ApproveCostRequest request)
         => Ok(await _mediator.Send(new ApproveProductionOrderCostCommand(productionOrderId, request.ApprovedCost, request.CostingNotes)));
 
+    /// <summary>
+    /// Snapshots the price this Job Order is charged (spec section 34) - one row per
+    /// unit. Supply <c>pricePerUnit</c> for a deliberate manual override (a reason is
+    /// then required); omit it to resolve from the customer's price, else the general
+    /// default. Later price-list edits never change an already-snapshotted price.
+    /// </summary>
+    [HttpPost("service-price")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PricingManage)]
+    [ProducesResponseType(typeof(ProductionOrderServicePriceDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderServicePriceDto>> ApplyServicePrice(
+        Guid productionOrderId, [FromBody] ApplyServicePriceRequest request)
+        => Ok(await _mediator.Send(new ApplyServicePriceToJobOrderCommand(
+            productionOrderId, request.StageDefinitionId, request.Unit, request.PricePerUnit, request.OverrideReason)));
+
+    /// <summary>Job Order profitability (spec section 37): revenue from the snapshotted price, once for the order.</summary>
+    [HttpGet("profitability")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CostingView)]
+    [ProducesResponseType(typeof(ProductionOrderProfitabilityDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderProfitabilityDto>> GetProfitability(Guid productionOrderId)
+        => Ok(await _mediator.Send(new GetProductionOrderProfitabilityQuery(productionOrderId)));
+
     /// <summary>Costing sheet as Excel/PDF for a comptroller review (spec sections 34 + 49).</summary>
     [HttpGet("export")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CostingView)]
@@ -60,6 +84,9 @@ public class CostAccountingController : ControllerBase
             new object?[] { "Electricity", cost.ElectricityCost },
             new object?[] { "Fuel", cost.FuelCost },
             new object?[] { "Maintenance", cost.MaintenanceCost },
+            new object?[] { "Transport", cost.TransportCost },
+            new object?[] { "Packaging", cost.PackagingCost },
+            new object?[] { "Repair", cost.RepairCost },
             new object?[] { "Other", cost.OtherCost },
             new object?[] { "Actual total", cost.TotalCost },
             new object?[] { "Estimated", cost.EstimatedCost },
@@ -78,3 +105,7 @@ public class CostAccountingController : ControllerBase
 public record AddCostEntryRequest(Domain.Enums.CostCategory Category, decimal Amount, DateTime EntryDate, string? Description);
 public record SetEstimateRequest(decimal? EstimatedCost, string? CostingNotes);
 public record ApproveCostRequest(decimal ApprovedCost, string? CostingNotes);
+
+public record ApplyServicePriceRequest(
+    Guid StageDefinitionId, Domain.Enums.UnitOfMeasure Unit,
+    decimal? PricePerUnit = null, string? OverrideReason = null);

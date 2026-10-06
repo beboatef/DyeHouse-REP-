@@ -135,6 +135,11 @@ export default {
         // available for tablet-specific layout inside pages.
         xs: "420px"
       },
+      /* Motion system keyframes. All of them animate only `opacity` and
+         `transform`, so they stay on the compositor and never trigger layout.
+         Durations/easings reference the motion tokens declared in index.css
+         (--motion-fast / --motion-normal / --motion-page / --ease-out-soft) so
+         the CSS and the JS helpers in src/components/motion.tsx cannot drift. */
       keyframes: {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
         // Direction-aware: the drawer slides in from the inline-start edge, so
@@ -143,11 +148,44 @@ export default {
           from: { transform: "translateX(var(--slide-from, 100%))" },
           to: { transform: "translateX(0)" }
         },
-        "fade-in-overlay": { from: { opacity: "0" }, to: { opacity: "1" } }
+        "fade-in-overlay": { from: { opacity: "0" }, to: { opacity: "1" } },
+        // Page entrance: a short fade with a subtle upward move. Deliberately
+        // small (6px) - a large slide or any bounce reads as a demo, not an ERP.
+        "page-enter": {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "none" }
+        },
+        // The stagger unit for cards/widgets: fade + 8px rise.
+        "rise-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "none" }
+        },
+        // Overlay surfaces (dropdown, modal dialog): fade + a very slight scale.
+        "pop-in": {
+          from: { opacity: "0", transform: "scale(0.97)" },
+          to: { opacity: "1", transform: "none" }
+        },
+        // Direction-aware toast entry. `--toast-from` carries the inline-edge
+        // offset so RTL and LTR both slide in from the correct side.
+        "toast-in": {
+          from: { opacity: "0", transform: "translateX(var(--toast-from, 0)) translateY(-6px)" },
+          to: { opacity: "1", transform: "none" }
+        },
+        // Skeleton shimmer sweep (a single transform, not a layout animation).
+        shimmer: { "100%": { transform: "translateX(100%)" } }
       },
       animation: {
         "fade-in": "fade-in 150ms ease-out",
-        "drawer-in": "drawer-in 220ms cubic-bezier(0.32, 0.72, 0, 1)"
+        "drawer-in": "drawer-in 220ms cubic-bezier(0.32, 0.72, 0, 1)",
+        // `backwards` fill, not `both`: it holds the start state during any
+        // stagger delay, then releases `transform` when done so hover lifts
+        // keep working (an animation's filled value would otherwise win over
+        // `:hover`).
+        "page-enter": "page-enter var(--motion-page) var(--ease-out-soft) backwards",
+        "rise-in": "rise-in var(--motion-normal) var(--ease-out-soft) backwards",
+        "pop-in": "pop-in var(--motion-fast) var(--ease-out-soft) backwards",
+        "toast-in": "toast-in var(--motion-normal) var(--ease-out-soft) backwards",
+        shimmer: "shimmer 1.6s var(--ease-in-out-soft) infinite"
       }
     }
   },

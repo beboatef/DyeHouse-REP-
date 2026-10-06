@@ -51,6 +51,14 @@ public class ProductionOrder : AuditableEntity
     public Guid? FormationRequestId { get; private set; }
     public Guid? FormationGroupId { get; private set; }
 
+    /// <summary>
+    /// Set when this Job Order fulfils ONE basin of a formation group (spec sections 10-11). Always null for
+    /// orders that are not derived from a formation request; always set together with FormationGroupId, so the
+    /// chain Request -&gt; Group -&gt; Basin -&gt; Job Order -&gt; Production -&gt; Ready Goods stays navigable and a
+    /// basin's quantity is never planned on more than one order.
+    /// </summary>
+    public Guid? FormationBasinId { get; private set; }
+
     // ---- Job Order costing (spec section 34) ----
     // Three figures, deliberately kept apart so nobody has to guess which one
     // they are looking at:
@@ -91,7 +99,7 @@ public class ProductionOrder : AuditableEntity
         string? rawOrigin = null, string? customerReference = null, string? notes = null,
         ProductionPriority priority = ProductionPriority.Normal, Guid? reprocessingOfProductionOrderId = null,
         JobOrderType jobOrderType = JobOrderType.ClosedLine,
-        Guid? formationRequestId = null, Guid? formationGroupId = null)
+        Guid? formationRequestId = null, Guid? formationGroupId = null, Guid? formationBasinId = null)
     {
         if (string.IsNullOrWhiteSpace(orderNumber))
             throw new ArgumentException("Order number is required.", nameof(orderNumber));
@@ -110,25 +118,57 @@ public class ProductionOrder : AuditableEntity
         JobOrderType = jobOrderType;
         FormationRequestId = formationRequestId;
         FormationGroupId = formationGroupId;
+        FormationBasinId = formationBasinId;
         ReprocessingOfProductionOrderId = reprocessingOfProductionOrderId;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
     /// <summary>
-    /// Generates one Pending stage execution per active stage definition,
-    /// in sequence order. Called once, right after creation - the "route"
-    /// is snapshotted at that point so later changes to the global stage
-    /// configuration don't retroactively alter orders already in flight.
+    /// Starts the order at التشكيل and NOTHING ELSE (spec sections 12-13).
+    ///
+    /// The route is deliberately NOT pre-built from every active stage: doing so
+    /// would force every basin through one fixed sequence, which is exactly what
+    /// the factory does not do - different basins take different routes, and the
+    /// next stage is chosen by the user at the moment of transfer. Only the
+    /// formation stage is created here, already activated with this order's
+    /// ACTUAL weight as its baseline; every later stage is created by
+    /// <see cref="ActivateNextStage"/> at transfer time.
     /// </summary>
-    public void BuildStageRoute(IEnumerable<ProductionStageDefinition> activeStagesInSequence)
+    public void BuildStageRoute(IEnumerable<ProductionStageDefinition> stageDefinitions, string startedBy)
     {
         if (_stageExecutions.Count > 0)
             throw new DomainException("The stage route has already been built for this production order.");
 
-        foreach (var stage in activeStagesInSequence.OrderBy(s => s.Sequence))
-            _stageExecutions.Add(new ProductionOrderStageExecution(Id, stage.Id, stage.Sequence));
+        // Identified ONLY by the explicit flag - never by Sequence order.
+        var formation = stageDefinitions.FirstOrDefault(s => s.IsFormationStage)
+            ?? throw new DomainException(
+                "No production stage is marked as the formation stage (IsFormationStage). Configure one before creating Job Orders.");
+
+        var first = new ProductionOrderStageExecution(Id, formation.Id, formation.Sequence);
+
+        // First-stage baseline is the Job Order's actual weight (spec section 15).
+        first.Activate(RequestedQuantityKg, RequestedQuantityMeter, startedBy);
+        _stageExecutions.Add(first);
     }
+
+    /// <summary>
+    /// Activates the NEXT stage the user chose, with the previous stage's final
+    /// output as its baseline (spec section 14). Only this one stage is created -
+    /// the route after it stays open until the user picks again.
+    /// </summary>
+    public ProductionOrderStageExecution ActivateNextStage(
+        ProductionStageDefinition nextStage, decimal? baselineKg, decimal? baselineMeter, string startedBy)
+    {
+        var next = new ProductionOrderStageExecution(Id, nextStage.Id, nextStage.Sequence);
+        next.Activate(baselineKg, baselineMeter, startedBy);
+        _stageExecutions.Add(next);
+        return next;
+    }
+
+    /// <summary>The stage currently in progress, if any.</summary>
+    public ProductionOrderStageExecution? CurrentStageExecution =>
+        _stageExecutions.FirstOrDefault(s => s.Status == StageExecutionStatus.InProgress);
 
     public RawAllocation AllocateRaw(
         Guid rawMessageId, Guid itemId, decimal? quantityKg, decimal? quantityMeter, string allocatedBy)
@@ -156,10 +196,12 @@ public class ProductionOrder : AuditableEntity
     }
 
     /// <summary>Links this order back to the approved Formation Request/group it fulfils (spec section 31).</summary>
-    public void LinkFormationRequest(Guid formationRequestId, Guid? formationGroupId, string modifiedBy)
+    public void LinkFormationRequest(
+        Guid formationRequestId, Guid? formationGroupId, Guid? formationBasinId, string modifiedBy)
     {
         FormationRequestId = formationRequestId;
         FormationGroupId = formationGroupId;
+        FormationBasinId = formationBasinId;
         ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }
@@ -214,6 +256,55 @@ public class ProductionOrder : AuditableEntity
         CostApprovedAtUtc = DateTime.UtcNow;
         CostingNotes = string.IsNullOrWhiteSpace(costingNotes) ? CostingNotes : costingNotes.Trim();
         ModifiedBy = approvedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Pauses the order (موقوف مؤقتًا, spec section 19).
+    ///
+    /// Pausing is NOT cancelling: the order keeps every movement and stage it has
+    /// accumulated and can be resumed, which re-issues raw material and returns the
+    /// job to التشكيل. The caller is responsible for posting the compensating IN
+    /// movements that return the released quantity to the customer's raw stock -
+    /// this method only records the state change and the reason.
+    /// </summary>
+    public void Pause(string reason, string modifiedBy)
+    {
+        if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+        if (Status == ProductionOrderStatus.Draft)
+            throw new DomainException(
+                "There is no raw material to release on a draft order - allocate raw material first.");
+        if (Status == ProductionOrderStatus.Paused)
+            throw new DomainException($"Production order {OrderNumber} is already paused.");
+
+        Status = ProductionOrderStatus.Paused;
+        Notes = string.IsNullOrWhiteSpace(Notes)
+            ? $"[Paused] {reason}"
+            : $"{Notes}\n[Paused] {reason}";
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Resumes a paused order (spec section 19). The caller re-issues the raw
+    /// material as a NEW allocation and a NEW movement - the released movements
+    /// from the pause are left exactly as they were posted, so the ledger keeps a
+    /// complete record of both cycles.
+    /// </summary>
+    public void Resume(string reason, string modifiedBy)
+    {
+        if (Status != ProductionOrderStatus.Paused)
+            throw new DomainException(
+                $"Production order {OrderNumber} is {Status}; only a paused order can be resumed.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("Resuming a paused production order requires a reason.");
+
+        Status = ProductionOrderStatus.InProduction;
+        Notes = string.IsNullOrWhiteSpace(Notes)
+            ? $"[Resumed] {reason}"
+            : $"{Notes}\n[Resumed] {reason}";
+        ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }
 

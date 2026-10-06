@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormationRequestsApi, FormationRequestStatus, JobOrderType, ProductionPriority } from "@/api/client";
@@ -35,6 +35,7 @@ export default function FormationRequestDetailPage() {
 
   const [reason, setReason] = useState("");
   const [convertGroupId, setConvertGroupId] = useState("");
+  const [convertBasinId, setConvertBasinId] = useState("");
   const [jobOrderType, setJobOrderType] = useState<JobOrderType>("ClosedLine");
   const [priority, setPriority] = useState<ProductionPriority>("Normal");
   const [error, setError] = useState<string | null>(null);
@@ -76,11 +77,12 @@ export default function FormationRequestDetailPage() {
     mutationFn: () =>
       FormationRequestsApi.convertToJobOrder(id as string, {
         groupId: convertGroupId || null,
+        basinId: convertBasinId || null,
         jobOrderType,
         priority,
         orderDate: new Date().toISOString().slice(0, 10)
       }),
-    onSuccess: () => { setConvertGroupId(""); refresh(); },
+    onSuccess: () => { setConvertGroupId(""); setConvertBasinId(""); refresh(); },
     onError
   });
 
@@ -90,9 +92,14 @@ export default function FormationRequestDetailPage() {
 
   const canEdit = request.status === "Draft" || request.status === "Rejected";
   const canConvert = request.status === "Approved" || request.status === "InProgress" || request.status === "PartiallyCompleted";
-  // Groups can be converted one by one; the API refuses a group that already has a Job Order,
-  // so the list simply offers every group and the rule is enforced server-side.
-  const convertibleGroups = request.groups;
+  // Basins and groups can be converted one by one (spec sections 10-11). A group that is split into basins
+  // is never offered as a lump - that would plan the same quantity twice - and neither is a whole request
+  // that contains such a group. The API enforces exactly the same rule server-side.
+  const hasBasins = request.groups.some((g) => (g.basins?.length ?? 0) > 0);
+  const convertibleGroups = request.groups.filter((g) => (g.basins?.length ?? 0) === 0);
+  const convertibleBasins = request.groups.flatMap((g) =>
+    (g.basins ?? []).map((b) => ({ group: g.groupNumber, basin: b }))
+  );
 
   return (
     <>
@@ -127,7 +134,7 @@ export default function FormationRequestDetailPage() {
             </Info>
             <Info label={t("fr.rawMessage")}>
               {request.rawMessageId ? (
-                <Link className="text-brand-600 hover:underline ltr-nums" to={`/print/raw-message/${request.rawMessageId}`}>
+                <Link className="btn-link ltr-nums" to={`/print/raw-message/${request.rawMessageId}`}>
                   {request.messageNumber}
                 </Link>
               ) : (
@@ -136,7 +143,7 @@ export default function FormationRequestDetailPage() {
             </Info>
             <Info label={t("fr.jobOrder")}>
               {request.productionOrderId ? (
-                <Link className="text-brand-600 hover:underline ltr-nums" to={`/production-orders/${request.productionOrderId}`}>
+                <Link className="btn-link ltr-nums" to={`/production-orders/${request.productionOrderId}`}>
                   {request.productionOrderNumber}
                 </Link>
               ) : (
@@ -185,8 +192,16 @@ export default function FormationRequestDetailPage() {
             )}
             {canConvert && (
               <div className="space-y-2 border-t border-slate-100 pt-3">
-                <p className="text-[11px] text-slate-500">{t("fr.convertToJobOrder")}</p>
-                <Select value={convertGroupId} onChange={(e) => setConvertGroupId(e.target.value)}>
+                <p className="text-2xs text-slate-500">{t("fr.convertToJobOrder")}</p>
+                <Select value={convertBasinId} onChange={(e) => { setConvertBasinId(e.target.value); setConvertGroupId(""); }}>
+                  <option value="">{t("fr.convertBasinNone")}</option>
+                  {convertibleBasins.map(({ group, basin }) => (
+                    <option key={basin.id} value={basin.id}>
+                      {t("fr.group")} #{group} / {t("fr.basin")} #{basin.basinNumber} · {basin.plannedQuantity} {basin.unit}
+                    </option>
+                  ))}
+                </Select>
+                <Select value={convertGroupId} onChange={(e) => { setConvertGroupId(e.target.value); setConvertBasinId(""); }}>
                   <option value="">{t("fr.convertWhole")}</option>
                   {convertibleGroups.map((g) => (
                     <option key={g.id} value={g.id}>
@@ -194,6 +209,9 @@ export default function FormationRequestDetailPage() {
                     </option>
                   ))}
                 </Select>
+                {hasBasins && !convertBasinId && (
+                  <p className="text-2xs text-amber-600">{t("fr.convertBasinRequired")}</p>
+                )}
                 <Select value={jobOrderType} onChange={(e) => setJobOrderType(e.target.value as JobOrderType)}>
                   <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
                   <option value="OpenLine">{t("jo.type.OpenLine")}</option>
@@ -204,7 +222,11 @@ export default function FormationRequestDetailPage() {
                   <option value="High">High</option>
                   <option value="Urgent">Urgent</option>
                 </Select>
-                <Button className="w-full" onClick={() => convertMutation.mutate()} disabled={convertMutation.isPending}>
+                <Button
+                  className="w-full"
+                  onClick={() => convertMutation.mutate()}
+                  disabled={convertMutation.isPending || (hasBasins && !convertBasinId && !convertGroupId)}
+                >
                   {t("fr.convertToJobOrder")}
                 </Button>
               </div>
@@ -221,7 +243,7 @@ export default function FormationRequestDetailPage() {
                 onChange={(e) => setReason(e.target.value)}
               />
             )}
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {error && <p className="form-error">{error}</p>}
           </div>
         </Card>
       </div>
@@ -230,39 +252,70 @@ export default function FormationRequestDetailPage() {
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-800">{t("fr.groups")} / {t("fr.specification")}</h3>
           {request.groups.some((g) => g.specificationSnapshotAtUtc) && (
-            <span className="text-[11px] text-slate-400">{t("fr.snapshotFrozen")}</span>
+            <span className="text-2xs text-slate-400">{t("fr.snapshotFrozen")}</span>
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="table">
             <thead>
-              <tr className="border-b border-gray-200 text-gray-500 text-xs">
-                <th className="text-start px-4 py-3 font-medium">#</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.planned")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.produced")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.tubCount")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.color")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.width")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.metersPerKg")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.gsm")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.tubFormat")}</th>
-                <th className="text-start px-4 py-3 font-medium">{t("fr.specTemplate")}</th>
+              <tr>
+                <th>#</th>
+                <th>{t("fr.basin")}</th>
+                <th>{t("fr.planned")}</th>
+                <th>{t("fr.produced")}</th>
+                <th>{t("fr.tubCount")}</th>
+                <th>{t("fr.color")}</th>
+                <th>{t("fr.width")}</th>
+                <th>{t("fr.metersPerKg")}</th>
+                <th>{t("fr.gsm")}</th>
+                <th>{t("fr.tubFormat")}</th>
+                <th>{t("fr.specTemplate")}</th>
               </tr>
             </thead>
             <tbody>
               {request.groups.map((g) => (
-                <tr key={g.id} className="border-b border-gray-100 last:border-0">
-                  <td className="px-4 py-3 font-medium">{g.groupNumber}</td>
-                  <td className="px-4 py-3 ltr-nums">{g.plannedQuantity} {g.unit}</td>
-                  <td className="px-4 py-3 ltr-nums">{g.producedQuantity}</td>
-                  <td className="px-4 py-3 ltr-nums">{g.tubCount ?? "—"}</td>
-                  <td className="px-4 py-3">{g.color ?? "—"}</td>
-                  <td className="px-4 py-3 ltr-nums">{g.widthCm ?? "—"}</td>
-                  <td className="px-4 py-3 ltr-nums">{g.metersPerKg ?? "—"}</td>
-                  <td className="px-4 py-3 ltr-nums">{g.gsm ?? "—"}</td>
-                  <td className="px-4 py-3">{g.tubFormat ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-500">{g.specificationTemplateName ?? "—"}</td>
-                </tr>
+                <Fragment key={g.id}>
+                  <tr className="border-b border-gray-100 last:border-0">
+                    <td className="font-medium">{g.groupNumber}</td>
+                    <td className="ltr-nums text-gray-400">
+                      {(g.basins?.length ?? 0) === 0 ? "—" : t("fr.groupTotal")}
+                    </td>
+                    <td className="ltr-nums">{g.plannedQuantity} {g.unit}</td>
+                    <td className="ltr-nums">{g.producedQuantity}</td>
+                    <td className="ltr-nums">{g.tubCount ?? "—"}</td>
+                    <td>{g.color ?? "—"}</td>
+                    <td className="ltr-nums">{g.widthCm ?? "—"}</td>
+                    <td className="ltr-nums">{g.metersPerKg ?? "—"}</td>
+                    <td className="ltr-nums">{g.gsm ?? "—"}</td>
+                    <td>{g.tubFormat ?? "—"}</td>
+                    <td className="text-ink-subtle">{g.specificationTemplateName ?? "—"}</td>
+                  </tr>
+                  {/* One row per basin (spec sections 10-11) - its own quantity and its own specification. */}
+                  {(g.basins ?? []).map((b) => (
+                    <tr key={b.id} className="border-b border-gray-100 bg-slate-50/60 last:border-0">
+                      <td className="font-medium text-brand-700">{g.groupNumber}</td>
+                      <td className="font-medium text-brand-700">
+                        {t("fr.basin")} #{b.basinNumber}
+                      </td>
+                      <td className="ltr-nums">
+                        {b.plannedQuantity} {b.unit}
+                        {b.producedQuantity > 0 && (
+                          <span className="text-gray-400"> / {b.producedQuantity}</span>
+                        )}
+                      </td>
+                      <td className="ltr-nums">{b.producedQuantity}</td>
+                      <td className="ltr-nums">{b.tubCount ?? "—"}</td>
+                      <td>{b.color ?? "—"}</td>
+                      <td className="ltr-nums">{b.widthCm ?? g.widthCm ?? "—"}</td>
+                      <td className="ltr-nums">{b.metersPerKg ?? g.metersPerKg ?? "—"}</td>
+                      <td className="ltr-nums">{b.gsm ?? g.gsm ?? "—"}</td>
+                      <td>{b.tubFormat ?? g.tubFormat ?? "—"}</td>
+                      <td className="text-gray-500">
+                        {b.specificationTemplateName ?? g.specificationTemplateName ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -281,7 +334,7 @@ export default function FormationRequestDetailPage() {
                 </span>
                 {" · "}
                 {link.route ? (
-                  <Link to={link.route} className="text-brand-600 hover:underline ltr-nums">
+                  <Link to={link.route} className="btn-link ltr-nums">
                     {link.reference}
                   </Link>
                 ) : (
@@ -311,7 +364,7 @@ export default function FormationRequestDetailPage() {
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] text-slate-400 mb-0.5">{label}</div>
+      <div className="text-2xs text-slate-400 mb-0.5">{label}</div>
       <div className="font-medium text-slate-700">{children}</div>
     </div>
   );

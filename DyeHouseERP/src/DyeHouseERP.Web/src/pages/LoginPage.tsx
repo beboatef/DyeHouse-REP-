@@ -59,7 +59,9 @@ export default function LoginPage() {
         ))}
       </div>
 
-      <div className="card card-pad w-full max-w-sm">
+      {/* The login card is outside <Layout>, so it opts into the same entrance
+          as every routed page: fade + a subtle rise. */}
+      <div className="card card-pad motion-rise w-full max-w-sm">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-brand-50 dark:bg-brand-900/50">
             {settings?.logoDataUrl ? (
@@ -123,7 +125,7 @@ export default function LoginPage() {
           {error && (
             <p
               role="alert"
-              className="flex items-center justify-center gap-1.5 rounded-lg bg-danger-soft px-3 py-2 text-center text-sm text-danger-ink"
+              className="motion-rise flex items-center justify-center gap-1.5 rounded-lg bg-danger-soft px-3 py-2 text-center text-sm text-danger-ink"
             >
               <AlertCircle size={15} />
               {error}

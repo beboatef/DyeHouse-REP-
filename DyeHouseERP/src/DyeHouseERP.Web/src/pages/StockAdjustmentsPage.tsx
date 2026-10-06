@@ -70,52 +70,52 @@ export default function StockAdjustmentsPage() {
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(false); }}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">العميل</label>
+                <label className="field-label">العميل</label>
                 <Select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setRawMessageId(""); }} required>
                   <option value="">اختر...</option>
                   {customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الصنف</label>
+                <label className="field-label">الصنف</label>
                 <Select value={itemId} onChange={(e) => setItemId(e.target.value)} required>
                   <option value="">اختر...</option>
                   {items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">نوع التسوية</label>
+                <label className="field-label">نوع التسوية</label>
                 <Select value={type} onChange={(e) => setType(e.target.value as AdjustmentType)}>
                   <option value="Increase">زيادة</option>
                   <option value="Decrease">نقص</option>
                 </Select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">الرسالة (المرسال)</label>
+                <label className="field-label">الرسالة (المرسال)</label>
                 <Select value={rawMessageId} onChange={(e) => setRawMessageId(e.target.value)} required disabled={!customerId}>
                   <option value="">اختر...</option>
                   {messages?.map((m) => <option key={m.id} value={m.id}>{m.messageNumber}</option>)}
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الكمية (كجم)</label>
+                <label className="field-label">الكمية (كجم)</label>
                 <Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">الكمية (متر)</label>
+                <label className="field-label">الكمية (متر)</label>
                 <Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">السبب</label>
+                <label className="field-label">السبب</label>
                 <Input value={reason} onChange={(e) => setReason(e.target.value)} required placeholder="فرق جرد فعلي / فرق وزن / تصحيح إدخال..." />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">ملاحظات</label>
+              <label className="field-label">ملاحظات</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>{createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}</Button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="form-error">{error}</p>}
 
             {negativeStockDetail && (
               <Card className="p-4 border-yellow-300 bg-yellow-50">
@@ -134,15 +134,15 @@ export default function StockAdjustmentsPage() {
       )}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">رقم التسوية</th>
-              <th className="text-start px-4 py-3 font-medium">العميل</th>
-              <th className="text-start px-4 py-3 font-medium">الصنف</th>
-              <th className="text-start px-4 py-3 font-medium">النوع</th>
-              <th className="text-start px-4 py-3 font-medium">قبل</th>
-              <th className="text-start px-4 py-3 font-medium">بعد</th>
+            <tr>
+              <th>رقم التسوية</th>
+              <th>العميل</th>
+              <th>الصنف</th>
+              <th>النوع</th>
+              <th>قبل</th>
+              <th>بعد</th>
             </tr>
           </thead>
           <tbody>
@@ -150,12 +150,12 @@ export default function StockAdjustmentsPage() {
             {!isLoading && adjustments?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد تسويات بعد</td></tr>}
             {adjustments?.map((a) => (
               <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{a.adjustmentNumber}</td>
-                <td className="px-4 py-3">{a.customerCode}</td>
-                <td className="px-4 py-3">{a.itemCode}</td>
-                <td className="px-4 py-3"><Badge tone={a.type === "Increase" ? "green" : "red"}>{a.type === "Increase" ? "زيادة" : "نقص"}</Badge></td>
-                <td className="px-4 py-3 ltr-nums">{a.quantityBeforeKg ?? a.quantityBeforeMeter ?? "-"}</td>
-                <td className="px-4 py-3 ltr-nums font-medium">{a.quantityAfterKg ?? a.quantityAfterMeter ?? "-"}</td>
+                <td className="font-medium ltr-nums">{a.adjustmentNumber}</td>
+                <td>{a.customerCode}</td>
+                <td>{a.itemCode}</td>
+                <td><Badge tone={a.type === "Increase" ? "green" : "red"}>{a.type === "Increase" ? "زيادة" : "نقص"}</Badge></td>
+                <td className="ltr-nums">{a.quantityBeforeKg ?? a.quantityBeforeMeter ?? "-"}</td>
+                <td className="ltr-nums font-medium">{a.quantityAfterKg ?? a.quantityAfterMeter ?? "-"}</td>
               </tr>
             ))}
           </tbody>

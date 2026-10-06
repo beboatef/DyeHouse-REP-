@@ -17,6 +17,7 @@ public interface IApplicationDbContext
     DbSet<CheckMovement> CheckMovements { get; }
     DbSet<FormationRequest> FormationRequests { get; }
     DbSet<FormationGroup> FormationGroups { get; }
+    DbSet<FormationBasin> FormationBasins { get; }
     DbSet<FormationSpecTemplate> FormationSpecTemplates { get; }
     DbSet<Item> Items { get; }
     DbSet<Warehouse> Warehouses { get; }
@@ -81,6 +82,18 @@ public interface IApplicationDbContext
     // Factory-owned materials sales (spec section 26)
     DbSet<MaterialSale> MaterialSales { get; }
     DbSet<MaterialSaleLine> MaterialSaleLines { get; }
+
+    // Purchase units of measure (spec section 44)
+    DbSet<PurchaseUnit> PurchaseUnits { get; }
+
+    // Customer returns of processed goods to the raw material warehouse (spec sections 32-33)
+    DbSet<CustomerReturn> CustomerReturns { get; }
+    DbSet<CustomerReturnLine> CustomerReturnLines { get; }
+
+    // Commercial price lists + the per-Job-Order price snapshot (spec sections 34A, 34, 36)
+    DbSet<StageCostRate> StageCostRates { get; }
+    DbSet<CustomerServicePrice> CustomerServicePrices { get; }
+    DbSet<ProductionOrderServicePrice> ProductionOrderServicePrices { get; }
 
     // Private attachments on business documents (spec section 47)
     DbSet<Attachment> Attachments { get; }

@@ -38,6 +38,10 @@ public static class DocumentSequenceSeeder
         (DocumentType.PayrollRun,               "PRL", 6, true,  false),
         (DocumentType.SupplyIssue,              "SUP", 6, true,  false),
         (DocumentType.MaterialSale,             "MSL", 6, true,  false),
+        (DocumentType.CustomerReturn,           "CRT", 6, true,  false),
+        // DocumentType.ProductionOrderPause deliberately has NO sequence row: a
+        // pause release is a compensating movement against the Job Order that
+        // already has a number, so it reuses that number rather than minting one.
     };
 
     public static async Task SeedAsync(ApplicationDbContext context, CancellationToken cancellationToken = default)

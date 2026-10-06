@@ -22,6 +22,21 @@ public record FormationSpecificationInput(
     string? InternalInstructions = null, string? CustomerInstructions = null);
 
 /// <summary>
+/// One basin / detail under a group (spec sections 10-11). <paramref name="Id"/> is only sent when editing an
+/// existing basin; omitted means "create a new basin". Leave <see cref="Basins"/> empty on a group to plan it
+/// as one single piece, exactly as the system behaved before basins existed.
+/// </summary>
+public record FormationBasinInput(
+    decimal PlannedQuantity,
+    UnitOfMeasure Unit,
+    int? TubCount = null,
+    string? Name = null,
+    string? Color = null,
+    FormationSpecificationInput? Specification = null,
+    string? Notes = null,
+    Guid? Id = null);
+
+/// <summary>
 /// One group/cell on a request (spec section 30). <paramref name="Id"/> is only
 /// sent when editing an existing group; omitted means "create a new group".
 /// </summary>
@@ -33,6 +48,7 @@ public record FormationGroupInput(
     string? Color = null,
     Guid? SpecificationTemplateId = null,
     FormationSpecificationInput? Specification = null,
+    List<FormationBasinInput>? Basins = null,
     string? Notes = null,
     Guid? Id = null);
 
@@ -58,6 +74,12 @@ public class CreateFormationRequestCommandValidator : AbstractValidator<CreateFo
             group.RuleFor(g => g.PlannedQuantity).GreaterThan(0);
             group.RuleFor(g => g.Unit).IsInEnum();
             group.RuleFor(g => g.TubCount).GreaterThanOrEqualTo(0).When(g => g.TubCount.HasValue);
+            group.RuleForEach(g => g.Basins ?? new List<FormationBasinInput>()).ChildRules(basin =>
+            {
+                basin.RuleFor(b => b.PlannedQuantity).GreaterThan(0);
+                basin.RuleFor(b => b.Unit).IsInEnum();
+                basin.RuleFor(b => b.TubCount).GreaterThanOrEqualTo(0).When(b => b.TubCount.HasValue);
+            });
         });
     }
 }
@@ -120,6 +142,11 @@ public class UpdateFormationRequestCommandValidator : AbstractValidator<UpdateFo
         {
             group.RuleFor(g => g.PlannedQuantity).GreaterThan(0);
             group.RuleFor(g => g.Unit).IsInEnum();
+            group.RuleForEach(g => g.Basins ?? new List<FormationBasinInput>()).ChildRules(basin =>
+            {
+                basin.RuleFor(b => b.PlannedQuantity).GreaterThan(0);
+                basin.RuleFor(b => b.Unit).IsInEnum();
+            });
         });
     }
 }
@@ -136,7 +163,7 @@ public class UpdateFormationRequestCommandHandler : IRequestHandler<UpdateFormat
 
     public async Task<FormationRequestDto> Handle(UpdateFormationRequestCommand request, CancellationToken cancellationToken)
     {
-        var entity = await _db.FormationRequests.Include(r => r.Groups)
+        var entity = await _db.FormationRequests.Include(r => r.Groups).ThenInclude(g => g.Basins)
             .FirstOrDefaultAsync(r => r.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Formation Request", request.Id);
 
@@ -225,10 +252,84 @@ internal static class FormationRequestGroupWriter
                     input.Specification.CustomerInstructions ?? current.CustomerInstructions,
                     input.Notes, user);
             }
+
+            // Basins are written LAST so the group's own quantity/specification is already in place and each
+            // new basin can inherit it. Writing them also re-derives the group's quantity from its basins,
+            // which is what keeps the request total correct without touching the header.
+            ApplyBasins(request, input, group.Id, user);
         }
 
         request.RenumberGroups(user);
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Replaces the basin set of one group: basins that are still listed are updated in place (keeping their
+    /// Id, and therefore their traceability), basins that disappeared are removed, new basins are appended.
+    ///
+    /// <paramref name="input.Basins"/> is null when the client never mentions basins - the group is then
+    /// planned as one single piece, exactly as it always was. An EMPTY list, on the other hand, is the user
+    /// deleting the last basin, and that must actually remove it: the group then carries its own quantity
+    /// again, which is restated from the input below so it can never keep a stale basin sum.
+    /// </summary>
+    private static void ApplyBasins(
+        FormationRequest request, FormationGroupInput input, Guid groupId, string user)
+    {
+        var basins = input.Basins;
+        if (basins is null) return;
+
+        var keptIds = basins.Where(b => b.Id.HasValue).Select(b => b.Id!.Value).ToHashSet();
+        foreach (var existing in request.Groups.First(g => g.Id == groupId).Basins
+                     .Where(b => !keptIds.Contains(b.Id)).Select(b => b.Id).ToList())
+        {
+            request.RemoveBasin(groupId, existing, user);
+        }
+
+        foreach (var basinInput in basins)
+        {
+            var target = basinInput.Id.HasValue && keptIds.Contains(basinInput.Id.Value)
+                ? request.UpdateBasin(
+                    groupId, basinInput.Id.Value, basinInput.Name, basinInput.PlannedQuantity, basinInput.Unit,
+                    basinInput.TubCount, basinInput.Color,
+                    basinInput.Specification?.WidthCm, basinInput.Specification?.MetersPerKg, basinInput.Specification?.Gsm,
+                    basinInput.Specification?.TubFormat, basinInput.Specification?.WindingTapeFormat,
+                    basinInput.Specification?.QualityInstructions, basinInput.Specification?.LabInstructions,
+                    basinInput.Specification?.InternalInstructions, basinInput.Specification?.CustomerInstructions,
+                    basinInput.Notes, user)
+                : request.AddBasin(
+                    groupId, basinInput.Name, basinInput.PlannedQuantity, basinInput.Unit, basinInput.TubCount,
+                    basinInput.Color, basinInput.Notes, user);
+
+            // An existing basin keeps its specification when the client sends none, exactly like a group does.
+            if (basinInput.Specification is not null && basinInput.Id.HasValue)
+            {
+                request.UpdateBasin(
+                    groupId, target.Id, target.Name, target.PlannedQuantity, target.Unit, target.TubCount, target.Color,
+                    basinInput.Specification.WidthCm ?? target.WidthCm,
+                    basinInput.Specification.MetersPerKg ?? target.MetersPerKg,
+                    basinInput.Specification.Gsm ?? target.Gsm,
+                    basinInput.Specification.TubFormat ?? target.TubFormat,
+                    basinInput.Specification.WindingTapeFormat ?? target.WindingTapeFormat,
+                    basinInput.Specification.QualityInstructions ?? target.QualityInstructions,
+                    basinInput.Specification.LabInstructions ?? target.LabInstructions,
+                    basinInput.Specification.InternalInstructions ?? target.InternalInstructions,
+                    basinInput.Specification.CustomerInstructions ?? target.CustomerInstructions,
+                    target.Notes, user);
+            }
+        }
+
+        // No basins left: the group is a single planned quantity again, so restate it from the input.
+        // Without this the group would still carry the sum its basins used to have.
+        if (!request.Groups.First(g => g.Id == groupId).Basins.Any())
+        {
+            request.UpdateGroup(
+                groupId, input.Name, input.PlannedQuantity, input.Unit, input.TubCount, input.Color,
+                input.Specification?.WidthCm, input.Specification?.MetersPerKg, input.Specification?.Gsm,
+                input.Specification?.TubFormat, input.Specification?.WindingTapeFormat,
+                input.Specification?.QualityInstructions, input.Specification?.LabInstructions,
+                input.Specification?.InternalInstructions, input.Specification?.CustomerInstructions,
+                input.Notes, user);
+        }
     }
 }
 

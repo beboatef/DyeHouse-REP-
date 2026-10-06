@@ -106,29 +106,29 @@ function MovementsReport() {
       toolbar={
         <div className="no-print flex flex-wrap items-end gap-3 mb-4">
           <div className="w-48">
-            <label className="block text-xs font-medium text-gray-600 mb-1">العميل</label>
+            <label className="field-label">العميل</label>
             <Select value={filters.customerId} onChange={(e) => setFilters({ ...filters, customerId: e.target.value })}>
               <option value="">الكل</option>
               {customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
             </Select>
           </div>
           <div className="w-48">
-            <label className="block text-xs font-medium text-gray-600 mb-1">الصنف</label>
+            <label className="field-label">الصنف</label>
             <Select value={filters.itemId} onChange={(e) => setFilters({ ...filters, itemId: e.target.value })}>
               <option value="">الكل</option>
               {items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}
             </Select>
           </div>
           <div className="w-48">
-            <label className="block text-xs font-medium text-gray-600 mb-1">المخزن</label>
+            <label className="field-label">المخزن</label>
             <Select value={filters.warehouseId} onChange={(e) => setFilters({ ...filters, warehouseId: e.target.value })}>
               <option value="">الكل</option>
               {warehouses?.map((w) => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
             </Select>
           </div>
-          <div><label className="block text-xs font-medium text-gray-600 mb-1">من</label>
+          <div><label className="field-label">من</label>
             <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></div>
-          <div><label className="block text-xs font-medium text-gray-600 mb-1">إلى</label>
+          <div><label className="field-label">إلى</label>
             <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></div>
           <ExportButtons
             excel={{ action: () => ReportsExports.inventoryMovements.excel(params) }}
@@ -138,20 +138,20 @@ function MovementsReport() {
         </div>
       }
     >
-      <table className="w-full text-sm">
+      <table className="table">
         <thead>
-          <tr className="border-b border-gray-200 text-gray-500 text-xs">
-            <th className="text-start px-4 py-3 font-medium">التاريخ</th>
-            <th className="text-start px-4 py-3 font-medium">المستند</th>
-            <th className="text-start px-4 py-3 font-medium">النوع</th>
-            <th className="text-start px-4 py-3 font-medium">المخزن</th>
-            <th className="text-start px-4 py-3 font-medium">العميل</th>
-            <th className="text-start px-4 py-3 font-medium">الصنف</th>
-            <th className="text-start px-4 py-3 font-medium">الرسالة</th>
-            <th className="text-start px-4 py-3 font-medium">أمر التشغيل</th>
-            <th className="text-start px-4 py-3 font-medium">كجم</th>
-            <th className="text-start px-4 py-3 font-medium">متر</th>
-            <th className="text-start px-4 py-3 font-medium">المستخدم</th>
+          <tr>
+            <th>التاريخ</th>
+            <th>المستند</th>
+            <th>النوع</th>
+            <th>المخزن</th>
+            <th>العميل</th>
+            <th>الصنف</th>
+            <th>الرسالة</th>
+            <th>أمر التشغيل</th>
+            <th>كجم</th>
+            <th>متر</th>
+            <th>المستخدم</th>
           </tr>
         </thead>
         <tbody>
@@ -161,17 +161,17 @@ function MovementsReport() {
           )}
           {data?.map((m) => (
             <tr key={m.id} className="border-b border-gray-100 last:border-0">
-              <td className="px-4 py-2 ltr-nums">{new Date(m.transactionDate).toLocaleDateString("en-GB")}</td>
-              <td className="px-4 py-2 ltr-nums">{m.sourceDocumentNumber}</td>
-              <td className="px-4 py-2">{m.sourceDocumentType}</td>
-              <td className="px-4 py-2">{m.warehouseName}</td>
-              <td className="px-4 py-2">{m.customerCode}</td>
-              <td className="px-4 py-2">{m.itemCode}</td>
-              <td className="px-4 py-2 ltr-nums">{m.messageNumber ?? "-"}</td>
-              <td className="px-4 py-2 ltr-nums">{m.orderNumber ?? "-"}</td>
-              <td className="px-4 py-2 ltr-nums">{num(m.quantityKg)}</td>
-              <td className="px-4 py-2 ltr-nums">{num(m.quantityMeter)}</td>
-              <td className="px-4 py-2">{m.createdBy}</td>
+              <td className="ltr-nums">{new Date(m.transactionDate).toLocaleDateString("en-GB")}</td>
+              <td className="ltr-nums">{m.sourceDocumentNumber}</td>
+              <td>{m.sourceDocumentType}</td>
+              <td>{m.warehouseName}</td>
+              <td>{m.customerCode}</td>
+              <td>{m.itemCode}</td>
+              <td className="ltr-nums">{m.messageNumber ?? "-"}</td>
+              <td className="ltr-nums">{m.orderNumber ?? "-"}</td>
+              <td className="ltr-nums">{num(m.quantityKg)}</td>
+              <td className="ltr-nums">{num(m.quantityMeter)}</td>
+              <td>{m.createdBy}</td>
             </tr>
           ))}
         </tbody>
@@ -196,7 +196,7 @@ function BalancesReport() {
       toolbar={
         <div className="no-print flex flex-wrap items-end gap-3 mb-4">
           <div className="w-56">
-            <label className="block text-xs font-medium text-gray-600 mb-1">العميل</label>
+            <label className="field-label">العميل</label>
             <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
               <option value="">الكل</option>
               {customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
@@ -214,15 +214,15 @@ function BalancesReport() {
         رصيد الخام لكل رسالة استلام + رصيد الجاهز لكل أمر تشغيل. الأرصدة مُحتسبة من دفتر الحركات
         وليست حقولًا مخزَّنة، فلا يمكن أن تنحرف عن Reality.
       </div>
-      <table className="w-full text-sm">
+      <table className="table">
         <thead>
-          <tr className="border-b border-gray-200 text-gray-500 text-xs">
-            <th className="text-start px-4 py-3 font-medium">أمر التشغيل</th>
-            <th className="text-start px-4 py-3 font-medium">العميل</th>
-            <th className="text-start px-4 py-3 font-medium">الصنف</th>
-            <th className="text-start px-4 py-3 font-medium">اللون</th>
-            <th className="text-start px-4 py-3 font-medium">كجم</th>
-            <th className="text-start px-4 py-3 font-medium">متر</th>
+          <tr>
+            <th>أمر التشغيل</th>
+            <th>العميل</th>
+            <th>الصنف</th>
+            <th>اللون</th>
+            <th>كجم</th>
+            <th>متر</th>
           </tr>
         </thead>
         <tbody>
@@ -232,12 +232,12 @@ function BalancesReport() {
           )}
           {ready?.map((r) => (
             <tr key={r.productionOrderId} className="border-b border-gray-100 last:border-0">
-              <td className="px-4 py-2 ltr-nums">{r.productionOrderNumber}</td>
-              <td className="px-4 py-2">{r.customerCode} - {r.customerName}</td>
-              <td className="px-4 py-2">{r.itemCode} - {r.itemName}</td>
-              <td className="px-4 py-2">{r.color ?? "-"}</td>
-              <td className="px-4 py-2 ltr-nums">{num(r.remainingKg)}</td>
-              <td className="px-4 py-2 ltr-nums">{num(r.remainingMeter)}</td>
+              <td className="ltr-nums">{r.productionOrderNumber}</td>
+              <td>{r.customerCode} - {r.customerName}</td>
+              <td>{r.itemCode} - {r.itemName}</td>
+              <td>{r.color ?? "-"}</td>
+              <td className="ltr-nums">{num(r.remainingKg)}</td>
+              <td className="ltr-nums">{num(r.remainingMeter)}</td>
             </tr>
           ))}
         </tbody>
@@ -262,9 +262,9 @@ function OverridesReport() {
     <ReportFrame
       toolbar={
         <div className="no-print flex flex-wrap items-end gap-3 mb-4">
-          <div><label className="block text-xs font-medium text-gray-600 mb-1">من</label>
+          <div><label className="field-label">من</label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div><label className="block text-xs font-medium text-gray-600 mb-1">إلى</label>
+          <div><label className="field-label">إلى</label>
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
           <ExportButtons
             excel={{ action: () => ReportsExports.negativeStockOverrides.excel(params) }}
@@ -274,13 +274,13 @@ function OverridesReport() {
         </div>
       }
     >
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
-          <th className="text-start px-4 py-3 font-medium">التاريخ</th><th className="text-start px-4 py-3 font-medium">الرسالة</th>
-          <th className="text-start px-4 py-3 font-medium">العميل</th><th className="text-start px-4 py-3 font-medium">الصنف</th>
-          <th className="text-start px-4 py-3 font-medium">المطلوب</th><th className="text-start px-4 py-3 font-medium">قبل</th>
-          <th className="text-start px-4 py-3 font-medium">بعد</th><th className="text-start px-4 py-3 font-medium">السبب</th>
-          <th className="text-start px-4 py-3 font-medium">طلبه</th><th className="text-start px-4 py-3 font-medium">اعتمده</th>
+      <table className="table">
+        <thead><tr>
+          <th>التاريخ</th><th>الرسالة</th>
+          <th>العميل</th><th>الصنف</th>
+          <th>المطلوب</th><th>قبل</th>
+          <th>بعد</th><th>السبب</th>
+          <th>طلبه</th><th>اعتمده</th>
         </tr></thead>
         <tbody>
           {isLoading && <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
@@ -289,16 +289,16 @@ function OverridesReport() {
           )}
           {overrides?.map((o) => (
             <tr key={o.id} className="border-b border-gray-100 last:border-0">
-              <td className="px-4 py-2 ltr-nums">{new Date(o.approvedAtUtc).toLocaleString("en-GB")}</td>
-              <td className="px-4 py-2 ltr-nums">{o.messageNumber}</td>
-              <td className="px-4 py-2">{o.customerCode}</td>
-              <td className="px-4 py-2">{o.itemCode}</td>
-              <td className="px-4 py-2 ltr-nums">{num(o.requestedQuantity)}</td>
-              <td className="px-4 py-2 ltr-nums">{num(o.balanceBefore)}</td>
-              <td className="px-4 py-2 ltr-nums">{num(o.resultingBalance)}</td>
-              <td className="px-4 py-2">{o.reason}</td>
-              <td className="px-4 py-2">{o.requestedBy}</td>
-              <td className="px-4 py-2">{o.approvedBy}</td>
+              <td className="ltr-nums">{new Date(o.approvedAtUtc).toLocaleString("en-GB")}</td>
+              <td className="ltr-nums">{o.messageNumber}</td>
+              <td>{o.customerCode}</td>
+              <td>{o.itemCode}</td>
+              <td className="ltr-nums">{num(o.requestedQuantity)}</td>
+              <td className="ltr-nums">{num(o.balanceBefore)}</td>
+              <td className="ltr-nums">{num(o.resultingBalance)}</td>
+              <td>{o.reason}</td>
+              <td>{o.requestedBy}</td>
+              <td>{o.approvedBy}</td>
             </tr>
           ))}
         </tbody>

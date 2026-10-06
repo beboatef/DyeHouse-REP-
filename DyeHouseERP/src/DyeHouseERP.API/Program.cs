@@ -236,6 +236,9 @@ using (var scope = app.Services.CreateScope())
         await db.Database.MigrateAsync();
         await DocumentSequenceSeeder.SeedAsync(db);
         await DyeHouseERP.Persistence.Seeding.WarehouseSeeder.SeedAsync(db);
+        await DyeHouseERP.Persistence.Seeding.PurchaseUnitSeeder.SeedAsync(db);
+        await DyeHouseERP.Persistence.Seeding.ProductionStageSeeder.SeedAsync(
+            db, app.Services.GetRequiredService<ILogger<Program>>());
 
         var passwordHasher = scope.ServiceProvider.GetRequiredService<DyeHouseERP.Application.Common.Interfaces.IPasswordHasher>();
         await UserSeeder.SeedAsync(db, passwordHasher);

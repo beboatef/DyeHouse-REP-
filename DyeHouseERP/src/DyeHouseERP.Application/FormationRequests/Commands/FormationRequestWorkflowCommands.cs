@@ -85,15 +85,20 @@ public class CancelFormationRequestCommandHandler : IRequestHandler<CancelFormat
 }
 
 /// <summary>
-/// Turns an approved request (or one specific group/cell of it) into a Job Order (spec sections 16 and 31).
-/// The Job Order carries the request Id and, when a single group is converted, the group Id too - so the chain
-/// Customer -&gt; Message -&gt; Formation Request -&gt; Job Order -&gt; Production -&gt; Ready Goods -&gt; Delivery is navigable
-/// in both directions. Groups can be converted one by one, which is how a mixed request (different colours /
-/// specifications per group) is actually processed.
+/// Turns an approved request (one basin, one group/cell, or the whole request) into a Job Order
+/// (spec sections 16, 31 and 10-11).
+///
+/// The Job Order carries the request Id and, when a single group or basin is converted, its Id too - so the chain
+/// Customer -&gt; Message -&gt; Formation Request -&gt; Group -&gt; Basin -&gt; Job Order -&gt; Production -&gt; Ready Goods -&gt; Delivery
+/// is navigable in both directions. Groups and basins are converted one by one, which is how a mixed request
+/// (different colours / specifications per basin) is actually processed.
+///
+/// A group that carries basins is never converted as one lump: its basins are already separate plans, so
+/// converting the group as well would plan the same physical quantity twice.
 /// </summary>
 public record ConvertFormationRequestToJobOrderCommand(
     Guid Id, DateTime OrderDate, JobOrderType JobOrderType, ProductionPriority Priority = ProductionPriority.Normal,
-    Guid? GroupId = null, string? Color = null, string? Notes = null, string? CustomerReference = null)
+    Guid? GroupId = null, Guid? BasinId = null, string? Color = null, string? Notes = null, string? CustomerReference = null)
     : IRequest<FormationRequestDto>;
 
 public class ConvertFormationRequestToJobOrderCommandValidator : AbstractValidator<ConvertFormationRequestToJobOrderCommand>
@@ -119,7 +124,7 @@ public class ConvertFormationRequestToJobOrderCommandHandler
 
     public async Task<FormationRequestDto> Handle(ConvertFormationRequestToJobOrderCommand request, CancellationToken cancellationToken)
     {
-        var entity = await _db.FormationRequests.Include(r => r.Groups)
+        var entity = await _db.FormationRequests.Include(r => r.Groups).ThenInclude(g => g.Basins)
             .FirstOrDefaultAsync(r => r.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Formation Request", request.Id);
 
@@ -129,10 +134,30 @@ public class ConvertFormationRequestToJobOrderCommandHandler
             throw new DomainException("A cancelled formation request cannot be converted into a Job Order.");
 
         FormationGroup? group = null;
-        if (request.GroupId.HasValue)
+        FormationBasin? basin = null;
+
+        if (request.BasinId.HasValue)
+        {
+            basin = entity.Groups.SelectMany(g => g.Basins).FirstOrDefault(b => b.Id == request.BasinId.Value)
+                ?? throw new DomainException(
+                    $"Formation basin ({request.BasinId}) does not belong to request {entity.RequestNumber}.");
+
+            group = entity.Groups.First(g => g.Id == basin.FormationGroupId);
+
+            var basinAlreadyLinked = await _db.ProductionOrders.AsNoTracking()
+                .AnyAsync(o => o.FormationBasinId == basin.Id && o.Status != ProductionOrderStatus.Cancelled, cancellationToken);
+            if (basinAlreadyLinked)
+                throw new DomainException(
+                    $"Basin {group.GroupNumber}/{basin.BasinNumber} already has a Job Order. Each basin is converted once - the same physical quantity must never be planned twice.");
+        }
+        else if (request.GroupId.HasValue)
         {
             group = entity.Groups.FirstOrDefault(g => g.Id == request.GroupId.Value)
                 ?? throw new DomainException($"Formation group ({request.GroupId}) does not belong to request {entity.RequestNumber}.");
+
+            if (group.HasBasins)
+                throw new DomainException(
+                    $"Group {group.GroupNumber} is split into {group.Basins.Count} basins. Convert the basins individually - converting the group as well would plan the same quantity twice.");
 
             var alreadyLinked = await _db.ProductionOrders.AsNoTracking()
                 .AnyAsync(o => o.FormationGroupId == group.Id && o.Status != ProductionOrderStatus.Cancelled, cancellationToken);
@@ -140,13 +165,18 @@ public class ConvertFormationRequestToJobOrderCommandHandler
                 throw new DomainException(
                     $"Group {group.GroupNumber} already has a Job Order. Each group is converted once - the same physical quantity must never be planned twice.");
         }
+        else if (entity.Groups.Any(g => g.HasBasins))
+        {
+            throw new DomainException(
+                "This request is split into basins. Convert the groups and basins individually - converting the whole request would plan the same quantity twice.");
+        }
 
-        var unit = group?.Unit ?? entity.Unit;
-        var quantity = group?.PlannedQuantity ?? entity.Groups.Sum(g => g.PlannedQuantity);
+        var unit = basin?.Unit ?? group?.Unit ?? entity.Unit;
+        var quantity = basin?.PlannedQuantity ?? group?.PlannedQuantity ?? entity.Groups.Sum(g => g.PlannedQuantity);
         if (quantity <= 0)
             throw new DomainException("The quantity being converted must be greater than zero.");
 
-        var color = request.Color ?? group?.Color;
+        var color = request.Color ?? basin?.Color ?? group?.Color;
         var orderNumber = await _numberGenerator.NextAsync(DocumentType.ProductionOrder, cancellationToken: cancellationToken);
 
         var order = new ProductionOrder(
@@ -159,11 +189,12 @@ public class ConvertFormationRequestToJobOrderCommandHandler
             priority: request.Priority,
             jobOrderType: request.JobOrderType,
             formationRequestId: entity.Id,
-            formationGroupId: group?.Id);
+            formationGroupId: group?.Id,
+            formationBasinId: basin?.Id);
 
         var activeStages = await _db.ProductionStageDefinitions.AsNoTracking()
             .Where(s => s.IsActive).OrderBy(s => s.Sequence).ToListAsync(cancellationToken);
-        order.BuildStageRoute(activeStages);
+        order.BuildStageRoute(activeStages, _currentUser.UserName);
 
         _db.ProductionOrders.Add(order);
         entity.LinkProductionOrder(order.Id, _currentUser.UserName);
@@ -179,7 +210,7 @@ internal static class FormationRequestWorkflow
     public static async Task<FormationRequestDto> MutateAsync(
         IApplicationDbContext db, Guid id, string user, Action<FormationRequest> mutate, CancellationToken cancellationToken)
     {
-        var entity = await db.FormationRequests.Include(r => r.Groups)
+        var entity = await db.FormationRequests.Include(r => r.Groups).ThenInclude(g => g.Basins)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken)
             ?? throw new NotFoundException("Formation Request", id);
 

@@ -14,6 +14,15 @@ public class FormationGroupDto
     public int? TubCount { get; set; }
     public string? Color { get; set; }
 
+    /// <summary>The basins / details inside this group (spec sections 10-11). Empty for a group planned as one piece.</summary>
+    public List<FormationBasinDto> Basins { get; set; } = new();
+
+    /// <summary>Planned quantity summed over the basins - equal to <see cref="PlannedQuantity"/> while basins exist.</summary>
+    public decimal PlannedBasinQuantity { get; set; }
+
+    /// <summary>Produced quantity summed over the basins.</summary>
+    public decimal ProducedBasinQuantity { get; set; }
+
     public decimal? WidthCm { get; set; }
     public decimal? MetersPerKg { get; set; }
     public decimal? Gsm { get; set; }
@@ -73,6 +82,44 @@ public class FormationRequestDto
     public decimal ProducedQuantity { get; set; }
 
     public List<FormationGroupDto> Groups { get; set; } = new();
+
+    /// <summary>Total number of basins across every group (spec sections 10-11).</summary>
+    public int BasinCount { get; set; }
+}
+
+/// <summary>
+/// One basin / detail inside a group (spec sections 10-11) - its own quantity, its own specification
+/// snapshot and its own produced quantity, so several basins of one group are never collapsed into a
+/// single figure. A group without basins carries no rows here and behaves exactly as it always has.
+/// </summary>
+public class FormationBasinDto
+{
+    public Guid Id { get; set; }
+    public Guid FormationGroupId { get; set; }
+    public int BasinNumber { get; set; }
+    public string? Name { get; set; }
+    public decimal PlannedQuantity { get; set; }
+    public decimal ProducedQuantity { get; set; }
+    public decimal RemainingQuantity { get; set; }
+    public UnitOfMeasure Unit { get; set; }
+    public int? TubCount { get; set; }
+    public string? Color { get; set; }
+
+    public decimal? WidthCm { get; set; }
+    public decimal? MetersPerKg { get; set; }
+    public decimal? Gsm { get; set; }
+    public string? TubFormat { get; set; }
+    public string? WindingTapeFormat { get; set; }
+
+    public string? QualityInstructions { get; set; }
+    public string? LabInstructions { get; set; }
+    public string? InternalInstructions { get; set; }
+    public string? CustomerInstructions { get; set; }
+    public string? Notes { get; set; }
+
+    public Guid? SpecificationTemplateId { get; set; }
+    public string? SpecificationTemplateName { get; set; }
+    public DateTime? SpecificationSnapshotAtUtc { get; set; }
 }
 
 /// <summary>

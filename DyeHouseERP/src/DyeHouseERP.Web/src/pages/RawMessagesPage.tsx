@@ -160,7 +160,7 @@ export default function RawMessagesPage() {
           <form onSubmit={submit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.customer")}</label>
+                <label className="field-label">{t("common.customer")}</label>
                 <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
                   <option value="">{t("common.selectCustomer")}</option>
                   {customers?.map((c) => (
@@ -169,7 +169,7 @@ export default function RawMessagesPage() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.warehouse")}</label>
+                <label className="field-label">{t("common.warehouse")}</label>
                 <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required>
                   <option value="">{t("common.selectWarehouse")}</option>
                   {warehouses?.map((w) => (
@@ -178,21 +178,21 @@ export default function RawMessagesPage() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("raw.receiptDate")}</label>
+                <label className="field-label">{t("raw.receiptDate")}</label>
                 <Input type="date" value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)} required />
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-medium text-gray-600">{t("raw.lines")}</label>
+                <label className="field-label">{t("raw.lines")}</label>
                 <Button type="button" variant="ghost" onClick={() => setLines((p) => [...p, emptyLine()])}>{t("raw.addLine")}</Button>
               </div>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
                   <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-gray-50 rounded-lg p-3">
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("common.item")}</label>
+                      <label className="field-label">{t("common.item")}</label>
                       <Select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })} required>
                         <option value="">{t("common.select")}</option>
                         {items?.map((i) => (
@@ -203,17 +203,17 @@ export default function RawMessagesPage() {
                       </Select>
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("raw.qtyKg")}</label>
+                      <label className="field-label">{t("raw.qtyKg")}</label>
                       <Input type="number" step="0.001" min="0" value={line.quantityKg}
                         onChange={(e) => updateLine(idx, { quantityKg: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("raw.qtyMeter")}</label>
+                      <label className="field-label">{t("raw.qtyMeter")}</label>
                       <Input type="number" step="0.001" min="0" value={line.quantityMeter}
                         onChange={(e) => updateLine(idx, { quantityMeter: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("raw.piecesHint")}</label>
+                      <label className="field-label">{t("raw.piecesHint")}</label>
                       <Input type="number" min="0" value={line.pieceCount}
                         onChange={(e) => updateLine(idx, { pieceCount: e.target.value })} />
                     </div>
@@ -231,14 +231,14 @@ export default function RawMessagesPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("raw.generalNotes")}</label>
+              <label className="field-label">{t("raw.generalNotes")}</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
 
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? t("common.saving") : t("raw.saveMessage")}
             </Button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="form-error">{error}</p>}
           </form>
         </Card>
       )}
@@ -274,27 +274,27 @@ export default function RawMessagesPage() {
               </div>
             </div>
 
-            <table className="w-full text-sm">
+            <table className="table">
               <thead>
-                <tr className="text-gray-400 text-xs border-b border-gray-100">
-                  <th className="text-start py-2 font-medium">{t("common.item")}</th>
-                  <th className="text-start py-2 font-medium">{t("raw.receivedQty")}</th>
-                  <th className="text-start py-2 font-medium">{t("raw.rejectedQty")}</th>
-                  <th className="text-start py-2 font-medium">{t("raw.acceptedQty")}</th>
-                  <th className="text-start py-2 font-medium">{t("raw.remainingQty")}</th>
-                  <th className="text-start py-2 font-medium">{t("raw.pieces")}</th>
+                <tr>
+                  <th>{t("common.item")}</th>
+                  <th>{t("raw.receivedQty")}</th>
+                  <th>{t("raw.rejectedQty")}</th>
+                  <th>{t("raw.acceptedQty")}</th>
+                  <th>{t("raw.remainingQty")}</th>
+                  <th>{t("raw.pieces")}</th>
                 </tr>
               </thead>
               <tbody>
                 {m.lines.map((l) => (
                   <tr key={l.id} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2">{l.itemCode} - {l.itemName}</td>
-                    <td className="py-2 ltr-nums">
+                    <td>{l.itemCode} - {l.itemName}</td>
+                    <td className="ltr-nums">
                       {l.quantityKg != null && `${l.quantityKg} ${t("common.kg")}`}
                       {l.quantityKg != null && l.quantityMeter != null && " / "}
                       {l.quantityMeter != null && `${l.quantityMeter} ${t("common.meter")}`}
                     </td>
-                    <td className="py-2 ltr-nums text-red-600">
+                    <td className="ltr-nums text-red-600">
                       {l.rejectedQuantityKg == null && l.rejectedQuantityMeter == null
                         ? "-"
                         : [
@@ -302,17 +302,17 @@ export default function RawMessagesPage() {
                             l.rejectedQuantityMeter != null ? `${l.rejectedQuantityMeter} ${t("common.meter")}` : null
                           ].filter(Boolean).join(" / ")}
                     </td>
-                    <td className="py-2 ltr-nums">
+                    <td className="ltr-nums">
                       {l.acceptedQuantityKg != null && `${l.acceptedQuantityKg} ${t("common.kg")}`}
                       {l.acceptedQuantityKg != null && l.acceptedQuantityMeter != null && " / "}
                       {l.acceptedQuantityMeter != null && `${l.acceptedQuantityMeter} ${t("common.meter")}`}
                     </td>
-                    <td className="py-2 ltr-nums font-medium">
+                    <td className="ltr-nums font-medium">
                       {l.remainingKg != null && `${l.remainingKg} ${t("common.kg")}`}
                       {l.remainingKg != null && l.remainingMeter != null && " / "}
                       {l.remainingMeter != null && `${l.remainingMeter} ${t("common.meter")}`}
                     </td>
-                    <td className="py-2 ltr-nums">{l.pieceCount ?? "-"}</td>
+                    <td className="ltr-nums">{l.pieceCount ?? "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -327,14 +327,14 @@ export default function RawMessagesPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                   <div>
-                    <label className="block text-[11px] text-gray-600 mb-1">{t("raw.inspection.result")}</label>
+                    <label className="field-label">{t("raw.inspection.result")}</label>
                     <Select value={inspectionResult} onChange={(e) => setInspectionResult(e.target.value as "AcceptedWithNotes" | "Rejected")}>
                       <option value="AcceptedWithNotes">{t("raw.inspection.acceptedWithNotes")}</option>
                       <option value="Rejected">{t("raw.inspection.rejected")}</option>
                     </Select>
                   </div>
                   <div>
-                    <label className="block text-[11px] text-gray-600 mb-1">{t("raw.inspection.notes")}</label>
+                    <label className="field-label">{t("raw.inspection.notes")}</label>
                     <Input value={inspectionNotes} onChange={(e) => setInspectionNotes(e.target.value)} />
                   </div>
                 </div>
@@ -344,17 +344,17 @@ export default function RawMessagesPage() {
                     <div key={l.id} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end bg-white/70 rounded-lg p-3">
                       <div className="text-sm text-gray-700">
                         {l.itemCode} - {l.itemName}
-                        <div className="text-[11px] text-gray-400 ltr-nums">
+                        <div className="text-2xs text-gray-400 ltr-nums">
                           {t("raw.receivedQty")}: {l.quantityKg ?? "-"} {t("common.kg")} / {l.quantityMeter ?? "-"} {t("common.meter")}
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] text-gray-500 mb-1">{t("raw.rejectedQty")} ({t("common.kg")})</label>
+                        <label className="field-label">{t("raw.rejectedQty")} ({t("common.kg")})</label>
                         <Input type="number" step="0.001" min="0" value={rejections[l.id]?.kg ?? ""}
                           onChange={(e) => setRejection(l.id, { kg: e.target.value })} />
                       </div>
                       <div>
-                        <label className="block text-[11px] text-gray-500 mb-1">{t("raw.rejectedQty")} ({t("common.meter")})</label>
+                        <label className="field-label">{t("raw.rejectedQty")} ({t("common.meter")})</label>
                         <Input type="number" step="0.001" min="0" value={rejections[l.id]?.meter ?? ""}
                           onChange={(e) => setRejection(l.id, { meter: e.target.value })} />
                       </div>
@@ -367,7 +367,7 @@ export default function RawMessagesPage() {
                     {inspectionMutation.isPending ? t("common.saving") : t("raw.inspection.save")}
                   </Button>
                   <Button variant="ghost" onClick={() => setInspectionFor(null)}>{t("common.cancel")}</Button>
-                  {inspectionError && <span className="text-sm text-red-600">{inspectionError}</span>}
+                  {inspectionError && <span className="form-error">{inspectionError}</span>}
                 </div>
               </div>
             )}

@@ -70,7 +70,7 @@ export default function AttachmentsPanel({
 
       <div className="flex flex-col sm:flex-row gap-3 sm:items-end mb-4">
         <div className="flex-1">
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("att.file")}</label>
+          <label className="field-label">{t("att.file")}</label>
           <input
             ref={fileRef}
             type="file"
@@ -87,7 +87,7 @@ export default function AttachmentsPanel({
           />
         </div>
         <div className="flex-1">
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("att.description")}</label>
+          <label className="field-label">{t("att.description")}</label>
           <Input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />
         </div>
       </div>

@@ -50,17 +50,17 @@ export default function CustomerPortalPage() {
         <Card className="p-5 mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">العميل</label>
+              <label className="field-label">العميل</label>
               <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required><option value="">اختر...</option>{customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}</Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">الصنف</label>
+              <label className="field-label">الصنف</label>
               <Select value={itemId} onChange={(e) => setItemId(e.target.value)} required><option value="">اختر...</option>{items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}</Select>
             </div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">اللون</label><Input value={color} onChange={(e) => setColor(e.target.value)} /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الكمية (كجم)</label><Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">الكمية (متر)</label><Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1">ملاحظات</label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+            <div><label className="field-label">اللون</label><Input value={color} onChange={(e) => setColor(e.target.value)} /></div>
+            <div><label className="field-label">الكمية (كجم)</label><Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} /></div>
+            <div><label className="field-label">الكمية (متر)</label><Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} /></div>
+            <div><label className="field-label">ملاحظات</label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
             <Button type="submit" disabled={createMutation.isPending}>إرسال الطلب</Button>
           </form>
         </Card>

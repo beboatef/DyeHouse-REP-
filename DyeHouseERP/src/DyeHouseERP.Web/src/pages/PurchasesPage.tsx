@@ -232,7 +232,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
     <>
       <Card className="p-4 mb-4 flex flex-wrap items-end gap-3">
         <div className="w-52">
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.status")}</label>
+          <label className="field-label">{t("common.status")}</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "" | PurchaseOrderStatus)}>
             <option value="">{t("common.all")}</option>
             {(["Draft", "Submitted", "Approved", "PartiallyReceived", "Received", "Cancelled"] as PurchaseOrderStatus[]).map((s) => (
@@ -258,7 +258,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
           >
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.supplier")}</label>
+                <label className="field-label">{t("common.supplier")}</label>
                 <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required>
                   <option value="">{t("common.select")}</option>
                   {suppliers?.map((s) => (
@@ -267,7 +267,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.warehouse")}</label>
+                <label className="field-label">{t("common.warehouse")}</label>
                 <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required>
                   <option value="">{t("common.selectWarehouse")}</option>
                   {warehouses?.map((w) => (
@@ -276,22 +276,22 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.orderDate")}</label>
+                <label className="field-label">{t("pur.orderDate")}</label>
                 <Input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} required />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.expectedDelivery")}</label>
+                <label className="field-label">{t("pur.expectedDelivery")}</label>
                 <Input type="date" value={expectedDeliveryDate} onChange={(e) => setExpectedDeliveryDate(e.target.value)} />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">{t("pur.tab.orders")}</label>
+              <label className="field-label">{t("pur.tab.orders")}</label>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
                   <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end bg-gray-50 rounded-lg p-3">
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("pur.material")}</label>
+                      <label className="field-label">{t("pur.material")}</label>
                       <Select
                         value={line.materialId}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, materialId: e.target.value } : l)))}
@@ -304,14 +304,14 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                       </Select>
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("pur.quantity")}</label>
+                      <label className="field-label">{t("pur.quantity")}</label>
                       <Input
                         type="number" step="0.001" min="0" value={line.quantity}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, quantity: e.target.value } : l)))}
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("common.unit")}</label>
+                      <label className="field-label">{t("common.unit")}</label>
                       <Select
                         value={line.unit}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, unit: e.target.value as MaterialUnit } : l)))}
@@ -323,7 +323,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                     </div>
                     <div className="flex gap-2">
                       <div className="flex-1">
-                        <label className="block text-[11px] text-gray-500 mb-1">{t("pur.unitPrice")}</label>
+                        <label className="field-label">{t("pur.unitPrice")}</label>
                         <Input
                           type="number" step="0.0001" min="0" value={line.unitPrice}
                           onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, unitPrice: e.target.value } : l)))}
@@ -349,7 +349,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.notes")}</label>
+              <label className="field-label">{t("common.notes")}</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
 
@@ -360,7 +360,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
         </Card>
       )}
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-4">
         {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
@@ -409,18 +409,18 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
               </div>
             </div>
 
-            {expanded === o.id && editError && <p className="text-sm text-red-600 mt-3">{editError}</p>}
+            {expanded === o.id && editError && <p className="form-error mt-3">{editError}</p>}
 
             {expanded === o.id && editing === o.id && (
               <Card className="p-4 mt-4 bg-gray-50">
                 <h4 className="text-sm font-semibold mb-3">{t("pur.editOrder")}</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] text-gray-500 mb-1">{t("pur.expectedDelivery")}</label>
+                    <label className="field-label">{t("pur.expectedDelivery")}</label>
                     <Input type="date" value={editExpected} onChange={(e) => setEditExpected(e.target.value)} />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-gray-500 mb-1">{t("common.notes")}</label>
+                    <label className="field-label">{t("common.notes")}</label>
                     <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
                   </div>
                 </div>
@@ -435,23 +435,23 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
 
             {expanded === o.id && (
               <div className="mt-4">
-                <table className="w-full text-sm">
+                <table className="table">
                   <thead>
-                    <tr className="text-gray-400 text-xs border-b border-gray-100">
-                      <th className="text-start py-2 font-medium">{t("pur.material")}</th>
-                      <th className="text-start py-2 font-medium">{t("pur.quantity")}</th>
-                      <th className="text-start py-2 font-medium">{t("pur.unitPrice")}</th>
-                      <th className="text-start py-2 font-medium">{t("pur.lineValue")}</th>
-                      <th className="text-start py-2 font-medium">{t("pur.receivedQty")}</th>
-                      <th className="text-start py-2 font-medium">{t("pur.outstandingQty")}</th>
-                      <th className="text-start py-2 font-medium" />
+                    <tr>
+                      <th>{t("pur.material")}</th>
+                      <th>{t("pur.quantity")}</th>
+                      <th>{t("pur.unitPrice")}</th>
+                      <th>{t("pur.lineValue")}</th>
+                      <th>{t("pur.receivedQty")}</th>
+                      <th>{t("pur.outstandingQty")}</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
                     {o.lines.map((l) => (
                       <tr key={l.id} className="border-b border-gray-50 last:border-0">
-                        <td className="py-2">{l.materialCode} - {l.materialName}</td>
-                        <td className="py-2 ltr-nums">
+                        <td>{l.materialCode} - {l.materialName}</td>
+                        <td className="ltr-nums">
                           {editing === o.id && canEditLine(o.status) && l.receivedQuantity === 0 ? (
                             <Input
                               className="w-24" type="number" step="0.001" min="0"
@@ -462,7 +462,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                             />
                           ) : `${l.quantity} ${l.unit}`}
                         </td>
-                        <td className="py-2 ltr-nums">
+                        <td className="ltr-nums">
                           {editing === o.id && canEditLine(o.status) && l.receivedQuantity === 0 ? (
                             <Input
                               className="w-24" type="number" step="0.0001" min="0"
@@ -473,15 +473,15 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                             />
                           ) : money(l.unitPrice)}
                         </td>
-                        <td className="py-2 ltr-nums">{money(l.lineValue)}</td>
-                        <td className="py-2 ltr-nums">{l.receivedQuantity}</td>
-                        <td className="py-2 ltr-nums font-medium">{l.outstandingQuantity}</td>
-                        <td className="py-2">
+                        <td className="ltr-nums">{money(l.lineValue)}</td>
+                        <td className="ltr-nums">{l.receivedQuantity}</td>
+                        <td className="ltr-nums font-medium">{l.outstandingQuantity}</td>
+                        <td>
                           {canEditLine(o.status) && l.receivedQuantity === 0 && (
                             <div className="flex items-center gap-3">
                               {editing === o.id && (
                                 <button
-                                  className="text-brand-600 hover:underline text-xs font-semibold"
+                                  className="btn-link"
                                   onClick={() => saveLine.mutate({
                                     orderId: o.id, lineId: l.id,
                                     quantity: Number(editLines[l.id]?.quantity ?? l.quantity),
@@ -633,7 +633,7 @@ function ReceiptsTab() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.linkToOrder")}</label>
+                <label className="field-label">{t("pur.linkToOrder")}</label>
                 <Select value={orderId} onChange={(e) => applyOrder(e.target.value)}>
                   <option value="">{t("pur.noOrderLink")}</option>
                   {receivableOrders.map((o) => (
@@ -642,7 +642,7 @@ function ReceiptsTab() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.supplier")}</label>
+                <label className="field-label">{t("common.supplier")}</label>
                 <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required>
                   <option value="">{t("common.select")}</option>
                   {suppliers?.map((s) => (
@@ -651,7 +651,7 @@ function ReceiptsTab() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.warehouse")}</label>
+                <label className="field-label">{t("common.warehouse")}</label>
                 <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required>
                   <option value="">{t("common.selectWarehouse")}</option>
                   {warehouses?.map((w) => (
@@ -660,29 +660,29 @@ function ReceiptsTab() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.receiptDate")}</label>
+                <label className="field-label">{t("pur.receiptDate")}</label>
                 <Input type="date" value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)} required />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.supplierDoc")}</label>
+                <label className="field-label">{t("pur.supplierDoc")}</label>
                 <Input value={supplierDocumentNumber} onChange={(e) => setSupplierDocumentNumber(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.notes")}</label>
+                <label className="field-label">{t("common.notes")}</label>
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">{t("common.item")}</label>
+              <label className="field-label">{t("common.item")}</label>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
                   <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-gray-50 rounded-lg p-3">
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("pur.material")}</label>
+                      <label className="field-label">{t("pur.material")}</label>
                       <Select
                         value={line.materialId}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, materialId: e.target.value } : l)))}
@@ -695,14 +695,14 @@ function ReceiptsTab() {
                       </Select>
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("pur.receivedQty")}</label>
+                      <label className="field-label">{t("pur.receivedQty")}</label>
                       <Input
                         type="number" step="0.001" min="0" value={line.quantity}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, quantity: e.target.value } : l)))}
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("common.unit")}</label>
+                      <label className="field-label">{t("common.unit")}</label>
                       <Select
                         value={line.unit}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, unit: e.target.value as MaterialUnit } : l)))}
@@ -713,7 +713,7 @@ function ReceiptsTab() {
                       </Select>
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-500 mb-1">{t("pur.unitCost")}</label>
+                      <label className="field-label">{t("pur.unitCost")}</label>
                       <Input
                         type="number" step="0.0001" min="0" value={line.unitCost}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, unitCost: e.target.value } : l)))}
@@ -751,7 +751,7 @@ function ReceiptsTab() {
         </Card>
       )}
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-4">
         {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
@@ -777,22 +777,22 @@ function ReceiptsTab() {
                 {t("common.pdf")}
               </Button>
             </div>
-            <table className="w-full text-sm">
+            <table className="table">
               <thead>
-                <tr className="text-gray-400 text-xs border-b border-gray-100">
-                  <th className="text-start py-2 font-medium">{t("pur.material")}</th>
-                  <th className="text-start py-2 font-medium">{t("pur.receivedQty")}</th>
-                  <th className="text-start py-2 font-medium">{t("pur.unitCost")}</th>
-                  <th className="text-start py-2 font-medium">{t("pur.lineValue")}</th>
+                <tr>
+                  <th>{t("pur.material")}</th>
+                  <th>{t("pur.receivedQty")}</th>
+                  <th>{t("pur.unitCost")}</th>
+                  <th>{t("pur.lineValue")}</th>
                 </tr>
               </thead>
               <tbody>
                 {r.lines.map((l) => (
                   <tr key={l.id} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2">{l.materialCode} - {l.materialName}</td>
-                    <td className="py-2 ltr-nums">{l.quantity} {l.unit}</td>
-                    <td className="py-2 ltr-nums">{money(l.unitCost)}</td>
-                    <td className="py-2 ltr-nums">{money(l.lineValue)}</td>
+                    <td>{l.materialCode} - {l.materialName}</td>
+                    <td className="ltr-nums">{l.quantity} {l.unit}</td>
+                    <td className="ltr-nums">{money(l.unitCost)}</td>
+                    <td className="ltr-nums">{money(l.lineValue)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -904,7 +904,7 @@ function InvoicesTab() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.supplier")}</label>
+                <label className="field-label">{t("common.supplier")}</label>
                 <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required>
                   <option value="">{t("common.select")}</option>
                   {suppliers?.map((s) => (
@@ -913,15 +913,15 @@ function InvoicesTab() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.invoiceNumber")}</label>
+                <label className="field-label">{t("pur.invoiceNumber")}</label>
                 <Input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} required maxLength={60} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.invoiceDate")}</label>
+                <label className="field-label">{t("pur.invoiceDate")}</label>
                 <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.dueDate")}</label>
+                <label className="field-label">{t("pur.dueDate")}</label>
                 <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
               </div>
             </div>
@@ -930,7 +930,7 @@ function InvoicesTab() {
               {lines.map((line, idx) => (
                 <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-gray-50 rounded-lg p-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-[11px] text-gray-500 mb-1">{t("pur.material")}</label>
+                    <label className="field-label">{t("pur.material")}</label>
                     <Select
                       value={line.materialId}
                       onChange={(e) => {
@@ -955,7 +955,7 @@ function InvoicesTab() {
                     </Select>
                   </div>
                   <div>
-                    <label className="block text-[11px] text-gray-500 mb-1">{t("pur.description")}</label>
+                    <label className="field-label">{t("pur.description")}</label>
                     <Input
                       value={line.description}
                       onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, description: e.target.value } : l)))}
@@ -963,14 +963,14 @@ function InvoicesTab() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-gray-500 mb-1">{t("pur.quantity")}</label>
+                    <label className="field-label">{t("pur.quantity")}</label>
                     <Input
                       type="number" step="0.001" min="0" value={line.quantity}
                       onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, quantity: e.target.value } : l)))}
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-gray-500 mb-1">{t("pur.unitPrice")}</label>
+                    <label className="field-label">{t("pur.unitPrice")}</label>
                     <Input
                       type="number" step="0.0001" min="0" value={line.unitPrice}
                       onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, unitPrice: e.target.value } : l)))}
@@ -997,15 +997,15 @@ function InvoicesTab() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.notes")}</label>
+                <label className="field-label">{t("common.notes")}</label>
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.discount")}</label>
+                <label className="field-label">{t("pur.discount")}</label>
                 <Input type="number" step="0.01" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.tax")}</label>
+                <label className="field-label">{t("pur.tax")}</label>
                 <Input type="number" step="0.01" min="0" value={tax} onChange={(e) => setTax(e.target.value)} />
               </div>
             </div>
@@ -1017,19 +1017,19 @@ function InvoicesTab() {
         </Card>
       )}
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("pur.invoiceNumber")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.supplier")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.invoiceDate")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.dueDate")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.totalValue")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("pur.invoiceNumber")}</th>
+              <th>{t("common.supplier")}</th>
+              <th>{t("pur.invoiceDate")}</th>
+              <th>{t("pur.dueDate")}</th>
+              <th>{t("pur.totalValue")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1045,23 +1045,23 @@ function InvoicesTab() {
             )}
             {invoices?.map((i) => (
               <tr key={i.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{i.invoiceNumber}</td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{i.invoiceNumber}</td>
+                <td>
                   <Button variant="ghost" onClick={() => PurchasesExports.supplierInvoicePdf(i.id)()}>
                     {t("common.pdf")}
                   </Button>
                 </td>
-                <td className="px-4 py-3">{i.supplierCode} - {i.supplierName}</td>
-                <td className="px-4 py-3 ltr-nums">{new Date(i.invoiceDate).toLocaleDateString("en-GB")}</td>
-                <td className="px-4 py-3 ltr-nums">{new Date(i.dueDate).toLocaleDateString("en-GB")}</td>
-                <td className="px-4 py-3 ltr-nums">{money(i.total)} {i.currency}</td>
-                <td className="px-4 py-3">
+                <td>{i.supplierCode} - {i.supplierName}</td>
+                <td className="ltr-nums">{new Date(i.invoiceDate).toLocaleDateString("en-GB")}</td>
+                <td className="ltr-nums">{new Date(i.dueDate).toLocaleDateString("en-GB")}</td>
+                <td className="ltr-nums">{money(i.total)} {i.currency}</td>
+                <td>
                   <Badge tone={invoiceTone[i.status]}>{t(`pur.invStatus.${i.status}`)}</Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   {i.status === "Draft" && (
                     <button
-                      className="text-brand-600 hover:underline text-xs font-semibold"
+                      className="btn-link"
                       onClick={() => postMutation.mutate(i.id)}
                     >
                       {t("pur.postInvoice")}
@@ -1145,7 +1145,7 @@ function PaymentsTab() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.supplier")}</label>
+              <label className="field-label">{t("common.supplier")}</label>
               <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required>
                 <option value="">{t("common.select")}</option>
                 {suppliers?.map((s) => (
@@ -1154,7 +1154,7 @@ function PaymentsTab() {
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.account")}</label>
+              <label className="field-label">{t("pur.account")}</label>
               <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
                 <option value="">{t("pay.selectAccount")}</option>
                 {accounts?.map((a) => (
@@ -1163,19 +1163,19 @@ function PaymentsTab() {
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.paymentDate")}</label>
+              <label className="field-label">{t("pur.paymentDate")}</label>
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.amount")}</label>
+              <label className="field-label">{t("pur.amount")}</label>
               <Input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} required />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.paymentMethod")}</label>
+              <label className="field-label">{t("pur.paymentMethod")}</label>
               <Input value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} maxLength={60} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.description")}</label>
+              <label className="field-label">{t("pur.description")}</label>
               <Input value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>
@@ -1185,7 +1185,7 @@ function PaymentsTab() {
         </Card>
       )}
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <Card className="p-4 mb-4">
         <ExportButtons
@@ -1195,15 +1195,15 @@ function PaymentsTab() {
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("pur.paymentNumber")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.supplier")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.paymentDate")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.account")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.amount")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.paymentMethod")}</th>
+            <tr>
+              <th>{t("pur.paymentNumber")}</th>
+              <th>{t("common.supplier")}</th>
+              <th>{t("pur.paymentDate")}</th>
+              <th>{t("pur.account")}</th>
+              <th>{t("pur.amount")}</th>
+              <th>{t("pur.paymentMethod")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1219,12 +1219,12 @@ function PaymentsTab() {
             )}
             {payments?.map((p) => (
               <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{p.paymentNumber}</td>
-                <td className="px-4 py-3">{p.supplierCode} - {p.supplierName}</td>
-                <td className="px-4 py-3 ltr-nums">{new Date(p.paymentDate).toLocaleDateString("en-GB")}</td>
-                <td className="px-4 py-3">{p.treasuryAccountName}</td>
-                <td className="px-4 py-3 ltr-nums">{money(p.amount)} {p.currency}</td>
-                <td className="px-4 py-3 text-gray-600">{p.paymentMethod ?? "—"}</td>
+                <td className="font-medium ltr-nums">{p.paymentNumber}</td>
+                <td>{p.supplierCode} - {p.supplierName}</td>
+                <td className="ltr-nums">{new Date(p.paymentDate).toLocaleDateString("en-GB")}</td>
+                <td>{p.treasuryAccountName}</td>
+                <td className="ltr-nums">{money(p.amount)} {p.currency}</td>
+                <td className="text-ink-muted">{p.paymentMethod ?? "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -1268,17 +1268,17 @@ function BalancesTab() {
       </Card>
 
       <Card className="mb-6">
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("common.code")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.supplier")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.totalInvoiced")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.totalPaid")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.outstanding")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.openInvoices")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("pur.overdue")}</th>
-              <th className="text-start px-4 py-3 font-medium" />
+            <tr>
+              <th>{t("common.code")}</th>
+              <th>{t("common.supplier")}</th>
+              <th>{t("pur.totalInvoiced")}</th>
+              <th>{t("pur.totalPaid")}</th>
+              <th>{t("pur.outstanding")}</th>
+              <th>{t("pur.openInvoices")}</th>
+              <th>{t("pur.overdue")}</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -1294,16 +1294,16 @@ function BalancesTab() {
             )}
             {balances?.map((b) => (
               <tr key={b.supplierId} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{b.supplierCode}</td>
-                <td className="px-4 py-3">{b.supplierName}</td>
-                <td className="px-4 py-3 ltr-nums">{money(b.totalInvoiced)}</td>
-                <td className="px-4 py-3 ltr-nums">{money(b.totalPaid)}</td>
-                <td className="px-4 py-3 ltr-nums font-semibold">{money(b.outstanding)}</td>
-                <td className="px-4 py-3 ltr-nums">{b.openInvoiceCount}</td>
-                <td className="px-4 py-3 ltr-nums text-red-600">{b.overdueAmount > 0 ? money(b.overdueAmount) : "—"}</td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{b.supplierCode}</td>
+                <td>{b.supplierName}</td>
+                <td className="ltr-nums">{money(b.totalInvoiced)}</td>
+                <td className="ltr-nums">{money(b.totalPaid)}</td>
+                <td className="ltr-nums font-semibold">{money(b.outstanding)}</td>
+                <td className="ltr-nums">{b.openInvoiceCount}</td>
+                <td className="ltr-nums text-red-600">{b.overdueAmount > 0 ? money(b.overdueAmount) : "—"}</td>
+                <td>
                   <button
-                    className="text-brand-600 hover:underline text-xs font-semibold"
+                    className="btn-link"
                     onClick={() => setSelected(selected === b.supplierId ? null : b.supplierId)}
                   >
                     {t("pur.ledger")}
@@ -1318,14 +1318,14 @@ function BalancesTab() {
       {selected && (
         <Card className="p-5">
           <h3 className="font-semibold mb-3">{t("pur.ledger")}</h3>
-          <table className="w-full text-sm">
+          <table className="table">
             <thead>
-              <tr className="text-gray-400 text-xs border-b border-gray-100">
-                <th className="text-start py-2 font-medium">{t("common.date")}</th>
-                <th className="text-start py-2 font-medium">{t("common.reference")}</th>
-                <th className="text-start py-2 font-medium">{t("pur.debit")}</th>
-                <th className="text-start py-2 font-medium">{t("pur.credit")}</th>
-                <th className="text-start py-2 font-medium">{t("pur.runningBalance")}</th>
+              <tr>
+                <th>{t("common.date")}</th>
+                <th>{t("common.reference")}</th>
+                <th>{t("pur.debit")}</th>
+                <th>{t("pur.credit")}</th>
+                <th>{t("pur.runningBalance")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1336,14 +1336,14 @@ function BalancesTab() {
               )}
               {ledger?.map((e) => (
                 <tr key={e.id} className="border-b border-gray-50 last:border-0">
-                  <td className="py-2 ltr-nums">{new Date(e.entryDate).toLocaleDateString("en-GB")}</td>
-                  <td className="py-2">
+                  <td className="ltr-nums">{new Date(e.entryDate).toLocaleDateString("en-GB")}</td>
+                  <td>
                     <span className="ltr-nums">{e.sourceDocumentNumber}</span>
                     <span className="text-gray-400 text-xs ms-2">{e.description}</span>
                   </td>
-                  <td className="py-2 ltr-nums">{e.debit > 0 ? money(e.debit) : "—"}</td>
-                  <td className="py-2 ltr-nums">{e.credit > 0 ? money(e.credit) : "—"}</td>
-                  <td className="py-2 ltr-nums font-medium">{money(e.runningBalance)}</td>
+                  <td className="ltr-nums">{e.debit > 0 ? money(e.debit) : "—"}</td>
+                  <td className="ltr-nums">{e.credit > 0 ? money(e.credit) : "—"}</td>
+                  <td className="ltr-nums font-medium">{money(e.runningBalance)}</td>
                 </tr>
               ))}
             </tbody>

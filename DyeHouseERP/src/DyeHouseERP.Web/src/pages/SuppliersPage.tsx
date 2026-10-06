@@ -96,38 +96,38 @@ export default function SuppliersPage() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.code")}</label>
+              <label className="field-label">{t("common.code")}</label>
               <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required maxLength={30} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.nameAr")}</label>
+              <label className="field-label">{t("common.nameAr")}</label>
               <Input value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.nameEn")}</label>
+              <label className="field-label">{t("common.nameEn")}</label>
               <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("customers.account")}</label>
+              <label className="field-label">{t("customers.account")}</label>
               <Input value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} maxLength={30} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("customers.phone")}</label>
+              <label className="field-label">{t("customers.phone")}</label>
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("customers.address")}</label>
+              <label className="field-label">{t("customers.address")}</label>
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Contact</label>
+              <label className="field-label">Contact</label>
               <Input value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} />
             </div>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </form>
-          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+          {error && <p className="form-error mt-3">{error}</p>}
         </Card>
       )}
 
@@ -140,15 +140,15 @@ export default function SuppliersPage() {
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("common.code")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.name")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("customers.account")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("customers.phone")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("common.code")}</th>
+              <th>{t("common.name")}</th>
+              <th>{t("customers.account")}</th>
+              <th>{t("customers.phone")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -164,16 +164,16 @@ export default function SuppliersPage() {
             )}
             {suppliers?.map((s) => (
               <tr key={s.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{s.code}</td>
-                <td className="px-4 py-3">{pick(s.nameAr, s.nameEn, s.name)}</td>
-                <td className="px-4 py-3 ltr-nums">{s.accountNumber}</td>
-                <td className="px-4 py-3 ltr-nums text-gray-600">{s.phone ?? "—"}</td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{s.code}</td>
+                <td>{pick(s.nameAr, s.nameEn, s.name)}</td>
+                <td className="ltr-nums">{s.accountNumber}</td>
+                <td className="ltr-nums text-gray-600">{s.phone ?? "—"}</td>
+                <td>
                   <Badge tone={s.isActive ? "green" : "gray"}>{s.isActive ? t("common.active") : t("common.inactive")}</Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <button
-                    className="text-brand-600 hover:underline text-xs font-semibold"
+                    className="btn-link"
                     onClick={() => toggleMutation.mutate({ id: s.id, isActive: !s.isActive })}
                   >
                     {s.isActive ? t("common.inactive") : t("common.active")}

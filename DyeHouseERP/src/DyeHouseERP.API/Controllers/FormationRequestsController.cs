@@ -82,13 +82,13 @@ public class FormationRequestsController : ControllerBase
     public async Task<ActionResult<FormationRequestDto>> Cancel(Guid id, [FromBody] FormationReasonRequest request)
         => Ok(await _mediator.Send(new CancelFormationRequestCommand(id, request.Reason)));
 
-    /// <summary>Converts the whole request, or one specific group/cell, into a Job Order (spec sections 16 and 31).</summary>
+    /// <summary>Converts the whole request, one group/cell, or one basin into a Job Order (spec sections 16, 31 and 10-11).</summary>
     [HttpPost("{id:guid}/convert-to-job-order")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationConvertToJobOrder)]
     public async Task<ActionResult<FormationRequestDto>> ConvertToJobOrder(Guid id, [FromBody] ConvertFormationRequestRequest request)
         => Ok(await _mediator.Send(new ConvertFormationRequestToJobOrderCommand(
             id, request.OrderDate ?? DateTime.UtcNow, request.JobOrderType, request.Priority,
-            request.GroupId, request.Color, request.Notes, request.CustomerReference)));
+            request.GroupId, request.BasinId, request.Color, request.Notes, request.CustomerReference)));
 
     [HttpGet("export/excel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationExport)]
@@ -100,13 +100,13 @@ public class FormationRequestsController : ControllerBase
         var requests = await _mediator.Send(new GetFormationRequestsQuery(customerId, null, null, status, from, to));
         var headers = new List<string>
         {
-            "RequestNumber", "Date", "Customer", "Item", "Message", "Groups", "TotalQuantity", "Unit", "Status", "JobOrder"
+            "RequestNumber", "Date", "Customer", "Item", "Message", "Groups", "Basins", "TotalQuantity", "Unit", "Status", "JobOrder"
         };
 
         var rows = requests.Select(r => new object?[]
         {
             r.RequestNumber, r.RequestDate.ToString("yyyy-MM-dd"), r.CustomerCode, r.ItemCode, r.MessageNumber,
-            r.Groups.Count, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString(), r.ProductionOrderNumber
+            r.Groups.Count, r.BasinCount, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString(), r.ProductionOrderNumber
         }).ToList();
 
         var bytes = export.GenerateExcel("FormationRequests", headers, rows);
@@ -146,14 +146,24 @@ public class FormationRequestsController : ControllerBase
 
         var headers = new List<string>
         {
-            "Group", "Quantity", "Unit", "Tubs", "Color", "Width(cm)", "m/kg", "g/m2", "TubFormat", "Specification"
+            "Group", "Basin", "Quantity", "Unit", "Tubs", "Color", "Width(cm)", "m/kg", "g/m2", "TubFormat", "Specification"
         };
 
-        var rows = request.Groups.Select(g => new object?[]
-        {
-            g.GroupNumber, g.PlannedQuantity, g.Unit.ToString(), g.TubCount, g.Color,
-            g.WidthCm, g.MetersPerKg, g.Gsm, g.TubFormat, g.SpecificationTemplateName
-        }).ToList();
+        // One printed row per basin (spec sections 10-11); a group without basins prints one row carrying
+        // its own figures, so the document never invents a basin the planner did not create.
+        var rows = request.Groups.SelectMany(g => g.Basins.Count > 0
+                ? g.Basins.Select(b => new object?[]
+                {
+                    g.GroupNumber, b.BasinNumber, b.PlannedQuantity, b.Unit.ToString(), b.TubCount, b.Color,
+                    b.WidthCm ?? g.WidthCm, b.MetersPerKg ?? g.MetersPerKg, b.Gsm ?? g.Gsm,
+                    b.TubFormat ?? g.TubFormat, b.SpecificationTemplateName ?? g.SpecificationTemplateName
+                })
+                : new[] { new object?[]
+                {
+                    g.GroupNumber, (object?)null, g.PlannedQuantity, g.Unit.ToString(), g.TubCount, g.Color,
+                    g.WidthCm, g.MetersPerKg, g.Gsm, g.TubFormat, g.SpecificationTemplateName
+                } })
+            .ToList();
 
         var subtitle = $"{request.CustomerCode} - {request.CustomerName} | {request.ItemCode} | {request.Status}";
         var bytes = export.GeneratePdf($"Formation Request {request.RequestNumber}", subtitle, headers, rows);
@@ -166,6 +176,7 @@ public record FormationReasonRequest(string Reason);
 
 public record ConvertFormationRequestRequest(
     Guid? GroupId,
+    Guid? BasinId = null,
     JobOrderType JobOrderType = JobOrderType.ClosedLine,
     ProductionPriority Priority = ProductionPriority.Normal,
     DateTime? OrderDate = null,

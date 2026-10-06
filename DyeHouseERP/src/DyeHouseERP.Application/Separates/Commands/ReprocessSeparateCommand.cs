@@ -51,7 +51,7 @@ public class ReprocessSeparateCommandHandler : IRequestHandler<ReprocessSeparate
 
         var activeStages = await _db.ProductionStageDefinitions.AsNoTracking()
             .Where(s => s.IsActive).OrderBy(s => s.Sequence).ToListAsync(cancellationToken);
-        newOrder.BuildStageRoute(activeStages);
+        newOrder.BuildStageRoute(activeStages, _currentUser.UserName);
 
         _db.ProductionOrders.Add(newOrder);
 

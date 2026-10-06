@@ -161,18 +161,18 @@ export default function MaterialSalesPage() {
             }}
           >
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.warehouse")}</label>
+              <label className="field-label">{t("common.warehouse")}</label>
               <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required>
                 <option value="">—</option>
                 {warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("msale.buyerName")}</label>
+              <label className="field-label">{t("msale.buyerName")}</label>
               <Input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} required maxLength={200} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("msale.customerAccount")}</label>
+              <label className="field-label">{t("msale.customerAccount")}</label>
               <Select
                 value={customerId}
                 onChange={(e) => {
@@ -186,30 +186,30 @@ export default function MaterialSalesPage() {
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("msale.settleNow")}</label>
+              <label className="field-label">{t("msale.settleNow")}</label>
               <Select value={treasuryAccountId} onChange={(e) => setTreasuryAccountId(e.target.value)}>
                 <option value="">—</option>
                 {accounts?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.date")}</label>
+              <label className="field-label">{t("common.date")}</label>
               <Input type="date" value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("msale.discount")}</label>
+              <label className="field-label">{t("msale.discount")}</label>
               <Input type="number" step="0.01" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("msale.tax")}</label>
+              <label className="field-label">{t("msale.tax")}</label>
               <Input type="number" step="0.01" min="0" value={tax} onChange={(e) => setTax(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Payment method</label>
+              <label className="field-label">Payment method</label>
               <Input value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} maxLength={100} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.notes")}</label>
+              <label className="field-label">{t("common.notes")}</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
             </div>
             <Button type="submit" disabled={create.isPending}>
@@ -221,7 +221,7 @@ export default function MaterialSalesPage() {
 
       <Card className="p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-end">
         <div className="w-full sm:w-56">
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.status")}</label>
+          <label className="field-label">{t("common.status")}</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "" | MaterialSaleStatus)}>
             <option value="">{t("common.all")}</option>
             <option value="Draft">{t("msale.draft")}</option>
@@ -232,20 +232,20 @@ export default function MaterialSalesPage() {
         <p className="text-xs text-gray-400 sm:mb-2">{t("msale.postedNote")}</p>
       </Card>
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="form-error mb-3">{error}</p>}
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("approvals.document")}</th>
-              <th className="text-start px-4 py-3 font-medium">PDF</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.date")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("msale.buyer")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.warehouse")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.total")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("approvals.document")}</th>
+              <th>PDF</th>
+              <th>{t("common.date")}</th>
+              <th>{t("msale.buyer")}</th>
+              <th>{t("common.warehouse")}</th>
+              <th>{t("common.total")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -262,14 +262,14 @@ export default function MaterialSalesPage() {
             {sales?.map((sale: MaterialSale) => (
               <Fragment key={sale.id}>
                 <tr className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium ltr-nums">{sale.saleNumber}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium ltr-nums">{sale.saleNumber}</td>
+                  <td>
                     <Button variant="ghost" onClick={MaterialSalesExports.documentPdf(sale.id)}>
                       PDF
                     </Button>
                   </td>
-                  <td className="px-4 py-3 ltr-nums">{new Date(sale.saleDate).toLocaleDateString("en-GB")}</td>
-                  <td className="px-4 py-3">
+                  <td className="ltr-nums">{new Date(sale.saleDate).toLocaleDateString("en-GB")}</td>
+                  <td>
                     <div>{sale.buyerName}</div>
                     {sale.customerId && (
                       <div className="text-xs text-gray-400">
@@ -280,12 +280,12 @@ export default function MaterialSalesPage() {
                       <div className="text-xs text-emerald-600">{sale.treasuryAccountName}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{sale.warehouseName}</td>
-                  <td className="px-4 py-3 ltr-nums font-medium">{money(sale.total)}</td>
-                  <td className="px-4 py-3">
+                  <td className="text-ink-muted">{sale.warehouseName}</td>
+                  <td className="ltr-nums font-medium">{money(sale.total)}</td>
+                  <td>
                     <Badge tone={statusTone(sale.status)}>{statusLabel(sale.status)}</Badge>
                   </td>
-                  <td className="px-4 py-3 flex flex-wrap gap-2">
+                  <td className="flex flex-wrap gap-2">
                     <Button variant="ghost" onClick={() => setExpanded(expanded === sale.id ? null : sale.id)}>
                       {expanded === sale.id ? t("common.close") : t("common.details")}
                     </Button>
@@ -303,14 +303,14 @@ export default function MaterialSalesPage() {
                 {expanded === sale.id && (
                   <tr className="bg-gray-50/60">
                     <td colSpan={8} className="px-4 py-4">
-                      <table className="w-full text-sm mb-4">
+                      <table className="table mb-4">
                         <thead>
-                          <tr className="text-gray-500 text-xs border-b border-gray-200">
-                            <th className="text-start py-2 font-medium">{t("common.item")}</th>
-                            <th className="text-start py-2 font-medium">{t("common.quantity")}</th>
-                            <th className="text-start py-2 font-medium">{t("pur.unitPrice")}</th>
-                            <th className="text-start py-2 font-medium">{t("common.total")}</th>
-                            <th className="text-start py-2 font-medium">{t("common.actions")}</th>
+                          <tr>
+                            <th>{t("common.item")}</th>
+                            <th>{t("common.quantity")}</th>
+                            <th>{t("pur.unitPrice")}</th>
+                            <th>{t("common.total")}</th>
+                            <th>{t("common.actions")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -321,14 +321,14 @@ export default function MaterialSalesPage() {
                           )}
                           {sale.lines.map((l) => (
                             <tr key={l.id} className="border-b border-gray-100 last:border-0">
-                              <td className="py-2">
+                              <td>
                                 <span className="ltr-nums text-gray-500 me-2">{l.materialCode}</span>
                                 {l.materialName}
                               </td>
-                              <td className="py-2 ltr-nums">{l.quantity} {l.unit}</td>
-                              <td className="py-2 ltr-nums">{money(l.unitPrice)}</td>
-                              <td className="py-2 ltr-nums">{money(l.lineTotal)}</td>
-                              <td className="py-2">
+                              <td className="ltr-nums">{l.quantity} {l.unit}</td>
+                              <td className="ltr-nums">{money(l.unitPrice)}</td>
+                              <td className="ltr-nums">{money(l.lineTotal)}</td>
+                              <td>
                                 {sale.isEditable && (
                                   <button
                                     className="text-red-500 hover:underline text-xs font-semibold"
@@ -352,7 +352,7 @@ export default function MaterialSalesPage() {
                           }}
                         >
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.item")}</label>
+                            <label className="field-label">{t("common.item")}</label>
                             <Select value={materialId} onChange={(e) => setMaterialId(e.target.value)} required>
                               <option value="">—</option>
                               {chemicals?.map((m) => (
@@ -363,13 +363,13 @@ export default function MaterialSalesPage() {
                             </Select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                            <label className="field-label">
                               {t("common.quantity")} {materialId ? `(${unitFor(materialId)})` : ""}
                             </label>
                             <Input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">{t("pur.unitPrice")}</label>
+                            <label className="field-label">{t("pur.unitPrice")}</label>
                             <Input type="number" step="0.0001" min="0" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
                           </div>
                           <Button type="submit" disabled={addLine.isPending}>{t("sup.addLine")}</Button>

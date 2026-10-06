@@ -52,7 +52,7 @@ export default function SettingsPage() {
 
       <Card className="p-6 max-w-2xl">
         <div className="mb-6">
-          <label className="block text-xs font-medium text-gray-600 mb-2">شعار الشركة</label>
+          <label className="field-label">شعار الشركة</label>
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-xl border border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden">
               {logoDataUrl ? (
@@ -73,18 +73,18 @@ export default function SettingsPage() {
                   إزالة الشعار
                 </button>
               )}
-              <p className="text-[11px] text-gray-400">PNG أو SVG أو JPG، حتى 2 ميجا تقريبًا</p>
+              <p className="text-2xs text-gray-400">PNG أو SVG أو JPG، حتى 2 ميجا تقريبًا</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">اسم الشركة (عربي)</label>
+            <label className="field-label">اسم الشركة (عربي)</label>
             <Input value={companyNameAr} onChange={(e) => setCompanyNameAr(e.target.value)} required />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">اسم الشركة (إنجليزي)</label>
+            <label className="field-label">اسم الشركة (إنجليزي)</label>
             <Input value={companyNameEn} onChange={(e) => setCompanyNameEn(e.target.value)} required dir="ltr" />
           </div>
         </div>
@@ -92,7 +92,7 @@ export default function SettingsPage() {
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
           {saveMutation.isPending ? "جارٍ الحفظ..." : saved ? "تم الحفظ ✓" : "حفظ"}
         </Button>
-        {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+        {error && <p className="form-error mt-3">{error}</p>}
       </Card>
     </>
   );

@@ -118,7 +118,7 @@ public class ConvertProductionRequestCommandHandler : IRequestHandler<ConvertPro
             pr.Color, pr.RequestedQuantityKg, pr.RequestedQuantityMeter, notes: $"From customer request {pr.RequestNumber}");
 
         var activeStages = await _db.ProductionStageDefinitions.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Sequence).ToListAsync(cancellationToken);
-        order.BuildStageRoute(activeStages);
+        order.BuildStageRoute(activeStages, _currentUser.UserName);
         _db.ProductionOrders.Add(order);
 
         pr.MarkConverted(order.Id, _currentUser.UserName);

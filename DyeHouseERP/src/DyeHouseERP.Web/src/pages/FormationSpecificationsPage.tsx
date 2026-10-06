@@ -113,14 +113,14 @@ export default function FormationSpecificationsPage() {
 
   const field = (key: keyof typeof emptyForm, label: string, type = "text") => (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="field-label">{label}</label>
       <Input type={type} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
     </div>
   );
 
   const textarea = (key: keyof typeof emptyForm, label: string) => (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="field-label">{label}</label>
       <textarea
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
         rows={2}
@@ -170,7 +170,7 @@ export default function FormationSpecificationsPage() {
             <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.code || (!form.nameAr && !form.nameEn)}>
               {saveMutation.isPending ? t("common.saving") : editingId ? t("common.save") : t("common.add")}
             </Button>
-            {error && <span className="text-sm text-red-600">{error}</span>}
+            {error && <span className="form-error">{error}</span>}
           </div>
         </Card>
       )}
@@ -180,17 +180,17 @@ export default function FormationSpecificationsPage() {
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("common.code")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.name")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("fr.width")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("fr.metersPerKg")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("fr.gsm")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("fr.tubFormat")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.actions")}</th>
+            <tr>
+              <th>{t("common.code")}</th>
+              <th>{t("common.name")}</th>
+              <th>{t("fr.width")}</th>
+              <th>{t("fr.metersPerKg")}</th>
+              <th>{t("fr.gsm")}</th>
+              <th>{t("fr.tubFormat")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -202,18 +202,18 @@ export default function FormationSpecificationsPage() {
             )}
             {templates?.map((template) => (
               <tr key={template.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{template.code}</td>
-                <td className="px-4 py-3">{pick(template.nameAr, template.nameEn)}</td>
-                <td className="px-4 py-3 ltr-nums">{template.widthCm ?? "—"}</td>
-                <td className="px-4 py-3 ltr-nums">{template.metersPerKg ?? "—"}</td>
-                <td className="px-4 py-3 ltr-nums">{template.gsm ?? "—"}</td>
-                <td className="px-4 py-3">{template.tubFormat ?? "—"}</td>
-                <td className="px-4 py-3">
+                <td className="font-medium ltr-nums">{template.code}</td>
+                <td>{pick(template.nameAr, template.nameEn)}</td>
+                <td className="ltr-nums">{template.widthCm ?? "—"}</td>
+                <td className="ltr-nums">{template.metersPerKg ?? "—"}</td>
+                <td className="ltr-nums">{template.gsm ?? "—"}</td>
+                <td>{template.tubFormat ?? "—"}</td>
+                <td>
                   <Badge tone={template.isActive ? "green" : "gray"}>
                     {template.isActive ? t("common.active") : t("common.inactive")}
                   </Badge>
                 </td>
-                <td className="px-4 py-3 space-x-3 whitespace-nowrap">
+                <td className="space-x-3 whitespace-nowrap">
                   <button className="btn-link" onClick={() => startEdit(template)}>
                     {t("common.edit")}
                   </button>

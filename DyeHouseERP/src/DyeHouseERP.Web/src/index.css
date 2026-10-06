@@ -74,10 +74,32 @@
     --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
     --shadow-pop: 0 10px 15px -3px rgb(16 24 40 / 0.1), 0 4px 6px -4px rgb(16 24 40 / 0.1);
 
+    /* -- dashboard tile strip -------------------------------------------------
+       The solid coloured quick-stat tiles from the reference design. Declared
+       as tokens (not literals in the component) so they are themeable and so
+       the same four colours can be reused on any module's summary strip. */
+    --tile-1: #2dce89;
+    --tile-2: #2f80ed;
+    --tile-3: #f5365c;
+    --tile-4: #fb6340;
+
     /* -- control sizing (the single source of truth for control heights) ---- */
     --control-h-sm: 32px;
     --control-h: 38px;
     --control-h-lg: 44px;
+
+    /* -- motion ------------------------------------------------------------
+       The DyeHouse motion language. Deliberately fast and calm: an ERP is a
+       tool, so no transition should ever make a user wait for it. Every
+       animation in the app must only touch `opacity` and `transform`. These
+       tokens are mirrored in src/components/motion.tsx (MOTION) so the CSS and
+       the JS count-up/stagger helpers read from one set of numbers. */
+    --motion-fast: 130ms;      /* colour / border changes, button press */
+    --motion-normal: 220ms;    /* card + widget entrance, dropdowns */
+    --motion-page: 300ms;      /* page-level entrance */
+    --motion-stagger: 45ms;    /* gap between staggered siblings (30-70ms) */
+    --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);   /* professional ease-out */
+    --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
 
     /* -- channel mirrors (for Tailwind opacity modifiers) ------------------ */
     --surface-rgb: 255 255 255;
@@ -161,6 +183,12 @@
 
     --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.2);
     --shadow-pop: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+
+    /* Tiles are deepened in dark mode so white text keeps its contrast. */
+    --tile-1: #1f9d67;
+    --tile-2: #1f5fb8;
+    --tile-3: #c02a49;
+    --tile-4: #c9502f;
 
     --surface-rgb: 17 24 39;
     --surface-sunken-rgb: 15 23 42;
@@ -248,10 +276,18 @@
 @layer components {
   /* -- Cards --------------------------------------------------------------- */
   .card {
-    @apply rounded-lg border border-line bg-surface shadow-card;
+    @apply rounded-lg border border-line bg-surface shadow-card
+           transition-[box-shadow,transform,border-color] duration-200 ease-out;
   }
   .card-pad {
     @apply p-4 sm:p-5;
+  }
+  /* Opt-in hover elevation. Kept off `.card` itself so a large static card
+     (an activity table, a form panel) does not float when the pointer crosses
+     it; summary/KPI tiles add this class instead. Transform-only, so the grid
+     never reflows. */
+  .card-hover {
+    @apply hover:-translate-y-0.5 hover:shadow-pop;
   }
 
   /* -- Buttons ------------------------------------------------------------- */
@@ -259,8 +295,11 @@
      and reserved for dense toolbars, never for primary mobile actions. */
   .btn {
     @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg
-           border border-transparent text-sm font-semibold transition-colors
-           disabled:cursor-not-allowed disabled:opacity-50;
+           border border-transparent text-sm font-semibold
+           transition-[color,background-color,border-color,box-shadow,transform]
+           duration-150 ease-out
+           active:scale-[0.98]
+           disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
     height: var(--control-h);
     @apply px-4;
   }
@@ -290,7 +329,8 @@
   .select,
   .textarea {
     @apply w-full rounded-lg border border-line-strong bg-surface text-sm text-ink
-           placeholder:text-ink-subtle transition-colors
+           placeholder:text-ink-subtle
+           transition-[color,background-color,border-color,box-shadow] duration-150 ease-out
            focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25
            disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-subtle;
     height: var(--control-h);
@@ -301,11 +341,24 @@
     height: auto;
     min-height: 80px;
   }
+  /* One label size for the whole system. This was the single biggest source of
+     drift: 273 form labels across the app were hand-styled as either
+     `text-[11px] text-gray-500` or `text-xs text-gray-600`, while these 10
+     pages used 14px. 12px/500 is the dense-but-legible size the majority
+     already used, so unifying here changes the fewest screens and makes every
+     form in the app read identically. */
   .field-label {
-    @apply mb-1.5 block text-sm font-medium text-ink;
+    @apply mb-1.5 block text-xs font-medium text-ink;
   }
+  /* Helper text under a control, matched to the label size. */
+  .field-hint {
+    @apply mt-1 text-2xs text-ink-subtle;
+  }
+  /* Validation text eases in instead of popping, so a failing submit does not
+     read as a layout jump. Transform-only, so neighbouring fields never move. */
   .field-error {
     @apply mt-1 text-xs text-danger;
+    animation: rise-in var(--motion-fast) var(--ease-out-soft) backwards;
   }
 
   /* -- Checkbox / radio -----------------------------------------------------
@@ -367,6 +420,56 @@
   .table-dense thead th {
     @apply px-3 py-2;
   }
+  /* Compact key/value table (a detail panel's field grid, not a data grid).
+     It shares the cell treatment but drops the 640px min-width, because a
+     two-column label/value table has nothing to scroll. */
+  .table-plain {
+    min-width: 0;
+  }
+  .table-plain thead th {
+    @apply bg-transparent;
+  }
+
+  /* -- Alerts ---------------------------------------------------------------
+     One banner for page- and form-level messages. Before this, the same error
+     was rendered 40+ times as an ad-hoc `text-sm text-red-600` paragraph with
+     four different sizes and margins. */
+  .alert {
+    @apply flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm;
+  }
+  .alert-info    { @apply border-info/30 bg-info-soft text-info-ink; }
+  .alert-success { @apply border-success/30 bg-success-soft text-success-ink; }
+  .alert-warning { @apply border-warning/30 bg-warning-soft text-warning-ink; }
+  .alert-danger  { @apply border-danger/30 bg-danger-soft text-danger-ink; }
+
+  /* Inline validation / action error text. One size and one animation, so it
+     cannot drift between `text-xs` and `text-sm` from page to page. */
+  .form-error {
+    @apply text-sm text-danger;
+    animation: rise-in var(--motion-fast) var(--ease-out-soft) backwards;
+  }
+
+  /* -- Section header -------------------------------------------------------
+     The heading above a group of cards inside a page, matching the dashboard's
+     `Section` treatment so every module reads the same way. */
+  .section-title {
+    @apply mb-3 text-xs font-semibold uppercase tracking-wide text-ink-subtle;
+  }
+
+  /* -- Filter / action bar --------------------------------------------------
+     The single toolbar row used above every list: search, filters, view
+     actions. Uniform gap and wrapping, so nothing is squeezed on a phone. */
+  .filter-bar {
+    @apply mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3 shadow-card;
+  }
+  .filter-bar-item {
+    @apply min-w-0 flex-1 basis-48;
+  }
+
+  /* -- Status indicator ----------------------------------------------------- */
+  .status-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
+  }
 
   /* Text-style buttons inside table cells and card action rows.
      The pages use bare <button class="text-xs font-semibold ..."> for row
@@ -405,6 +508,77 @@
   .badge-danger  { @apply bg-danger-soft text-danger-ink; }
   .badge-info    { @apply bg-info-soft text-info-ink; }
   .badge-neutral { @apply bg-surface-sunken text-ink-muted; }
+  .badge-brand   { @apply bg-brand-50 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200; }
+
+  /* -- KPI cards ------------------------------------------------------------
+     The reference design's headline card: a small muted label, one large
+     figure, then a footnote, with an optional tonal icon badge and sparkline.
+     ----------------------------------------------------------------------- */
+  .kpi-label {
+    @apply text-xs font-medium text-ink-muted;
+  }
+  .kpi-value {
+    @apply mt-1 text-2xl font-bold leading-tight text-ink;
+  }
+  .kpi-footnote {
+    @apply mt-1.5 text-2xs text-ink-subtle;
+  }
+  .kpi-icon {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg;
+  }
+
+  /* -- Small chip (the compact pill used for deltas/footnotes) -------------- */
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold;
+  }
+  .chip-success { @apply bg-success-soft text-success-ink; }
+  .chip-warning { @apply bg-warning-soft text-warning-ink; }
+  .chip-danger  { @apply bg-danger-soft text-danger-ink; }
+  .chip-info    { @apply bg-info-soft text-info-ink; }
+  .chip-neutral { @apply bg-surface-sunken text-ink-muted; }
+
+  /* -- Quick-stat tiles (the solid coloured strip) -------------------------- */
+  /* NOTE: the tile text/overlay colours are literal whites, NOT Tailwind's
+     `text-white` / `bg-white/20`. tailwind.config.js deliberately remaps the
+     `white` and `black` NAMES onto --surface / --ink so the existing pages theme
+     automatically - which means `text-white` on these solid tiles would render
+     near-black in dark mode. Inside a solid coloured tile the foreground is
+     always white, so it is written out. */
+  .quick-tile {
+    @apply flex items-center gap-3 rounded-lg border border-transparent p-4 shadow-card
+           transition-transform hover:-translate-y-0.5;
+    color: #ffffff;
+  }
+  .quick-tile-icon {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full;
+    background: rgb(255 255 255 / 0.22);
+  }
+  .quick-tile-label {
+    @apply text-xs font-medium;
+    color: rgb(255 255 255 / 0.88);
+  }
+  .quick-tile-value {
+    @apply mt-0.5 text-lg font-bold leading-tight;
+    color: #ffffff;
+  }
+  .quick-tile-1 { background: var(--tile-1); }
+  .quick-tile-2 { background: var(--tile-2); }
+  .quick-tile-3 { background: var(--tile-3); }
+  .quick-tile-4 { background: var(--tile-4); }
+
+  /* -- Chart legend dot ----------------------------------------------------- */
+  .legend-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
+  }
+
+  /* -- Segmented distribution bar (the reference's "sales overview" panel) -- */
+  .seg-track {
+    @apply h-2 w-full overflow-hidden rounded-full bg-surface-sunken;
+  }
+  .seg-fill {
+    @apply h-full rounded-full transition-[width] duration-500;
+  }
+
 
   /* -- Tabs -----------------------------------------------------------------
      Horizontally scrollable on narrow screens instead of forcing the page to
@@ -450,12 +624,83 @@
   /* -- Sidebar -------------------------------------------------------------- */
   .nav-link {
     @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium
-           text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700
+           text-ink-muted
+           transition-[color,background-color] duration-150 ease-out
+           hover:bg-brand-50 hover:text-brand-700
            dark:hover:bg-brand-900/40 dark:hover:text-brand-200;
   }
   .nav-link-active {
     @apply bg-brand-50 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200;
   }
+}
+
+/* ===========================================================================
+   MOTION UTILITIES
+   ---------------------------------------------------------------------------
+   The reusable motion primitives. Pages and components compose these instead
+   of hand-writing keyframes, so the whole app moves with one rhythm.
+
+   Everything here animates ONLY opacity/transform. No width/height/margin
+   animation means no layout thrash and no reflow of a 200-row table.
+   =========================================================================== */
+
+/* Page-level entrance. Applied once to the routed content container, so every
+   one of the 42 pages gets the same fade + subtle rise without per-page code.
+   The animation name is retriggered by React remounting on a route change.
+
+   NOTE on `@apply animate-*` below: the keyframes live in tailwind.config.js,
+   and Tailwind only emits a keyframe when its `animate-*` utility is actually
+   generated. Applying the utility here (rather than hand-writing the shorthand)
+   is what guarantees the keyframe reaches the bundle - a bare
+   `animation: rise-in ...` in custom CSS would silently reference a keyframe
+   that was never emitted. */
+.motion-page {
+  @apply animate-page-enter;
+}
+
+/* A single staggered item (card, widget, section header). `--reveal-delay` is
+   set inline by <Reveal> to the item's stagger slot. */
+.motion-rise {
+  /* `animate-rise-in` uses `backwards` fill (not `both`): it holds the
+     opacity-0 start state through the stagger delay, but once the animation
+     ends it releases `transform`. With `both` the final `transform: none`
+     would stay applied forever and silently beat the `:hover` lift on
+     .card-hover / .quick-tile, because animations outrank normal declarations
+     in the cascade. Declared after the @apply so the delay is not reset. */
+  @apply animate-rise-in;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+/* Overlay surfaces: dropdown panels, dialogs, popovers. */
+.motion-pop {
+  @apply animate-pop-in;
+  transform-origin: var(--pop-origin, center);
+}
+
+/* Toast / inline notification. Slides in from the inline-end edge and is
+   direction-aware in both RTL and LTR via `--toast-from`. */
+.motion-toast {
+  @apply animate-toast-in;
+}
+
+/* Loading placeholder. A real shimmer sweep (one transform, one compositor
+   layer) rather than `animate-pulse`, which fades the whole block and reads as
+   a flicker on dense screens. */
+.skeleton {
+  @apply relative overflow-hidden rounded-md bg-surface-sunken;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--line-rgb) / 0.55),
+    transparent
+  );
+  @apply animate-shimmer;
 }
 
 /* Numbers (document numbers, quantities) read better LTR even inside an RTL page */
@@ -465,14 +710,23 @@
   display: inline-block;
 }
 
-/* Respect a user's reduced-motion preference. */
+/* Respect a user's reduced-motion preference.
+   Important detail: `animation-delay` must be reset too. Our entrance
+   animations use `fill-mode: both`, so with a stagger delay still in place a
+   reduced-motion user would sit on the `from` state (opacity 0) until the
+   delay elapsed and then pop in. The `!important` here also beats the inline
+   `animation-delay` that <Reveal> sets, so no JS change is needed.
+   The interface stays fully usable - motion is removed, not functionality. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

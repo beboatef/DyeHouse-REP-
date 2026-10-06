@@ -32,23 +32,23 @@ export default function AuditLogPage() {
       )}
 
       <Card>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
-            <th className="text-start px-4 py-3 font-medium">الوقت</th><th className="text-start px-4 py-3 font-medium">المستخدم</th>
-            <th className="text-start px-4 py-3 font-medium">الإجراء</th><th className="text-start px-4 py-3 font-medium">الكيان</th>
-            <th className="text-start px-4 py-3 font-medium">المعرّف</th><th className="text-start px-4 py-3 font-medium">IP</th>
+        <table className="table">
+          <thead><tr>
+            <th>الوقت</th><th>المستخدم</th>
+            <th>الإجراء</th><th>الكيان</th>
+            <th>المعرّف</th><th>IP</th>
           </tr></thead>
           <tbody>
             {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {!isLoading && entries?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد حركات مسجلة</td></tr>}
             {entries?.map((e) => (
               <tr key={e.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 ltr-nums">{new Date(e.occurredAtUtc).toLocaleString("en-GB")}</td>
-                <td className="px-4 py-3">{e.userName}</td>
-                <td className="px-4 py-3"><Badge tone={actionTone[e.action] ?? "gray"}>{e.action}</Badge></td>
-                <td className="px-4 py-3">{e.entityName}</td>
-                <td className="px-4 py-3 ltr-nums text-xs text-gray-500">{e.entityId?.slice(0, 8) ?? "-"}</td>
-                <td className="px-4 py-3 ltr-nums text-xs text-gray-500">{e.ipAddress ?? "-"}</td>
+                <td className="ltr-nums">{new Date(e.occurredAtUtc).toLocaleString("en-GB")}</td>
+                <td>{e.userName}</td>
+                <td><Badge tone={actionTone[e.action] ?? "gray"}>{e.action}</Badge></td>
+                <td>{e.entityName}</td>
+                <td className="ltr-nums text-xs text-gray-500">{e.entityId?.slice(0, 8) ?? "-"}</td>
+                <td className="ltr-nums text-xs text-gray-500">{e.ipAddress ?? "-"}</td>
               </tr>
             ))}
           </tbody>

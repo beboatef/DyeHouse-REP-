@@ -77,40 +77,40 @@ export default function InvoicesPage() {
               <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">العميل</label>
+                    <label className="field-label">العميل</label>
                     <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
                       <option value="">اختر...</option>{customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                     </Select>
                   </div>
-                  <div><label className="block text-xs font-medium text-gray-600 mb-1">تاريخ الفاتورة</label><Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required /></div>
-                  <div><label className="block text-xs font-medium text-gray-600 mb-1">الخصم</label><Input type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} /></div>
-                  <div><label className="block text-xs font-medium text-gray-600 mb-1">الضريبة</label><Input type="number" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} /></div>
+                  <div><label className="field-label">تاريخ الفاتورة</label><Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required /></div>
+                  <div><label className="field-label">الخصم</label><Input type="number" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} /></div>
+                  <div><label className="field-label">الضريبة</label><Input type="number" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} /></div>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-medium text-gray-600">بنود الفاتورة</label>
+                    <label className="field-label">بنود الفاتورة</label>
                     <Button type="button" variant="ghost" onClick={() => setLines((p) => [...p, emptyLine()])}>+ إضافة بند</Button>
                   </div>
                   <div className="space-y-3">
                     {lines.map((line, idx) => (
                       <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-gray-50 rounded-lg p-3">
                         <div>
-                          <label className="block text-[11px] text-gray-500 mb-1">الصنف</label>
+                          <label className="field-label">الصنف</label>
                           <Select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })} required>
                             <option value="">اختر...</option>{items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}
                           </Select>
                         </div>
-                        <div><label className="block text-[11px] text-gray-500 mb-1">اللون</label><Input value={line.color} onChange={(e) => updateLine(idx, { color: e.target.value })} /></div>
-                        <div><label className="block text-[11px] text-gray-500 mb-1">الكمية</label><Input type="number" step="0.001" min="0" value={line.quantity} onChange={(e) => updateLine(idx, { quantity: e.target.value })} required /></div>
-                        <div><label className="block text-[11px] text-gray-500 mb-1">سعر التشغيل للوحدة</label><Input type="number" step="0.01" min="0" value={line.processingPrice} onChange={(e) => updateLine(idx, { processingPrice: e.target.value })} required /></div>
+                        <div><label className="field-label">اللون</label><Input value={line.color} onChange={(e) => updateLine(idx, { color: e.target.value })} /></div>
+                        <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={line.quantity} onChange={(e) => updateLine(idx, { quantity: e.target.value })} required /></div>
+                        <div><label className="field-label">سعر التشغيل للوحدة</label><Input type="number" step="0.01" min="0" value={line.processingPrice} onChange={(e) => updateLine(idx, { processingPrice: e.target.value })} required /></div>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <Button type="submit" disabled={createMutation.isPending}>{createMutation.isPending ? "جارٍ الحفظ..." : "حفظ كمسودة"}</Button>
-                {error && <p className="text-sm text-red-600">{error}</p>}
+                {error && <p className="form-error">{error}</p>}
               </form>
             </Card>
           )}
@@ -171,22 +171,22 @@ export default function InvoicesPage() {
                 </Button>
               </div>
               <Card>
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-gray-200 text-gray-500 text-xs">
-                  <th className="text-start px-4 py-3 font-medium">التاريخ</th><th className="text-start px-4 py-3 font-medium">البيان</th>
-                  <th className="text-start px-4 py-3 font-medium">المستند</th><th className="text-start px-4 py-3 font-medium">مدين</th>
-                  <th className="text-start px-4 py-3 font-medium">دائن</th><th className="text-start px-4 py-3 font-medium">الرصيد</th>
+              <table className="table">
+                <thead><tr>
+                  <th>التاريخ</th><th>البيان</th>
+                  <th>المستند</th><th>مدين</th>
+                  <th>دائن</th><th>الرصيد</th>
                 </tr></thead>
                 <tbody>
                   {statement?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد حركات بعد</td></tr>}
                   {statement?.map((s, idx) => (
                     <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 ltr-nums">{new Date(s.date).toLocaleDateString("en-GB")}</td>
-                      <td className="px-4 py-3">{s.description}</td>
-                      <td className="px-4 py-3 ltr-nums">{s.documentNumber}</td>
-                      <td className="px-4 py-3 ltr-nums">{s.debit || "-"}</td>
-                      <td className="px-4 py-3 ltr-nums">{s.credit || "-"}</td>
-                      <td className="px-4 py-3 ltr-nums font-medium">{s.runningBalance}</td>
+                      <td className="ltr-nums">{new Date(s.date).toLocaleDateString("en-GB")}</td>
+                      <td>{s.description}</td>
+                      <td className="ltr-nums">{s.documentNumber}</td>
+                      <td className="ltr-nums">{s.debit || "-"}</td>
+                      <td className="ltr-nums">{s.credit || "-"}</td>
+                      <td className="ltr-nums font-medium">{s.runningBalance}</td>
                     </tr>
                   ))}
                 </tbody>

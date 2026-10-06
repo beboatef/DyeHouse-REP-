@@ -77,6 +77,7 @@ function BalancesTab() {
   const { t } = useI18n();
   const [customerId, setCustomerId] = useState("");
   const [search, setSearch] = useState("");
+  const [negativesOnly, setNegativesOnly] = useState(false);
 
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => CustomersApi.list() });
 
@@ -85,9 +86,18 @@ function BalancesTab() {
     queryFn: () => RawMessagesApi.list({ customerId: customerId || undefined, onlyWithBalance: true })
   });
 
-  const rows = (data ?? []).flatMap((message) =>
-    message.lines.map((line) => ({ message, line }))
-  ).filter(({ message, line }) => {
+  // A balance is negative when the ledger has posted more out than in. This screen only
+  // REPORTS that state - it never clamps, corrects or hides it, because the ledger is the
+  // source of truth and a negative balance is a real exception the factory has to see.
+  const allRows = (data ?? []).flatMap((message) => message.lines.map((line) => ({ message, line })));
+
+  const isNegative = (line: { remainingKg?: number | null; remainingMeter?: number | null }) =>
+    (line.remainingKg ?? 0) < 0 || (line.remainingMeter ?? 0) < 0;
+
+  const negativeCount = allRows.filter(({ line }) => isNegative(line)).length;
+
+  const rows = allRows.filter(({ message, line }) => {
+    if (negativesOnly && !isNegative(line)) return false;
     if (!search) return true;
     const term = search.toLowerCase();
     return (
@@ -113,8 +123,22 @@ function BalancesTab() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={negativesOnly}
+            onChange={(e) => setNegativesOnly(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300"
+          />
+          {t("wh.negativesOnly")}
+        </label>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-slate-500">{t("wh.balanceNote")}</span>
+          {negativeCount > 0 && (
+            <span className="text-xs font-semibold text-danger">
+              {negativeCount} {t("wh.negativeBalances")}
+            </span>
+          )}
           {/* Same live balances the table shows: raw remaining per message line
               plus ready-goods per job order, all summed from the ledgers. */}
           <ExportButtons
@@ -126,15 +150,15 @@ function BalancesTab() {
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("fr.rawMessage")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.customer")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.item")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.quantity")} KG</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.quantity")} M</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.status")}</th>
+            <tr>
+              <th>{t("fr.rawMessage")}</th>
+              <th>{t("common.customer")}</th>
+              <th>{t("common.item")}</th>
+              <th>{t("common.quantity")} KG</th>
+              <th>{t("common.quantity")} M</th>
+              <th>{t("common.status")}</th>
             </tr>
           </thead>
           <tbody>
@@ -144,24 +168,38 @@ function BalancesTab() {
             {!isLoading && rows.length === 0 && (
               <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
             )}
-            {rows.map(({ message, line }) => (
-              <tr key={line.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium ltr-nums">{message.messageNumber}</td>
-                <td className="px-4 py-3">
-                  <span className="ltr-nums font-medium">{message.customerCode}</span>
-                  <span className="text-gray-500"> · {message.customerName}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="ltr-nums font-medium">{line.itemCode}</span>
-                  <span className="text-gray-500"> · {line.itemName}</span>
-                </td>
-                <td className="px-4 py-3 ltr-nums">{line.remainingKg ?? "—"}</td>
-                <td className="px-4 py-3 ltr-nums">{line.remainingMeter ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <Badge tone={message.status === "Depleted" ? "gray" : "green"}>{message.status}</Badge>
-                </td>
-              </tr>
-            ))}
+            {rows.map(({ message, line }) => {
+              const negative = isNegative(line);
+              return (
+                <tr
+                  key={line.id}
+                  className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${negative ? "bg-danger/5" : ""}`}
+                >
+                  <td className="font-medium ltr-nums">{message.messageNumber}</td>
+                  <td>
+                    <span className="ltr-nums font-medium">{message.customerCode}</span>
+                    <span className="text-gray-500"> · {message.customerName}</span>
+                  </td>
+                  <td>
+                    <span className="ltr-nums font-medium">{line.itemCode}</span>
+                    <span className="text-gray-500"> · {line.itemName}</span>
+                  </td>
+                  <td className={`px-4 py-3 ltr-nums ${(line.remainingKg ?? 0) < 0 ? "font-bold text-danger" : ""}`}>
+                    {line.remainingKg ?? "—"}
+                  </td>
+                  <td className={`px-4 py-3 ltr-nums ${(line.remainingMeter ?? 0) < 0 ? "font-bold text-danger" : ""}`}>
+                    {line.remainingMeter ?? "—"}
+                  </td>
+                  <td>
+                    {negative ? (
+                      <Badge tone="red">{t("wh.negative")}</Badge>
+                    ) : (
+                      <Badge tone={message.status === "Depleted" ? "gray" : "green"}>{message.status}</Badge>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -189,11 +227,11 @@ function MovementsTab() {
     <>
       <Card className="p-4 mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.from")}</label>
+          <label className="field-label">{t("common.from")}</label>
           <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">{t("common.to")}</label>
+          <label className="field-label">{t("common.to")}</label>
           <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
         </div>
         <div className="flex flex-wrap gap-2">
@@ -217,16 +255,16 @@ function MovementsTab() {
       </Card>
 
       <Card>
-        <table className="w-full text-sm">
+        <table className="table">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-xs">
-              <th className="text-start px-4 py-3 font-medium">{t("common.date")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("fr.rawMessage")} / {t("fr.jobOrder")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.customer")}</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.item")}</th>
-              <th className="text-start px-4 py-3 font-medium">KG (±)</th>
-              <th className="text-start px-4 py-3 font-medium">M (±)</th>
-              <th className="text-start px-4 py-3 font-medium">{t("common.user")}</th>
+            <tr>
+              <th>{t("common.date")}</th>
+              <th>{t("fr.rawMessage")} / {t("fr.jobOrder")}</th>
+              <th>{t("common.customer")}</th>
+              <th>{t("common.item")}</th>
+              <th>KG (±)</th>
+              <th>M (±)</th>
+              <th>{t("common.user")}</th>
             </tr>
           </thead>
           <tbody>
@@ -238,20 +276,20 @@ function MovementsTab() {
             )}
             {data?.map((m) => (
               <tr key={m.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3 ltr-nums text-gray-600">{m.transactionDate.slice(0, 10)}</td>
-                <td className="px-4 py-3">
+                <td className="ltr-nums text-gray-600">{m.transactionDate.slice(0, 10)}</td>
+                <td>
                   <div className="ltr-nums font-medium">{m.sourceDocumentNumber}</div>
-                  <div className="text-[11px] text-gray-400">{m.sourceDocumentType}</div>
+                  <div className="text-2xs text-gray-400">{m.sourceDocumentType}</div>
                 </td>
-                <td className="px-4 py-3 ltr-nums">{m.customerCode}</td>
-                <td className="px-4 py-3 ltr-nums">{m.itemCode}</td>
+                <td className="ltr-nums">{m.customerCode}</td>
+                <td className="ltr-nums">{m.itemCode}</td>
                 <td className={`px-4 py-3 ltr-nums font-medium ${(m.signedQuantityKg ?? 0) < 0 ? "text-red-600" : "text-green-700"}`}>
                   {m.signedQuantityKg ?? "—"}
                 </td>
                 <td className={`px-4 py-3 ltr-nums font-medium ${(m.signedQuantityMeter ?? 0) < 0 ? "text-red-600" : "text-green-700"}`}>
                   {m.signedQuantityMeter ?? "—"}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{m.createdBy}</td>
+                <td className="text-ink-muted">{m.createdBy}</td>
               </tr>
             ))}
           </tbody>

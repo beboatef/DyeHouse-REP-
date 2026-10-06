@@ -44,6 +44,9 @@ import PayrollPage from "@/pages/PayrollPage";
 import ApprovalCenterPage from "@/pages/ApprovalCenterPage";
 import SuppliesPage from "@/pages/SuppliesPage";
 import MaterialSalesPage from "@/pages/MaterialSalesPage";
+import PurchaseUnitsPage from "@/pages/PurchaseUnitsPage";
+import CustomerReturnsPage from "@/pages/CustomerReturnsPage";
+import PriceListsPage from "@/pages/PriceListsPage";
 
 export default function App() {
   return (
@@ -63,6 +66,10 @@ export default function App() {
         <Route path="/raw-external-releases" element={<RawExternalReleasesPage />} />
         <Route path="/customer-transfers" element={<CustomerTransfersPage />} />
         <Route path="/stock-adjustments" element={<StockAdjustmentsPage />} />
+        <Route path="/customer-returns" element={<CustomerReturnsPage />} />
+        <Route path="/purchase-units" element={<PurchaseUnitsPage />} />
+        {/* Actual cost list + customer service price list (spec sections 34 + 36). */}
+        <Route path="/price-lists" element={<PriceListsPage />} />
         <Route path="/separates" element={<SeparatesPage />} />
         <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/ready-goods" element={<ReadyGoodsPage />} />

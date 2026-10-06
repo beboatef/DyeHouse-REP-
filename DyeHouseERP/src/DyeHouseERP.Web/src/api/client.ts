@@ -32,6 +32,10 @@ export interface Customer {
   code: string;
   name: string;
   isActive: boolean;
+  phone: string | null;
+  address: string | null;
+  contactPerson: string | null;
+  taxNumber: string | null;
 }
 
 export interface Item {
@@ -89,11 +93,26 @@ export interface RawMessage {
   lines: RawMessageLine[];
 }
 
+export interface CustomerInput {
+  code?: string;
+  name: string;
+  phone?: string | null;
+  address?: string | null;
+  contactPerson?: string | null;
+  taxNumber?: string | null;
+}
+
 export const CustomersApi = {
   list: (params?: { activeOnly?: boolean; search?: string }) =>
     api.get<Customer[]>("/customers", { params }).then((r) => r.data),
-  create: (body: { code: string; name: string }) =>
-    api.post<Customer>("/customers", body).then((r) => r.data)
+  create: (body: CustomerInput) =>
+    api.post<Customer>("/customers", body).then((r) => r.data),
+  /** The code is not part of the update payload - it is the key every document refers to. */
+  update: (id: string, body: Omit<CustomerInput, "code">) =>
+    api.put<Customer>(`/customers/${id}`, { id, ...body }).then((r) => r.data),
+  /** Deactivation, never deletion. */
+  setActive: (id: string, isActive: boolean) =>
+    api.post<Customer>(`/customers/${id}/active`, { isActive }).then((r) => r.data)
 };
 
 export const ItemsApi = {
@@ -186,6 +205,209 @@ export const WarehousesApi = {
     api.post<Warehouse>("/warehouses", body).then((r) => r.data)
 };
 
+// ---------------- Purchase units of measure (spec section 44) ----------------
+
+/**
+ * Units are data, not an enum: the nine defaults ship seeded and users add their
+ * own bilingual units. `conversionFactor`/`baseUnitId` are BOTH present or BOTH
+ * null - a factor with no target unit is rejected by the API.
+ */
+export interface PurchaseUnit {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn: string;
+  isActive: boolean;
+  isSystemDefault: boolean;
+  conversionFactor: number | null;
+  baseUnitId: string | null;
+  baseUnitName: string | null;
+  baseUnitNameAr: string | null;
+  notes: string | null;
+}
+
+export interface PurchaseUnitInput {
+  nameAr: string;
+  nameEn: string;
+  conversionFactor?: number | null;
+  baseUnitId?: string | null;
+  notes?: string | null;
+}
+
+export const PurchaseUnitsApi = {
+  list: (params?: { activeOnly?: boolean; search?: string }) =>
+    api.get<PurchaseUnit[]>("/purchase-units", { params }).then((r) => r.data),
+  create: (body: PurchaseUnitInput & { code: string }) =>
+    api.post<PurchaseUnit>("/purchase-units", body).then((r) => r.data),
+  update: (id: string, body: PurchaseUnitInput) =>
+    api.put<PurchaseUnit>(`/purchase-units/${id}`, { id, ...body }).then((r) => r.data),
+  /** Deactivation is the delete substitute - a unit a purchase document already uses must stay resolvable. */
+  setActive: (id: string, isActive: boolean) =>
+    api.post<PurchaseUnit>(`/purchase-units/${id}/active`, { isActive }).then((r) => r.data)
+};
+
+// ---------------- Customer returns to the raw material warehouse (spec sections 32-33) ----------------
+
+export interface CustomerReturnLine {
+  id: string;
+  rawMessageId: string;
+  messageNumber: string;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  quantityKg: number | null;
+  quantityMeter: number | null;
+  productionOrderId: string | null;
+  productionOrderNumber: string | null;
+  formationGroupId: string | null;
+  formationGroupNumber: number | null;
+  notes: string | null;
+}
+
+export interface CustomerReturn {
+  id: string;
+  returnNumber: string;
+  returnDate: string;
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  reason: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+  lines: CustomerReturnLine[];
+}
+
+/**
+ * `rawMessageId` (the target raw lot) may be omitted ONLY when a Job Order is
+ * supplied - the API then derives the lot from that order's own allocations.
+ * When the Job Order is unknown the lot is mandatory.
+ */
+export interface CustomerReturnLineInput {
+  rawMessageId?: string | null;
+  itemId: string;
+  quantityKg?: number | null;
+  quantityMeter?: number | null;
+  productionOrderId?: string | null;
+  notes?: string | null;
+}
+
+export interface CustomerReturnInput {
+  customerId: string;
+  returnDate: string;
+  reason?: string | null;
+  notes?: string | null;
+  lines: CustomerReturnLineInput[];
+}
+
+export const CustomerReturnsApi = {
+  list: (params?: { customerId?: string; fromDate?: string; toDate?: string; search?: string }) =>
+    api.get<CustomerReturn[]>("/customer-returns", { params }).then((r) => r.data),
+  get: (id: string) => api.get<CustomerReturn>(`/customer-returns/${id}`).then((r) => r.data),
+  create: (body: CustomerReturnInput) =>
+    api.post<CustomerReturn>("/customer-returns", body).then((r) => r.data)
+};
+
+// ---------------- Price lists (spec sections 34 + 36) ----------------
+//
+// TWO separate lists, deliberately: what a stage costs US (actual cost list) and
+// what the CUSTOMER is charged (service price list). Conflating them would make
+// real profitability impossible, which is the whole point of section 34.
+
+export interface StageCostRate {
+  id: string;
+  stageDefinitionId: string;
+  stageCode: string;
+  stageName: string;
+  unit: UnitOfMeasure;
+  costPerUnit: number;
+  isActive: boolean;
+  notes: string | null;
+}
+
+export interface CustomerServicePrice {
+  id: string;
+  stageDefinitionId: string;
+  stageCode: string;
+  stageName: string;
+  customerId: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  /** True when this is the general default rather than a customer-specific override. */
+  isGeneralDefault: boolean;
+  unit: UnitOfMeasure;
+  pricePerUnit: number;
+  isActive: boolean;
+  notes: string | null;
+}
+
+/** The Job Order's OWN snapshotted price - later price-list edits never change it. */
+export interface ProductionOrderServicePrice {
+  id: string;
+  productionOrderId: string;
+  stageDefinitionId: string;
+  stageCode: string;
+  stageName: string;
+  unit: UnitOfMeasure;
+  pricePerUnit: number;
+  isOverride: boolean;
+  sourceCustomerId: string | null;
+  sourceCustomerName: string | null;
+  previousPricePerUnit: number | null;
+  overrideReason: string | null;
+  pricedBy: string;
+  pricedAtUtc: string;
+}
+
+/** Job Order profitability (spec section 37). Revenue is computed ONCE, not per stage. */
+export interface ProductionOrderProfitability {
+  productionOrderId: string;
+  productionOrderNumber: string;
+  servicePrices: ProductionOrderServicePrice[];
+  finalQuantityKg: number;
+  finalQuantityMeter: number;
+  /** Where the final quantity came from: ReadyGoodsTransfer | LastStageOutput | None. */
+  finalQuantitySource: string;
+  revenue: number;
+  /** False when no price has been snapshotted yet, so revenue cannot be computed. */
+  hasServicePrice: boolean;
+  actualCost: number;
+  profit: number;
+  marginPercent: number | null;
+  /**
+   * The legacy cost rollup's own processing value. NOT the invoiced amount and not
+   * the revenue basis - shown only for comparison, deliberately named so the two
+   * revenue notions cannot be confused.
+   */
+  legacyProcessingValue: number;
+}
+
+export const PriceListsApi = {
+  costRates: (params?: { stageDefinitionId?: string; activeOnly?: boolean }) =>
+    api.get<StageCostRate[]>("/price-lists/cost-rates", { params }).then((r) => r.data),
+  setCostRate: (body: { stageDefinitionId: string; unit: UnitOfMeasure; costPerUnit: number; notes?: string }) =>
+    api.post<StageCostRate>("/price-lists/cost-rates", body).then((r) => r.data),
+  setCostRateActive: (id: string, isActive: boolean) =>
+    api.post<StageCostRate>(`/price-lists/cost-rates/${id}/active`, { isActive }).then((r) => r.data),
+
+  servicePrices: (params?: {
+    customerId?: string;
+    activeOnly?: boolean;
+    stageDefinitionId?: string;
+    generalOnly?: boolean;
+  }) => api.get<CustomerServicePrice[]>("/price-lists/service-prices", { params }).then((r) => r.data),
+  /** Omit `customerId` to set the GENERAL DEFAULT; supply it for that customer's own override. */
+  setServicePrice: (body: {
+    stageDefinitionId: string;
+    customerId?: string | null;
+    unit: UnitOfMeasure;
+    pricePerUnit: number;
+    notes?: string;
+  }) => api.post<CustomerServicePrice>("/price-lists/service-prices", body).then((r) => r.data),
+  setServicePriceActive: (id: string, isActive: boolean) =>
+    api.post<CustomerServicePrice>(`/price-lists/service-prices/${id}/active`, { isActive }).then((r) => r.data)
+};
+
 export const RawMessagesApi = {
   list: (params?: { customerId?: string; itemId?: string; onlyWithBalance?: boolean }) =>
     api.get<RawMessage[]>("/raw-messages", { params }).then((r) => r.data),
@@ -222,10 +444,18 @@ export interface ProductionStageDefinition {
   allowRepeat: boolean;
   allowRework: boolean;
   allowReturn: boolean;
+  /** Exactly one stage has this: التشكيل, where every Job Order starts. */
+  isFormationStage: boolean;
+  /** Exactly one stage has this: الجاهز, the final stage that moves output to Ready Goods. */
+  isReadyGoodsStage: boolean;
   notes: string | null;
 }
 
 export const ProductionStagesApi = {
+  setFormationStage: (id: string) =>
+    api.post<ProductionStageDefinition>(`/production-stages/${id}/formation-stage`).then((r) => r.data),
+  setReadyGoodsStage: (id: string) =>
+    api.post<ProductionStageDefinition>(`/production-stages/${id}/ready-goods-stage`).then((r) => r.data),
   list: (params?: { activeOnly?: boolean }) =>
     api.get<ProductionStageDefinition[]>("/production-stages", { params }).then((r) => r.data),
   create: (body: {
@@ -245,7 +475,7 @@ export const ProductionStagesApi = {
 
 // ---------------- Production Orders ----------------
 
-export type ProductionOrderStatus = "Draft" | "RawAllocated" | "InProduction" | "Completed" | "Cancelled";
+export type ProductionOrderStatus = "Draft" | "RawAllocated" | "InProduction" | "Paused" | "Completed" | "Cancelled";
 export type ProductionPriority = "Low" | "Normal" | "High" | "Urgent";
 /** Job order line type (spec section 16): closed line / open line. */
 export type JobOrderType = "ClosedLine" | "OpenLine";
@@ -274,6 +504,12 @@ export interface StageExecution {
   outputMeter: number | null;
   lossKg: number | null;
   lossMeter: number | null;
+  /** Immutable starting weight: the Job Order's actual weight, or the previous stage's output. */
+  baselineKg: number | null;
+  baselineMeter: number | null;
+  /** Loss as a percentage of the baseline, recorded when the stage is closed. */
+  lossPercentKg: number | null;
+  lossPercentMeter: number | null;
   separatesKg: number | null;
   separatesMeter: number | null;
   operator: string | null;
@@ -302,11 +538,18 @@ export interface ProductionOrder {
   jobOrderType: JobOrderType;
   orderDate: string;
   status: ProductionOrderStatus;
+  /** After a resume: the previous cycle's loss %, used as this cycle's expected-output basis. */
+  previousCycleLossPercent: number | null;
+  expectedOutputKg: number | null;
+  expectedOutputMeter: number | null;
   reprocessingOfProductionOrderId: string | null;
   formationRequestId: string | null;
   formationRequestNumber: string | null;
   formationGroupId: string | null;
   formationGroupNumber: number | null;
+  /** Set when this Job Order fulfils one formation basin (spec sections 10-11). */
+  formationBasinId: string | null;
+  formationBasinNumber: number | null;
   rawAllocations: RawAllocationLine[];
   stageExecutions: StageExecution[];
 }
@@ -348,6 +591,35 @@ export const ProductionOrdersApi = {
   ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/complete`, body).then((r) => r.data),
   skipStage: (stageExecutionId: string, reason: string) =>
     api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/skip`, { reason }).then((r) => r.data),
+  /**
+   * Moves the order to the stage the user selects (spec sections 13-17). This IS
+   * the end of a stage - there is no separate "End Stage" button. Passing the
+   * stage marked isReadyGoodsStage moves the output to Ready Goods and completes
+   * the order, so there is no separate "End Job Order" button either.
+   */
+  transferStage: (
+    stageExecutionId: string,
+    body: {
+      nextStageDefinitionId: string;
+      outputKg?: number; outputMeter?: number;
+      separatesKg?: number; separatesMeter?: number; notes?: string;
+    }
+  ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/transfer`, body).then((r) => r.data),
+  /** Edits the OPEN stage's output. The baseline never moves; the change is audited. */
+  updateStageOutput: (
+    stageExecutionId: string,
+    body: { outputKg?: number; outputMeter?: number; reason?: string }
+  ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/output`, body).then((r) => r.data),
+  pause: (id: string, body: { releaseKg?: number; releaseMeter?: number; reason: string }) =>
+    api.post<ProductionOrder>(`/production-orders/${id}/pause`, body).then((r) => r.data),
+  resume: (
+    id: string,
+    body: {
+      rawMessageId: string; itemId: string;
+      quantityKg?: number; quantityMeter?: number;
+      overrideNegativeStock?: boolean; overrideReason?: string;
+    }
+  ) => api.post<ProductionOrder>(`/production-orders/${id}/resume`, body).then((r) => r.data),
   complete: (id: string) => api.post<ProductionOrder>(`/production-orders/${id}/complete`).then((r) => r.data)
 };
 
@@ -633,7 +905,17 @@ export const DeliveriesApi = {
   }) => api.post<Delivery>("/deliveries", body).then((r) => r.data),
   prepare: (id: string) => api.post<Delivery>(`/deliveries/${id}/prepare`).then((r) => r.data),
   deliver: (id: string) => api.post<Delivery>(`/deliveries/${id}/deliver`).then((r) => r.data),
-  cancel: (id: string, reason: string) => api.post<Delivery>(`/deliveries/${id}/cancel`, { reason }).then((r) => r.data)
+  cancel: (id: string, reason: string) => api.post<Delivery>(`/deliveries/${id}/cancel`, { reason }).then((r) => r.data),
+  /**
+   * Corrects an ALREADY APPROVED delivery (spec section 30). Only the quantities
+   * of existing lines may change - the API posts the difference as a compensating
+   * movement (a reduction returns stock to Ready Goods) and never rewrites the
+   * original posted movements, so the ledger stays the source of truth.
+   */
+  correctApprovedLines: (
+    id: string,
+    body: { reason: string; lines: { lineId: string; quantityKg?: number; quantityMeter?: number }[] }
+  ) => api.post<Delivery>(`/deliveries/${id}/lines/corrections`, body).then((r) => r.data)
 };
 
 // ---------------- Invoices & Customer Statement ----------------
@@ -754,13 +1036,22 @@ export const TreasuryTransfersApi = {
 
 // ---------------- Cost Accounting ----------------
 
-export type CostCategory = "Labor" | "Electricity" | "Fuel" | "Maintenance" | "Other";
+/**
+ * Additional cost-line categories (spec section 35). External processing is not
+ * listed: that charge is derived from the external-release rows, so entering it
+ * here as well would double-count it.
+ */
+export type CostCategory =
+  | "Labor" | "Electricity" | "Fuel" | "Maintenance"
+  | "Transport" | "Packaging" | "Repair" | "Other";
 
 export interface ProductionOrderCost {
   productionOrderId: string; productionOrderNumber: string;
   materialCost: number; preparationCost: number; externalProcessingCost: number;
   laborCost: number; electricityCost: number;
   fuelCost: number; maintenanceCost: number; otherCost: number;
+  /** Additional cost lines (spec section 35). */
+  transportCost: number; packagingCost: number; repairCost: number;
   /** ACTUAL cost - always the live rollup of posted transactions. */
   totalCost: number;
   estimatedCost: number | null;
@@ -1006,6 +1297,20 @@ export const CostAccountingApi = {
   /** Approved cost - only once the order is completed; records who signed it off and when. */
   approve: (productionOrderId: string, body: { approvedCost: number; costingNotes?: string }) =>
     api.post<ProductionOrderCost>(`/production-orders/${productionOrderId}/cost/approve`, body).then((r) => r.data),
+  /**
+   * Snapshots the price this Job Order is charged (spec section 34). Omit
+   * `pricePerUnit` to resolve it from the price list (the customer's own price
+   * first, then the general default); supply it - with a reason - to override it.
+   */
+  applyServicePrice: (
+    productionOrderId: string,
+    body: { stageDefinitionId: string; unit: UnitOfMeasure; pricePerUnit?: number; overrideReason?: string }
+  ) =>
+    api.post<ProductionOrderServicePrice>(`/production-orders/${productionOrderId}/cost/service-price`, body)
+      .then((r) => r.data),
+  /** Job Order profitability: snapshotted price revenue vs the live actual cost. */
+  profitability: (productionOrderId: string) =>
+    api.get<ProductionOrderProfitability>(`/production-orders/${productionOrderId}/cost/profitability`).then((r) => r.data),
   exportFile: (productionOrderId: string, format: "excel" | "pdf", fileName: string) =>
     downloadBlob(`/production-orders/${productionOrderId}/cost/export`, { productionOrderId, format }, fileName)
 };
@@ -1034,16 +1339,48 @@ export const ProductionRequestsApi = {
 
 // ---------------- Production Floor Dashboard ----------------
 
+/** One live Job Order on the factory floor, with the stage it is in right now. */
 export interface ProductionFloorRow {
-  productionOrderId: string; orderNumber: string; customerCode: string; itemCode: string; color: string | null;
-  requestedQuantityKg: number | null; requestedQuantityMeter: number | null;
-  currentStageName: string; currentStageStatus: string; orderStatus: string; priority: string;
-  stageStartedAtUtc: string | null; minutesInStage: number | null; notes: string | null;
+  productionOrderId: string;
+  orderNumber: string;
+  customerCode: string;
+  customerName: string;
+  itemCode: string;
+  itemName: string;
+  color: string | null;
+  requestedQuantityKg: number | null;
+  requestedQuantityMeter: number | null;
+  stageDefinitionId: string | null;
+  currentStageName: string;
+  currentStageStatus: string;
+  stageExecutionId: string | null;
+  stageSequence: number | null;
+  orderStatus: string;
+  priority: string;
+  stageStartedAtUtc: string | null;
+  minutesInStage: number | null;
+  baselineKg: number | null;
+  baselineMeter: number | null;
+  inputKg: number | null;
+  inputMeter: number | null;
+  outputKg: number | null;
+  outputMeter: number | null;
+  lossKg: number | null;
+  lossMeter: number | null;
+  lossPercentKg: number | null;
+  lossPercentMeter: number | null;
+  operator: string | null;
+  /** Raw material is allocated but no stage has started yet. */
+  awaitingStart: boolean;
+  customerReference: string | null;
+  notes: string | null;
 }
 
 export const ProductionFloorApi = {
-  get: (params?: { customerId?: string; itemId?: string; priority?: string }) =>
-    api.get<ProductionFloorRow[]>("/production-floor", { params }).then((r) => r.data)
+  get: (params?: {
+    customerId?: string; itemId?: string; stageDefinitionId?: string;
+    status?: string; priority?: string; search?: string;
+  }) => api.get<ProductionFloorRow[]>("/production-floor", { params }).then((r) => r.data)
 };
 
 // ---------------- Auth ----------------
@@ -1287,6 +1624,37 @@ export type FormationRequestStatus =
   | "Draft" | "Submitted" | "Approved" | "InProgress"
   | "PartiallyCompleted" | "Completed" | "Rejected" | "Cancelled";
 
+/**
+ * One basin / detail inside a group - its own quantity, its own specification
+ * snapshot and its own produced quantity. A group with no basins is planned as a
+ * single piece, exactly as the system behaved before basins existed.
+ */
+export interface FormationBasin {
+  id: string;
+  formationGroupId: string;
+  basinNumber: number;
+  name: string | null;
+  plannedQuantity: number;
+  producedQuantity: number;
+  remainingQuantity: number;
+  unit: UnitOfMeasure;
+  tubCount: number | null;
+  color: string | null;
+  widthCm: number | null;
+  metersPerKg: number | null;
+  gsm: number | null;
+  tubFormat: string | null;
+  windingTapeFormat: string | null;
+  qualityInstructions: string | null;
+  labInstructions: string | null;
+  internalInstructions: string | null;
+  customerInstructions: string | null;
+  notes: string | null;
+  specificationTemplateId: string | null;
+  specificationTemplateName: string | null;
+  specificationSnapshotAtUtc: string | null;
+}
+
 /** One group / cell on a request - its specification values are a snapshot taken when it was created. */
 export interface FormationGroup {
   id: string;
@@ -1298,6 +1666,10 @@ export interface FormationGroup {
   unit: UnitOfMeasure;
   tubCount: number | null;
   color: string | null;
+  /** Basins inside this group; empty means the group is planned as one piece. */
+  basins: FormationBasin[];
+  plannedBasinQuantity: number;
+  producedBasinQuantity: number;
   widthCm: number | null;
   metersPerKg: number | null;
   gsm: number | null;
@@ -1345,6 +1717,7 @@ export interface FormationRequest {
   createdAtUtc: string;
   producedQuantity: number;
   groups: FormationGroup[];
+  basinCount: number;
 }
 
 export interface FormationSpecificationInput {
@@ -1359,6 +1732,17 @@ export interface FormationSpecificationInput {
   customerInstructions?: string | null;
 }
 
+export interface FormationBasinInput {
+  id?: string | null;
+  name?: string | null;
+  plannedQuantity: number;
+  unit: UnitOfMeasure;
+  tubCount?: number | null;
+  color?: string | null;
+  specification?: FormationSpecificationInput | null;
+  notes?: string | null;
+}
+
 export interface FormationGroupInput {
   id?: string | null;
   name?: string | null;
@@ -1368,6 +1752,7 @@ export interface FormationGroupInput {
   color?: string | null;
   specificationTemplateId?: string | null;
   specification?: FormationSpecificationInput | null;
+  basins?: FormationBasinInput[] | null;
   notes?: string | null;
 }
 
@@ -1426,7 +1811,7 @@ export const FormationRequestsApi = {
   cancel: (id: string, reason: string) =>
     api.post<FormationRequest>(`/formation-requests/${id}/cancel`, { reason }).then((r) => r.data),
   convertToJobOrder: (id: string, body: {
-    groupId?: string | null; jobOrderType: JobOrderType; priority?: ProductionPriority;
+    groupId?: string | null; basinId?: string | null; jobOrderType: JobOrderType; priority?: ProductionPriority;
     orderDate?: string; color?: string | null; notes?: string | null; customerReference?: string | null;
   }) => api.post<FormationRequest>(`/formation-requests/${id}/convert-to-job-order`, body).then((r) => r.data),
   exportExcel: (params?: { customerId?: string; status?: FormationRequestStatus }) => {

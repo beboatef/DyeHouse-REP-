@@ -27,6 +27,17 @@ public class ProductionOrderCostDto
     public decimal ElectricityCost { get; set; }
     public decimal FuelCost { get; set; }
     public decimal MaintenanceCost { get; set; }
+
+    // ---- Additional cost lines (spec section 35) ----
+    /// <summary>نقل - transport / freight.</summary>
+    public decimal TransportCost { get; set; }
+
+    /// <summary>تعبئة - packaging.</summary>
+    public decimal PackagingCost { get; set; }
+
+    /// <summary>إصلاح - repairs.</summary>
+    public decimal RepairCost { get; set; }
+
     public decimal OtherCost { get; set; }
 
     /// <summary>ACTUAL cost: the live rollup of everything posted above.</summary>
