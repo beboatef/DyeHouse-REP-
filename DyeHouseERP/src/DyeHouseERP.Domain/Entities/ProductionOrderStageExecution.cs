@@ -1,7 +1,4 @@
-using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
-using DyeHouseERP.Domain.Enums;
-using DyeHouseERP.Domain.Exceptions;
 
 namespace DyeHouseERP.Domain.Entities;
 
@@ -50,16 +47,13 @@ public class ProductionOrderStageExecution : BaseEntity
     public string? Notes { get; private set; }
     public DateTime? StartedAtUtc { get; private set; }
     public DateTime? CompletedAtUtc { get; private set; }
-    public bool ApprovalRequired { get; private set; }
-    public string? ApprovedBy { get; private set; }
-    public DateTime? ApprovedAtUtc { get; private set; }
 
     /// <summary>
     /// H1 optimistic concurrency token, maintained by SQL Server. Quantities and
     /// status on a stage feed production output and separates, so two operators
     /// recording the same stage at once must not silently overwrite each other.
     /// </summary>
-    [Timestamp]
+    [System.ComponentModel.DataAnnotations.Timestamp]
     public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private ProductionOrderStageExecution() { } // EF Core
@@ -159,37 +153,6 @@ public class ProductionOrderStageExecution : BaseEntity
         Status = StageExecutionStatus.InProgress;
         Operator = operatorName;
         StartedAtUtc = DateTime.UtcNow;
-    }
-
-    /// <summary>
-    /// Records the stage's recorded quantities and marks it complete. Whether
-    /// input/output are required is enforced by the caller against the
-    /// matching ProductionStageDefinition (RequiresInputQuantity /
-    /// RequiresOutputQuantity) - the entity itself stays agnostic about
-    /// which stage type it is.
-    /// </summary>
-    public void Complete(
-        decimal? inputKg, decimal? inputMeter, decimal? outputKg, decimal? outputMeter,
-        decimal? lossKg, decimal? lossMeter, decimal? separatesKg, decimal? separatesMeter,
-        string? notes, bool approvalRequired, string? approvedBy)
-    {
-        if (Status == StageExecutionStatus.Completed)
-            throw new DomainException("Stage is already completed.");
-
-        if (approvalRequired && string.IsNullOrWhiteSpace(approvedBy))
-            throw new DomainException("This stage requires approval before it can be completed.");
-
-        InputKg = inputKg; InputMeter = inputMeter;
-        OutputKg = outputKg; OutputMeter = outputMeter;
-        LossKg = lossKg; LossMeter = lossMeter;
-        SeparatesKg = separatesKg; SeparatesMeter = separatesMeter;
-        Notes = notes;
-        ApprovalRequired = approvalRequired;
-        ApprovedBy = approvedBy;
-        ApprovedAtUtc = approvalRequired ? DateTime.UtcNow : null;
-
-        Status = StageExecutionStatus.Completed;
-        CompletedAtUtc = DateTime.UtcNow;
     }
 
     public void Skip(bool stageAllowsSkip, string reason, string modifiedBy)
