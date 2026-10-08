@@ -19,7 +19,6 @@ public class ProductionStageDefinition : AuditableEntity
 
     public bool RequiresInputQuantity { get; private set; }
     public bool RequiresOutputQuantity { get; private set; }
-    public bool RequiresApproval { get; private set; }
     public bool AllowSkip { get; private set; }
     public bool AllowRepeat { get; private set; }
     public bool AllowRework { get; private set; }
@@ -58,7 +57,7 @@ public class ProductionStageDefinition : AuditableEntity
     public ProductionStageDefinition(
         string code, string name, int sequence, string createdBy,
         bool requiresInputQuantity = true, bool requiresOutputQuantity = true,
-        bool requiresApproval = false, bool allowSkip = false, bool allowRepeat = false,
+        bool allowSkip = false, bool allowRepeat = false,
         bool allowRework = true, bool allowReturn = false, string? notes = null,
         bool isFormationStage = false, bool isReadyGoodsStage = false)
     {
@@ -72,7 +71,6 @@ public class ProductionStageDefinition : AuditableEntity
         Sequence = sequence;
         RequiresInputQuantity = requiresInputQuantity;
         RequiresOutputQuantity = requiresOutputQuantity;
-        RequiresApproval = requiresApproval;
         AllowSkip = allowSkip;
         AllowRepeat = allowRepeat;
         AllowRework = allowRework;
