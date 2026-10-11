@@ -9,37 +9,10 @@ using Microsoft.EntityFrameworkCore;
 namespace DyeHouseERP.Application.PriceLists.Queries;
 
 // =====================================================================
-// Actual Cost List
-// =====================================================================
-
-public record GetStageCostRatesQuery(Guid? StageDefinitionId = null, bool? ActiveOnly = null)
-    : IRequest<List<StageCostRateDto>>;
-
-public class GetStageCostRatesQueryHandler : IRequestHandler<GetStageCostRatesQuery, List<StageCostRateDto>>
-{
-    private readonly IApplicationDbContext _db;
-    public GetStageCostRatesQueryHandler(IApplicationDbContext db) => _db = db;
-
-    public async Task<List<StageCostRateDto>> Handle(GetStageCostRatesQuery request, CancellationToken cancellationToken)
-    {
-        var query = _db.StageCostRates.AsNoTracking().AsQueryable();
-        if (request.StageDefinitionId.HasValue) query = query.Where(r => r.StageDefinitionId == request.StageDefinitionId.Value);
-        if (request.ActiveOnly == true) query = query.Where(r => r.IsActive);
-
-        var rates = await query.ToListAsync(cancellationToken);
-        var stages = await _db.ProductionStageDefinitions.AsNoTracking()
-            .ToDictionaryAsync(s => s.Id, cancellationToken);
-
-        return rates
-            .OrderBy(r => stages.TryGetValue(r.StageDefinitionId, out var s) ? s.Sequence : int.MaxValue)
-            .ThenBy(r => r.Unit)
-            .Select(r => PriceListMapping.ToDto(r, stages.TryGetValue(r.StageDefinitionId, out var s) ? s : null))
-            .ToList();
-    }
-}
-
-// =====================================================================
-// Customer Service Price List
+// Customer service price list (spec sections 34 + 36)
+//
+// S8: the fixed per-stage "actual cost list" (StageCostRate) was removed, so this
+// file holds only the customer-facing price list and Job Order profitability.
 // =====================================================================
 
 /// <summary>Lists service prices. <paramref name="GeneralOnly"/> isolates the default rows; <paramref name="CustomerId"/> shows that customer's own rows.</summary>

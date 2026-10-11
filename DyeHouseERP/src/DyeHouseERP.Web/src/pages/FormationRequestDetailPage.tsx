@@ -38,6 +38,7 @@ export default function FormationRequestDetailPage() {
   const [convertBasinId, setConvertBasinId] = useState("");
   const [jobOrderType, setJobOrderType] = useState<JobOrderType>("ClosedLine");
   const [priority, setPriority] = useState<ProductionPriority>("Normal");
+  const [convertActual, setConvertActual] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const { data: request, isLoading } = useQuery({
@@ -80,9 +81,12 @@ export default function FormationRequestDetailPage() {
         basinId: convertBasinId || null,
         jobOrderType,
         priority,
-        orderDate: new Date().toISOString().slice(0, 10)
+        orderDate: new Date().toISOString().slice(0, 10),
+        // A basin is converted from its ACTUAL weighed weight, never from the plan
+        // (spec sections 8 and 10).
+        actualBasinQuantity: convertBasinId ? Number(convertActual) || null : null
       }),
-    onSuccess: () => { setConvertGroupId(""); setConvertBasinId(""); refresh(); },
+    onSuccess: () => { setConvertGroupId(""); setConvertBasinId(""); setConvertActual(""); refresh(); },
     onError
   });
 
@@ -193,14 +197,28 @@ export default function FormationRequestDetailPage() {
             {canConvert && (
               <div className="space-y-2 border-t border-slate-100 pt-3">
                 <p className="text-2xs text-slate-500">{t("fr.convertToJobOrder")}</p>
-                <Select value={convertBasinId} onChange={(e) => { setConvertBasinId(e.target.value); setConvertGroupId(""); }}>
+                <Select value={convertBasinId} onChange={(e) => {
+                  setConvertBasinId(e.target.value); setConvertGroupId("");
+                  const picked = convertibleBasins.find(({ basin }) => basin.id === e.target.value);
+                  setConvertActual(picked ? String(picked.basin.actualQuantity ?? picked.basin.plannedQuantity) : "");
+                }}>
                   <option value="">{t("fr.convertBasinNone")}</option>
                   {convertibleBasins.map(({ group, basin }) => (
                     <option key={basin.id} value={basin.id}>
-                      {t("fr.group")} #{group} / {t("fr.basin")} #{basin.basinNumber} · {basin.plannedQuantity} {basin.unit}
+                      {t("fr.group")} #{group} / {t("fr.basin")} #{basin.basinNumber} · {basin.actualQuantity ?? basin.plannedQuantity} {basin.unit}
                     </option>
                   ))}
                 </Select>
+                {convertBasinId !== "" && (
+                  <div>
+                    <label className="field-label">{t("fr.actualWeight")}</label>
+                    <Input type="number" min={0} step="0.001" value={convertActual}
+                      onChange={(e) => setConvertActual(e.target.value)} />
+                    {!(Number(convertActual) > 0) && (
+                      <p className="text-2xs text-amber-600 mt-1">{t("fr.actualWeightRequired")}</p>
+                    )}
+                  </div>
+                )}
                 <Select value={convertGroupId} onChange={(e) => { setConvertGroupId(e.target.value); setConvertBasinId(""); }}>
                   <option value="">{t("fr.convertWhole")}</option>
                   {convertibleGroups.map((g) => (
@@ -225,7 +243,10 @@ export default function FormationRequestDetailPage() {
                 <Button
                   className="w-full"
                   onClick={() => convertMutation.mutate()}
-                  disabled={convertMutation.isPending || (hasBasins && !convertBasinId && !convertGroupId)}
+                  disabled={
+                    convertMutation.isPending || (hasBasins && !convertBasinId && !convertGroupId) ||
+                    (convertBasinId !== "" && !(Number(convertActual) > 0))
+                  }
                 >
                   {t("fr.convertToJobOrder")}
                 </Button>

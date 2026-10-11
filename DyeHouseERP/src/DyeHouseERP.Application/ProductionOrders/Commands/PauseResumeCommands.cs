@@ -1,6 +1,7 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -21,21 +22,25 @@ namespace DyeHouseERP.Application.ProductionOrders.Commands;
 /// UNUSED raw material back to the customer's own raw stock.
 ///
 /// The rules, as agreed:
-///   * "unused" = allocated quantity minus the quantity already consumed, where
-///     consumed means material that has actually entered a COMPLETED processing
-///     step (the recorded stage input). Material still sitting in the process is
-///     not releasable, and neither is anything already issued in a past cycle.
-///   * the release quantity is USER-ENTERED and bounded by that un-consumed
+///   * "unused" is read from the INVENTORY LEDGER: what this order was issued
+///     from a raw lot (its OUT movements) minus what it has already returned
+///     (its pause-reversal IN movements). Material that was already processed is
+///     therefore still releasable, and a released quantity can never be credited twice.
+///   * the release quantity is USER-ENTERED and bounded by that outstanding
 ///     figure - the server refuses anything larger rather than silently clamping it.
-///   * the release is posted as NEW compensating IN movements against the very
-///     lots this order was allocated from. The original allocation and its OUT
-///     movement are left untouched, so the ledger keeps both cycles.
+///   * the release is posted as a NEW compensating IN movement against the exact
+///     lot the user names. With several source lots the system never picks one
+///     itself (no FIFO). The original allocations and OUT movements are left
+///     untouched, so the ledger keeps every cycle.
+///   * a release of zero is legitimate: pausing with nothing going back to stock.
 /// </summary>
 public record PauseProductionOrderCommand(
     Guid ProductionOrderId,
-    decimal? ReleaseKg,
-    decimal? ReleaseMeter,
-    string Reason) : IRequest<ProductionOrderDto>;
+    string Reason,
+    Guid? RawMessageId = null,
+    Guid? ItemId = null,
+    decimal? ReleaseKg = null,
+    decimal? ReleaseMeter = null) : IRequest<ProductionOrderDto>;
 
 public class PauseProductionOrderCommandValidator : AbstractValidator<PauseProductionOrderCommand>
 {
@@ -43,13 +48,17 @@ public class PauseProductionOrderCommandValidator : AbstractValidator<PauseProdu
     {
         RuleFor(x => x.ProductionOrderId).NotEmpty();
         RuleFor(x => x.Reason).NotEmpty().WithMessage("Pausing a production order requires a reason.");
-        RuleFor(x => x)
-            .Must(x => x.ReleaseKg is > 0 || x.ReleaseMeter is > 0)
-            .WithMessage("Enter the quantity of unused raw material to release back to the customer.");
-        RuleFor(x => x.ReleaseKg).GreaterThanOrEqualTo(0).When(x => x.ReleaseKg.HasValue);
-        RuleFor(x => x.ReleaseMeter).GreaterThanOrEqualTo(0).When(x => x.ReleaseMeter.HasValue);
+        // Zero is explicitly allowed: pausing with nothing going back to stock.
+        RuleFor(x => x.ReleaseKg).GreaterThanOrEqualTo(0).When(x => x.ReleaseKg.HasValue)
+            .WithMessage("A negative return is never valid.");
+        RuleFor(x => x.ReleaseMeter).GreaterThanOrEqualTo(0).When(x => x.ReleaseMeter.HasValue)
+            .WithMessage("A negative return is never valid.");
     }
 }
+
+/// <summary>One raw lot as the ledger shows it for an order: issued minus already returned.</summary>
+internal sealed record LedgerLot(
+    Guid RawMessageId, Guid ItemId, Guid WarehouseId, decimal OutstandingKg, decimal OutstandingMeter);
 
 public class PauseProductionOrderCommandHandler : IRequestHandler<PauseProductionOrderCommand, ProductionOrderDto>
 {
@@ -73,79 +82,99 @@ public class PauseProductionOrderCommandHandler : IRequestHandler<PauseProductio
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 
-        var allocations = await _db.RawAllocations
-            .Where(a => a.ProductionOrderId == order.Id)
-            .OrderBy(a => a.AllocatedAtUtc)
+        var releaseKg = request.ReleaseKg ?? 0;
+        var releaseMeter = request.ReleaseMeter ?? 0;
+
+        // The releasable figure comes from the LEDGER - the order's own issue (OUT)
+        // movements netted against its pause reversals (IN) - never from a stage's
+        // InputKg. A lot's outstanding claim is therefore independent of how far the
+        // material has been processed, and can never be returned twice.
+        var ledger = await _db.InventoryTransactions.AsNoTracking()
+            .Where(t => t.ProductionOrderId == order.Id && t.RawMessageId != null
+                && (t.SourceDocumentType == DocumentType.ProductionOrder
+                    || t.SourceDocumentType == DocumentType.ProductionOrderPause))
+            .Select(t => new
+            {
+                t.SourceDocumentType, t.RawMessageId, t.ItemId, t.WarehouseId, t.QuantityKg, t.QuantityMeter
+            })
             .ToListAsync(cancellationToken);
 
-        var allocatedKg = allocations.Sum(a => a.QuantityKg ?? 0);
-        var allocatedMeter = allocations.Sum(a => a.QuantityMeter ?? 0);
+        var lots = new Dictionary<(Guid LotId, Guid ItemId), (Guid WarehouseId, decimal IssuedKg, decimal IssuedMeter, decimal ReturnedKg, decimal ReturnedMeter)>();
+        foreach (var row in ledger)
+        {
+            var key = (row.RawMessageId!.Value, row.ItemId);
+            lots.TryGetValue(key, out var acc);
+            if (row.SourceDocumentType == DocumentType.ProductionOrder)
+                lots[key] = (row.WarehouseId, acc.IssuedKg + (row.QuantityKg ?? 0),
+                    acc.IssuedMeter + (row.QuantityMeter ?? 0), acc.ReturnedKg, acc.ReturnedMeter);
+            else
+                lots[key] = (row.WarehouseId, acc.IssuedKg, acc.IssuedMeter,
+                    acc.ReturnedKg + (row.QuantityKg ?? 0), acc.ReturnedMeter + (row.QuantityMeter ?? 0));
+        }
 
-        // Consumed = material that has already entered a completed processing step.
-        // Anything else is still unused and can legitimately go back to the customer.
-        var completedStages = await _db.ProductionOrderStageExecutions.AsNoTracking()
-            .Where(s => s.ProductionOrderId == order.Id && s.Status == StageExecutionStatus.Completed)
-            .ToListAsync(cancellationToken);
-
-        var consumedKg = completedStages.Sum(s => s.InputKg ?? 0);
-        var consumedMeter = completedStages.Sum(s => s.InputMeter ?? 0);
-
-        var unConsumedKg = allocatedKg - consumedKg;
-        var unConsumedMeter = allocatedMeter - consumedMeter;
-
-        // Bounded, not clamped: a release larger than the unused balance is a
-        // mistake the user needs to see, not something to quietly round off.
-        if (request.ReleaseKg is > 0 && request.ReleaseKg > unConsumedKg)
-            throw new DomainException(
-                $"Cannot release {request.ReleaseKg} KG: only {unConsumedKg} KG of the allocated {allocatedKg} KG is still unused (already consumed by production: {consumedKg} KG).");
-        if (request.ReleaseMeter is > 0 && request.ReleaseMeter > unConsumedMeter)
-            throw new DomainException(
-                $"Cannot release {request.ReleaseMeter} Meter: only {unConsumedMeter} Meter of the allocated {allocatedMeter} Meter is still unused (already consumed by production: {consumedMeter} Meter).");
-
-        var messages = await _db.RawMessages
-            .Where(m => allocations.Select(a => a.RawMessageId).Contains(m.Id))
-            .ToDictionaryAsync(m => m.Id, cancellationToken);
-
-        var lockKeys = allocations
-            .Select(a => StockLockKey.RawLot(messages[a.RawMessageId].WarehouseId, a.ItemId, order.CustomerId, a.RawMessageId))
-            .Distinct()
+        var releasable = lots
+            .Select(kv => new LedgerLot(kv.Key.LotId, kv.Key.ItemId, kv.Value.WarehouseId,
+                kv.Value.IssuedKg - kv.Value.ReturnedKg, kv.Value.IssuedMeter - kv.Value.ReturnedMeter))
+            .Where(l => l.OutstandingKg > 0 || l.OutstandingMeter > 0)
             .ToList();
 
-        await using (await _allocationLock.AcquireManyAsync(lockKeys, cancellationToken))
+        if (releaseKg > 0 || releaseMeter > 0)
         {
-            // The released material goes back to the lots THIS order was allocated
-            // from, newest allocation first so the movement ties to the most
-            // recent issue. That is bookkeeping inside one order - it is not an
-            // automatic pick between different stock sources.
-            var remainingKg = request.ReleaseKg ?? 0;
-            var remainingMeter = request.ReleaseMeter ?? 0;
-
-            foreach (var allocation in allocations.AsEnumerable().Reverse())
+            // Which lot the material goes back to is the USER's decision, never an
+            // automatic pick: with several source lots the request is refused rather
+            // than silently guessed.
+            LedgerLot chosen;
+            if (request.RawMessageId.HasValue)
             {
-                if (remainingKg <= 0 && remainingMeter <= 0) break;
+                chosen = releasable.FirstOrDefault(l => l.RawMessageId == request.RawMessageId.Value
+                        && (request.ItemId is null || l.ItemId == request.ItemId.Value))
+                    ?? throw new DomainException(
+                        $"Raw material message ({request.RawMessageId}) is not one this Job Order was issued material from.");
+            }
+            else
+            {
+                if (releasable.Count > 1)
+                    throw new DomainException(
+                        $"Job Order {order.OrderNumber} was issued material from more than one raw message. Name the raw message the unused material is returned to - the system never selects a lot on its own.");
 
-                var takeKg = Math.Min(remainingKg, allocation.QuantityKg ?? 0);
-                var takeMeter = Math.Min(remainingMeter, allocation.QuantityMeter ?? 0);
-                if (takeKg <= 0 && takeMeter <= 0) continue;
-
-                var message = messages[allocation.RawMessageId];
-
-                _db.InventoryTransactions.Add(new InventoryTransaction(
-                    DocumentType.ProductionOrderPause, order.OrderNumber, order.Id,
-                    _clock.UtcNow, message.WarehouseId, order.CustomerId, allocation.ItemId,
-                    rawMessageId: allocation.RawMessageId, productionOrderId: order.Id,
-                    quantityKg: takeKg > 0 ? takeKg : null,
-                    quantityMeter: takeMeter > 0 ? takeMeter : null,
-                    direction: TransactionDirection.In, createdBy: _currentUser.UserName));
-
-                remainingKg -= takeKg;
-                remainingMeter -= takeMeter;
+                chosen = releasable.SingleOrDefault()
+                    ?? throw new DomainException(
+                        $"Job Order {order.OrderNumber} has no outstanding raw material to return.");
             }
 
+            // Bounded, not clamped: a release larger than what the chosen lot still
+            // holds for this order is a mistake the user needs to see.
+            if (releaseKg > chosen.OutstandingKg)
+                throw new DomainException(
+                    $"Cannot release {releaseKg} KG from raw message {chosen.RawMessageId}: only {chosen.OutstandingKg} KG of what this Job Order took from that lot is still outstanding.");
+            if (releaseMeter > chosen.OutstandingMeter)
+                throw new DomainException(
+                    $"Cannot release {releaseMeter} Meter from raw message {chosen.RawMessageId}: only {chosen.OutstandingMeter} Meter of what this Job Order took from that lot is still outstanding.");
+
+            // The state change happens first, so a refused pause never leaves a
+            // half-written movement behind in the change tracker.
             order.Pause(request.Reason, _currentUser.UserName);
 
-            await _db.SaveChangesAsync(cancellationToken);
+            await using (await _allocationLock.AcquireAsync(
+                StockLockKey.RawLot(chosen.WarehouseId, chosen.ItemId, order.CustomerId, chosen.RawMessageId),
+                cancellationToken))
+            {
+                _db.InventoryTransactions.Add(new InventoryTransaction(
+                    DocumentType.ProductionOrderPause, order.OrderNumber, order.Id,
+                    _clock.UtcNow, chosen.WarehouseId, order.CustomerId, chosen.ItemId,
+                    rawMessageId: chosen.RawMessageId, productionOrderId: order.Id,
+                    quantityKg: releaseKg > 0 ? releaseKg : null,
+                    quantityMeter: releaseMeter > 0 ? releaseMeter : null,
+                    direction: TransactionDirection.In, createdBy: _currentUser.UserName));
+            }
         }
+        else
+        {
+            // Nothing goes back to stock: the pause is purely a state change.
+            order.Pause(request.Reason, _currentUser.UserName);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
 
         return await GetProductionOrderByIdQueryHandler.LoadDtoAsync(_db, order.Id, cancellationToken);
     }
@@ -168,7 +197,19 @@ public record ResumeProductionOrderCommand(
     decimal? QuantityKg,
     decimal? QuantityMeter,
     bool OverrideNegativeStock = false,
-    string? OverrideReason = null) : IRequest<ProductionOrderDto>;
+    string? OverrideReason = null,
+    // Set only when the Approval Center dispatches this command after approving a request (spec section 24).
+    Guid? ApprovalRequestId = null) : IRequest<ProductionOrderDto>, IApprovalBoundOperation
+{
+    // Spec section 24: the approval is bound to these exact facts.
+    public ApprovalRequestType ApprovalType => ApprovalRequestType.ResumeProduction;
+
+    public Guid ApprovalDocumentId => ProductionOrderId;
+
+    public string OperationSignature =>
+        $"ResumeProduction|order={ProductionOrderId}|msg={RawMessageId}|item={ItemId}" +
+        $"|kg={ApprovalBinding.Quantity(QuantityKg)}|m={ApprovalBinding.Quantity(QuantityMeter)}";
+}
 
 public class ResumeProductionOrderCommandValidator : AbstractValidator<ResumeProductionOrderCommand>
 {
@@ -272,11 +313,12 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
 
         if (lastCompleted is null) return;
 
-        // Loss % against that stage's own baseline. Baseline = its recorded input
-        // when there is one, otherwise its starting quantity, so the ratio is
-        // always "of what went in", never of a hard-coded figure.
-        var baselineKg = lastCompleted.InputKg ?? lastCompleted.OutputKg;
-        var baselineMeter = lastCompleted.InputMeter ?? lastCompleted.OutputMeter;
+        // Loss % against that stage's IMMUTABLE baseline (spec section 15). The baseline
+        // is the quantity the stage started from, so the ratio is always "of what went
+        // in" - dividing by the output instead would understate the waste (783 baseline
+        // with 775 output is 1.02%, not 1.03%).
+        var baselineKg = lastCompleted.BaselineKg ?? lastCompleted.InputKg ?? lastCompleted.OutputKg;
+        var baselineMeter = lastCompleted.BaselineMeter ?? lastCompleted.InputMeter ?? lastCompleted.OutputMeter;
 
         if (baselineKg is > 0 && lastCompleted.LossKg is not null)
         {
@@ -308,9 +350,16 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
             throw new UnauthorizedAccessException(
                 $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 
+        // Spec section 24: the re-issue is authorised by a stored, SINGLE-USE
+        // approval raised by a different user, bound to these exact facts. The
+        // old path recorded the caller as both requester and approver, which is
+        // exactly the self-approval the separation of duties forbids.
+        var decision = await ApprovalRequestGuard.ConsumeAsync(
+            _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+
         _db.NegativeStockOverrides.Add(new NegativeStockOverride(
             message.Id, request.ItemId, order.CustomerId, requested, available,
-            request.OverrideReason!, _currentUser.UserName, _currentUser.UserName));
+            request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
 
         await Task.CompletedTask;
     }

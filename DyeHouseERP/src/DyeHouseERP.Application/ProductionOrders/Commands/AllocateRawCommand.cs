@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using DyeHouseERP.Domain.Common;
@@ -34,7 +35,21 @@ public record AllocateRawCommand(
     decimal? QuantityKg,
     decimal? QuantityMeter,
     bool OverrideNegativeStock = false,
-    string? OverrideReason = null) : IRequest<ProductionOrderDto>;
+    string? OverrideReason = null,
+    // Set only when the Approval Center dispatches this command after approving a request (spec section 24).
+    Guid? ApprovalRequestId = null) : IRequest<ProductionOrderDto>, IApprovalBoundOperation
+{
+    // Spec section 24: the approval is bound to these exact facts - a request
+    // approved for a different item, lot, account, quantity or unit cannot
+    // authorise this allocation.
+    public ApprovalRequestType ApprovalType => ApprovalRequestType.AllocateRaw;
+
+    public Guid ApprovalDocumentId => ProductionOrderId;
+
+    public string OperationSignature =>
+        $"AllocateRaw|order={ProductionOrderId}|msg={RawMessageId}|item={ItemId}" +
+        $"|kg={ApprovalBinding.Quantity(QuantityKg)}|m={ApprovalBinding.Quantity(QuantityMeter)}";
+}
 
 public class AllocateRawCommandValidator : AbstractValidator<AllocateRawCommand>
 {
@@ -154,11 +169,20 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
             throw new UnauthorizedAccessException(
                 $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 
+        // Spec section 24: the override is authorised by a stored, SINGLE-USE approval
+        // request raised by a different user. The shared guard re-checks that it is still
+        // pending, that it is about THIS order, and that the caller is not its requester,
+        // then consumes it - in the same SaveChanges as the allocation, so the movement and
+        // its authorisation commit together or not at all.
+        var decision = await ApprovalRequestGuard.ConsumeAsync(
+            _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+
         // Authorized override: record it for the Negative Stock / Balance
-        // Override Report (spec section 17) and let the allocation proceed.
+        // Override Report (spec section 17), naming BOTH real accounts, and let the
+        // allocation proceed.
         _db.NegativeStockOverrides.Add(new NegativeStockOverride(
             message.Id, itemId, customerId, requested, available,
-            request.OverrideReason!, _currentUser.UserName, _currentUser.UserName));
+            request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
 
         await Task.CompletedTask;
     }

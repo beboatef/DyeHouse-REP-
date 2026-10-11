@@ -325,13 +325,22 @@ public enum EmployeeStatus
     Terminated = 3
 }
 
-/// <summary>Lifecycle of a monthly payroll run (spec section 36). Posting is the only step with a financial effect.</summary>
+/// <summary>
+/// Lifecycle of a monthly payroll run (spec sections 36 and 39):
+/// Draft -&gt; Calculated -&gt; UnderReview -&gt; Approved -&gt; Posted, with a posted run
+/// REVERSED (never edited) by a linked adjustment run. Cancelling is the other
+/// terminal state; a reversed run can never be cancelled. Posting is the only step
+/// with a financial effect.
+/// </summary>
 public enum PayrollRunStatus
 {
     Draft = 1,
     Approved = 2,
     Posted = 3,
-    Cancelled = 4
+    Cancelled = 4,
+    Calculated = 5,
+    UnderReview = 6,
+    Reversed = 7
 }
 
 /// <summary>
@@ -360,5 +369,131 @@ public enum MaterialSaleStatus
 {
     Draft = 1,
     Posted = 2,
+    Cancelled = 3
+}
+/// <summary>
+/// The reason a user requested a second user to authorise an action (spec section 24).
+/// Each value maps to a controller/area so approvals, permission checks and the
+/// approval centre can route, filter and describe the request by what it is about.
+/// </summary>
+public enum ApprovalRequestType
+{
+    AllocateRaw = 1,
+    ResumeProduction = 2,
+    CustomerTransfer = 3,
+    RawExternalRelease = 4,
+    StockAdjustment = 5
+}
+
+/// <summary>Lifecycle of an approval request (spec section 24).</summary>
+public enum ApprovalRequestStatus
+{
+    Pending = 1,
+    Approved = 2,
+    Rejected = 3
+}
+
+/// <summary>
+/// Kind of pay component (spec section 35): how it is reported in the wage bill and
+/// which payroll totals it feeds. Stored as a string by design, but kept as a strong
+/// enum in code so the UI, commands and queries can never invent a value.
+/// </summary>
+public enum PayComponentKind
+{
+    Allowance = 1,
+    Incentive = 2,
+    Bonus = 3,
+    Commission = 4,
+    Deduction = 5
+}
+
+/// <summary>How a pay component is computed (spec section 35). Stored as a string by design.</summary>
+public enum PayComponentCalculation
+{
+    FixedAmount = 1,
+    PercentOfBasic = 2,
+    PerAttendanceDay = 3,
+    PerOvertimeHour = 4,
+    PercentOfGross = 5
+}
+
+/// <summary>Statutory contribution kind (spec section 36).</summary>
+public enum ContributionKind
+{
+    Tax = 1,
+    Insurance = 2
+}
+
+/// <summary>Payroll base on which a contribution is calculated (spec section 36).</summary>
+public enum ContributionBase
+{
+    BasicSalary = 1,
+    GrossPay = 2
+}
+
+/// <summary>Payroll accounting destination kind (spec section 37). Stored as a string by design.</summary>
+public enum PayrollAccountKind
+{
+    BasicSalary = 1,
+    Allowance = 2,
+    Deduction = 3,
+    Tax = 4,
+    Insurance = 5,
+    Advance = 6,
+    NetPay = 7
+}
+
+/// <summary>Attendance status for one employee on one day (spec sections 30-31).</summary>
+public enum AttendanceStatus
+{
+    Present = 1,
+    Late = 2,
+    Absent = 3,
+    OnLeave = 4,
+    RestDay = 5,
+    /// <summary>
+    /// A public holiday (spec section 31) - a non-working day that is neither the
+    /// weekly rest day nor leave. Recorded on the same non-working path so a
+    /// holiday is never mistaken for an absence.
+    /// </summary>
+    Holiday = 6
+}
+
+/// <summary>How an attendance row was created (spec sections 30-31).</summary>
+public enum AttendanceSource
+{
+    Manual = 1
+}
+
+/// <summary>Lifecycle of a leave request (spec section 32).</summary>
+public enum LeaveStatus
+{
+    Pending = 1,
+    Approved = 2,
+    Rejected = 3,
+    Cancelled = 4
+}
+
+/// <summary>Lifecycle of an overtime entry (spec section 33).</summary>
+public enum OvertimeStatus
+{
+    Pending = 1,
+    Approved = 2,
+    Rejected = 3
+}
+
+/// <summary>Overtime category that selects the configured multiplier (spec section 33).</summary>
+public enum OvertimeCategory
+{
+    Normal = 1,
+    Weekend = 2,
+    Holiday = 3
+}
+
+/// <summary>Lifecycle of an employee advance (spec section 34).</summary>
+public enum AdvanceStatus
+{
+    Active = 1,
+    Closed = 2,
     Cancelled = 3
 }

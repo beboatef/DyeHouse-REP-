@@ -12,9 +12,10 @@ namespace DyeHouseERP.IntegrationTests;
 
 /// <summary>
 /// Boots the real API in-process against a real SQL Server test database.
-/// Requires SQL Server reachable at the connection string below (defaults
-/// to the same instance docker-compose.yml brings up at the repo root) -
-/// this is a genuine integration test, not an in-memory fake, because the
+/// Requires SQL Server reachable at the connection string supplied through
+/// the DYEHOUSE_TEST_CONNECTION environment variable (there is no embedded
+/// fallback credential) - this is a genuine integration test, not an
+/// in-memory fake, because the
 /// numbering engine (SqlDocumentNumberGenerator) uses SQL Server-specific
 /// T-SQL (sp_getapplock) that has no in-memory equivalent.
 ///
@@ -25,9 +26,20 @@ namespace DyeHouseERP.IntegrationTests;
 /// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// The SQL Server connection string for the integration suite. It is
+    /// REQUIRED - there is deliberately no embedded credential fallback, so no
+    /// password is ever committed. It is read lazily and only when a test
+    /// actually starts the factory, so simply referencing the type does not
+    /// throw.
+    /// </summary>
     public static string ConnectionString =>
         Environment.GetEnvironmentVariable("DYEHOUSE_TEST_CONNECTION")
-        ?? "Server=localhost,1433;Database=DyeHouseERP_IntegrationTests;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;";
+        ?? throw new InvalidOperationException(
+            "The integration tests need a real SQL Server test database. Set the environment variable " +
+            "'DYEHOUSE_TEST_CONNECTION' to a connection string (for example " +
+            "'Server=localhost,1433;Database=DyeHouseERP_IntegrationTests;Integrated Security=True;TrustServerCertificate=True;') " +
+            "and run the integration tests again.");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

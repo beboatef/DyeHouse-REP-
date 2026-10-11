@@ -19,6 +19,9 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
         builder.Property(o => o.RawOrigin).HasMaxLength(500);
         builder.Property(o => o.CustomerReference).HasMaxLength(200);
         builder.Property(o => o.Notes).HasMaxLength(2000);
+        // Why an order was closed with no output (spec section 18) - kept on the order,
+        // not only in the audit log, so it is visible wherever the order is read.
+        builder.Property(o => o.ZeroOutputReason).HasMaxLength(1000);
         builder.Property(o => o.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(o => o.ModifiedBy).HasMaxLength(100);
 
@@ -94,6 +97,24 @@ public class ProductionOrderStageExecutionConfiguration : IEntityTypeConfigurati
 
         builder.HasIndex(s => new { s.ProductionOrderId, s.Sequence });
         builder.HasIndex(s => s.StageDefinitionId);
+
+        // Machine / execution-shift linkage (S-Dynamic-Machines, S-Production-Execution-Shifts).
+        // The reference lives on the execution and is mapped explicitly so that neither column,
+        // nor the constraint that links it to its master data, is ever silently dropped: a
+        // completed stage keeps naming the machine and shift it actually ran on. EntityFramework
+        // cannot delete a machine/shift that a stage execution still references (NoAction).
+        builder.HasIndex(s => s.MachineId);
+        builder.HasIndex(s => s.ProductionShiftId);
+
+        builder.HasOne<Machine>()
+            .WithMany()
+            .HasForeignKey(s => s.MachineId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne<ProductionShift>()
+            .WithMany()
+            .HasForeignKey(s => s.ProductionShiftId)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }
 

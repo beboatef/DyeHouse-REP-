@@ -28,6 +28,15 @@ public class ReadyGoodsTransfer : AuditableEntity
     public Guid WarehouseId { get; private set; }
     public decimal? QuantityKg { get; private set; }
     public decimal? QuantityMeter { get; private set; }
+
+    /// <summary>
+    /// The stage execution whose output this transfer moved (spec section 23). A lot in
+    /// the ready warehouse therefore traces back to the STAGE that produced it, not merely
+    /// to the order. Null only on rows written before the column existed - a historical
+    /// link is never fabricated, and the create command refuses a new null link.
+    /// </summary>
+    public Guid? StageExecutionId { get; private set; }
+
     public int? PieceCount { get; private set; }
     public string? Notes { get; private set; }
     public ReadyGoodsTransferStatus Status { get; private set; } = ReadyGoodsTransferStatus.Posted;
@@ -45,7 +54,7 @@ public class ReadyGoodsTransfer : AuditableEntity
     public ReadyGoodsTransfer(
         string transferNumber, DateTime transferDate, Guid productionOrderId, Guid customerId, Guid itemId,
         Guid warehouseId, decimal? quantityKg, decimal? quantityMeter, string createdBy,
-        int? pieceCount = null, string? notes = null)
+        int? pieceCount = null, string? notes = null, Guid? stageExecutionId = null)
     {
         if (quantityKg is null && quantityMeter is null)
             throw new ArgumentException("A ready goods transfer must specify a KG and/or Meter quantity.");
@@ -58,6 +67,7 @@ public class ReadyGoodsTransfer : AuditableEntity
         WarehouseId = warehouseId;
         QuantityKg = quantityKg;
         QuantityMeter = quantityMeter;
+        StageExecutionId = stageExecutionId;
         PieceCount = pieceCount;
         Notes = notes;
         CreatedBy = createdBy;

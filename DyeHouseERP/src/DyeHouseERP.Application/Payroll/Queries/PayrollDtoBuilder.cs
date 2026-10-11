@@ -57,7 +57,13 @@ internal static class PayrollDtoBuilder
             Phone = e.Phone,
             NationalId = e.NationalId,
             BankAccountNumber = e.BankAccountNumber,
-            Notes = e.Notes
+            Notes = e.Notes,
+            HrSectionId = e.HrSectionId,
+            JobPositionId = e.JobPositionId,
+            CostCenterId = e.CostCenterId,
+            HrShiftId = e.HrShiftId,
+            IsTaxExempt = e.IsTaxExempt,
+            IsInsuranceExempt = e.IsInsuranceExempt
         };
     }
 

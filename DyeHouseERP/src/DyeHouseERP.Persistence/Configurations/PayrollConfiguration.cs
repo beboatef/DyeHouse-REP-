@@ -51,6 +51,13 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.HasIndex(e => e.DepartmentId);
         builder.HasIndex(e => e.Status);
 
+        // HR classification is filtered and reported on directly (spec sections 28-34), so the
+        // four nullable classification columns are indexed even though they are optional.
+        builder.HasIndex(e => e.HrSectionId);
+        builder.HasIndex(e => e.JobPositionId);
+        builder.HasIndex(e => e.CostCenterId);
+        builder.HasIndex(e => e.HrShiftId);
+
         builder.ToTable(t => t.HasCheckConstraint("CK_Employees_BasicSalaryNotNegative", "[BasicSalary] >= 0"));
     }
 }
@@ -71,6 +78,17 @@ public class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
         builder.Property(r => r.PostedBy).HasMaxLength(100);
         builder.Property(r => r.CancelledBy).HasMaxLength(100);
         builder.Property(r => r.CancellationReason).HasMaxLength(1000);
+
+        // Calculation / review / reversal workflow (spec section 39). These are the same
+        // 100-character "who" fields and 1000-character "why" fields the rest of the
+        // run uses, so no workflow string is ever silently left unbounded.
+        builder.Property(r => r.CalculatedBy).HasMaxLength(100);
+        builder.Property(r => r.SubmittedBy).HasMaxLength(100);
+        builder.Property(r => r.ReviewedBy).HasMaxLength(100);
+        builder.Property(r => r.ReviewNotes).HasMaxLength(1000);
+        builder.Property(r => r.ReversedBy).HasMaxLength(100);
+        builder.Property(r => r.ReversalReason).HasMaxLength(1000);
+
         builder.Property(r => r.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(r => r.ModifiedBy).HasMaxLength(100);
 
@@ -81,13 +99,19 @@ public class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
 
         builder.HasIndex(r => r.TreasuryAccountId);
 
+        // Reversal traceability (spec section 39): both sides of the original <-> adjustment
+        // link are queried directly to show a run's correction history.
+        builder.HasIndex(r => r.ReversesPayrollRunId);
+        builder.HasIndex(r => r.ReversedByPayrollRunId);
+
         // One ACTIVE payroll run per period - a month is never paid twice (spec section 36).
-        // The index is filtered so a cancelled run does not block rebuilding the payroll
-        // for that month, which is exactly why a run can be cancelled in the first place.
-        // This keeps the database constraint and CreatePayrollRunCommandHandler in agreement.
+        // The index is filtered so neither a cancelled run nor a REVERSED run blocks rebuilding
+        // the payroll for that month (a reversal is corrected by its own adjustment run), which is
+        // exactly why a run can be cancelled or reversed in the first place. This keeps the database
+        // constraint and CreatePayrollRunCommandHandler in agreement.
         builder.HasIndex(r => new { r.PeriodYear, r.PeriodMonth })
             .IsUnique()
-            .HasFilter("[Status] <> 'Cancelled'");
+            .HasFilter("[Status] <> 'Cancelled' AND [Status] <> 'Reversed'");
 
         builder.Metadata.FindNavigation(nameof(PayrollRun.Lines))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
@@ -109,9 +133,22 @@ public class PayrollRunLineConfiguration : IEntityTypeConfiguration<PayrollRunLi
         builder.Property(l => l.EmployeeCode).HasMaxLength(30).IsRequired();
         builder.Property(l => l.EmployeeName).HasMaxLength(200).IsRequired();
         builder.Property(l => l.DepartmentName).HasMaxLength(200);
+        // Monetary amounts keep full 18,4 precision; day/hour counts keep 9,2.
         builder.Property(l => l.BasicSalary).HasPrecision(18, 4);
         builder.Property(l => l.Allowances).HasPrecision(18, 4);
+        builder.Property(l => l.Incentives).HasPrecision(18, 4);
+        builder.Property(l => l.Bonuses).HasPrecision(18, 4);
+        builder.Property(l => l.Commissions).HasPrecision(18, 4);
+        builder.Property(l => l.OvertimeAmount).HasPrecision(18, 4);
+        builder.Property(l => l.OtherEarnings).HasPrecision(18, 4);
         builder.Property(l => l.Deductions).HasPrecision(18, 4);
+        builder.Property(l => l.Tax).HasPrecision(18, 4);
+        builder.Property(l => l.Insurance).HasPrecision(18, 4);
+        builder.Property(l => l.EmployerInsurance).HasPrecision(18, 4);
+        builder.Property(l => l.Advances).HasPrecision(18, 4);
+        builder.Property(l => l.AttendanceDays).HasPrecision(9, 2);
+        builder.Property(l => l.OvertimeHours).HasPrecision(9, 2);
+        builder.Property(l => l.LeaveDays).HasPrecision(9, 2);
         builder.Property(l => l.Notes).HasMaxLength(1000);
 
         builder.Ignore(l => l.GrossPay);
@@ -121,11 +158,17 @@ public class PayrollRunLineConfiguration : IEntityTypeConfiguration<PayrollRunLi
         builder.HasIndex(l => l.DepartmentId);
         builder.HasIndex(l => l.PayrollRunId);
 
+        // Labor-cost reporting reads the snapshotted classification directly.
+        builder.HasIndex(l => l.CostCenterId);
+        builder.HasIndex(l => l.HrSectionId);
+
         // An employee can only be paid once per run (spec section 53 - never double count).
         builder.HasIndex(l => new { l.PayrollRunId, l.EmployeeId }).IsUnique();
 
+        // No payroll line may carry a negative amount in ANY of its monetary columns,
+        // not just the three hand-editable ones - a calculated breakdown is included too.
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_PayrollRunLines_AmountsNotNegative",
-            "[BasicSalary] >= 0 AND [Allowances] >= 0 AND [Deductions] >= 0"));
+            "[BasicSalary] >= 0 AND [Allowances] >= 0 AND [Deductions] >= 0 AND [Incentives] >= 0 AND [Bonuses] >= 0 AND [Commissions] >= 0 AND [OvertimeAmount] >= 0 AND [Tax] >= 0 AND [Insurance] >= 0 AND [Advances] >= 0"));
     }
 }

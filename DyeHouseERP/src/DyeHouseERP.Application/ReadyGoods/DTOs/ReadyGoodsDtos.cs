@@ -15,6 +15,14 @@ public class ReadyGoodsTransferDto
     public decimal? QuantityKg { get; set; }
     public decimal? QuantityMeter { get; set; }
     public int? PieceCount { get; set; }
+
+    /// <summary>The stage execution whose output this transfer moved (spec section 23). Null for pre-existing rows only.</summary>
+    public Guid? StageExecutionId { get; set; }
+    public int? StageSequence { get; set; }
+    public string? StageName { get; set; }
+    public decimal? StageOutputKg { get; set; }
+    public decimal? StageOutputMeter { get; set; }
+
     /// <summary>Posted or Cancelled - a cancelled transfer's stock effect is zeroed by its reversal rows.</summary>
     public string Status { get; set; } = "Posted";
 }

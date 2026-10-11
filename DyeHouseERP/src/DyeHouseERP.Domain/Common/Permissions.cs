@@ -34,6 +34,12 @@ public static class Permissions
     public const string ProductionExecuteStage = "production.execute_stage";
     public const string ProductionComplete = "production.complete";
     public const string ProductionReprocess = "production.reprocess";
+    /// <summary>Resuming a paused Job Order (spec section 19) - a distinct right from ordinary stage work, because it re-issues raw material.</summary>
+    public const string ProductionResume = "production.resume";
+    /// <summary>Maintaining the machines master (spec section 20).</summary>
+    public const string ProductionManageMachines = "production.manage_machines";
+    /// <summary>Maintaining the production execution shifts master (spec section 19) - separate from the HR attendance shifts.</summary>
+    public const string ProductionManageShifts = "production.manage_shifts";
     /// <summary>Gates completing a stage flagged RequiresApproval (spec section 19-20) - distinct from ProductionExecuteStage, which is ordinary stage work.</summary>
     public const string StageRequiresApproval = "production.approve_stage";
 
@@ -120,6 +126,19 @@ public static class Permissions
     public const string PayrollApprove = "payroll.approve";
     public const string PayrollPost = "payroll.post";
     public const string PayrollCancel = "payroll.cancel";
+    /// <summary>Reading and exporting the payroll accounting mappings (spec section 37).</summary>
+    public const string PayrollAccounting = "payroll.accounting";
+
+    // ---- HR: sections, attendance, leave, overtime, advances, labor cost (spec sections 28-42) ----
+    public const string HrView = "hr.view";
+    public const string HrManage = "hr.manage";
+    public const string HrAttendance = "hr.attendance";
+    public const string HrLeaveRequest = "hr.leave_request";
+    public const string HrLeaveApprove = "hr.leave_approve";
+    public const string HrOvertimeRequest = "hr.overtime_request";
+    public const string HrOvertimeApprove = "hr.overtime_approve";
+    public const string HrAdvancesManage = "hr.advances";
+    public const string HrLaborCost = "hr.labor_cost";
 
     // ---- Job Order costing (spec section 34) ----
     public const string CostingView = "costing.view";
@@ -127,7 +146,7 @@ public static class Permissions
     /// <summary>Signing off the approved cost of a completed Job Order - a financial decision, kept separate from editing the estimate.</summary>
     public const string CostingApprove = "costing.approve";
 
-    // ---- Commercial price lists (spec sections 34A + 36) ----
+    // ---- Customer service price list (spec sections 34 + 36) ----
     // Kept separate from costing: reading the cost list, reading the service price
     // list, and changing either are four different rights. A factory costs its own
     // work; only commercial staff set what a customer is charged.
@@ -167,7 +186,7 @@ public static class Permissions
         CustomersView, CustomersCreate, CustomersEdit,
         ItemsView, ItemsCreate, ItemsEdit,
         RawReceive, RawInspect, RawConsume, RawReturn, RawExternalRelease, RawTransfer,
-        ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, StageRequiresApproval,
+        ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, ProductionResume, ProductionManageMachines, ProductionManageShifts, StageRequiresApproval,
         InventoryView, InventoryEdit, InventoryDelete, InventoryAdjust, InventoryAllowNegativeStock, InventoryApproveNegativeStock,
         ReadyView, ReadyTransfer, ReadyDeliver, ReadyEditPostApproval,
         InvoicesView, InvoicesCreate, InvoicesIssue, InvoicesCancel,
@@ -179,7 +198,9 @@ public static class Permissions
         SuppliersView, SuppliersCreate, SuppliersEdit,
         PurchasesView, PurchasesCreate, PurchasesEdit, PurchasesSubmit, PurchasesApprove,
         PurchasesReceive, PurchasesCancel, PurchasesInvoice, PurchasesPay, PurchasesExport,
-        PayrollView, PayrollManageEmployees, PayrollCreate, PayrollApprove, PayrollPost, PayrollCancel,
+        PayrollView, PayrollManageEmployees, PayrollCreate, PayrollApprove, PayrollPost, PayrollCancel, PayrollAccounting,
+        HrView, HrManage, HrAttendance, HrLeaveRequest, HrLeaveApprove, HrOvertimeRequest, HrOvertimeApprove,
+        HrAdvancesManage, HrLaborCost,
         CostingView, CostingEditEstimate, CostingApprove,
         PricingView, PricingManage,
         SuppliesView, SuppliesIssue, SuppliesCancel,

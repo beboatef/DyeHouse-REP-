@@ -31,7 +31,9 @@ export const PermissionGroups: string[] = [
   "الموردون",
   "المشتريات",
   "الرواتب",
+  "الموارد البشرية",
   "تكاليف أوامر التشغيل",
+  "قوائم الأسعار",
   "مستلزمات التشغيل",
   "بيع المواد",
   "مركز الاعتمادات",
@@ -67,6 +69,9 @@ export const Permissions: PermissionOption[] = [
   { value: "production.complete", group: "الإنتاج", label: "إكمال أمر التشغيل" },
   { value: "production.reprocess", group: "الإنتاج", label: "إعادة التشغيل" },
   { value: "production.approve_stage", group: "الإنتاج", label: "اعتماد مراحل التشغيل" },
+  { value: "production.resume", group: "الإنتاج", label: "استئناف أمر تشغيل موقوف" },
+  { value: "production.manage_machines", group: "الإنتاج", label: "إدارة الماكينات" },
+  { value: "production.manage_shifts", group: "الإنتاج", label: "إدارة ورديات التشغيل" },
 
   { value: "inventory.view", group: "المخزون", label: "عرض المخزون" },
   { value: "inventory.edit", group: "المخزون", label: "تعديل حركات المخزون" },
@@ -78,6 +83,7 @@ export const Permissions: PermissionOption[] = [
   { value: "ready.view", group: "المخزون الجاهز", label: "عرض المخزون الجاهز" },
   { value: "ready.transfer", group: "المخزون الجاهز", label: "ترحيل للمخزون الجاهز" },
   { value: "ready.deliver", group: "المخزون الجاهز", label: "تسليم الجاهز" },
+  { value: "ready.edit_post_approval", group: "المخزون الجاهز", label: "تعديل تسليم بعد الاعتماد" },
 
   { value: "invoices.view", group: "الفواتير", label: "عرض الفواتير" },
   { value: "invoices.create", group: "الفواتير", label: "إنشاء فاتورة" },
@@ -132,10 +138,24 @@ export const Permissions: PermissionOption[] = [
   { value: "payroll.approve", group: "الرواتب", label: "اعتماد مسير الرواتب" },
   { value: "payroll.post", group: "الرواتب", label: "ترحيل الرواتب للخزينة" },
   { value: "payroll.cancel", group: "الرواتب", label: "إلغاء مسير الرواتب" },
+  { value: "payroll.accounting", group: "الرواتب", label: "محاسبة الرواتب (عرض وترحيل)" },
+
+  { value: "hr.view", group: "الموارد البشرية", label: "عرض الموارد البشرية" },
+  { value: "hr.manage", group: "الموارد البشرية", label: "إدارة الموارد البشرية" },
+  { value: "hr.attendance", group: "الموارد البشرية", label: "تسجيل الحضور والانصراف" },
+  { value: "hr.leave_request", group: "الموارد البشرية", label: "طلب إجازة" },
+  { value: "hr.leave_approve", group: "الموارد البشرية", label: "اعتماد الإجازات" },
+  { value: "hr.overtime_request", group: "الموارد البشرية", label: "طلب وقت إضافي" },
+  { value: "hr.overtime_approve", group: "الموارد البشرية", label: "اعتماد الوقت الإضافي" },
+  { value: "hr.advances", group: "الموارد البشرية", label: "إدارة السلف" },
+  { value: "hr.labor_cost", group: "الموارد البشرية", label: "تكلفة العمالة" },
 
   { value: "costing.view", group: "تكاليف أوامر التشغيل", label: "عرض التكاليف" },
   { value: "costing.edit_estimate", group: "تكاليف أوامر التشغيل", label: "تعديل التكلفة التقديرية" },
   { value: "costing.approve", group: "تكاليف أوامر التشغيل", label: "اعتماد التكلفة النهائية" },
+
+  { value: "pricing.view", group: "قوائم الأسعار", label: "عرض الأسعار التجارية" },
+  { value: "pricing.manage", group: "قوائم الأسعار", label: "إدارة الأسعار التجارية" },
 
   { value: "supplies.view", group: "مستلزمات التشغيل", label: "عرض مستلزمات التشغيل" },
   { value: "supplies.issue", group: "مستلزمات التشغيل", label: "صرف مستلزمات التشغيل" },

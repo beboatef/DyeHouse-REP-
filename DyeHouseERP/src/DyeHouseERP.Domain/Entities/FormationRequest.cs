@@ -212,6 +212,24 @@ public class FormationRequest : AuditableEntity
         Touch(modifiedBy);
     }
 
+    /// <summary>
+    /// Records the ACTUAL weighed quantity of one basin, before its Job Order is created
+    /// (spec sections 8 and 10). The Job Order quantity IS this figure - the planned
+    /// formation quantity is planning data only and never reaches production. The request
+    /// must already be approved, and the weight can never be pushed below what the basin
+    /// has already produced.
+    /// </summary>
+    public void RecordBasinActualQuantity(Guid groupId, Guid basinId, decimal actualQuantity, string modifiedBy)
+    {
+        if (Status is FormationRequestStatus.Draft or FormationRequestStatus.Submitted or FormationRequestStatus.Rejected)
+            throw new DomainException("A basin can only be weighed once its formation request has been approved.");
+        if (Status == FormationRequestStatus.Cancelled)
+            throw new DomainException("A cancelled formation request cannot be weighed.");
+
+        FindGroup(groupId).FindBasin(basinId).SetActualQuantity(actualQuantity);
+        Touch(modifiedBy);
+    }
+
     private FormationGroup FindGroup(Guid groupId) => _groups.FirstOrDefault(g => g.Id == groupId)
         ?? throw new DomainException($"Formation group ({groupId}) does not belong to request {RequestNumber}.");
 
@@ -672,16 +690,43 @@ public class FormationBasin : BaseEntity
     public string? CustomerInstructions { get; private set; }
     public string? Notes { get; private set; }
 
-    /// <summary>Quantity actually produced for THIS basin (accumulated, never overwritten).</summary>
+    /// <summary>
+    /// The quantity actually produced for THIS basin (accumulated, never overwritten).
+    /// </summary>
     public decimal ProducedQuantity { get; private set; }
+
+    /// <summary>
+    /// The basin's ACTUAL weighed quantity, recorded before its Job Order is created
+    /// (spec sections 8 and 10). Null until the basin is weighed, because the planned
+    /// figure is planning data, not a measurement.
+    /// </summary>
+    public decimal? ActualQuantity { get; private set; }
 
     public Guid? SpecificationTemplateId { get; private set; }
     public string? SpecificationTemplateName { get; private set; }
     public DateTime? SpecificationSnapshotAtUtc { get; private set; }
 
-    public decimal RemainingQuantity => PlannedQuantity - ProducedQuantity;
+    /// <summary>
+    /// The figure production uses: the weighed weight once it is recorded, otherwise the
+    /// planned one. Remaining is always measured against it, so a lighter basin can never
+    /// over-claim the 20 KG it never had.
+    /// </summary>
+    public decimal EffectiveQuantity => ActualQuantity ?? PlannedQuantity;
 
-    private FormationBasin() { } // EF Core
+    public decimal RemainingQuantity => EffectiveQuantity - ProducedQuantity;
+
+    internal void SetActualQuantity(decimal actualQuantity)
+    {
+        if (actualQuantity <= 0)
+            throw new ArgumentException(
+                "A basin's actual weighed quantity must be greater than zero.", nameof(actualQuantity));
+        if (actualQuantity < ProducedQuantity)
+            throw new ArgumentException(
+                $"The actual weighed quantity ({actualQuantity}) cannot be lower than the {ProducedQuantity} already produced from this basin.",
+                nameof(actualQuantity));
+
+        ActualQuantity = actualQuantity;
+    }
 
     internal FormationBasin(
         Guid formationGroupId, int basinNumber, string? name, decimal plannedQuantity,

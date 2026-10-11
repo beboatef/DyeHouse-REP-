@@ -99,6 +99,10 @@ public class FormationBasinDto
     public int BasinNumber { get; set; }
     public string? Name { get; set; }
     public decimal PlannedQuantity { get; set; }
+    /// <summary>The ACTUAL weighed weight, once the basin has been weighed (spec sections 8 and 10).</summary>
+    public decimal? ActualQuantity { get; set; }
+    /// <summary>The figure production uses: the actual weight once recorded, otherwise the planned one.</summary>
+    public decimal EffectiveQuantity { get; set; }
     public decimal ProducedQuantity { get; set; }
     public decimal RemainingQuantity { get; set; }
     public UnitOfMeasure Unit { get; set; }

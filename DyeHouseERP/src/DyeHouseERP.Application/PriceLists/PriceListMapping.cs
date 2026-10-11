@@ -9,18 +9,6 @@ namespace DyeHouseERP.Application.PriceLists;
 /// </summary>
 internal static class PriceListMapping
 {
-    internal static StageCostRateDto ToDto(StageCostRate rate, ProductionStageDefinition? stage) => new()
-    {
-        Id = rate.Id,
-        StageDefinitionId = rate.StageDefinitionId,
-        StageCode = stage?.Code ?? string.Empty,
-        StageName = stage?.Name ?? string.Empty,
-        Unit = rate.Unit,
-        CostPerUnit = rate.CostPerUnit,
-        IsActive = rate.IsActive,
-        Notes = rate.Notes
-    };
-
     internal static CustomerServicePriceDto ToDto(
         CustomerServicePrice price, ProductionStageDefinition? stage, Customer? customer) => new()
     {

@@ -88,7 +88,19 @@ public class FormationRequestsController : ControllerBase
     public async Task<ActionResult<FormationRequestDto>> ConvertToJobOrder(Guid id, [FromBody] ConvertFormationRequestRequest request)
         => Ok(await _mediator.Send(new ConvertFormationRequestToJobOrderCommand(
             id, request.OrderDate ?? DateTime.UtcNow, request.JobOrderType, request.Priority,
-            request.GroupId, request.BasinId, request.Color, request.Notes, request.CustomerReference)));
+            request.GroupId, request.BasinId, request.Color, request.Notes, request.CustomerReference,
+            request.ActualBasinQuantity)));
+
+    /// <summary>
+    /// Records a basin's ACTUAL weighed quantity (spec sections 8 and 10) before it is
+    /// converted - the Job Order quantity is taken from this figure, never from the plan.
+    /// </summary>
+    [HttpPost("{id:guid}/basins/{basinId:guid}/actual-quantity")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
+    public async Task<ActionResult<FormationRequestDto>> RecordBasinActualQuantity(
+        Guid id, Guid basinId, [FromBody] RecordBasinActualQuantityRequest request)
+        => Ok(await _mediator.Send(new RecordFormationBasinActualQuantityCommand(
+            id, request.GroupId, basinId, request.ActualQuantity)));
 
     [HttpGet("export/excel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationExport)]
@@ -182,4 +194,8 @@ public record ConvertFormationRequestRequest(
     DateTime? OrderDate = null,
     string? Color = null,
     string? Notes = null,
-    string? CustomerReference = null);
+    string? CustomerReference = null,
+    // Required when a single basin is converted: its ACTUAL weighed weight (spec sections 8, 10).
+    decimal? ActualBasinQuantity = null);
+
+public record RecordBasinActualQuantityRequest(Guid GroupId, decimal ActualQuantity);

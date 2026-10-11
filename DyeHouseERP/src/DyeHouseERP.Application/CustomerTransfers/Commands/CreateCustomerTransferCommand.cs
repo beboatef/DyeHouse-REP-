@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.CustomerTransfers.DTOs;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Entities;
@@ -21,7 +22,21 @@ namespace DyeHouseERP.Application.CustomerTransfers.Commands;
 public record CreateCustomerTransferCommand(
     Guid FromCustomerId, Guid ToCustomerId, Guid RawMessageId, Guid ItemId,
     decimal? QuantityKg, decimal? QuantityMeter, string Reason, string? Notes,
-    bool OverrideNegativeStock = false, string? OverrideReason = null) : IRequest<CustomerTransferDto>;
+    bool OverrideNegativeStock = false, string? OverrideReason = null,
+    // Set only when the Approval Center dispatches this command after approving a request (spec section 24).
+    Guid? ApprovalRequestId = null) : IRequest<CustomerTransferDto>, IApprovalBoundOperation
+{
+    // Spec section 24: the approval is bound to these exact facts - a request
+    // approved for another lot, item, sending/receiving customer, quantity or
+    // unit cannot authorise this transfer.
+    public ApprovalRequestType ApprovalType => ApprovalRequestType.CustomerTransfer;
+
+    public Guid ApprovalDocumentId => RawMessageId;
+
+    public string OperationSignature =>
+        $"CustomerTransfer|msg={RawMessageId}|item={ItemId}|from={FromCustomerId}|to={ToCustomerId}" +
+        $"|kg={ApprovalBinding.Quantity(QuantityKg)}|m={ApprovalBinding.Quantity(QuantityMeter)}";
+}
 
 public class CreateCustomerTransferCommandValidator : AbstractValidator<CreateCustomerTransferCommand>
 {
@@ -94,13 +109,26 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
             if (!request.OverrideNegativeStock)
                 throw new NegativeStockException(available, requested);
 
-            if (!_currentUser.HasPermission(Permissions.InventoryAllowNegativeStock))
+            // B6: authorization goes through the permission model. Both
+            // permissions are required, exactly as on the other three
+            // negative-stock paths (allocation, external release, adjustment) -
+            // a transfer was previously the only path that asked for one.
+            if (!_currentUser.HasPermission(Permissions.InventoryAllowNegativeStock)
+                || !_currentUser.HasPermission(Permissions.InventoryApproveNegativeStock))
                 throw new UnauthorizedAccessException(
-                    $"Overriding negative stock requires the '{Permissions.InventoryAllowNegativeStock}' permission.");
+                    $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
+
+            // Spec section 24: the override is authorised by a stored,
+            // SINGLE-USE approval request raised by a DIFFERENT user, matched
+            // against this transfer's exact facts. The old path recorded the
+            // caller as both requester and approver - the self-approval the
+            // separation of duties forbids - and posted with no approval at all.
+            var decision = await ApprovalRequestGuard.ConsumeAsync(
+                _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
 
             _db.NegativeStockOverrides.Add(new NegativeStockOverride(
                 message.Id, request.ItemId, request.FromCustomerId, requested, available,
-                request.OverrideReason!, _currentUser.UserName, _currentUser.UserName));
+                request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
         }
 
         var transferNumber = await _numberGenerator.NextAsync(DocumentType.CustomerTransfer, cancellationToken: cancellationToken);

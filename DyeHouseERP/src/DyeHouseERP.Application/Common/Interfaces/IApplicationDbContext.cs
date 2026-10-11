@@ -75,6 +75,30 @@ public interface IApplicationDbContext
     DbSet<PayrollRun> PayrollRuns { get; }
     DbSet<PayrollRunLine> PayrollRunLines { get; }
 
+    // HR masters, attendance, leave, overtime, advances & wage rules (spec sections 28-42)
+    DbSet<HrSection> HrSections { get; }
+    DbSet<JobPosition> JobPositions { get; }
+    DbSet<CostCenter> CostCenters { get; }
+    DbSet<HrShift> HrShifts { get; }
+    DbSet<AttendanceRule> AttendanceRules { get; }
+    DbSet<AttendanceEvent> AttendanceEvents { get; }
+    DbSet<LeaveType> LeaveTypes { get; }
+    DbSet<LeaveRequest> LeaveRequests { get; }
+    DbSet<OvertimeEntry> OvertimeEntries { get; }
+    DbSet<EmployeeAdvance> EmployeeAdvances { get; }
+    DbSet<PayComponent> PayComponents { get; }
+    DbSet<EmployeePayComponent> EmployeePayComponents { get; }
+    DbSet<ContributionRule> ContributionRules { get; }
+    DbSet<PayrollAccountMapping> PayrollAccountMappings { get; }
+
+    // Approval centre (spec section 24)
+    DbSet<ApprovalRequest> ApprovalRequests { get; }
+
+    // Production master data (spec sections 19-20): machines, execution shifts, stage machines
+    DbSet<Machine> Machines { get; }
+    DbSet<StageMachine> StageMachines { get; }
+    DbSet<ProductionShift> ProductionShifts { get; }
+
     // Operating supplies internal issue (spec section 27)
     DbSet<SupplyIssue> SupplyIssues { get; }
     DbSet<SupplyIssueLine> SupplyIssueLines { get; }
@@ -90,8 +114,9 @@ public interface IApplicationDbContext
     DbSet<CustomerReturn> CustomerReturns { get; }
     DbSet<CustomerReturnLine> CustomerReturnLines { get; }
 
-    // Commercial price lists + the per-Job-Order price snapshot (spec sections 34A, 34, 36)
-    DbSet<StageCostRate> StageCostRates { get; }
+    // Customer service price list + the per-Job-Order price snapshot (spec sections 34, 36).
+    // S8: the fixed per-stage "actual cost list" (StageCostRate) was removed - factory actual
+    // cost is always derived from posted transactions, never from a fixed stage rate.
     DbSet<CustomerServicePrice> CustomerServicePrices { get; }
     DbSet<ProductionOrderServicePrice> ProductionOrderServicePrices { get; }
 

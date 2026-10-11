@@ -15,6 +15,10 @@ dist/
 .env
 .env.local
 
+## Local source backups - never part of a commit (keep the manifest clean)
+_backup-*/
+*.backup-before-*
+
 ## OS
 .DS_Store
 Thumbs.db

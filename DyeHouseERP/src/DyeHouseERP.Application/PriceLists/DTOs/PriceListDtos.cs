@@ -2,19 +2,6 @@ using DyeHouseERP.Domain.Enums;
 
 namespace DyeHouseERP.Application.PriceLists.DTOs;
 
-/// <summary>Actual Cost List row (spec section 34A): stage + unit -> company cost.</summary>
-public class StageCostRateDto
-{
-    public Guid Id { get; set; }
-    public Guid StageDefinitionId { get; set; }
-    public string StageCode { get; set; } = string.Empty;
-    public string StageName { get; set; } = string.Empty;
-    public UnitOfMeasure Unit { get; set; }
-    public decimal CostPerUnit { get; set; }
-    public bool IsActive { get; set; }
-    public string? Notes { get; set; }
-}
-
 /// <summary>
 /// Customer Service Price List row (spec section 36): stage + customer + unit ->
 /// selling price. <see cref="IsGeneralDefault"/> marks the fallback row that

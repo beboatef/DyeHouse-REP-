@@ -239,6 +239,14 @@ using (var scope = app.Services.CreateScope())
         await DyeHouseERP.Persistence.Seeding.PurchaseUnitSeeder.SeedAsync(db);
         await DyeHouseERP.Persistence.Seeding.ProductionStageSeeder.SeedAsync(
             db, app.Services.GetRequiredService<ILogger<Program>>());
+        // Initial machine master data + stage mapping: depends on the stages
+        // above (it is a no-op when they are absent), and is idempotent by
+        // machine code.
+        await DyeHouseERP.Persistence.Seeding.MachineSeeder.SeedAsync(
+            db, app.Services.GetRequiredService<ILogger<Program>>());
+        // Initial production execution shifts (master data, not a fixed limit).
+        await DyeHouseERP.Persistence.Seeding.ProductionShiftSeeder.SeedAsync(
+            db, app.Services.GetRequiredService<ILogger<Program>>());
 
         var passwordHasher = scope.ServiceProvider.GetRequiredService<DyeHouseERP.Application.Common.Interfaces.IPasswordHasher>();
         await UserSeeder.SeedAsync(db, passwordHasher);

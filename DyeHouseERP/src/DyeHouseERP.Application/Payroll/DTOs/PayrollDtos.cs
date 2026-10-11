@@ -38,6 +38,14 @@ public class EmployeeDto
     public string? NationalId { get; set; }
     public string? BankAccountNumber { get; set; }
     public string? Notes { get; set; }
+
+    // HR classification (spec sections 28-36)
+    public Guid? HrSectionId { get; set; }
+    public Guid? JobPositionId { get; set; }
+    public Guid? CostCenterId { get; set; }
+    public Guid? HrShiftId { get; set; }
+    public bool IsTaxExempt { get; set; }
+    public bool IsInsuranceExempt { get; set; }
 }
 
 public class PayrollRunLineDto

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CustomersApi, ItemsApi, RawExternalReleasesApi, RawMessagesApi, RawReleaseReason,
+  ApprovalsApi, CustomersApi, ItemsApi, RawExternalReleasesApi, RawMessagesApi, RawReleaseReason,
   type ExternalProcessingStatus, type RawExternalRelease
 } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
@@ -157,6 +157,7 @@ export default function RawExternalReleasesPage() {
   const [statusFilter, setStatusFilter] = useState<ExternalProcessingStatus | "">("");
   const [error, setError] = useState<string | null>(null);
   const [negativeStockDetail, setNegativeStockDetail] = useState<{ shortage: number; reason: string } | null>(null);
+  const [approvalRequested, setApprovalRequested] = useState<string | null>(null);
 
   const { data: customers } = useQuery({ queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true }) });
   const { data: items } = useQuery({ queryKey: ["items", "active"], queryFn: () => ItemsApi.list({ activeOnly: true }) });
@@ -171,7 +172,7 @@ export default function RawExternalReleasesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (overrideNegativeStock: boolean) =>
+    mutationFn: () =>
       RawExternalReleasesApi.create({
         customerId, itemId, rawMessageId, reason,
         quantityKg: qtyKg ? Number(qtyKg) : undefined,
@@ -180,15 +181,14 @@ export default function RawExternalReleasesPage() {
         externalProcessingStage: stage || undefined,
         externalProcessingCost: cost ? Number(cost) : undefined,
         expectedReturnDate: expectedReturnDate ? new Date(expectedReturnDate).toISOString() : undefined,
-        notes: notes || undefined,
-        overrideNegativeStock,
-        overrideReason: negativeStockDetail?.reason
+        notes: notes || undefined
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["raw-external-releases"] });
       setShowForm(false);
       setQtyKg(""); setQtyMeter(""); setExternalParty(""); setStage(""); setCost("");
       setExpectedReturnDate(""); setNotes(""); setError(null); setNegativeStockDetail(null);
+      setApprovalRequested(null);
     },
     onError: (err: any) => {
       if (err?.response?.data?.code === "NEGATIVE_STOCK") {
@@ -197,6 +197,37 @@ export default function RawExternalReleasesPage() {
         setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ");
       }
     }
+  });
+
+  /**
+   * Spec section 24: the shortage is not overridden by the person who wants the
+   * movement. The screen submits it as an approval request instead; a DIFFERENT
+   * user decides it, and only that approval posts the release - bound to this
+   * exact lot, item, customer, reason (return / processing / sale), quantity
+   * and unit.
+   */
+  const requestApprovalMutation = useMutation({
+    mutationFn: (approvalReason: string) =>
+      ApprovalsApi.submit({
+        type: "RawExternalRelease",
+        reason: approvalReason,
+        payloadJson: JSON.stringify({
+          customerId, itemId, rawMessageId, reason,
+          quantityKg: qtyKg ? Number(qtyKg) : undefined,
+          quantityMeter: qtyMeter ? Number(qtyMeter) : undefined,
+          externalParty: externalParty || undefined,
+          externalProcessingStage: stage || undefined,
+          externalProcessingCost: cost ? Number(cost) : undefined,
+          expectedReturnDate: expectedReturnDate ? new Date(expectedReturnDate).toISOString() : undefined,
+          notes: notes || undefined
+        })
+      }),
+    onSuccess: (request) => {
+      setNegativeStockDetail(null);
+      setApprovalRequested(request.documentNumber);
+      qc.invalidateQueries({ queryKey: ["approval-requests"] });
+    },
+    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
   });
 
   const isExternal = reason === "ExternalProcessing";
@@ -223,7 +254,8 @@ export default function RawExternalReleasesPage() {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              createMutation.mutate(false);
+              setApprovalRequested(null);
+              createMutation.mutate();
             }}
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -302,16 +334,28 @@ export default function RawExternalReleasesPage() {
               <Card className="p-4 border-yellow-300 bg-yellow-50">
                 <p className="text-sm text-yellow-800">
                   الكمية تتجاوز الرصيد المتاح بمقدار <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
-                  يتطلب صلاحية تجاوز الرصيد السالب وسببًا موثقًا.
+                  لا يتم تجاوز الرصيد السالب هنا: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه إلا مستخدم آخر يملك صلاحية اعتماد تجاوز الرصيد السالب.
                 </p>
                 <div className="flex gap-2 mt-2">
-                  <Input placeholder="سبب التجاوز..." value={negativeStockDetail.reason}
+                  <Input placeholder="سبب طلب الاعتماد..." value={negativeStockDetail.reason}
                     onChange={(e) => setNegativeStockDetail({ ...negativeStockDetail, reason: e.target.value })} />
-                  <Button type="button" variant="secondary" disabled={!negativeStockDetail.reason} onClick={() => createMutation.mutate(true)}>
-                    تجاوز واعتماد
+                  <Button type="button" variant="secondary"
+                    disabled={!negativeStockDetail.reason || requestApprovalMutation.isPending}
+                    onClick={() => { setError(null); requestApprovalMutation.mutate(negativeStockDetail.reason); }}>
+                    {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
                   </Button>
                 </div>
+                <p className="mt-2 text-2xs text-yellow-800">
+                  الاعتماد مرتبط بنفس الحركة ونفس السبب (إرجاع / تشغيل خارجي / بيع) والكمية والوحدة والصنف والعميل - أي تغيير يتطلب طلبًا جديدًا.
+                </p>
               </Card>
+            )}
+
+            {approvalRequested && (
+              <p className="text-sm text-green-700">
+                تم إرسال طلب اعتماد على الرسالة <span className="ltr-nums font-bold">{approvalRequested}</span>.
+                لن يتم الحفظ إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
+              </p>
             )}
           </form>
         </Card>

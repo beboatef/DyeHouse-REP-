@@ -18,7 +18,10 @@ namespace DyeHouseERP.Application.ReadyGoods.Commands;
 /// this check gives a friendly error first).
 /// </summary>
 public record CreateReadyGoodsTransferCommand(
-    Guid ProductionOrderId, Guid WarehouseId, decimal? QuantityKg, decimal? QuantityMeter, int? PieceCount, string? Notes)
+    Guid ProductionOrderId, Guid WarehouseId, decimal? QuantityKg, decimal? QuantityMeter, int? PieceCount, string? Notes,
+    // Spec section 23: the stage execution whose output is being moved. A NULL link is legal only on
+    // historical rows - every transfer posted from now on must name the stage that produced it.
+    Guid? StageExecutionId = null)
     : IRequest<ReadyGoodsTransferDto>;
 
 public class CreateReadyGoodsTransferCommandValidator : AbstractValidator<CreateReadyGoodsTransferCommand>
@@ -29,6 +32,8 @@ public class CreateReadyGoodsTransferCommandValidator : AbstractValidator<Create
         RuleFor(x => x.WarehouseId).NotEmpty();
         RuleFor(x => x).Must(x => x.QuantityKg is > 0 || x.QuantityMeter is > 0)
             .WithMessage("Specify the transferred quantity in KG and/or Meter.");
+        RuleFor(x => x.StageExecutionId).NotNull()
+            .WithMessage("Name the stage execution whose output is being moved - an untraceable ready-goods transfer is refused.");
     }
 }
 
@@ -56,6 +61,10 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
 
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
+
+        // A cancelled order is dead: it must never create ready-goods stock.
+        if (order.Status == ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", order.OrderNumber);
 
         // R2: the destination must exist and genuinely be a Ready Goods
         // warehouse. Validated BEFORE the lock so a bad request never queues
@@ -87,11 +96,37 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
         if (pendingStages)
             throw new DomainException("Cannot transfer to ready goods while stages are still pending or in progress.");
 
+        // Spec section 23: the transfer names the STAGE EXECUTION whose output it moved,
+        // and the cumulative transfers linked to one stage can never together exceed that
+        // stage's own output. Both are resolved before anything is written, under the same
+        // lock as the posting itself.
+        var stage = await _db.ProductionOrderStageExecutions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == request.StageExecutionId, cancellationToken)
+            ?? throw new NotFoundException("ProductionOrderStageExecution", request.StageExecutionId ?? Guid.Empty);
+
+        if (stage.ProductionOrderId != order.Id)
+            throw new DomainException(
+                $"The named stage belongs to a different production order than '{order.OrderNumber}'.");
+
+        var alreadyLinked = await _db.ReadyGoodsTransfers.AsNoTracking()
+            .Where(t => t.StageExecutionId == stage.Id && t.Status != ReadyGoodsTransferStatus.Cancelled)
+            .Select(t => new { t.QuantityKg, t.QuantityMeter })
+            .ToListAsync(cancellationToken);
+
+        stage.EnsureTransfersWithinOutput(
+            alreadyLinked.Sum(t => t.QuantityKg ?? 0),
+            alreadyLinked.Sum(t => t.QuantityMeter ?? 0),
+            request.QuantityKg, request.QuantityMeter);
+
+        var stageDefinition = await _db.ProductionStageDefinitions.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == stage.StageDefinitionId, cancellationToken);
+
         var transferNumber = await _numberGenerator.NextAsync(DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
 
         var transfer = new ReadyGoodsTransfer(
             transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId, request.WarehouseId,
-            request.QuantityKg, request.QuantityMeter, _currentUser.UserName, request.PieceCount, request.Notes);
+            request.QuantityKg, request.QuantityMeter, _currentUser.UserName, request.PieceCount, request.Notes,
+            stageExecutionId: stage.Id);
         _db.ReadyGoodsTransfers.Add(transfer);
 
 var allocations = await _db.RawAllocations
@@ -127,6 +162,8 @@ foreach (var allocation in allocations)
             CustomerId = order.CustomerId, CustomerCode = customer?.Code ?? "",
             ItemId = order.ItemId, ItemCode = item?.Code ?? "", Color = order.Color,
             QuantityKg = transfer.QuantityKg, QuantityMeter = transfer.QuantityMeter, PieceCount = transfer.PieceCount,
+            StageExecutionId = stage.Id, StageSequence = stage.Sequence, StageName = stageDefinition?.Name,
+            StageOutputKg = stage.OutputKg, StageOutputMeter = stage.OutputMeter,
             Status = transfer.Status.ToString()
         };
         }

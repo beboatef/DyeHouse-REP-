@@ -41,6 +41,7 @@ import PeriodClosingPage from "@/pages/PeriodClosingPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import PurchasesPage from "@/pages/PurchasesPage";
 import PayrollPage from "@/pages/PayrollPage";
+import HrPage from "@/pages/HrPage";
 import ApprovalCenterPage from "@/pages/ApprovalCenterPage";
 import SuppliesPage from "@/pages/SuppliesPage";
 import MaterialSalesPage from "@/pages/MaterialSalesPage";
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/formation-specifications" element={<FormationSpecificationsPage />} />
         <Route path="/purchases" element={<PurchasesPage />} />
         <Route path="/payroll" element={<PayrollPage />} />
+        <Route path="/hr" element={<HrPage />} />
         <Route path="/approvals" element={<ApprovalCenterPage />} />
         {/* Operating supplies and material sales live under Materials & supplies
             (spec sections 26 + 27) - they are factory-owned stock, not custodies. */}

@@ -7,59 +7,13 @@ using Xunit;
 namespace DyeHouseERP.UnitTests;
 
 /// <summary>
-/// Spec section 34: the actual cost list and the customer service price list are
-/// separate concepts, and a Job Order's applied price is a SNAPSHOT - later edits to
-/// the list never change an order that already priced.
+/// Spec section 34: customer service pricing is what the CUSTOMER is charged, and a
+/// Job Order's applied price is a SNAPSHOT - later edits to the list never change an
+/// order that already priced.
+///
+/// S8: the fixed per-stage "actual cost list" (StageCostRate) was removed, so only the
+/// customer-facing price list and the Job Order snapshot are covered here.
 /// </summary>
-public class StageCostRateTests
-{
-    [Fact]
-    public void Rate_StoresStageUnitAndCost()
-    {
-        var stageId = Guid.NewGuid();
-
-        var rate = new StageCostRate(stageId, UnitOfMeasure.KG, 12.5m, "tester", "dyeing cost");
-
-        rate.StageDefinitionId.Should().Be(stageId);
-        rate.Unit.Should().Be(UnitOfMeasure.KG);
-        rate.CostPerUnit.Should().Be(12.5m);
-        rate.IsActive.Should().BeTrue();
-        rate.Notes.Should().Be("dyeing cost");
-    }
-
-    [Fact]
-    public void Rate_RejectsANegativeCost()
-    {
-        var act = () => new StageCostRate(Guid.NewGuid(), UnitOfMeasure.KG, -1m, "tester");
-        act.Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void Rate_RequiresAStage()
-    {
-        var act = () => new StageCostRate(Guid.Empty, UnitOfMeasure.KG, 5m, "tester");
-        act.Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void Rate_UpdateAndDeactivateAreAudited()
-    {
-        var rate = new StageCostRate(Guid.NewGuid(), UnitOfMeasure.Meter, 3m, "tester");
-
-        rate.Update(4.75m, null, "manager");
-        rate.CostPerUnit.Should().Be(4.75m);
-        rate.ModifiedBy.Should().Be("manager");
-
-        rate.Deactivate("manager");
-        rate.IsActive.Should().BeFalse();
-        // The row survives deactivation - a rate that priced an order must stay resolvable.
-        rate.CostPerUnit.Should().Be(4.75m);
-
-        rate.Activate("manager");
-        rate.IsActive.Should().BeTrue();
-    }
-}
-
 public class CustomerServicePriceTests
 {
     [Fact]

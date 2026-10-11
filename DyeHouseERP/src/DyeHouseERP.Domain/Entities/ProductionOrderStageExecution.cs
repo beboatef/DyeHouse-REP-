@@ -46,6 +46,19 @@ public class ProductionOrderStageExecution : BaseEntity
     public decimal? LossPercentKg { get; private set; }
     public decimal? LossPercentMeter { get; private set; }
 
+    /// <summary>
+    /// The machine this stage execution ran on, and the execution shift it ran in
+    /// (S-Dynamic-Machines / S-Production-Execution-Shifts).
+    ///
+    /// These are HISTORICAL references, kept on the execution itself rather than derived
+    /// from the stage's current machine mapping: a completed stage must still name the
+    /// machine and shift it actually ran on even after that machine is re-mapped,
+    /// deactivated or removed from the stage, so the production history is never rewritten.
+    /// Optional because a stage may legitimately run without either being recorded.
+    /// </summary>
+    public Guid? MachineId { get; private set; }
+    public Guid? ProductionShiftId { get; private set; }
+
     public string? Operator { get; private set; }
     public string? Notes { get; private set; }
     public DateTime? StartedAtUtc { get; private set; }
@@ -149,6 +162,35 @@ public class ProductionOrderStageExecution : BaseEntity
 
         OutputKg = outputKg;
         OutputMeter = outputMeter;
+    }
+
+    /// <summary>
+    /// Guards the ready-goods transfers linked to this stage (spec section 23): the
+    /// quantities posted against a stage may never together exceed the stage's own
+    /// recorded output, and a unit the stage never recorded can never be transferred.
+    /// KG and Meter are checked independently - filling one says nothing about the other.
+    /// </summary>
+    public void EnsureTransfersWithinOutput(
+        decimal alreadyTransferredKg, decimal alreadyTransferredMeter,
+        decimal? transferKg, decimal? transferMeter)
+    {
+        if (Status != StageExecutionStatus.Completed || (OutputKg is null && OutputMeter is null))
+            throw new DomainException(
+                "This stage has not been closed, so it has no output to transfer to ready goods.");
+
+        if (transferKg is > 0 && OutputKg is null)
+            throw new DomainException(
+                "This stage recorded no KG output, so KG cannot be transferred against it.");
+        if (transferMeter is > 0 && OutputMeter is null)
+            throw new DomainException(
+                "This stage recorded no Meter output, so Meter cannot be transferred against it.");
+
+        if (transferKg is > 0 && alreadyTransferredKg + transferKg.Value > OutputKg!.Value + 0.001m)
+            throw new DomainException(
+                $"Cumulative transfers can never exceed a stage's output: this stage produced {OutputKg} KG, {alreadyTransferredKg} KG has already been transferred and {transferKg} KG more was requested.");
+        if (transferMeter is > 0 && alreadyTransferredMeter + transferMeter.Value > OutputMeter!.Value + 0.001m)
+            throw new DomainException(
+                $"Cumulative transfers can never exceed a stage's output: this stage produced {OutputMeter} Meter, {alreadyTransferredMeter} Meter has already been transferred and {transferMeter} Meter more was requested.");
     }
 
     public void Start(string operatorName)

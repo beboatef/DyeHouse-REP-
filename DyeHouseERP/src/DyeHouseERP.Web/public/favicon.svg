@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140" role="img" aria-label="DyeHouse ERP">
+  <title>DyeHouse ERP</title>
+  <!--
+    DyeHouse ERP - icon-only variant (the droplet), derived from
+    public/dyehouse-erp-logo.svg exactly as the brand spec defines it: everything
+    inside clip-path="url(#drop)" plus the outline path, cropped to 0 0 120 140.
+
+    Differences from the full logo, both forced by the medium:
+      * static final frame (no draw/rise/flow) - a tab icon has no time to
+        animate and some browsers would only ever capture the first frame;
+      * the ink follows the OS colour scheme, the only signal a favicon has.
+        The in-app logo uses the app's own theme variables instead.
+  -->
+  <defs>
+    <clipPath id="drop">
+      <path d="M60 10 C60 10 20 58 20 88 a40 40 0 0 0 80 0 C100 58 60 10 60 10 Z"/>
+    </clipPath>
+  </defs>
+  <style>
+    .outline { fill:none; stroke:#0F172A; stroke-width:3; stroke-linejoin:round; }
+    @media (prefers-color-scheme: dark) { .outline { stroke:#F8FAFC; } }
+  </style>
+
+  <g clip-path="url(#drop)">
+    <path d="M-80 52 q20 -12 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 V140 H-80 Z" fill="#06B6D4"/>
+    <path d="M-80 70 q20 -12 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 V140 H-80 Z" fill="#D946EF"/>
+    <path d="M-80 88 q20 -12 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 V140 H-80 Z" fill="#F59E0B"/>
+    <ellipse fill="#fff" opacity="0.35" cx="42" cy="78" rx="6" ry="16" transform="rotate(18 42 78)"/>
+  </g>
+  <path class="outline" d="M60 10 C60 10 20 58 20 88 a40 40 0 0 0 80 0 C100 58 60 10 60 10 Z"/>
+</svg>

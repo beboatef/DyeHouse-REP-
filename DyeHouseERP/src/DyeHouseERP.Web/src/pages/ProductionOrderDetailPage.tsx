@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ProductionOrdersApi, RawMessagesApi, CostAccountingApi, CostCategory, ProductionStagesApi, type ProductionOrder, type UnitOfMeasure } from "@/api/client";
+import { ApprovalsApi, ProductionOrdersApi, RawMessagesApi, CostAccountingApi, CostCategory, ProductionStagesApi, type ProductionOrder, type UnitOfMeasure } from "@/api/client";
 
 /**
  * The cost-line categories a user can add (spec section 35). Order matters - it
@@ -48,22 +48,22 @@ export default function ProductionOrderDetailPage() {
   const [allocMeter, setAllocMeter] = useState("");
   const [allocError, setAllocError] = useState<string | null>(null);
   const [negativeStockDetail, setNegativeStockDetail] = useState<{ shortage: number; reason: string } | null>(null);
+  const [approvalRequested, setApprovalRequested] = useState<string | null>(null);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["production-orders", id] });
 
   const allocateMutation = useMutation({
-    mutationFn: (overrideNegativeStock: boolean) =>
+    mutationFn: () =>
       ProductionOrdersApi.allocateRaw(id!, {
         rawMessageId: selectedMessageId,
         itemId: selectedLineItemId,
         quantityKg: allocKg ? Number(allocKg) : undefined,
-        quantityMeter: allocMeter ? Number(allocMeter) : undefined,
-        overrideNegativeStock,
-        overrideReason: negativeStockDetail?.reason
+        quantityMeter: allocMeter ? Number(allocMeter) : undefined
       }),
     onSuccess: () => {
       invalidate();
       setSelectedMessageId(""); setSelectedLineItemId(""); setAllocKg(""); setAllocMeter(""); setAllocError(null); setNegativeStockDetail(null);
+      setApprovalRequested(null);
     },
     onError: (err: any) => {
       if (err?.response?.data?.code === "NEGATIVE_STOCK") {
@@ -72,6 +72,35 @@ export default function ProductionOrderDetailPage() {
         setAllocError(err?.response?.data?.title ?? "حدث خطأ أثناء التخصيص");
       }
     }
+  });
+
+  /**
+   * Spec section 24: the shortage is not "overridden" by the person allocating.
+   * The screen submits the allocation as an approval request; a DIFFERENT user
+   * with inventory.approve_negative_stock decides it in the Approval Center, and
+   * only their approval executes the movement - bound to this Job Order, lot,
+   * item and quantity.
+   */
+  const requestApprovalMutation = useMutation({
+    mutationFn: (approvalReason: string) =>
+      ApprovalsApi.submit({
+        type: "AllocateRaw",
+        reason: approvalReason,
+        payloadJson: JSON.stringify({
+          productionOrderId: id,
+          rawMessageId: selectedMessageId,
+          itemId: selectedLineItemId,
+          quantityKg: allocKg ? Number(allocKg) : undefined,
+          quantityMeter: allocMeter ? Number(allocMeter) : undefined
+        })
+      }),
+    onSuccess: (request) => {
+      setNegativeStockDetail(null);
+      setApprovalRequested(request.documentNumber);
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["approval-requests"] });
+    },
+    onError: (err: any) => setAllocError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
   });
 
   if (isLoading || !order) return <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>;
@@ -200,7 +229,7 @@ export default function ProductionOrderDetailPage() {
         <div className="mt-3">
           <Button
             disabled={!selectedMessageId || !selectedLineItemId || (!allocKg && !allocMeter) || allocateMutation.isPending}
-            onClick={() => allocateMutation.mutate(false)}
+            onClick={() => { setApprovalRequested(null); allocateMutation.mutate(); }}
           >
             تخصيص
           </Button>
@@ -212,23 +241,34 @@ export default function ProductionOrderDetailPage() {
           <Card className="p-4 mt-3 border-yellow-300 bg-yellow-50">
             <p className="text-sm text-yellow-800">
               الكمية المطلوبة تتجاوز الرصيد المتاح بمقدار <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
-              هذا يتطلب صلاحية تجاوز الرصيد السالب (inventory.allow_negative_stock) وسببًا موثقًا.
+              لا يتم تجاوز الرصيد السالب هنا: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه إلا مستخدم آخر يملك
+              صلاحية اعتماد تجاوز الرصيد السالب - ولا يمكن لمقدّم الطلب اعتماده بنفسه.
             </p>
             <div className="flex gap-2 mt-2">
               <Input
-                placeholder="سبب التجاوز..."
+                placeholder="سبب طلب الاعتماد..."
                 value={negativeStockDetail.reason}
                 onChange={(e) => setNegativeStockDetail({ ...negativeStockDetail, reason: e.target.value })}
               />
               <Button
                 variant="secondary"
-                disabled={!negativeStockDetail.reason}
-                onClick={() => allocateMutation.mutate(true)}
+                disabled={!negativeStockDetail.reason || requestApprovalMutation.isPending}
+                onClick={() => { setAllocError(null); requestApprovalMutation.mutate(negativeStockDetail.reason); }}
               >
-                تجاوز واعتماد
+                {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
               </Button>
             </div>
+            <p className="mt-2 text-2xs text-yellow-800">
+              الاعتماد مرتبط بنفس أمر التشغيل ونفس الرسالة والصنف والكمية والوحدة - أي تغيير يتطلب طلبًا جديدًا.
+            </p>
           </Card>
+        )}
+
+        {approvalRequested && (
+          <p className="mt-2 text-sm text-green-700">
+            تم إرسال طلب اعتماد على أمر التشغيل <span className="ltr-nums font-bold">{approvalRequested}</span>.
+            لن يتم الصرف إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
+          </p>
         )}
       </Card>
 
@@ -287,6 +327,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   const [releaseKg, setReleaseKg] = useState("");
   const [releaseMeter, setReleaseMeter] = useState("");
   const [pauseReason, setPauseReason] = useState("");
+  const [releaseLotId, setReleaseLotId] = useState("");
   const [resumeQtyKg, setResumeQtyKg] = useState("");
   const [resumeQtyMeter, setResumeQtyMeter] = useState("");
   const [resumeMessageId, setResumeMessageId] = useState("");
@@ -330,13 +371,18 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
       ProductionOrdersApi.pause(order.id, {
         releaseKg: releaseKg ? Number(releaseKg) : undefined,
         releaseMeter: releaseMeter ? Number(releaseMeter) : undefined,
-        reason: pauseReason.trim()
+        reason: pauseReason.trim(),
+        // The lot is named only when material actually goes back: the release is read
+        // from the ledger per lot, and with several source lots the backend refuses to
+        // pick one on its own (no FIFO).
+        rawMessageId: releaseKg || releaseMeter ? releaseLotId || null : null
       }),
     onSuccess: () => {
       invalidate();
       setPauseOpen(false);
       setReleaseKg("");
       setReleaseMeter("");
+      setReleaseLotId("");
       setPauseReason("");
       setFlowError(null);
     },
@@ -449,12 +495,27 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
               <Input type="number" min={0} step="0.01" value={releaseMeter} onChange={(e) => setReleaseMeter(e.target.value)} />
             </Field>
           </div>
+          {(releaseKg !== "" || releaseMeter !== "") && order.rawAllocations.length > 0 && (
+            <Field label={t("pause.releaseLot")}>
+              <Select value={releaseLotId} onChange={(e) => setReleaseLotId(e.target.value)}>
+                <option value="">{t("common.select")}</option>
+                {order.rawAllocations.map((a) => (
+                  <option key={a.id} value={a.rawMessageId}>
+                    {a.messageNumber}{a.quantityKg != null ? ` - ${a.quantityKg} كجم` : ""}{a.quantityMeter != null ? ` ${a.quantityMeter} م` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label={t("pause.reason")}>
             <Input value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} />
           </Field>
           <div className="mt-3 flex gap-2">
             <Button
-              disabled={(!releaseKg && !releaseMeter) || pauseReason.trim() === "" || pauseMutation.isPending}
+              disabled={
+                (!releaseKg && !releaseMeter) || pauseReason.trim() === "" || pauseMutation.isPending ||
+                ((releaseKg !== "" || releaseMeter !== "") && order.rawAllocations.length > 1 && !releaseLotId)
+              }
               onClick={() => pauseMutation.mutate()}
             >
               {t("pause.title")}

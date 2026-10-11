@@ -10,6 +10,7 @@ export default function ReadyGoodsPage() {
   const [showForm, setShowForm] = useState(false);
   const [productionOrderId, setProductionOrderId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
+  const [stageExecutionId, setStageExecutionId] = useState("");
   const [qtyKg, setQtyKg] = useState("");
   const [qtyMeter, setQtyMeter] = useState("");
   const [pieceCount, setPieceCount] = useState("");
@@ -20,9 +21,18 @@ export default function ReadyGoodsPage() {
   const { data: balance, isLoading: balanceLoading } = useQuery({ queryKey: ["ready-goods-balance"], queryFn: () => ReadyGoodsApi.balance() });
   const { data: transfers, isLoading: transfersLoading } = useQuery({ queryKey: ["ready-goods-transfers"], queryFn: () => ReadyGoodsApi.listTransfers() });
 
+  // The stage link (spec section 23) is mandatory, so the form loads the chosen
+  // order's closed stages and the quantity is capped by the stage's own output.
+  const { data: selectedOrder } = useQuery({
+    queryKey: ["production-order", productionOrderId],
+    queryFn: () => ProductionOrdersApi.get(productionOrderId),
+    enabled: !!productionOrderId
+  });
+  const closedStages = selectedOrder?.stageExecutions.filter((s) => s.status === "Completed") ?? [];
+
   const createMutation = useMutation({
     mutationFn: () => ReadyGoodsApi.createTransfer({
-      productionOrderId, warehouseId,
+      productionOrderId, warehouseId, stageExecutionId,
       quantityKg: qtyKg ? Number(qtyKg) : undefined,
       quantityMeter: qtyMeter ? Number(qtyMeter) : undefined,
       pieceCount: pieceCount ? Number(pieceCount) : undefined
@@ -30,7 +40,8 @@ export default function ReadyGoodsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
       qc.invalidateQueries({ queryKey: ["ready-goods-transfers"] });
-      setShowForm(false); setQtyKg(""); setQtyMeter(""); setPieceCount(""); setError(null);
+      setShowForm(false); setQtyKg(""); setQtyMeter(""); setPieceCount("");
+      setStageExecutionId(""); setError(null);
     },
     onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
   });
@@ -61,7 +72,9 @@ export default function ReadyGoodsPage() {
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div className="sm:col-span-2">
               <label className="field-label">أمر التشغيل</label>
-              <Select value={productionOrderId} onChange={(e) => setProductionOrderId(e.target.value)} required>
+              <Select value={productionOrderId} onChange={(e) => {
+                setProductionOrderId(e.target.value); setStageExecutionId(""); setQtyKg(""); setQtyMeter("");
+              }} required>
                 <option value="">اختر...</option>
                 {orders?.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} - {o.customerCode} - {o.itemCode}</option>)}
               </Select>
@@ -73,10 +86,31 @@ export default function ReadyGoodsPage() {
                 {warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </Select>
             </div>
+            <div>
+              <label className="field-label">المرحلة المنتِجة</label>
+              <Select value={stageExecutionId} onChange={(e) => {
+                const stage = closedStages.find((s) => s.id === e.target.value);
+                setStageExecutionId(e.target.value);
+                setQtyKg(stage?.outputKg != null ? String(stage.outputKg) : "");
+                setQtyMeter(stage?.outputMeter != null ? String(stage.outputMeter) : "");
+              }} required disabled={!productionOrderId}>
+                <option value="">اختر...</option>
+                {closedStages.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    #{s.sequence} {s.stageName}{s.outputKg != null ? ` - ${s.outputKg} كجم` : ""}{s.outputMeter != null ? ` ${s.outputMeter} م` : ""}
+                  </option>
+                ))}
+              </Select>
+              {productionOrderId && closedStages.length === 0 && (
+                <p className="text-2xs text-amber-600 mt-1">
+                  لا توجد مرحلة مغلقة لهذا الأمر التشغيلي - أغلق المرحلة أولًا ليتحرك ناتجها إلى الجاهز.
+                </p>
+              )}
+            </div>
             <div><label className="field-label">الكمية (كجم)</label><Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} /></div>
             <div><label className="field-label">الكمية (متر)</label><Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} /></div>
             <div><label className="field-label">عدد القطع (وصفي)</label><Input type="number" min="0" value={pieceCount} onChange={(e) => setPieceCount(e.target.value)} /></div>
-            <Button type="submit" disabled={createMutation.isPending}>{createMutation.isPending ? "جارٍ الحفظ..." : "ترحيل"}</Button>
+            <Button type="submit" disabled={createMutation.isPending || !stageExecutionId}>{createMutation.isPending ? "جارٍ الحفظ..." : "ترحيل"}</Button>
           </form>
           {error && <p className="form-error mt-2">{error}</p>}
         </Card>
@@ -108,13 +142,14 @@ export default function ReadyGoodsPage() {
         <table className="table">
           <thead><tr>
             <th>الرقم</th><th>أمر التشغيل</th>
-            <th>العميل</th><th>الكمية</th>
+            <th>المرحلة</th><th>العميل</th><th>الكمية</th>
           </tr></thead>
           <tbody>
-            {transfersLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {transfersLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {transfers?.map((t) => (
               <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td className="ltr-nums">{t.productionOrderNumber}</td>
+                <td>{t.stageSequence != null ? `#${t.stageSequence} ${t.stageName ?? ""}` : "—"}</td>
                 <td>{t.customerCode}</td>
                 <td className="ltr-nums">{t.quantityKg != null && `${t.quantityKg} كجم `}{t.quantityMeter != null && `${t.quantityMeter} م`}</td>
               </tr>

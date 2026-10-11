@@ -11,92 +11,12 @@ using Microsoft.EntityFrameworkCore;
 namespace DyeHouseERP.Application.PriceLists.Commands;
 
 // =====================================================================
-// Actual Cost List (spec section 34A) - stage + unit -> company cost
-// =====================================================================
-
-public record SetStageCostRateCommand(
-    Guid StageDefinitionId, UnitOfMeasure Unit, decimal CostPerUnit, string? Notes = null)
-    : IRequest<StageCostRateDto>;
-
-public class SetStageCostRateCommandValidator : AbstractValidator<SetStageCostRateCommand>
-{
-    public SetStageCostRateCommandValidator()
-    {
-        RuleFor(x => x.StageDefinitionId).NotEmpty();
-        RuleFor(x => x.Unit).IsInEnum();
-        RuleFor(x => x.CostPerUnit).GreaterThanOrEqualTo(0);
-    }
-}
-
-public class SetStageCostRateCommandHandler : IRequestHandler<SetStageCostRateCommand, StageCostRateDto>
-{
-    private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
-
-    public SetStageCostRateCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
-    {
-        _db = db;
-        _currentUser = currentUser;
-    }
-
-    public async Task<StageCostRateDto> Handle(SetStageCostRateCommand request, CancellationToken cancellationToken)
-    {
-        var stage = await _db.ProductionStageDefinitions.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == request.StageDefinitionId, cancellationToken)
-            ?? throw new NotFoundException("ProductionStageDefinition", request.StageDefinitionId);
-
-        // Upsert against the unique (stage, unit) index, so there is always exactly
-        // one rate for a stage+unit rather than two rows nobody can choose between.
-        var rate = await _db.StageCostRates
-            .FirstOrDefaultAsync(r => r.StageDefinitionId == request.StageDefinitionId && r.Unit == request.Unit, cancellationToken);
-
-        if (rate is null)
-        {
-            rate = new StageCostRate(request.StageDefinitionId, request.Unit, request.CostPerUnit, _currentUser.UserName, request.Notes);
-            _db.StageCostRates.Add(rate);
-        }
-        else
-        {
-            rate.Update(request.CostPerUnit, request.Notes, _currentUser.UserName);
-            rate.Activate(_currentUser.UserName);
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
-        return PriceListMapping.ToDto(rate, stage);
-    }
-}
-
-public record SetStageCostRateActiveCommand(Guid Id, bool IsActive) : IRequest<StageCostRateDto>;
-
-public class SetStageCostRateActiveCommandHandler : IRequestHandler<SetStageCostRateActiveCommand, StageCostRateDto>
-{
-    private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
-
-    public SetStageCostRateActiveCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
-    {
-        _db = db;
-        _currentUser = currentUser;
-    }
-
-    public async Task<StageCostRateDto> Handle(SetStageCostRateActiveCommand request, CancellationToken cancellationToken)
-    {
-        var rate = await _db.StageCostRates.FirstOrDefaultAsync(r => r.Id == request.Id, cancellationToken)
-            ?? throw new NotFoundException("StageCostRate", request.Id);
-
-        if (request.IsActive) rate.Activate(_currentUser.UserName);
-        else rate.Deactivate(_currentUser.UserName);
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        var stage = await _db.ProductionStageDefinitions.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == rate.StageDefinitionId, cancellationToken);
-        return PriceListMapping.ToDto(rate, stage);
-    }
-}
-
-// =====================================================================
-// Customer Service Price List (spec section 36) - stage + customer + unit
+// Customer service price list (spec sections 34 + 36) - stage + customer + unit.
+//
+// S8: the fixed per-stage "actual cost list" (StageCostRate) was removed, so there is
+// no cost-rate command here any more - factory actual cost is derived from posted
+// transactions. What remains is the customer-facing price list and the Job Order
+// price snapshot below.
 // =====================================================================
 
 /// <summary>

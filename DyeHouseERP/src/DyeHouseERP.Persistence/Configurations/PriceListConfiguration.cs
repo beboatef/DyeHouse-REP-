@@ -5,29 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace DyeHouseERP.Persistence.Configurations;
 
 /// <summary>
-/// Actual Cost List (spec section 34A). One active rate per stage+unit; the unique
-/// index is what makes "the" rate for a stage+unit unambiguous instead of leaving
-/// two competing rows for the resolver to pick from arbitrarily.
-/// </summary>
-public class StageCostRateConfiguration : IEntityTypeConfiguration<StageCostRate>
-{
-    public void Configure(EntityTypeBuilder<StageCostRate> builder)
-    {
-        builder.ToTable("StageCostRates");
-        builder.HasKey(r => r.Id);
-
-        builder.Property(r => r.Unit).HasConversion<string>().HasMaxLength(20);
-        builder.Property(r => r.CostPerUnit).HasPrecision(18, 4);
-        builder.Property(r => r.Notes).HasMaxLength(1000);
-        builder.Property(r => r.CreatedBy).HasMaxLength(100).IsRequired();
-        builder.Property(r => r.ModifiedBy).HasMaxLength(100);
-
-        builder.HasIndex(r => new { r.StageDefinitionId, r.Unit }).IsUnique();
-        builder.HasIndex(r => r.IsActive);
-    }
-}
-
-/// <summary>
 /// Customer Service Price List (spec section 36). The unique index covers
 /// (stage, customer, unit). SQL Server treats NULLs as equal in a unique index, so
 /// this also enforces "at most ONE general default per stage+unit" - which is

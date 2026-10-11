@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.StockAdjustments.DTOs;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Entities;
@@ -19,7 +20,21 @@ namespace DyeHouseERP.Application.StockAdjustments.Commands;
 public record CreateStockAdjustmentCommand(
     Guid CustomerId, Guid ItemId, Guid RawMessageId, AdjustmentType Type,
     decimal? QuantityKg, decimal? QuantityMeter, string Reason, string? Notes, string? ApprovedBy,
-    bool OverrideNegativeStock = false, string? OverrideReason = null) : IRequest<StockAdjustmentDto>;
+    bool OverrideNegativeStock = false, string? OverrideReason = null,
+    // Set only when the Approval Center dispatches this command after approving a request (spec section 24).
+    Guid? ApprovalRequestId = null) : IRequest<StockAdjustmentDto>, IApprovalBoundOperation
+{
+    // Spec section 24: the approval is bound to these exact facts - including
+    // the adjustment direction, so an approval for a decrease cannot authorise
+    // an increase (or vice versa).
+    public ApprovalRequestType ApprovalType => ApprovalRequestType.StockAdjustment;
+
+    public Guid ApprovalDocumentId => RawMessageId;
+
+    public string OperationSignature =>
+        $"StockAdjustment|msg={RawMessageId}|item={ItemId}|customer={CustomerId}|type={Type}" +
+        $"|kg={ApprovalBinding.Quantity(QuantityKg)}|m={ApprovalBinding.Quantity(QuantityMeter)}";
+}
 
 public class CreateStockAdjustmentCommandValidator : AbstractValidator<CreateStockAdjustmentCommand>
 {
@@ -68,6 +83,8 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
         {
         var (beforeKg, beforeMeter) = await _ledger.GetCustomerBalanceAsync(message.Id, request.ItemId, request.CustomerId, message.WarehouseId, cancellationToken);
 
+        var approvedBy = request.ApprovedBy;
+
         if (request.Type == AdjustmentType.Decrease)
         {
             var kgShort = request.QuantityKg.HasValue && request.QuantityKg.Value > beforeKg;
@@ -83,9 +100,22 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
                 if (!_currentUser.HasPermission(Permissions.InventoryAllowNegativeStock) || !_currentUser.HasPermission(Permissions.InventoryApproveNegativeStock))
                     throw new UnauthorizedAccessException($"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 
+                // Spec section 24: the override is authorised by a stored,
+                // SINGLE-USE approval request raised by a DIFFERENT user,
+                // matched against this adjustment's exact facts. The old path
+                // recorded the caller as both requester and approver - the
+                // self-approval the separation of duties forbids.
+                var decision = await ApprovalRequestGuard.ConsumeAsync(
+                    _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+
                 _db.NegativeStockOverrides.Add(new NegativeStockOverride(
                     message.Id, request.ItemId, request.CustomerId, requested, available,
-                    request.OverrideReason!, _currentUser.UserName, _currentUser.UserName));
+                    request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
+
+                // The adjustment stores who authorised it: on the override path
+                // that is the real approver account from the approval, never the
+                // free-text name the client may have sent in the body.
+                approvedBy = decision.ApprovedBy;
             }
         }
 
@@ -94,7 +124,7 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
         var adjustment = new StockAdjustment(
             adjustmentNumber, _clock.UtcNow, request.CustomerId, request.ItemId, message.Id, message.WarehouseId,
             request.Type, beforeKg, beforeMeter, request.QuantityKg, request.QuantityMeter,
-            request.Reason, _currentUser.UserName, request.Notes, request.ApprovedBy);
+            request.Reason, _currentUser.UserName, request.Notes, approvedBy);
 
         _db.StockAdjustments.Add(adjustment);
 

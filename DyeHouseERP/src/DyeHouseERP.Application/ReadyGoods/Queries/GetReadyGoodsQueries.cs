@@ -22,15 +22,43 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
         var customers = await _db.Customers.AsNoTracking().Where(c => transfers.Select(t => t.CustomerId).Contains(c.Id)).ToDictionaryAsync(c => c.Id, cancellationToken);
         var items = await _db.Items.AsNoTracking().Where(i => transfers.Select(t => t.ItemId).Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
 
-        return transfers.Select(t => new ReadyGoodsTransferDto
+        // The register reads each transfer's stage back with its IDENTITY (sequence and
+        // name), not a bare id (spec section 23). A historical row with no link simply
+        // renders as "no stage" rather than being dropped.
+        var stageIds = transfers.Where(t => t.StageExecutionId.HasValue)
+            .Select(t => t.StageExecutionId!.Value).Distinct().ToList();
+        var stages = stageIds.Count == 0
+            ? new Dictionary<Guid, ProductionOrderStageExecution>()
+            : await _db.ProductionOrderStageExecutions.AsNoTracking()
+                .Where(s => stageIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, cancellationToken);
+
+        var definitionIds = stages.Values.Select(s => s.StageDefinitionId).Distinct().ToList();
+        var stageNames = definitionIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _db.ProductionStageDefinitions.AsNoTracking()
+                .Where(d => definitionIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name, cancellationToken);
+
+        ProductionOrderStageExecution? StageOf(Guid? id) =>
+            id.HasValue && stages.TryGetValue(id.Value, out var s) ? s : null;
+
+        return transfers.Select(t =>
         {
-            Id = t.Id, TransferNumber = t.TransferNumber, TransferDate = t.TransferDate,
-            ProductionOrderId = t.ProductionOrderId, ProductionOrderNumber = orders.GetValueOrDefault(t.ProductionOrderId)?.OrderNumber ?? "",
-            CustomerId = t.CustomerId, CustomerCode = customers.GetValueOrDefault(t.CustomerId)?.Code ?? "",
-            ItemId = t.ItemId, ItemCode = items.GetValueOrDefault(t.ItemId)?.Code ?? "",
-            Color = orders.GetValueOrDefault(t.ProductionOrderId)?.Color,
-            QuantityKg = t.QuantityKg, QuantityMeter = t.QuantityMeter, PieceCount = t.PieceCount,
-            Status = t.Status.ToString()
+            var stage = StageOf(t.StageExecutionId);
+            return new ReadyGoodsTransferDto
+            {
+                Id = t.Id, TransferNumber = t.TransferNumber, TransferDate = t.TransferDate,
+                ProductionOrderId = t.ProductionOrderId, ProductionOrderNumber = orders.GetValueOrDefault(t.ProductionOrderId)?.OrderNumber ?? "",
+                CustomerId = t.CustomerId, CustomerCode = customers.GetValueOrDefault(t.CustomerId)?.Code ?? "",
+                ItemId = t.ItemId, ItemCode = items.GetValueOrDefault(t.ItemId)?.Code ?? "",
+                Color = orders.GetValueOrDefault(t.ProductionOrderId)?.Color,
+                QuantityKg = t.QuantityKg, QuantityMeter = t.QuantityMeter, PieceCount = t.PieceCount,
+                StageExecutionId = t.StageExecutionId,
+                StageSequence = stage?.Sequence,
+                StageName = stage is null ? null : stageNames.GetValueOrDefault(stage.StageDefinitionId),
+                StageOutputKg = stage?.OutputKg,
+                StageOutputMeter = stage?.OutputMeter,
+                Status = t.Status.ToString()
+            };
         }).ToList();
     }
 }

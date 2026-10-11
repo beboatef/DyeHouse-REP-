@@ -2,13 +2,30 @@ using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.ProductionOrders.Commands;
 
-/// <summary>Marks a Production Order Completed once every stage is done (spec section 12). If this order exists to reprocess a Separate, the Separate is marked Reprocessed too (spec section 23).</summary>
-public record CompleteProductionOrderCommand(Guid ProductionOrderId) : IRequest<ProductionOrderDto>;
+/// <summary>
+/// Marks a Production Order Completed once every stage is done (spec sections 12 and 18).
+/// The reason is mandatory and recorded on the order: a close with no output has to be
+/// explainable, and one with output still records who closed it and why. If this order
+/// exists to reprocess a Separate, the Separate is marked Reprocessed too (spec section 23).
+/// </summary>
+public record CompleteProductionOrderCommand(Guid ProductionOrderId, string Reason) : IRequest<ProductionOrderDto>;
+
+public class CompleteProductionOrderCommandValidator : AbstractValidator<CompleteProductionOrderCommand>
+{
+    public CompleteProductionOrderCommandValidator()
+    {
+        RuleFor(x => x.ProductionOrderId).NotEmpty();
+        RuleFor(x => x.Reason).NotEmpty()
+            .WithMessage("Completing a production order requires a reason - it is recorded with the completion.")
+            .MaximumLength(1000);
+    }
+}
 
 public class CompleteProductionOrderCommandHandler : IRequestHandler<CompleteProductionOrderCommand, ProductionOrderDto>
 {
@@ -29,7 +46,7 @@ public class CompleteProductionOrderCommandHandler : IRequestHandler<CompletePro
         if (stages.Any(s => s.Status is Domain.Enums.StageExecutionStatus.Pending or Domain.Enums.StageExecutionStatus.InProgress))
             throw new Domain.Exceptions.DomainException("Cannot complete a production order while stages are still pending or in progress.");
 
-        order.Complete();
+        order.CompleteWithReason(request.Reason);
 
         if (order.ReprocessingOfProductionOrderId.HasValue)
         {

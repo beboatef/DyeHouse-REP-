@@ -139,11 +139,14 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             var transferNumber = await _numberGenerator.NextAsync(
                 DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
 
+            // Spec section 23: the automatic transfer carries the same stage link a manual
+            // one does - the quantity it posts IS this stage's recorded output.
             _db.ReadyGoodsTransfers.Add(new ReadyGoodsTransfer(
                 transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId,
                 readyWarehouse.Id, request.OutputKg, request.OutputMeter, _currentUser.UserName,
                 pieceCount: null,
-                notes: $"Stage transfer to ready goods ({nextStage.Name})"));
+                notes: $"Stage transfer to ready goods ({nextStage.Name})",
+                stageExecutionId: stage.Id));
 
             // IN into the ready dimension (RawMessageId = null, ProductionOrderId
             // set) - the same ledger shape ReadyGoods balances are read from.

@@ -78,6 +78,13 @@ public class ProductionOrder : AuditableEntity
     public ProductionOrderStatus Status { get; private set; } = ProductionOrderStatus.Draft;
 
     /// <summary>
+    /// Why an order was completed with no output (spec section 18). A completion that
+    /// produced nothing must be explainable, so the reason travels with the order
+    /// rather than living only in the audit log. Null for an ordinary completion.
+    /// </summary>
+    public string? ZeroOutputReason { get; private set; }
+
+    /// <summary>
     /// Set when this order exists to reprocess Separates from another order
     /// (spec section 23). Never null for a reprocessing order; always null
     /// for an original order. The original order's history is never
@@ -310,11 +317,31 @@ public class ProductionOrder : AuditableEntity
 
     public void Complete()
     {
+        // A cancelled order is dead and can never come back (spec section 12).
+        if (Status == ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+
         if (_stageExecutions.Any(s => s.Status is StageExecutionStatus.Pending or StageExecutionStatus.InProgress))
             throw new DomainException("Cannot complete a production order while stages are still pending or in progress.");
 
         Status = ProductionOrderStatus.Completed;
         Lock();
+    }
+
+    /// <summary>
+    /// Completes the order and records WHY (spec section 18). The reason is mandatory -
+    /// a close with no output in particular has to be explainable - and it is kept on the
+    /// order itself, not only in the audit log, so it is visible wherever the order is read.
+    /// </summary>
+    public void CompleteWithReason(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("Completing a production order requires a reason.");
+        if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+
+        ZeroOutputReason = reason.Trim();
+        Complete();
     }
 
     public void Cancel(string reason, string modifiedBy)

@@ -135,14 +135,15 @@ public class ProductionOrdersController : ControllerBase
     [HttpPost("{id:guid}/complete")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionComplete)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ProductionOrderDto>> Complete(Guid id)
-        => Ok(await _mediator.Send(new CompleteProductionOrderCommand(id)));
+    public async Task<ActionResult<ProductionOrderDto>> Complete(Guid id, [FromBody] CompleteProductionOrderRequest request)
+        => Ok(await _mediator.Send(new CompleteProductionOrderCommand(id, request.Reason)));
 
     /// <summary>
     /// Pauses the order (موقوف مؤقتًا) and releases the user's chosen quantity of
-    /// UNUSED raw material back to the customer's own raw stock (spec section 19).
-    /// The release is bounded by allocated-minus-consumed and posted as new
-    /// compensating IN movements; nothing already posted is edited or deleted.
+    /// unused raw material back to the customer's own raw stock (spec section 19).
+    /// The release is read from the ledger and bounded by what the NAMED lot still
+    /// holds for this order; it is posted as a new compensating IN movement, while
+    /// nothing already posted is edited or deleted.
     /// </summary>
     /// <summary>
     /// Moves the Job Order to the next stage the USER selects (spec sections 13-17).
@@ -176,7 +177,8 @@ public class ProductionOrdersController : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductionOrderDto>> Pause(Guid id, [FromBody] PauseProductionOrderRequest request)
-        => Ok(await _mediator.Send(new PauseProductionOrderCommand(id, request.ReleaseKg, request.ReleaseMeter, request.Reason)));
+        => Ok(await _mediator.Send(new PauseProductionOrderCommand(
+            id, request.Reason, request.RawMessageId, request.ItemId, request.ReleaseKg, request.ReleaseMeter)));
 
     /// <summary>
     /// Resumes a paused order with a NEW raw material issue (spec section 19). The
@@ -199,7 +201,11 @@ public record TransferStageRequest(
 
 public record UpdateStageOutputRequest(decimal? OutputKg, decimal? OutputMeter, string? Reason);
 
-public record PauseProductionOrderRequest(decimal? ReleaseKg, decimal? ReleaseMeter, string Reason);
+public record PauseProductionOrderRequest(
+    string Reason, Guid? RawMessageId = null, Guid? ItemId = null,
+    decimal? ReleaseKg = null, decimal? ReleaseMeter = null);
+
+public record CompleteProductionOrderRequest(string Reason);
 
 public record ResumeProductionOrderRequest(
     Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,

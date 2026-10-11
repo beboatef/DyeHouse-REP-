@@ -310,20 +310,10 @@ export const CustomerReturnsApi = {
 
 // ---------------- Price lists (spec sections 34 + 36) ----------------
 //
-// TWO separate lists, deliberately: what a stage costs US (actual cost list) and
-// what the CUSTOMER is charged (service price list). Conflating them would make
-// real profitability impossible, which is the whole point of section 34.
-
-export interface StageCostRate {
-  id: string;
-  stageDefinitionId: string;
-  stageCode: string;
-  stageName: string;
-  unit: UnitOfMeasure;
-  costPerUnit: number;
-  isActive: boolean;
-  notes: string | null;
-}
+// One commercial list: what the CUSTOMER is charged per stage/operation + unit, plus
+// the Job Order's own snapshotted price. S8: the fixed per-stage "actual cost list"
+// (StageCostRate) was removed - factory actual cost is derived from posted
+// transactions and is not a price list, so revenue and cost can never be conflated.
 
 export interface CustomerServicePrice {
   id: string;
@@ -383,13 +373,6 @@ export interface ProductionOrderProfitability {
 }
 
 export const PriceListsApi = {
-  costRates: (params?: { stageDefinitionId?: string; activeOnly?: boolean }) =>
-    api.get<StageCostRate[]>("/price-lists/cost-rates", { params }).then((r) => r.data),
-  setCostRate: (body: { stageDefinitionId: string; unit: UnitOfMeasure; costPerUnit: number; notes?: string }) =>
-    api.post<StageCostRate>("/price-lists/cost-rates", body).then((r) => r.data),
-  setCostRateActive: (id: string, isActive: boolean) =>
-    api.post<StageCostRate>(`/price-lists/cost-rates/${id}/active`, { isActive }).then((r) => r.data),
-
   servicePrices: (params?: {
     customerId?: string;
     activeOnly?: boolean;
@@ -577,7 +560,7 @@ export const ProductionOrdersApi = {
   }) => api.post<ProductionOrder>("/production-orders", body).then((r) => r.data),
   allocateRaw: (
     id: string,
-    body: { rawMessageId: string; itemId: string; quantityKg?: number; quantityMeter?: number; overrideNegativeStock?: boolean; overrideReason?: string }
+    body: { rawMessageId: string; itemId: string; quantityKg?: number; quantityMeter?: number }
   ) => api.post<ProductionOrder>(`/production-orders/${id}/raw-allocations`, body).then((r) => r.data),
   startStage: (stageExecutionId: string) =>
     api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/start`).then((r) => r.data),
@@ -610,17 +593,25 @@ export const ProductionOrdersApi = {
     stageExecutionId: string,
     body: { outputKg?: number; outputMeter?: number; reason?: string }
   ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/output`, body).then((r) => r.data),
-  pause: (id: string, body: { releaseKg?: number; releaseMeter?: number; reason: string }) =>
-    api.post<ProductionOrder>(`/production-orders/${id}/pause`, body).then((r) => r.data),
+  /**
+   * Pauses the order and returns the chosen quantity of raw material to the NAMED lot.
+   * The release is read from the ledger, so it can never exceed what that message still
+   * holds for this order; with several source lots the backend refuses to pick one.
+   */
+  pause: (id: string, body: {
+    releaseKg?: number; releaseMeter?: number; reason: string;
+    rawMessageId?: string | null; itemId?: string | null;
+  }) => api.post<ProductionOrder>(`/production-orders/${id}/pause`, body).then((r) => r.data),
   resume: (
     id: string,
     body: {
       rawMessageId: string; itemId: string;
       quantityKg?: number; quantityMeter?: number;
-      overrideNegativeStock?: boolean; overrideReason?: string;
     }
   ) => api.post<ProductionOrder>(`/production-orders/${id}/resume`, body).then((r) => r.data),
-  complete: (id: string) => api.post<ProductionOrder>(`/production-orders/${id}/complete`).then((r) => r.data)
+  /** Completing requires a reason: it is recorded on the order (a zero-output close must be explainable). */
+  complete: (id: string, reason: string) =>
+    api.post<ProductionOrder>(`/production-orders/${id}/complete`, { reason }).then((r) => r.data)
 };
 
 // ---------------- Separates & Reprocessing ----------------
@@ -700,7 +691,6 @@ export const RawExternalReleasesApi = {
     customerId: string; itemId: string; rawMessageId: string;
     quantityKg?: number; quantityMeter?: number; reason: RawReleaseReason;
     externalParty?: string; notes?: string;
-    overrideNegativeStock?: boolean; overrideReason?: string;
     productionOrderId?: string; externalProcessingStage?: string;
     externalProcessingCost?: number; expectedReturnDate?: string;
   }) => api.post<RawExternalRelease>("/raw-external-releases", body).then((r) => r.data),
@@ -747,7 +737,6 @@ export const CustomerTransfersApi = {
   create: (body: {
     fromCustomerId: string; toCustomerId: string; rawMessageId: string; itemId: string;
     quantityKg?: number; quantityMeter?: number; reason: string; notes?: string;
-    overrideNegativeStock?: boolean; overrideReason?: string;
   }) => api.post<CustomerTransfer>("/customer-transfers", body).then((r) => r.data)
 };
 
@@ -787,7 +776,6 @@ export const StockAdjustmentsApi = {
   create: (body: {
     customerId: string; itemId: string; rawMessageId: string; type: AdjustmentType;
     quantityKg?: number; quantityMeter?: number; reason: string; notes?: string; approvedBy?: string;
-    overrideNegativeStock?: boolean; overrideReason?: string;
   }) => api.post<StockAdjustment>("/stock-adjustments", body).then((r) => r.data)
 };
 
@@ -865,6 +853,9 @@ export interface ReadyGoodsTransfer {
   productionOrderId: string; productionOrderNumber: string;
   customerId: string; customerCode: string; itemId: string; itemCode: string; color: string | null;
   quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null;
+  /** Traceability (spec section 23): the stage whose output this transfer moved. */
+  stageExecutionId: string | null; stageSequence: number | null; stageName: string | null;
+  stageOutputKg: number | null; stageOutputMeter: number | null;
 }
 
 export interface ReadyGoodsBalance {
@@ -877,8 +868,14 @@ export interface ReadyGoodsBalance {
 export const ReadyGoodsApi = {
   listTransfers: () => api.get<ReadyGoodsTransfer[]>("/ready-goods/transfers").then((r) => r.data),
   balance: (params?: { customerId?: string }) => api.get<ReadyGoodsBalance[]>("/ready-goods/balance", { params }).then((r) => r.data),
-  createTransfer: (body: { productionOrderId: string; warehouseId: string; quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string }) =>
-    api.post<ReadyGoodsTransfer>("/ready-goods/transfers", body).then((r) => r.data)
+  /**
+   * Stage execution id is REQUIRED: the transfer must name the stage that produced the
+   * quantity, and the transfers linked to one stage can never together exceed its output.
+   */
+  createTransfer: (body: {
+    productionOrderId: string; warehouseId: string; stageExecutionId: string;
+    quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string;
+  }) => api.post<ReadyGoodsTransfer>("/ready-goods/transfers", body).then((r) => r.data)
 };
 
 // ---------------- Deliveries ----------------
@@ -1087,8 +1084,45 @@ export interface ApprovalCenter {
   totalPending: number;
 }
 
+/**
+ * One separation-of-duties request (spec §24): who asked for what, why, and -
+ * once decided - who decided it from their own account and why they refused.
+ * The approver identity is never sent by this client; the server takes it from
+ * the session.
+ */
+export interface ApprovalRequestRow {
+  id: string;
+  type: string;
+  documentId: string;
+  documentNumber: string;
+  reason: string;
+  requestedBy: string;
+  requestedAtUtc: string;
+  status: string;
+  decidedBy: string | null;
+  decidedAtUtc: string | null;
+  decisionReason: string | null;
+  requiredPermission: string;
+  linkPath: string;
+}
+
+/** The module command a request authorises, exactly as the module would post it. */
+export interface SubmitApprovalRequestBody {
+  type: string;
+  reason: string;
+  payloadJson: string;
+}
+
 export const ApprovalsApi = {
-  get: (recentDays = 30) => api.get<ApprovalCenter>("/approvals", { params: { recentDays } }).then((r) => r.data)
+  get: (recentDays = 30) => api.get<ApprovalCenter>("/approvals", { params: { recentDays } }).then((r) => r.data),
+  requests: (params?: { status?: string; type?: string }) =>
+    api.get<ApprovalRequestRow[]>("/approvals/requests", { params }).then((r) => r.data),
+  submit: (body: SubmitApprovalRequestBody) =>
+    api.post<ApprovalRequestRow>("/approvals", body).then((r) => r.data),
+  approve: (id: string) =>
+    api.post<ApprovalRequestRow>(`/approvals/${id}/approve`).then((r) => r.data),
+  reject: (id: string, reason: string) =>
+    api.post<ApprovalRequestRow>(`/approvals/${id}/reject`, { reason }).then((r) => r.data)
 };
 
 // ------------------------------------------------------------- attachments (§47)
@@ -1635,6 +1669,10 @@ export interface FormationBasin {
   basinNumber: number;
   name: string | null;
   plannedQuantity: number;
+  /** The ACTUAL weighed weight, once the basin has been weighed (spec sections 8, 10). */
+  actualQuantity: number | null;
+  /** The figure production uses: the actual weight once recorded, otherwise the planned one. */
+  effectiveQuantity: number;
   producedQuantity: number;
   remainingQuantity: number;
   unit: UnitOfMeasure;
@@ -1813,7 +1851,12 @@ export const FormationRequestsApi = {
   convertToJobOrder: (id: string, body: {
     groupId?: string | null; basinId?: string | null; jobOrderType: JobOrderType; priority?: ProductionPriority;
     orderDate?: string; color?: string | null; notes?: string | null; customerReference?: string | null;
+    /** Required when a single basin is converted: its ACTUAL weighed weight (spec sections 8, 10). */
+    actualBasinQuantity?: number | null;
   }) => api.post<FormationRequest>(`/formation-requests/${id}/convert-to-job-order`, body).then((r) => r.data),
+  /** Weighs one basin before it is converted: the Job Order quantity is taken from this figure. */
+  recordBasinActualQuantity: (id: string, basinId: string, body: { groupId: string; actualQuantity: number }) =>
+    api.post<FormationRequest>(`/formation-requests/${id}/basins/${basinId}/actual-quantity`, body).then((r) => r.data),
   exportExcel: (params?: { customerId?: string; status?: FormationRequestStatus }) => {
     const query = new URLSearchParams();
     if (params?.customerId) query.set("customerId", params.customerId);
@@ -2266,6 +2309,13 @@ export interface Employee {
   nationalId: string | null;
   bankAccountNumber: string | null;
   notes: string | null;
+  /** HR classification (spec sections 28-36) - set through the employee profile endpoint. */
+  hrSectionId: string | null;
+  jobPositionId: string | null;
+  costCenterId: string | null;
+  hrShiftId: string | null;
+  isTaxExempt: boolean;
+  isInsuranceExempt: boolean;
 }
 
 export interface PayrollRunLine {
@@ -2345,5 +2395,431 @@ export const PayrollApi = {
   postRun: (id: string) => api.post<PayrollRun>(`/payroll/runs/${id}/post`).then((r) => r.data),
   cancelRun: (id: string, reason: string) =>
     api.post<PayrollRun>(`/payroll/runs/${id}/cancel`, { reason }).then((r) => r.data)
+};
+
+// ============================================================== HR & payroll rules
+// Spec sections 28-42. Everything the payroll calculation consumes is master data
+// maintained on the HR screen: sections, jobs, cost centers, HR attendance shifts
+// (deliberately separate from the production execution shifts), the attendance
+// policy, leave types, pay components, statutory contribution rules and the
+// accounting mappings. Nothing factory-specific is hard-coded server-side.
+
+export type AttendanceStatus = "Present" | "Late" | "Absent" | "OnLeave" | "RestDay" | "Holiday";
+export type AttendanceSource = "Manual";
+export type LeaveStatus = "Pending" | "Approved" | "Rejected" | "Cancelled";
+export type OvertimeStatus = "Pending" | "Approved" | "Rejected";
+export type OvertimeCategory = "Normal" | "Weekend" | "Holiday";
+export type AdvanceStatus = "Active" | "Closed" | "Cancelled";
+export type PayComponentKind = "Allowance" | "Incentive" | "Bonus" | "Commission" | "Deduction";
+export type PayComponentCalculation =
+  | "FixedAmount" | "PercentOfBasic" | "PerAttendanceDay" | "PerOvertimeHour" | "PercentOfGross";
+export type ContributionKind = "Tax" | "Insurance";
+export type ContributionBase = "BasicSalary" | "GrossPay";
+export type PayrollAccountKind =
+  | "BasicSalary" | "Allowance" | "Deduction" | "Tax" | "Insurance" | "Advance" | "NetPay";
+
+export interface HrSection {
+  id: string;
+  departmentId: string;
+  departmentName: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface JobPosition {
+  id: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  defaultBasicSalary: number | null;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface HrShift {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  /** Minutes from midnight, kept numeric so the UI renders any locale's clock. */
+  startMinutes: number;
+  endMinutes: number;
+  breakMinutes: number;
+  graceMinutes: number;
+  workingDays: string;
+  isNightShift: boolean;
+  isActive: boolean;
+  plannedMinutes: number;
+}
+
+export interface AttendanceRule {
+  id: string;
+  name: string;
+  standardDailyHours: number;
+  standardWorkingDaysPerMonth: number;
+  graceMinutes: number;
+  latePenaltyPerMinute: number;
+  earlyLeavePenaltyPerMinute: number;
+  absenceDayDeductionFactor: number;
+  overtimeGraceMinutes: number;
+  overtimeNormalMultiplier: number;
+  overtimeWeekendMultiplier: number;
+  overtimeHolidayMultiplier: number;
+  weekendDays: string;
+  paidLeaveCountsAsAttendance: boolean;
+  overtimeRequiresApproval: boolean;
+  isActive: boolean;
+}
+
+export interface LeaveType {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  isPaid: boolean;
+  annualEntitlementDays: number;
+  requiresApproval: boolean;
+  isActive: boolean;
+}
+
+export interface PayComponent {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  kind: PayComponentKind;
+  calculation: PayComponentCalculation;
+  defaultAmount: number;
+  defaultPercent: number;
+  isTaxable: boolean;
+  isInsured: boolean;
+  sortOrder: number;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface EmployeePayComponent {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  payComponentId: string;
+  payComponentCode: string;
+  payComponentName: string;
+  amount: number | null;
+  percent: number | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+}
+
+export interface ContributionRule {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  kind: ContributionKind;
+  base: ContributionBase;
+  employeeRatePercent: number;
+  employerRatePercent: number;
+  minBase: number | null;
+  maxBase: number | null;
+  isActive: boolean;
+}
+
+export interface PayrollAccountMapping {
+  id: string;
+  kind: PayrollAccountKind;
+  accountCode: string;
+  accountName: string;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface AttendanceEvent {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  workDate: string;
+  hrShiftId: string | null;
+  shiftName: string | null;
+  checkInMinutes: number | null;
+  checkOutMinutes: number | null;
+  workedMinutes: number;
+  lateMinutes: number;
+  earlyLeaveMinutes: number;
+  overtimeMinutes: number;
+  status: AttendanceStatus;
+  source: AttendanceSource;
+  leaveRequestId: string | null;
+  absenceDays: number;
+  notes: string | null;
+}
+
+export interface AttendanceSummary {
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  presentDays: number;
+  lateDays: number;
+  absentDays: number;
+  leaveDays: number;
+  lateMinutes: number;
+  overtimeMinutes: number;
+  workedHours: number;
+}
+
+export interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  leaveTypeId: string;
+  leaveTypeName: string;
+  isPaid: boolean;
+  fromDate: string;
+  toDate: string;
+  days: number;
+  reason: string;
+  status: LeaveStatus;
+  decidedBy: string | null;
+  decidedAtUtc: string | null;
+  decisionReason: string | null;
+  attendanceApplied: boolean;
+  createdBy: string;
+  createdAtUtc: string;
+}
+
+export interface OvertimeEntry {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  workDate: string;
+  hours: number;
+  category: OvertimeCategory;
+  reason: string;
+  status: OvertimeStatus;
+  approvedMultiplier: number;
+  decidedBy: string | null;
+  decidedAtUtc: string | null;
+  decisionReason: string | null;
+  payrollRunId: string | null;
+}
+
+export interface EmployeeAdvance {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  advanceDate: string;
+  amount: number;
+  instalmentCount: number;
+  instalmentAmount: number;
+  recoveredAmount: number;
+  remainingAmount: number;
+  reason: string;
+  status: AdvanceStatus;
+}
+
+/** Labor cost grouped by department / section / cost center (spec section 40). */
+export interface LaborCostRow {
+  groupKey: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  costCenterId: string | null;
+  costCenterName: string | null;
+  employeeCount: number;
+  basicSalary: number;
+  allowances: number;
+  overtime: number;
+  deductions: number;
+  tax: number;
+  insurance: number;
+  employerInsurance: number;
+  advances: number;
+  gross: number;
+  net: number;
+  /** Gross + employer contributions: the true cost to the factory. */
+  employerCost: number;
+}
+
+export interface LaborCostReport {
+  periodYear: number;
+  periodMonth: number;
+  rows: LaborCostRow[];
+  totalBasicSalary: number;
+  totalGross: number;
+  totalNet: number;
+  totalEmployerCost: number;
+}
+
+export const HrApi = {
+  // ----- master data
+  sections: (params?: { departmentId?: string; activeOnly?: boolean }) =>
+    api.get<HrSection[]>("/hr/sections", { params }).then((r) => r.data),
+  createSection: (body: { departmentId: string; code: string; nameAr?: string; nameEn?: string; notes?: string }) =>
+    api.post<HrSection>("/hr/sections", body).then((r) => r.data),
+  updateSection: (id: string, body: Partial<HrSection>) =>
+    api.put<HrSection>(`/hr/sections/${id}`, { id, ...body }).then((r) => r.data),
+
+  jobs: (params?: { departmentId?: string; activeOnly?: boolean }) =>
+    api.get<JobPosition[]>("/hr/jobs", { params }).then((r) => r.data),
+  createJob: (body: {
+    code: string; nameAr?: string; nameEn?: string; departmentId?: string;
+    defaultBasicSalary?: number; notes?: string;
+  }) => api.post<JobPosition>("/hr/jobs", body).then((r) => r.data),
+  updateJob: (id: string, body: Partial<JobPosition>) =>
+    api.put<JobPosition>(`/hr/jobs/${id}`, { id, ...body }).then((r) => r.data),
+
+  costCenters: (params?: { activeOnly?: boolean }) =>
+    api.get<CostCenter[]>("/hr/cost-centers", { params }).then((r) => r.data),
+  createCostCenter: (body: { code: string; nameAr?: string; nameEn?: string; notes?: string }) =>
+    api.post<CostCenter>("/hr/cost-centers", body).then((r) => r.data),
+  updateCostCenter: (id: string, body: Partial<CostCenter>) =>
+    api.put<CostCenter>(`/hr/cost-centers/${id}`, { id, ...body }).then((r) => r.data),
+
+  // ----- HR attendance shifts (deliberately separate from production shifts)
+  shifts: (params?: { activeOnly?: boolean }) =>
+    api.get<HrShift[]>("/hr/shifts", { params }).then((r) => r.data),
+  createShift: (body: {
+    code: string; nameAr?: string; nameEn?: string;
+    startMinutes: number; endMinutes: number; breakMinutes: number; graceMinutes: number;
+    workingDays: string; isNightShift?: boolean; notes?: string;
+  }) => api.post<HrShift>("/hr/shifts", body).then((r) => r.data),
+  updateShift: (id: string, body: Partial<HrShift>) =>
+    api.put<HrShift>(`/hr/shifts/${id}`, { id, ...body }).then((r) => r.data),
+
+  // ----- attendance policy
+  attendanceRules: (params?: { activeOnly?: boolean }) =>
+    api.get<AttendanceRule[]>("/hr/attendance-rules", { params }).then((r) => r.data),
+  createAttendanceRule: (body: Partial<AttendanceRule> & { name: string; activate?: boolean }) =>
+    api.post<AttendanceRule>("/hr/attendance-rules", body).then((r) => r.data),
+  updateAttendanceRule: (id: string, body: Partial<AttendanceRule>) =>
+    api.put<AttendanceRule>(`/hr/attendance-rules/${id}`, { id, ...body }).then((r) => r.data),
+
+  // ----- leave types
+  leaveTypes: (params?: { activeOnly?: boolean }) =>
+    api.get<LeaveType[]>("/hr/leave-types", { params }).then((r) => r.data),
+  createLeaveType: (body: {
+    code: string; nameAr?: string; nameEn?: string;
+    isPaid: boolean; annualEntitlementDays: number; requiresApproval?: boolean; notes?: string;
+  }) => api.post<LeaveType>("/hr/leave-types", body).then((r) => r.data),
+  updateLeaveType: (id: string, body: Partial<LeaveType>) =>
+    api.put<LeaveType>(`/hr/leave-types/${id}`, { id, ...body }).then((r) => r.data),
+
+  // ----- pay components and their per-employee assignments
+  payComponents: (params?: { activeOnly?: boolean }) =>
+    api.get<PayComponent[]>("/hr/pay-components", { params }).then((r) => r.data),
+  createPayComponent: (
+    body: Partial<PayComponent> & { code: string; kind: PayComponentKind; calculation: PayComponentCalculation }
+  ) => api.post<PayComponent>("/hr/pay-components", body).then((r) => r.data),
+  updatePayComponent: (id: string, body: Partial<PayComponent>) =>
+    api.put<PayComponent>(`/hr/pay-components/${id}`, { id, ...body }).then((r) => r.data),
+
+  employeePayComponents: (params?: { employeeId?: string; activeOnly?: boolean }) =>
+    api.get<EmployeePayComponent[]>("/hr/employee-pay-components", { params }).then((r) => r.data),
+  assignEmployeePayComponent: (body: {
+    employeeId: string; payComponentId: string; effectiveFrom: string;
+    amount?: number; percent?: number; effectiveTo?: string;
+  }) => api.post<EmployeePayComponent>("/hr/employee-pay-components", body).then((r) => r.data),
+  updateEmployeePayComponent: (id: string, body: Partial<EmployeePayComponent>) =>
+    api.put<EmployeePayComponent>(`/hr/employee-pay-components/${id}`, { id, ...body }).then((r) => r.data),
+  removeEmployeePayComponent: (id: string) =>
+    api.delete(`/hr/employee-pay-components/${id}`).then((r) => r.data),
+
+  // ----- statutory contributions and their accounting destinations
+  contributionRules: (params?: { activeOnly?: boolean }) =>
+    api.get<ContributionRule[]>("/hr/contribution-rules", { params }).then((r) => r.data),
+  createContributionRule: (body: {
+    code: string; nameAr?: string; nameEn?: string; kind: ContributionKind; base: ContributionBase;
+    employeeRatePercent: number; employerRatePercent: number; minBase?: number; maxBase?: number;
+  }) => api.post<ContributionRule>("/hr/contribution-rules", body).then((r) => r.data),
+  updateContributionRule: (id: string, body: Partial<ContributionRule>) =>
+    api.put<ContributionRule>(`/hr/contribution-rules/${id}`, { id, ...body }).then((r) => r.data),
+
+  accountMappings: () => api.get<PayrollAccountMapping[]>("/hr/account-mappings").then((r) => r.data),
+  upsertAccountMapping: (body: {
+    kind: PayrollAccountKind; accountCode: string; accountName: string; notes?: string;
+  }) => api.post<PayrollAccountMapping>("/hr/account-mappings", body).then((r) => r.data),
+
+  // ----- employee classification
+  setEmployeeProfile: (id: string, body: {
+    hrSectionId: string | null; jobPositionId: string | null; costCenterId: string | null; hrShiftId: string | null;
+    isTaxExempt?: boolean | null; isInsuranceExempt?: boolean | null;
+  }) => api.put<Employee>(`/hr/employees/${id}/profile`, body).then((r) => r.data),
+
+  // ----- attendance
+  attendance: (params?: { employeeId?: string; fromDate?: string; toDate?: string }) =>
+    api.get<AttendanceEvent[]>("/hr/attendance", { params }).then((r) => r.data),
+  attendanceSummary: (params?: { employeeId?: string; fromDate?: string; toDate?: string }) =>
+    api.get<AttendanceSummary[]>("/hr/attendance/summary", { params }).then((r) => r.data),
+  recordAttendance: (body: {
+    employeeId: string; workDate: string; checkInMinutes: number; checkOutMinutes: number; notes?: string;
+  }) => api.post<AttendanceEvent>("/hr/attendance", body).then((r) => r.data),
+  recordNonWorking: (body: {
+    employeeId: string; workDate: string; status: AttendanceStatus; notes?: string;
+  }) => api.post<AttendanceEvent>("/hr/attendance/non-working", body).then((r) => r.data),
+  generateAttendance: (body: { periodYear: number; periodMonth: number; departmentId?: string }) =>
+    api.post<{ created: number }>("/hr/attendance/generate", body).then((r) => r.data),
+  removeAttendance: (id: string) => api.delete(`/hr/attendance/${id}`).then((r) => r.data),
+
+  // ----- leave / overtime: requested by one user, decided by a different one
+  leaveRequests: (params?: { employeeId?: string; status?: LeaveStatus; fromDate?: string; toDate?: string }) =>
+    api.get<LeaveRequest[]>("/hr/leave-requests", { params }).then((r) => r.data),
+  submitLeave: (body: {
+    employeeId: string; leaveTypeId: string; fromDate: string; toDate: string; days: number; reason: string;
+  }) => api.post<LeaveRequest>("/hr/leave-requests", body).then((r) => r.data),
+  approveLeave: (id: string, note?: string) =>
+    api.post<LeaveRequest>(`/hr/leave-requests/${id}/approve`, { note: note ?? null }).then((r) => r.data),
+  rejectLeave: (id: string, reason: string) =>
+    api.post<LeaveRequest>(`/hr/leave-requests/${id}/reject`, { reason }).then((r) => r.data),
+  cancelLeave: (id: string, note?: string) =>
+    api.post<LeaveRequest>(`/hr/leave-requests/${id}/cancel`, { note: note ?? null }).then((r) => r.data),
+
+  overtime: (params?: { employeeId?: string; status?: OvertimeStatus }) =>
+    api.get<OvertimeEntry[]>("/hr/overtime", { params }).then((r) => r.data),
+  submitOvertime: (body: {
+    employeeId: string; workDate: string; hours: number; category: OvertimeCategory; reason: string;
+  }) => api.post<OvertimeEntry>("/hr/overtime", body).then((r) => r.data),
+  approveOvertime: (id: string) =>
+    api.post<OvertimeEntry>(`/hr/overtime/${id}/approve`).then((r) => r.data),
+  rejectOvertime: (id: string, reason: string) =>
+    api.post<OvertimeEntry>(`/hr/overtime/${id}/reject`, { reason }).then((r) => r.data),
+
+  // ----- advances
+  advances: (params?: { employeeId?: string; status?: AdvanceStatus }) =>
+    api.get<EmployeeAdvance[]>("/hr/advances", { params }).then((r) => r.data),
+  createAdvance: (body: {
+    employeeId: string; advanceDate: string; amount: number; instalmentCount: number; reason: string;
+  }) => api.post<EmployeeAdvance>("/hr/advances", body).then((r) => r.data),
+  cancelAdvance: (id: string, reason: string) =>
+    api.post<EmployeeAdvance>(`/hr/advances/${id}/cancel`, { reason }).then((r) => r.data),
+
+  // ----- labor cost reporting
+  laborCost: (params: { periodYear: number; periodMonth: number; groupByCostCenter?: boolean; departmentId?: string }) =>
+    api.get<LaborCostReport>("/hr/labor-cost", { params }).then((r) => r.data)
 };
 

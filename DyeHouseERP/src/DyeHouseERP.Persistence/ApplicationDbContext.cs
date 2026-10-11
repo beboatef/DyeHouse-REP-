@@ -78,6 +78,30 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PayrollRun> PayrollRuns => Set<PayrollRun>();
     public DbSet<PayrollRunLine> PayrollRunLines => Set<PayrollRunLine>();
 
+    // HR masters, attendance, leave, overtime, advances & wage rules (spec sections 28-42)
+    public DbSet<HrSection> HrSections => Set<HrSection>();
+    public DbSet<JobPosition> JobPositions => Set<JobPosition>();
+    public DbSet<CostCenter> CostCenters => Set<CostCenter>();
+    public DbSet<HrShift> HrShifts => Set<HrShift>();
+    public DbSet<AttendanceRule> AttendanceRules => Set<AttendanceRule>();
+    public DbSet<AttendanceEvent> AttendanceEvents => Set<AttendanceEvent>();
+    public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();
+    public DbSet<LeaveRequest> LeaveRequests => Set<LeaveRequest>();
+    public DbSet<OvertimeEntry> OvertimeEntries => Set<OvertimeEntry>();
+    public DbSet<EmployeeAdvance> EmployeeAdvances => Set<EmployeeAdvance>();
+    public DbSet<PayComponent> PayComponents => Set<PayComponent>();
+    public DbSet<EmployeePayComponent> EmployeePayComponents => Set<EmployeePayComponent>();
+    public DbSet<ContributionRule> ContributionRules => Set<ContributionRule>();
+    public DbSet<PayrollAccountMapping> PayrollAccountMappings => Set<PayrollAccountMapping>();
+
+    // Approval centre (spec section 24)
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+
+    // Production master data (spec sections 19-20): machines, execution shifts, stage machines
+    public DbSet<Machine> Machines => Set<Machine>();
+    public DbSet<StageMachine> StageMachines => Set<StageMachine>();
+    public DbSet<ProductionShift> ProductionShifts => Set<ProductionShift>();
+
     // Operating supplies internal issue (spec section 27)
     public DbSet<SupplyIssue> SupplyIssues => Set<SupplyIssue>();
     public DbSet<SupplyIssueLine> SupplyIssueLines => Set<SupplyIssueLine>();
@@ -93,8 +117,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<CustomerReturn> CustomerReturns => Set<CustomerReturn>();
     public DbSet<CustomerReturnLine> CustomerReturnLines => Set<CustomerReturnLine>();
 
-    // Commercial price lists + the per-Job-Order price snapshot (spec sections 34A, 34, 36)
-    public DbSet<StageCostRate> StageCostRates => Set<StageCostRate>();
+    // Customer service price list + the per-Job-Order price snapshot (spec sections 34, 36).
+    // S8: the fixed per-stage "actual cost list" (StageCostRate) was removed - factory actual
+    // cost is always derived from posted transactions, never from a fixed stage rate.
     public DbSet<CustomerServicePrice> CustomerServicePrices => Set<CustomerServicePrice>();
     public DbSet<ProductionOrderServicePrice> ProductionOrderServicePrices => Set<ProductionOrderServicePrice>();
 

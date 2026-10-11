@@ -21,5 +21,15 @@ public class ReadyGoodsTransferConfiguration : IEntityTypeConfiguration<ReadyGoo
 
         // Prevent duplicate transfer for the same order (spec section 29).
         builder.HasIndex(t => t.ProductionOrderId).IsUnique();
+
+        // Traceability (spec section 23): the stage whose output this transfer moved.
+        // Mapped as a real reference (never a cascade) so the chain
+        // order -> stage execution -> ready goods lot cannot be broken from the database side.
+        builder.HasIndex(t => t.StageExecutionId);
+
+        builder.HasOne<ProductionOrderStageExecution>()
+            .WithMany()
+            .HasForeignKey(t => t.StageExecutionId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

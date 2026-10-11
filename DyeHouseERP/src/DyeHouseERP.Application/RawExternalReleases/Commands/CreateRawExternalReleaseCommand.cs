@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.RawExternalReleases.DTOs;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Entities;
@@ -22,7 +23,21 @@ public record CreateRawExternalReleaseCommand(
     string? ExternalParty, string? Notes,
     bool OverrideNegativeStock = false, string? OverrideReason = null,
     Guid? ProductionOrderId = null, string? ExternalProcessingStage = null,
-    decimal? ExternalProcessingCost = null, DateTime? ExpectedReturnDate = null) : IRequest<RawExternalReleaseDto>;
+    decimal? ExternalProcessingCost = null, DateTime? ExpectedReturnDate = null,
+    // Set only when the Approval Center dispatches this command after approving a request (spec section 24).
+    Guid? ApprovalRequestId = null) : IRequest<RawExternalReleaseDto>, IApprovalBoundOperation
+{
+    // Spec section 24: the approval is bound to these exact facts - including
+    // the release reason, so an approval for an external-processing release
+    // cannot authorise a sale.
+    public ApprovalRequestType ApprovalType => ApprovalRequestType.RawExternalRelease;
+
+    public Guid ApprovalDocumentId => RawMessageId;
+
+    public string OperationSignature =>
+        $"RawExternalRelease|msg={RawMessageId}|item={ItemId}|customer={CustomerId}|reason={Reason}" +
+        $"|kg={ApprovalBinding.Quantity(QuantityKg)}|m={ApprovalBinding.Quantity(QuantityMeter)}";
+}
 
 public class CreateRawExternalReleaseCommandValidator : AbstractValidator<CreateRawExternalReleaseCommand>
 {
@@ -97,9 +112,17 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
                 throw new UnauthorizedAccessException(
                     $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 
+            // Spec section 24: the override is authorised by a stored,
+            // SINGLE-USE approval request raised by a DIFFERENT user, matched
+            // against this movement's exact facts. The old path recorded the
+            // caller as both requester and approver - the self-approval the
+            // separation of duties forbids - and posted with no approval at all.
+            var decision = await ApprovalRequestGuard.ConsumeAsync(
+                _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+
             _db.NegativeStockOverrides.Add(new NegativeStockOverride(
                 message.Id, request.ItemId, request.CustomerId, requested, available,
-                request.OverrideReason!, _currentUser.UserName, _currentUser.UserName));
+                request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
         }
 
         var releaseNumber = await _numberGenerator.NextAsync(DocumentType.RawIssueExternalRelease, cancellationToken: cancellationToken);

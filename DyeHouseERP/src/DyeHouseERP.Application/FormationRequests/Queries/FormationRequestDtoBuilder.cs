@@ -128,6 +128,8 @@ internal static class FormationRequestDtoBuilder
         BasinNumber = b.BasinNumber,
         Name = b.Name,
         PlannedQuantity = b.PlannedQuantity,
+        ActualQuantity = b.ActualQuantity,
+        EffectiveQuantity = b.EffectiveQuantity,
         ProducedQuantity = b.ProducedQuantity,
         RemainingQuantity = b.RemainingQuantity,
         Unit = b.Unit,

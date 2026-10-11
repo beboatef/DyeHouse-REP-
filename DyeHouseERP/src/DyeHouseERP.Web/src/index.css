@@ -710,6 +710,158 @@
   display: inline-block;
 }
 
+/* ===========================================================================
+   BRAND LOGO (the DyeHouse ERP mark)
+   ---------------------------------------------------------------------------
+   The mark is an inline SVG (src/components/BrandLogo.tsx); this is its
+   stylesheet half. It is the animated artwork from public/dyehouse-erp-logo.svg
+   with the class names re-pointed at `dh-brand` and the two gradients/ids made
+   per-instance, so the design and its timing are unchanged.
+
+   THE REASON THIS BLOCK MATTERS BEYOND PAINT: the wordmark is latin text drawn
+   at a fixed x in an RTL-first document. Without `direction: ltr` here the text
+   inherits rtl from <html dir="rtl">, and for SVG text `text-anchor: start`
+   then means the RIGHT edge - the wordmark is laid out leftwards from its own
+   anchor, straight over the droplet, and clipped by the viewport. Measured in
+   Chromium before this rule existed: the "DyeHouse" box sat at x=-118..125
+   (droplet at x=20..100), i.e. overlapping; with the rule it sits at 125..368.
+
+   The `dir="ltr"` ATTRIBUTE that BrandLogo sets is not sufficient: Chromium
+   does not map `dir` to the `direction` property on an <svg> element, so the
+   inherited value still arrives as rtl. Only an author CSS declaration stops
+   it, which is why the guard lives here and not in the component.
+
+   The same absence produced the solid BLACK droplet: with no rule for
+   `.dh-brand__outline` the path took the SVG default `fill: black` and no
+   stroke, so instead of a drawn outline it rendered as a black blob covering
+   the dye waves - and `fill="var(--logo-ink)"` resolved against an undefined
+   variable, which is invalid at computed-value time, so the wordmark fell back
+   to black in both themes. Roles below: the outline is DRAWN (dasharray 260 is
+   its path length), the waves RISE inside the droplet, the wordmark slides in.
+   =========================================================================== */
+.dh-brand {
+  /* Ink follows the app theme: light #111827 / dark #f3f4f6, sub #94a3b8. */
+  --logo-ink: var(--ink);
+  --logo-sub: var(--ink-subtle);
+  /* The direction guard described above. */
+  direction: ltr;
+}
+
+/* Second guard, on the text nodes themselves: a stray `direction: rtl` from any
+   wrapper (print layout, a translated template) can never mirror the latin. */
+.dh-brand text {
+  direction: ltr;
+}
+
+/* -- droplet -------------------------------------------------------------- */
+.dh-brand__outline {
+  fill: none;
+  stroke: var(--logo-ink);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: dh-brand-draw 1.2s ease-out forwards;
+}
+
+/* The three dye waves rise into the droplet as one group. */
+.dh-brand__fill {
+  transform: translateY(90px);
+  animation: dh-brand-rise 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s forwards;
+}
+.dh-brand__wave {
+  animation: dh-brand-flow 3s linear infinite;
+}
+.dh-brand__wave--2 {
+  animation-duration: 4s;
+  animation-direction: reverse;
+}
+.dh-brand__wave--3 {
+  animation-duration: 5s;
+}
+
+.dh-brand__shine {
+  fill: #fff;
+  opacity: 0;
+  animation: dh-brand-shine 0.6s ease 1.6s forwards;
+}
+
+/* -- wordmark ------------------------------------------------------------- */
+/* Translated in USER units (the viewBox), as in the artwork: 14 units is ~6px at
+   the login card's 228px width, so the text never travels near the droplet even
+   at the start of the animation. */
+.dh-brand__t1,
+.dh-brand__t2 {
+  opacity: 0;
+  transform: translateX(-14px);
+  animation: dh-brand-slide 0.7s ease forwards;
+}
+.dh-brand__t1 {
+  animation-delay: 1s;
+}
+.dh-brand__t2 {
+  animation-delay: 1.2s;
+}
+.dh-brand__t3 {
+  opacity: 0;
+  animation: dh-brand-fade 0.8s ease 1.6s forwards;
+}
+
+@keyframes dh-brand-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes dh-brand-rise {
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes dh-brand-flow {
+  to {
+    transform: translateX(80px);
+  }
+}
+@keyframes dh-brand-slide {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes dh-brand-shine {
+  to {
+    opacity: 0.35;
+  }
+}
+@keyframes dh-brand-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Static placement (shell header, print): the finished frame, no motion at all.
+   `!important` because these must beat the per-class animation shorthand above
+   no matter where the modifier is applied. */
+.dh-brand--static,
+.dh-brand--static * {
+  animation: none !important;
+}
+.dh-brand--static .dh-brand__outline {
+  stroke-dashoffset: 0 !important;
+}
+.dh-brand--static .dh-brand__fill {
+  transform: translateY(0) !important;
+}
+.dh-brand--static .dh-brand__shine {
+  opacity: 0.35 !important;
+}
+.dh-brand--static .dh-brand__t1,
+.dh-brand--static .dh-brand__t2,
+.dh-brand--static .dh-brand__t3 {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 /* Respect a user's reduced-motion preference.
    Important detail: `animation-delay` must be reset too. Our entrance
    animations use `fill-mode: both`, so with a stagger delay still in place a

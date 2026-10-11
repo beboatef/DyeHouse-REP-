@@ -98,7 +98,9 @@ public class CancelFormationRequestCommandHandler : IRequestHandler<CancelFormat
 /// </summary>
 public record ConvertFormationRequestToJobOrderCommand(
     Guid Id, DateTime OrderDate, JobOrderType JobOrderType, ProductionPriority Priority = ProductionPriority.Normal,
-    Guid? GroupId = null, Guid? BasinId = null, string? Color = null, string? Notes = null, string? CustomerReference = null)
+    Guid? GroupId = null, Guid? BasinId = null, string? Color = null, string? Notes = null, string? CustomerReference = null,
+    // Spec sections 8 and 10: converting ONE basin requires its ACTUAL weighed weight.
+    decimal? ActualBasinQuantity = null)
     : IRequest<FormationRequestDto>;
 
 public class ConvertFormationRequestToJobOrderCommandValidator : AbstractValidator<ConvertFormationRequestToJobOrderCommand>
@@ -171,8 +173,20 @@ public class ConvertFormationRequestToJobOrderCommandHandler
                 "This request is split into basins. Convert the groups and basins individually - converting the whole request would plan the same quantity twice.");
         }
 
+        // Spec sections 8 and 10: a basin is weighed for real before its Job Order exists, and
+        // the Job Order's quantity IS that actual weight. The planned formation quantity stays
+        // planning data - it must never be what production is planned from.
+        if (basin is not null)
+        {
+            if (request.ActualBasinQuantity is not > 0)
+                throw new DomainException(
+                    $"Enter the ACTUAL weighed weight for basin {basin.BasinNumber} - a Job Order's quantity IS the basin's real weight, never the planned formation quantity.");
+
+            entity.RecordBasinActualQuantity(group!.Id, basin.Id, request.ActualBasinQuantity.Value, _currentUser.UserName);
+        }
+
         var unit = basin?.Unit ?? group?.Unit ?? entity.Unit;
-        var quantity = basin?.PlannedQuantity ?? group?.PlannedQuantity ?? entity.Groups.Sum(g => g.PlannedQuantity);
+        var quantity = basin?.EffectiveQuantity ?? group?.PlannedQuantity ?? entity.Groups.Sum(g => g.PlannedQuantity);
         if (quantity <= 0)
             throw new DomainException("The quantity being converted must be greater than zero.");
 
@@ -202,6 +216,44 @@ public class ConvertFormationRequestToJobOrderCommandHandler
         await _db.SaveChangesAsync(cancellationToken);
         return await FormationRequestDtoBuilder.BuildAsync(_db, entity, cancellationToken);
     }
+}
+
+/// <summary>
+/// Records a basin's ACTUAL weighed quantity without converting it (spec sections 8 and 10).
+/// Weighing is what the Job Order quantity will be taken from, so it happens while the request
+/// is approved and before the basin is converted - never after production has started.
+/// </summary>
+public record RecordFormationBasinActualQuantityCommand(
+    Guid Id, Guid GroupId, Guid BasinId, decimal ActualQuantity) : IRequest<FormationRequestDto>;
+
+public class RecordFormationBasinActualQuantityCommandValidator
+    : AbstractValidator<RecordFormationBasinActualQuantityCommand>
+{
+    public RecordFormationBasinActualQuantityCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.GroupId).NotEmpty();
+        RuleFor(x => x.BasinId).NotEmpty();
+        RuleFor(x => x.ActualQuantity).GreaterThan(0)
+            .WithMessage("A basin's actual weighed quantity must be greater than zero.");
+    }
+}
+
+public class RecordFormationBasinActualQuantityCommandHandler
+    : IRequestHandler<RecordFormationBasinActualQuantityCommand, FormationRequestDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+
+    public RecordFormationBasinActualQuantityCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
+    { _db = db; _currentUser = currentUser; }
+
+    public Task<FormationRequestDto> Handle(
+        RecordFormationBasinActualQuantityCommand request, CancellationToken cancellationToken)
+        => FormationRequestWorkflow.MutateAsync(_db, request.Id, _currentUser.UserName,
+            entity => entity.RecordBasinActualQuantity(
+                request.GroupId, request.BasinId, request.ActualQuantity, _currentUser.UserName),
+            cancellationToken);
 }
 
 /// <summary>Loads a request with its groups, applies one domain transition, and returns the fresh DTO.</summary>

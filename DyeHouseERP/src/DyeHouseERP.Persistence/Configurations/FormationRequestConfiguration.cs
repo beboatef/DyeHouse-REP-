@@ -106,6 +106,8 @@ public class FormationBasinConfiguration : IEntityTypeConfiguration<FormationBas
 
         builder.Property(b => b.Name).HasMaxLength(200);
         builder.Property(b => b.PlannedQuantity).HasPrecision(18, 3);
+        // The ACTUAL weighed weight (spec sections 8, 10) - nullable until the basin is weighed.
+        builder.Property(b => b.ActualQuantity).HasPrecision(18, 3);
         builder.Property(b => b.ProducedQuantity).HasPrecision(18, 3);
         builder.Property(b => b.Unit).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(b => b.Color).HasMaxLength(100);
@@ -122,6 +124,7 @@ public class FormationBasinConfiguration : IEntityTypeConfiguration<FormationBas
         builder.Property(b => b.SpecificationTemplateName).HasMaxLength(200);
 
         builder.Ignore(b => b.RemainingQuantity);
+        builder.Ignore(b => b.EffectiveQuantity);
 
         builder.HasIndex(b => new { b.FormationGroupId, b.BasinNumber }).IsUnique();
         builder.HasIndex(b => b.SpecificationTemplateId);
