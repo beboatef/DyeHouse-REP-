@@ -48,7 +48,9 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
     public async Task<MaterialIssueDto> Handle(CreateMaterialIssueCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: issuing chemicals to production is a stock posting.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // One clock read for the guard, the document date and the ledger row below.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);
@@ -75,12 +77,12 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
         var unitCost = request.UnitCost ?? material.PurchasePrice;
         var issueNumber = await _numberGenerator.NextAsync(DocumentType.MaterialIssue, cancellationToken: cancellationToken);
 
-        var issue = new MaterialIssue(issueNumber, _clock.UtcNow, request.MaterialId, request.WarehouseId,
+        var issue = new MaterialIssue(issueNumber, postingDate, request.MaterialId, request.WarehouseId,
             request.ProductionOrderId, request.Quantity, unitCost, _currentUser.UserName, request.Notes);
         _db.MaterialIssues.Add(issue);
 
         _db.MaterialTransactions.Add(new MaterialTransaction(
-            DocumentType.MaterialIssue, issue.IssueNumber, issue.Id, _clock.UtcNow,
+            DocumentType.MaterialIssue, issue.IssueNumber, issue.Id, postingDate,
             request.MaterialId, request.WarehouseId, request.ProductionOrderId,
             request.Quantity, MaterialTransactionDirection.Out, unitCost, _currentUser.UserName));
 

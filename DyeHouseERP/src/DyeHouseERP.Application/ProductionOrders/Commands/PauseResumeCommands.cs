@@ -77,7 +77,7 @@ public class PauseProductionOrderCommandHandler : IRequestHandler<PauseProductio
     public async Task<ProductionOrderDto> Handle(PauseProductionOrderCommand request, CancellationToken cancellationToken)
     {
         // The release is a stock posting, so a closed period blocks it.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
@@ -252,7 +252,7 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
 
     public async Task<ProductionOrderDto> Handle(ResumeProductionOrderCommand request, CancellationToken cancellationToken)
     {
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);

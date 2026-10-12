@@ -45,6 +45,17 @@ internal sealed class RecordingStockLock : IAllocationLockService
         return Task.FromResult<IAsyncDisposable>(Noop.Instance);
     }
 
+    public Task<IAsyncDisposable> AcquireExclusiveAsync(string resource, CancellationToken cancellationToken = default)
+    {
+        NamedResources.Add(resource);
+        return Task.FromResult<IAsyncDisposable>(Noop.Instance);
+    }
+    public Task<IAsyncDisposable> AcquireSharedAsync(string resource, CancellationToken cancellationToken = default)
+    {
+        NamedResources.Add(resource);
+        return Task.FromResult<IAsyncDisposable>(Noop.Instance);
+    }
+
     private sealed class Noop : IAsyncDisposable
     {
         public static readonly Noop Instance = new();
@@ -60,6 +71,16 @@ internal sealed class FixedClock : IDateTime
 internal sealed class OpenPeriod : IPeriodCloseService
 {
     public Task EnsureOpenAsync(DateTime date, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task<IAsyncDisposable> BeginPostingAsync(DateTime date, CancellationToken cancellationToken = default)
+        => Task.FromResult<IAsyncDisposable>(NoopPeriodGuard.Instance);
+}
+
+/// <summary>Shared no-op guard used by every fake period service (unit tests).</summary>
+internal sealed class NoopPeriodGuard : IAsyncDisposable
+{
+    public static readonly NoopPeriodGuard Instance = new();
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
 internal sealed class FixedNumberGenerator : IDocumentNumberGenerator
@@ -641,6 +662,17 @@ public class RawInspectionRejectionConcurrencyTests
         }
 
         public async Task<IAsyncDisposable> AcquireNamedAsync(string resource, CancellationToken cancellationToken = default)
+        {
+            await _onAcquire();
+            return Noop.Instance;
+        }
+
+        public async Task<IAsyncDisposable> AcquireExclusiveAsync(string resource, CancellationToken cancellationToken = default)
+        {
+            await _onAcquire();
+            return Noop.Instance;
+        }
+        public async Task<IAsyncDisposable> AcquireSharedAsync(string resource, CancellationToken cancellationToken = default)
         {
             await _onAcquire();
             return Noop.Instance;

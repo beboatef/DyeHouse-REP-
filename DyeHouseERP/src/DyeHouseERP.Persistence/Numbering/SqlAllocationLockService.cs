@@ -32,8 +32,6 @@ public class SqlAllocationLockService : IAllocationLockService
 
     private readonly ApplicationDbContext _context;
 
-    public SqlAllocationLockService(ApplicationDbContext context) => _context = context;
-
     public async Task<IAsyncDisposable> AcquireAsync(StockLockKey key, CancellationToken cancellationToken = default)
     {
         var connection = await OpenConnectionAsync(cancellationToken);
@@ -94,6 +92,26 @@ public class SqlAllocationLockService : IAllocationLockService
         return guard ?? throw Timeout(fullResource);
     }
 
+    public async Task<IAsyncDisposable> AcquireExclusiveAsync(string resource, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(resource))
+            throw new ArgumentException("A lock resource name is required.", nameof(resource));
+
+        var connection = await OpenConnectionAsync(cancellationToken);
+        var guard = await TryAcquireAsync(connection, resource, cancellationToken, "Exclusive");
+        return guard ?? throw Timeout(resource);
+    }
+
+    public async Task<IAsyncDisposable> AcquireSharedAsync(string resource, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(resource))
+            throw new ArgumentException("A lock resource name is required.", nameof(resource));
+
+        var connection = await OpenConnectionAsync(cancellationToken);
+        var guard = await TryAcquireAsync(connection, resource, cancellationToken, "Shared");
+        return guard ?? throw Timeout(resource);
+    }
+
     /// <summary>
     /// R1: the legacy (rawMessage, item, customer) overload has been removed.
     /// Every stock path - allocation included - now locks through
@@ -112,13 +130,17 @@ public class SqlAllocationLockService : IAllocationLockService
 
     /// <summary>Returns null when the lock could not be taken within the timeout.</summary>
     private static async Task<SessionAppLockGuard?> TryAcquireAsync(
-        SqlConnection connection, string resource, CancellationToken cancellationToken)
+        SqlConnection connection, string resource, CancellationToken cancellationToken,
+        string lockMode = "Exclusive")
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "sp_getapplock";
         command.CommandType = CommandType.StoredProcedure;
         command.Parameters.Add(new SqlParameter("@Resource", resource));
-        command.Parameters.Add(new SqlParameter("@LockMode", "Exclusive"));
+        // Period postings take "Shared" (they may run concurrently with each
+        // other and only need to exclude a Close/Reopen); everything else takes
+        // the original "Exclusive".
+        command.Parameters.Add(new SqlParameter("@LockMode", lockMode));
         // Session-scoped: it survives across the handler's individual EF
         // commands and is released deterministically by sp_releaseapplock
         // in the guard's DisposeAsync.

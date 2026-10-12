@@ -23,10 +23,16 @@ public class CreateCostEntryCommandHandler : IRequestHandler<CreateCostEntryComm
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    public CreateCostEntryCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser) { _db = db; _currentUser = currentUser; }
+    private readonly IPeriodCloseService _periodClose;
+    public CreateCostEntryCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IPeriodCloseService periodClose)
+    { _db = db; _currentUser = currentUser; _periodClose = periodClose; }
 
     public async Task<CostEntryDto> Handle(CreateCostEntryCommand request, CancellationToken cancellationToken)
     {
+        // Spec section 43: the cost entry is filed under its own accounting date, so that
+        // exact date must fall inside an open period before anything is persisted.
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.EntryDate, cancellationToken);
+
         var entry = new CostEntry(request.ProductionOrderId, request.Category, request.Amount, request.EntryDate, _currentUser.UserName, request.Description);
         _db.CostEntries.Add(entry);
         await _db.SaveChangesAsync(cancellationToken);

@@ -231,6 +231,9 @@ public class PaySupplierOwnershipTests
     private sealed class OpenPeriod : IPeriodCloseService
     {
         public Task EnsureOpenAsync(DateTime date, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<IAsyncDisposable> BeginPostingAsync(DateTime date, CancellationToken cancellationToken = default)
+            => Task.FromResult<IAsyncDisposable>(NoopPeriodGuard.Instance);
     }
 
     private (Guid supplierA, Guid supplierB, Guid account, Guid invoice) Seed()

@@ -175,6 +175,9 @@ public class ProductionOrderCancellationTests
     {
         public Task EnsureOpenAsync(DateTime date, CancellationToken cancellationToken = default)
             => throw new DomainException("The accounting period is closed.");
+
+        public Task<IAsyncDisposable> BeginPostingAsync(DateTime date, CancellationToken cancellationToken = default)
+            => throw new DomainException("The accounting period is closed.");
     }
 
     /// <summary>
@@ -198,6 +201,12 @@ public class ProductionOrderCancellationTests
             => Task.FromResult<IAsyncDisposable>(Noop.Instance);
 
         public Task<IAsyncDisposable> AcquireNamedAsync(string resource, CancellationToken cancellationToken = default)
+            => Task.FromResult<IAsyncDisposable>(Noop.Instance);
+
+        public Task<IAsyncDisposable> AcquireExclusiveAsync(string resource, CancellationToken cancellationToken = default)
+            => Task.FromResult<IAsyncDisposable>(Noop.Instance);
+
+        public Task<IAsyncDisposable> AcquireSharedAsync(string resource, CancellationToken cancellationToken = default)
             => Task.FromResult<IAsyncDisposable>(Noop.Instance);
 
         private sealed class Noop : IAsyncDisposable

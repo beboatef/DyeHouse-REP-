@@ -36,7 +36,7 @@ public class CreatePaymentCommandHandler : IRequestHandler<CreatePaymentCommand,
 
     public async Task<PaymentDto> Handle(CreatePaymentCommand request, CancellationToken cancellationToken)
     {
-        await _periodClose.EnsureOpenAsync(request.PaymentDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.PaymentDate, cancellationToken);
 
         var account = await _db.TreasuryAccounts.FirstOrDefaultAsync(a => a.Id == request.TreasuryAccountId, cancellationToken)
             ?? throw new NotFoundException("TreasuryAccount", request.TreasuryAccountId);

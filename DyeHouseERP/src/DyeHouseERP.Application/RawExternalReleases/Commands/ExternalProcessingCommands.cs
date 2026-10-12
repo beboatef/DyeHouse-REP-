@@ -49,7 +49,7 @@ public class RecordExternalProcessingReturnCommandHandler
     public async Task<RawExternalReleaseDto> Handle(RecordExternalProcessingReturnCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: recording the return posts an IN row in the ledger.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var release = await _db.RawExternalReleases
             .FirstOrDefaultAsync(r => r.Id == request.ReleaseId, cancellationToken)

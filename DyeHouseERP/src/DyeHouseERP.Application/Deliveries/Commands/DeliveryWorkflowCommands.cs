@@ -71,7 +71,9 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
     public async Task<DeliveryDto> Handle(MarkDeliveryDeliveredCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: delivering ready goods is the stock posting that empties the lot.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // The clock is read ONCE so the guard and every ledger row below carry the same date.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var delivery = await _db.Deliveries.FirstOrDefaultAsync(d => d.Id == request.DeliveryId, cancellationToken)
             ?? throw new NotFoundException("Delivery", request.DeliveryId);
@@ -153,7 +155,7 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             foreach (var line in lines)
             {
                 _db.InventoryTransactions.Add(new InventoryTransaction(
-                    DocumentType.Delivery, delivery.DeliveryNumber, delivery.Id, _clock.UtcNow,
+                    DocumentType.Delivery, delivery.DeliveryNumber, delivery.Id, postingDate,
                     readyWarehouse.Id, delivery.CustomerId, line.ItemId,
                     rawMessageId: null, productionOrderId: line.ProductionOrderId,
                     quantityKg: line.QuantityKg, quantityMeter: line.QuantityMeter,
@@ -194,7 +196,9 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
     {
         // Spec section 43: the reversal row is dated today, so a closed period only
         // blocks it if today itself is closed - historical corrections stay possible.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // One clock read for guard and reversal rows alike.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var delivery = await _db.Deliveries.FirstOrDefaultAsync(d => d.Id == request.DeliveryId, cancellationToken)
             ?? throw new NotFoundException("Delivery", request.DeliveryId);
@@ -227,7 +231,7 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
                 foreach (var row in originalRows)
                 {
                     _db.InventoryTransactions.Add(new InventoryTransaction(
-                        DocumentType.Delivery, delivery.DeliveryNumber, delivery.Id, _clock.UtcNow,
+                        DocumentType.Delivery, delivery.DeliveryNumber, delivery.Id, postingDate,
                         row.WarehouseId, row.CustomerId, row.ItemId, row.RawMessageId, row.ProductionOrderId,
                         row.QuantityKg, row.QuantityMeter,
                         direction: row.Direction == TransactionDirection.Out ? TransactionDirection.In : TransactionDirection.Out,

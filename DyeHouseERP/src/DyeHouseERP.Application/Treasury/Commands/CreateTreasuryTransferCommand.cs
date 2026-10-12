@@ -37,7 +37,7 @@ public class CreateTreasuryTransferCommandHandler : IRequestHandler<CreateTreasu
     public async Task<TreasuryTransferDto> Handle(CreateTreasuryTransferCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: a transfer between cash/bank accounts moves money on its own date.
-        await _periodClose.EnsureOpenAsync(request.TransferDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.TransferDate, cancellationToken);
 
         var fromAccount = await _db.TreasuryAccounts.FirstOrDefaultAsync(a => a.Id == request.FromAccountId, cancellationToken)
             ?? throw new NotFoundException("TreasuryAccount", request.FromAccountId);

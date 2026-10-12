@@ -19,15 +19,28 @@ public class ClosePeriodCommandHandler : IRequestHandler<ClosePeriodCommand, Per
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    public ClosePeriodCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser) { _db = db; _currentUser = currentUser; }
+    private readonly IAllocationLockService _lockService;
+    public ClosePeriodCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
+        IAllocationLockService lockService)
+    { _db = db; _currentUser = currentUser; _lockService = lockService; }
 
     public async Task<PeriodCloseDto> Handle(ClosePeriodCommand request, CancellationToken cancellationToken)
     {
-        var period = new PeriodClose(request.PeriodStart, request.PeriodEnd, _currentUser.UserName, request.Notes);
-        _db.PeriodCloses.Add(period);
-        await _db.SaveChangesAsync(cancellationToken);
+        // Spec section 43, close-vs-post protocol: the closure takes the EXCLUSIVE
+        // version of the single GLOBAL period lock and holds it through its own
+        // commit. Every posting holds SHARED on the same resource for the whole
+        // span between its closure re-check and its SaveChangesAsync, so a close
+        // can only commit while NO posting is in flight, and a posting's re-check
+        // cannot pass while a close is committing. Arbitrary, overlapping period
+        // ranges are why the resource is global rather than per-period.
+        await using (await _lockService.AcquireExclusiveAsync(IPeriodCloseService.PeriodLockResource, cancellationToken))
+        {
+            var period = new PeriodClose(request.PeriodStart, request.PeriodEnd, _currentUser.UserName, request.Notes);
+            _db.PeriodCloses.Add(period);
+            await _db.SaveChangesAsync(cancellationToken);
 
-        return Map(period);
+            return Map(period);
+        }
     }
 
     internal static PeriodCloseDto Map(PeriodClose p) => new()
@@ -50,16 +63,25 @@ public class ReopenPeriodCommandHandler : IRequestHandler<ReopenPeriodCommand, P
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    public ReopenPeriodCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser) { _db = db; _currentUser = currentUser; }
+    private readonly IAllocationLockService _lockService;
+    public ReopenPeriodCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
+        IAllocationLockService lockService)
+    { _db = db; _currentUser = currentUser; _lockService = lockService; }
 
     public async Task<PeriodCloseDto> Handle(ReopenPeriodCommand request, CancellationToken cancellationToken)
     {
-        var period = await _db.PeriodCloses.FirstOrDefaultAsync(p => p.Id == request.PeriodCloseId, cancellationToken)
-            ?? throw new NotFoundException("PeriodClose", request.PeriodCloseId);
+        // Reopening toggles the very closure that blocks postings, so it shares the
+        // Close's EXCLUSIVE period lock: a posting cannot observe half-updated
+        // IsReopened state, and a close cannot be re-issued on top of it.
+        await using (await _lockService.AcquireExclusiveAsync(IPeriodCloseService.PeriodLockResource, cancellationToken))
+        {
+            var period = await _db.PeriodCloses.FirstOrDefaultAsync(p => p.Id == request.PeriodCloseId, cancellationToken)
+                ?? throw new NotFoundException("PeriodClose", request.PeriodCloseId);
 
-        period.Reopen(request.Reason, _currentUser.UserName);
-        await _db.SaveChangesAsync(cancellationToken);
+            period.Reopen(request.Reason, _currentUser.UserName);
+            await _db.SaveChangesAsync(cancellationToken);
 
-        return ClosePeriodCommandHandler.Map(period);
+            return ClosePeriodCommandHandler.Map(period);
+        }
     }
 }

@@ -81,7 +81,10 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
     public async Task<CustomerTransferDto> Handle(CreateCustomerTransferCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: a customer-to-customer transfer is a stock posting.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // One clock read for the guard, the transfer document and both ledger legs,
+        // so the Out and In rows can never land on different sides of a midnight.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
@@ -140,7 +143,7 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         var transferNumber = await _numberGenerator.NextAsync(DocumentType.CustomerTransfer, cancellationToken: cancellationToken);
 
         var transfer = new CustomerTransfer(
-            transferNumber, _clock.UtcNow, request.FromCustomerId, request.ToCustomerId,
+            transferNumber, postingDate, request.FromCustomerId, request.ToCustomerId,
             message.Id, request.ItemId, request.QuantityKg, request.QuantityMeter,
             request.Reason, _currentUser.UserName, request.Notes);
 
@@ -151,14 +154,14 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         // zero; the ownership dimension is what moves (spec section 15).
         _db.InventoryTransactions.Add(new InventoryTransaction(
             DocumentType.CustomerTransfer, transfer.TransferNumber, transfer.Id,
-            _clock.UtcNow, message.WarehouseId, request.FromCustomerId, request.ItemId,
+            postingDate, message.WarehouseId, request.FromCustomerId, request.ItemId,
             rawMessageId: message.Id, productionOrderId: null,
             quantityKg: request.QuantityKg, quantityMeter: request.QuantityMeter,
             direction: TransactionDirection.Out, createdBy: _currentUser.UserName));
 
         _db.InventoryTransactions.Add(new InventoryTransaction(
             DocumentType.CustomerTransfer, transfer.TransferNumber, transfer.Id,
-            _clock.UtcNow, message.WarehouseId, request.ToCustomerId, request.ItemId,
+            postingDate, message.WarehouseId, request.ToCustomerId, request.ItemId,
             rawMessageId: message.Id, productionOrderId: null,
             quantityKg: request.QuantityKg, quantityMeter: request.QuantityMeter,
             direction: TransactionDirection.In, createdBy: _currentUser.UserName));

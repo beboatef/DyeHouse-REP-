@@ -207,7 +207,7 @@ public class ReversePayrollRunCommandHandler : IRequestHandler<ReversePayrollRun
         // The reversal is dated today, so a closed period only blocks it if today is
         // closed - a correction of an old period stays possible (spec section 43).
         var today = DateTime.UtcNow.Date;
-        await _periodClose.EnsureOpenAsync(today, ct);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(today, ct);
 
         var runNumber = await _numberGenerator.NextAsync(DocumentType.PayrollRun, cancellationToken: ct);
 

@@ -115,15 +115,38 @@ public interface IExcelImportReader
 }
 
 /// <summary>
-/// Checks whether a date falls inside a closed accounting/inventory period
-/// (spec section 43). Command handlers that post financial or inventory
-/// documents should call EnsureOpenAsync before writing - see
-/// IssueInvoiceCommand, CreateStockAdjustmentCommand, CreateReceiptCommand,
-/// and CreatePaymentCommand for the pattern; extending it to every other
-/// posting command is the same one-line addition.
+/// Guards accounting-date postings against period closure (spec section 43).
+///
+/// CHECK-ONLY path (no serialization): <see cref="EnsureOpenAsync"/> just rejects a
+/// date inside a closed period. Use it only where nothing is persisted (e.g. a
+/// pre-flight read path).
+///
+/// PROTECTED-POSTING path (safe against the close-vs-post race): <see
+/// cref="BeginPostingAsync"/> takes a database application lock - SHARED on the
+/// single GLOBAL period resource - and re-checks closure while holding it, so a
+/// concurrent ClosePeriod/ReopenPeriod call (which takes EXCLUSIVE on the SAME
+/// resource) is serialized against the posting. The returned guard must be held
+/// THROUGH the handler's SaveChangesAsync and disposed after it; releasing it
+/// before the commit reopens the race window. The lock is the resource of the
+/// whole guard system, never per-month, because period ranges may overlap.
+///
+/// Contract for callers (the same discipline the stock locks use):
+///   await using var _ = await _periodClose.BeginPostingAsync(date, cancellationToken);
+///   ...validate, stage ledger rows...
+///   await _db.SaveChangesAsync(cancellationToken);
 /// </summary>
 public interface IPeriodCloseService
 {
+    /// <summary>The single global period-lock resource; the Shared/Exclusive sides must reference the SAME string.</summary>
+    const string PeriodLockResource = "Shared:Period";
+
     Task EnsureOpenAsync(DateTime date, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes the SHARED period lock and re-checks that <paramref name="date"/>
+    /// is not inside a closed period while holding it, then returns the guard
+    /// to dispose AFTER the posting's SaveChangesAsync.
+    /// </summary>
+    Task<IAsyncDisposable> BeginPostingAsync(DateTime date, CancellationToken cancellationToken = default);
 }
 

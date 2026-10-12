@@ -148,7 +148,7 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
         {
             // Spec 17: the final stage moves the output to Ready Goods and completes
             // the order. The transfer IS the completion - there is no other button.
-            await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+            await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
             var readyWarehouse = await _db.Warehouses.AsNoTracking()
                 .Where(w => w.Kind == WarehouseKind.ReadyGoods)

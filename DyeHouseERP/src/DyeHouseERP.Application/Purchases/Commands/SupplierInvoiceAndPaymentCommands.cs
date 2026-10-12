@@ -150,7 +150,7 @@ public class PostSupplierInvoiceCommandHandler : IRequestHandler<PostSupplierInv
             .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("SupplierInvoice", request.Id);
 
-        await _periodClose.EnsureOpenAsync(invoice.InvoiceDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(invoice.InvoiceDate, cancellationToken);
 
         invoice.Post(_currentUser.UserName);
 
@@ -194,7 +194,7 @@ public class CancelSupplierInvoiceCommandHandler : IRequestHandler<CancelSupplie
     {
         // Spec section 43: the reversal row is dated today, so a closed period only
         // blocks this if today is closed - historical corrections stay possible.
-        await _periodClose.EnsureOpenAsync(DateTime.UtcNow.Date, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(DateTime.UtcNow.Date, cancellationToken);
 
         var invoice = await _db.SupplierInvoices.Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
@@ -283,7 +283,7 @@ public class PaySupplierCommandHandler : IRequestHandler<PaySupplierCommand, Sup
 
     public async Task<SupplierPaymentDto> Handle(PaySupplierCommand request, CancellationToken cancellationToken)
     {
-        await _periodClose.EnsureOpenAsync(request.PaymentDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.PaymentDate, cancellationToken);
         await PurchaseRules.EnsureSupplierExists(_db, request.SupplierId, cancellationToken);
         await PurchaseRules.EnsureTreasuryAccountExists(_db, request.TreasuryAccountId, cancellationToken);
 
@@ -473,7 +473,7 @@ public class CancelSupplierPaymentCommandHandler : IRequestHandler<CancelSupplie
     public async Task<SupplierPaymentDto> Handle(CancelSupplierPaymentCommand request, CancellationToken cancellationToken)
     {
         // Reversal rows are dated today - closed period blocks only if today is closed.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var payment = await _db.SupplierPayments.FirstOrDefaultAsync(p => p.Id == request.PaymentId, cancellationToken)
             ?? throw new NotFoundException("SupplierPayment", request.PaymentId);

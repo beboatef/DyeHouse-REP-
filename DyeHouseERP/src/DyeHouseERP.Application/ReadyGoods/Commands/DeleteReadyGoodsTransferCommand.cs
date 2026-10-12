@@ -63,7 +63,7 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
         // The reversal rows are dated today, so a closed period only blocks
         // the cancellation if today itself is closed - the same convention
         // used by CancelDeliveryCommandHandler (spec section 43).
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var transferExists = await _db.ReadyGoodsTransfers.AnyAsync(x => x.Id == request.Id, cancellationToken);
         if (!transferExists)

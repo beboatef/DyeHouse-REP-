@@ -62,7 +62,7 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
     {
         // Spec section 43: a raw receipt is a stock posting, so its date must
         // fall outside any closed period.
-        await _periodClose.EnsureOpenAsync(request.ReceiptDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.ReceiptDate, cancellationToken);
 
         // A receipt is written into exactly the warehouse the caller picked, so the
         // warehouse must exist and still be active. Deactivated warehouses stay readable

@@ -249,7 +249,7 @@ public class ClearCheckCommandHandler : IRequestHandler<ClearCheckCommand, Check
 
         var movementsBefore = CheckWorkflow.SnapshotMovements(entity);
         var movementDate = request.MovementDate ?? DateTime.UtcNow;
-        await _periodClose.EnsureOpenAsync(movementDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(movementDate, cancellationToken);
 
         var accountId = request.TreasuryAccountId ?? entity.TreasuryAccountId
             ?? throw new DomainException("The check must be deposited into a bank/treasury account before it can be cleared.");

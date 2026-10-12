@@ -82,7 +82,7 @@ public class EditDeliveredDeliveryCommandHandler
     {
         // The compensating rows are dated today, so a closed period blocks them if
         // today itself is closed - historical corrections stay possible (spec 43).
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var delivery = await _db.Deliveries.FirstOrDefaultAsync(d => d.Id == request.DeliveryId, cancellationToken)
             ?? throw new NotFoundException("Delivery", request.DeliveryId);

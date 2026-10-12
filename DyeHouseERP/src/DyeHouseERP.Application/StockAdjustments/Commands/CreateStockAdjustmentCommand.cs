@@ -74,7 +74,7 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         // The adjustment posts a NEW IN/OUT row against the message's warehouse. A
         // deactivated warehouse keeps the history of everything already posted and

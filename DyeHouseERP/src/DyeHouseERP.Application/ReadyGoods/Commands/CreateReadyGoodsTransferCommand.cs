@@ -58,7 +58,7 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
     public async Task<ReadyGoodsTransferDto> Handle(CreateReadyGoodsTransferCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: transferring finished goods into ready-goods stock is a stock posting.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);

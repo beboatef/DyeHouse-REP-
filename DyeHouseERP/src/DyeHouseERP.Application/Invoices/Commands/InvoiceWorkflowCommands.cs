@@ -31,7 +31,12 @@ public class IssueInvoiceCommandHandler : IRequestHandler<IssueInvoiceCommand, I
         var invoice = await _db.Invoices.Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == request.InvoiceId, cancellationToken)
             ?? throw new NotFoundException("Invoice", request.InvoiceId);
 
-        await _periodClose.EnsureOpenAsync(invoice.InvoiceDate, cancellationToken);
+        // Spec section 43: the customer-ledger debit is dated with the ACTUAL posting date
+        // (the row written below), so the period guard must validate that same date - not
+        // the invoice's own document date, which can be backdated. Reading the clock once
+        // keeps the checked date and the posted date identical even across midnight.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
         var lines = await _db.InvoiceLines.Where(l => l.InvoiceId == invoice.Id).ToListAsync(cancellationToken);
 
         invoice.Issue();
@@ -40,7 +45,7 @@ public class IssueInvoiceCommandHandler : IRequestHandler<IssueInvoiceCommand, I
         var total = subTotal - invoice.Discount + invoice.Tax;
 
         _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
-            invoice.CustomerId, _clock.UtcNow, DocumentType.Invoice, invoice.InvoiceNumber, invoice.Id,
+            invoice.CustomerId, postingDate, DocumentType.Invoice, invoice.InvoiceNumber, invoice.Id,
             debit: total, credit: 0, description: $"Invoice {invoice.InvoiceNumber}", createdBy: _currentUser.UserName));
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -73,8 +78,10 @@ public class CancelInvoiceCommandHandler : IRequestHandler<CancelInvoiceCommand,
     public async Task<InvoiceDto> Handle(CancelInvoiceCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: the reversal row is dated today, so a closed period only
-        // blocks this if today is closed - historical corrections stay possible.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // blocks this if today is closed - historical corrections stay possible. The
+        // clock is read once so the checked date and the reversal row date agree.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == request.InvoiceId, cancellationToken)
             ?? throw new NotFoundException("Invoice", request.InvoiceId);
@@ -86,7 +93,7 @@ public class CancelInvoiceCommandHandler : IRequestHandler<CancelInvoiceCommand,
             var total = subTotal - invoice.Discount + invoice.Tax;
 
             _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
-                invoice.CustomerId, _clock.UtcNow, DocumentType.Invoice, invoice.InvoiceNumber, invoice.Id,
+                invoice.CustomerId, postingDate, DocumentType.Invoice, invoice.InvoiceNumber, invoice.Id,
                 debit: 0, credit: total, description: $"Cancellation of invoice {invoice.InvoiceNumber}", createdBy: _currentUser.UserName));
         }
 

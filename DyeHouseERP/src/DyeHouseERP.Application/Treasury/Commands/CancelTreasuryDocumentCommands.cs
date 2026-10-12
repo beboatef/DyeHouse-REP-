@@ -44,7 +44,7 @@ public class CancelReceiptCommandHandler : IRequestHandler<CancelReceiptCommand,
     {
         // Reversal rows are dated today - a closed period blocks only if today
         // itself is closed (same convention as every other reversal).
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var receipt = await _db.Receipts.FirstOrDefaultAsync(r => r.Id == request.ReceiptId, cancellationToken)
             ?? throw new Common.Exceptions.NotFoundException("Receipt", request.ReceiptId);
@@ -144,7 +144,7 @@ public class CancelPaymentCommandHandler : IRequestHandler<CancelPaymentCommand,
 
     public async Task<PaymentDto> Handle(CancelPaymentCommand request, CancellationToken cancellationToken)
     {
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var payment = await _db.Payments.FirstOrDefaultAsync(p => p.Id == request.PaymentId, cancellationToken)
             ?? throw new Common.Exceptions.NotFoundException("Payment", request.PaymentId);

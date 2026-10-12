@@ -202,7 +202,10 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
 
     public async Task<MaterialSaleDto> Handle(PostMaterialSaleCommand request, CancellationToken cancellationToken)
     {
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // One clock read: the guard and EVERY row this post writes (stock, customer, treasury)
+        // share the identical posting date, so a midnight cross can never split them.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var sale = await _db.MaterialSales.Include(s => s.Lines)
             .FirstOrDefaultAsync(s => s.Id == request.Id, cancellationToken)
@@ -233,7 +236,7 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
         foreach (var line in sale.Lines)
         {
             _db.MaterialTransactions.Add(new MaterialTransaction(
-                DocumentType.MaterialSale, sale.SaleNumber, sale.Id, _clock.UtcNow,
+                DocumentType.MaterialSale, sale.SaleNumber, sale.Id, postingDate,
                 line.MaterialId, sale.WarehouseId, null,
                 line.Quantity, MaterialTransactionDirection.Out, line.UnitPrice, _currentUser.UserName));
         }
@@ -291,7 +294,9 @@ public class CancelMaterialSaleCommandHandler : IRequestHandler<CancelMaterialSa
     {
         // Spec section 43: the reversal rows are dated today, so a closed period only
         // blocks this if today is closed - historical corrections stay possible.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // One clock read for the guard and all reversal rows below.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var sale = await _db.MaterialSales.Include(s => s.Lines)
             .FirstOrDefaultAsync(s => s.Id == request.Id, cancellationToken)
@@ -316,7 +321,7 @@ public class CancelMaterialSaleCommandHandler : IRequestHandler<CancelMaterialSa
             foreach (var line in sale.Lines)
             {
                 _db.MaterialTransactions.Add(new MaterialTransaction(
-                    DocumentType.MaterialSale, sale.SaleNumber, sale.Id, _clock.UtcNow,
+                    DocumentType.MaterialSale, sale.SaleNumber, sale.Id, postingDate,
                     line.MaterialId, sale.WarehouseId, null,
                     line.Quantity, MaterialTransactionDirection.In, line.UnitPrice, _currentUser.UserName));
             }
@@ -324,13 +329,13 @@ public class CancelMaterialSaleCommandHandler : IRequestHandler<CancelMaterialSa
             if (sale.CustomerId is not null)
             {
                 _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
-                    sale.CustomerId.Value, _clock.UtcNow.Date, DocumentType.MaterialSale, sale.SaleNumber, sale.Id,
+                    sale.CustomerId.Value, postingDate.Date, DocumentType.MaterialSale, sale.SaleNumber, sale.Id,
                     0, sale.Total, $"Cancelled material sale {sale.SaleNumber}: {request.Reason}", _currentUser.UserName));
 
                 if (sale.TreasuryAccountId is not null)
                 {
                     _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
-                        sale.CustomerId.Value, _clock.UtcNow.Date, DocumentType.MaterialSale, sale.SaleNumber, sale.Id,
+                        sale.CustomerId.Value, postingDate.Date, DocumentType.MaterialSale, sale.SaleNumber, sale.Id,
                         sale.Total, 0, $"Cancelled material sale {sale.SaleNumber} - reversing settled cash", _currentUser.UserName));
                 }
             }
@@ -338,7 +343,7 @@ public class CancelMaterialSaleCommandHandler : IRequestHandler<CancelMaterialSa
             if (sale.TreasuryAccountId is not null)
             {
                 _db.TreasuryTransactions.Add(new TreasuryTransaction(
-                    sale.TreasuryAccountId.Value, _clock.UtcNow.Date, DocumentType.MaterialSale, sale.SaleNumber, sale.Id,
+                    sale.TreasuryAccountId.Value, postingDate.Date, DocumentType.MaterialSale, sale.SaleNumber, sale.Id,
                     sale.Total, TreasuryDirection.Out,
                     $"Cancelled material sale {sale.SaleNumber}: {request.Reason}", _currentUser.UserName));
             }

@@ -48,7 +48,7 @@ public class CreateMaterialPreparationCommandHandler : IRequestHandler<CreateMat
     public async Task<MaterialPreparationDto> Handle(CreateMaterialPreparationCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: preparation/dilution consumes and produces material stock.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.OriginalMaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.OriginalMaterialId);

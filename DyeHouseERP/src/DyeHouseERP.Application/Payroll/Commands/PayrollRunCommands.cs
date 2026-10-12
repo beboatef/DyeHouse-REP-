@@ -221,7 +221,7 @@ public class PostPayrollRunCommandHandler : IRequestHandler<PostPayrollRunComman
 
         var postingDate = new DateTime(run.PeriodYear, run.PeriodMonth,
             DateTime.DaysInMonth(run.PeriodYear, run.PeriodMonth));
-        await _periodClose.EnsureOpenAsync(postingDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         run.Post(_currentUser.UserName);
 
@@ -270,7 +270,7 @@ public class CancelPayrollRunCommandHandler : IRequestHandler<CancelPayrollRunCo
     {
         // Spec section 43: the reversal row is dated today, so a closed period only
         // blocks this if today is closed - historical corrections stay possible.
-        await _periodClose.EnsureOpenAsync(DateTime.UtcNow.Date, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(DateTime.UtcNow.Date, cancellationToken);
 
         var run = await _db.PayrollRuns.Include(r => r.Lines)
             .FirstOrDefaultAsync(r => r.Id == request.Id, cancellationToken)

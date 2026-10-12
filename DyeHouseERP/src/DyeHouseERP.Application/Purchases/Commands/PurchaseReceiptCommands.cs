@@ -74,7 +74,7 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
 
     public async Task<PurchaseReceiptDto> Handle(CreatePurchaseReceiptCommand request, CancellationToken cancellationToken)
     {
-        await _periodClose.EnsureOpenAsync(request.ReceiptDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.ReceiptDate, cancellationToken);
         await PurchaseRules.EnsureSupplierExists(_db, request.SupplierId, cancellationToken);
 
         // Unlike a purchase ORDER (a commercial document with no stock effect until it is

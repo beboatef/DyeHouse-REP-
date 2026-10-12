@@ -68,7 +68,7 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
     {
         // Spec section 43: rejecting part of a receipt posts a correcting OUT row,
         // so the inspection date must fall outside any closed period.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         // No correcting ledger row is written when nothing is rejected, so a plain
         // inspection result needs neither a lot lock nor a warehouse movement check.

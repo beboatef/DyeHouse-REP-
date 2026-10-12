@@ -173,7 +173,7 @@ public class PostSupplyIssueCommandHandler : IRequestHandler<PostSupplyIssueComm
     public async Task<SupplyIssueDto> Handle(PostSupplyIssueCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: posting a supply issue consumes store stock.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var issue = await _db.SupplyIssues.Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
@@ -246,7 +246,7 @@ public class CancelSupplyIssueCommandHandler : IRequestHandler<CancelSupplyIssue
     {
         // Spec section 43: the reversal row is dated today, so only a period that
         // covers today blocks it - historical corrections remain possible.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var issue = await _db.SupplyIssues.Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)

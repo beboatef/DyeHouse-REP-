@@ -76,7 +76,7 @@ public class RecordAttendanceCommandHandler : IRequestHandler<RecordAttendanceCo
     public async Task<AttendanceEventDto> Handle(RecordAttendanceCommand r, CancellationToken ct)
     {
         // Attendance belongs to a payroll period, so a closed period blocks edits too.
-        await _periodClose.EnsureOpenAsync(r.WorkDate.Date, ct);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(r.WorkDate.Date, ct);
 
         var employee = await HrLookup.EmployeeAsync(_db, r.EmployeeId, ct);
         var shift = await HrLookup.ShiftOfAsync(_db, employee, ct);
@@ -116,7 +116,7 @@ public class RecordNonWorkingDayCommandHandler : IRequestHandler<RecordNonWorkin
 
     public async Task<AttendanceEventDto> Handle(RecordNonWorkingDayCommand r, CancellationToken ct)
     {
-        await _periodClose.EnsureOpenAsync(r.WorkDate.Date, ct);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(r.WorkDate.Date, ct);
 
         if (r.Status is AttendanceStatus.Present or AttendanceStatus.Late)
             throw new DomainException("Use record-attendance to record a day that was worked.");
@@ -170,7 +170,7 @@ public class GenerateAttendanceForPeriodCommandHandler : IRequestHandler<Generat
     {
         var from = new DateTime(r.PeriodYear, r.PeriodMonth, 1);
         var to = from.AddMonths(1).AddDays(-1);
-        await _periodClose.EnsureOpenAsync(to, ct);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(to, ct);
 
         var rule = await HrLookup.ActiveRuleAsync(_db, ct);
 
@@ -232,7 +232,7 @@ public class RemoveAttendanceEventCommandHandler : IRequestHandler<RemoveAttenda
         var attendance = await _db.AttendanceEvents.FirstOrDefaultAsync(a => a.Id == r.Id, ct)
             ?? throw new NotFoundException("AttendanceEvent", r.Id);
 
-        await _periodClose.EnsureOpenAsync(attendance.WorkDate, ct);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(attendance.WorkDate, ct);
         _db.AttendanceEvents.Remove(attendance);
         await _db.SaveChangesAsync(ct);
         return Unit.Value;
@@ -316,7 +316,7 @@ public class ApproveLeaveRequestCommandHandler : IRequestHandler<ApproveLeaveReq
             throw new UnauthorizedAccessException(
                 "Separation of duties: the user requesting leave cannot also approve it.");
 
-        await _periodClose.EnsureOpenAsync(request.FromDate, ct);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.FromDate, ct);
 
         var employee = await HrLookup.EmployeeAsync(_db, request.EmployeeId, ct);
         var leaveType = await _db.LeaveTypes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == request.LeaveTypeId, ct)
@@ -479,7 +479,7 @@ public class SubmitOvertimeCommandHandler : IRequestHandler<SubmitOvertimeComman
 
     public async Task<OvertimeEntryDto> Handle(SubmitOvertimeCommand r, CancellationToken ct)
     {
-        await _periodClose.EnsureOpenAsync(r.WorkDate.Date, ct);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(r.WorkDate.Date, ct);
         var employee = await HrLookup.EmployeeAsync(_db, r.EmployeeId, ct);
 
         var entry = new OvertimeEntry(r.EmployeeId, r.WorkDate, r.Hours, r.Category, r.Reason, _currentUser.UserName);

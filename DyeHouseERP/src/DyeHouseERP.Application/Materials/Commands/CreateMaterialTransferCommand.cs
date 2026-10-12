@@ -46,7 +46,7 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
     public async Task<MaterialTransferDto> Handle(CreateMaterialTransferCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: moving material between warehouses is a stock posting.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);

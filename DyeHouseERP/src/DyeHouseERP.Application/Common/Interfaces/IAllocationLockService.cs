@@ -46,4 +46,20 @@ public interface IAllocationLockService
     /// per document.
     /// </summary>
     Task<IAsyncDisposable> AcquireNamedAsync(string resource, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Acquires an EXCLUSIVE application lock on a caller-chosen resource.
+    /// Used by period Close/Reopen, which must serialize against every posting
+    /// holding the SHARED period lock. Regular stock paths never call this -
+    /// they hold Shared dimension locks via the methods above.
+    /// </summary>
+    Task<IAsyncDisposable> AcquireExclusiveAsync(string resource, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Acquires a SHARED application lock on a caller-chosen resource.
+    /// Used by the period posting guard: many postings may hold it at once in
+    /// SQL Server terms, but a Close/Reopen holding EXCLUSIVE on the same
+    /// resource excludes them all (and vice versa) until both sides commit.
+    /// </summary>
+    Task<IAsyncDisposable> AcquireSharedAsync(string resource, CancellationToken cancellationToken = default);
 }

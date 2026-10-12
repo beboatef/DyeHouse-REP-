@@ -91,7 +91,7 @@ public class CreateCustomerReturnCommandHandler : IRequestHandler<CreateCustomer
     public async Task<CustomerReturnDto> Handle(CreateCustomerReturnCommand request, CancellationToken cancellationToken)
     {
         // A customer return posts stock, so it must fall outside any closed period.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var customer = await _db.Customers.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken)

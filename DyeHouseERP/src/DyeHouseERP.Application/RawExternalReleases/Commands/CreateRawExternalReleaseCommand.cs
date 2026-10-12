@@ -79,7 +79,7 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
     public async Task<RawExternalReleaseDto> Handle(CreateRawExternalReleaseCommand request, CancellationToken cancellationToken)
     {
         // Spec section 43: releasing raw material out of the warehouse is a stock posting.
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);

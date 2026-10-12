@@ -77,7 +77,10 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
         // Spec section 43: the reversal rows are dated today, so a closed period
         // only blocks the cancellation if TODAY itself is closed - historical
         // corrections stay possible (same convention as every other reversal).
-        await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
+        // One clock read: guard, the compensating IN rows and the audit note all
+        // carry the identical posting date.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
@@ -171,7 +174,7 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
                 // (the order) plus the audit entry below.
                 _db.InventoryTransactions.Add(new InventoryTransaction(
                     DocumentType.ProductionOrder, order.OrderNumber, order.Id,
-                    _clock.UtcNow, message.WarehouseId, order.CustomerId, lot.Key.ItemId,
+                    postingDate, message.WarehouseId, order.CustomerId, lot.Key.ItemId,
                     rawMessageId: lot.Key.MessageId, productionOrderId: order.Id,
                     quantityKg: kg > 0 ? kg : null,
                     quantityMeter: meter > 0 ? meter : null,
@@ -197,7 +200,7 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
             // why and the exact quantities - a cancellation is never a silent
             // stock mutation (same convention as Pause).
             _db.AuditLogEntries.Add(new AuditLogEntry(
-                _clock.UtcNow, _currentUser.UserName, "Cancel", "ProductionOrder", order.Id.ToString(),
+                postingDate, _currentUser.UserName, "Cancel", "ProductionOrder", order.Id.ToString(),
                 JsonSerializer.Serialize(new { status = statusBefore.ToString() }),
                 JsonSerializer.Serialize(new
                 {

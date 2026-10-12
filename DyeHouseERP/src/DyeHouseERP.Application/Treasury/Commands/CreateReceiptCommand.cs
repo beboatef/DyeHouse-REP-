@@ -47,7 +47,7 @@ public class CreateReceiptCommandHandler : IRequestHandler<CreateReceiptCommand,
 
     public async Task<ReceiptDto> Handle(CreateReceiptCommand request, CancellationToken cancellationToken)
     {
-        await _periodClose.EnsureOpenAsync(request.ReceiptDate, cancellationToken);
+        await using var periodGuard = await _periodClose.BeginPostingAsync(request.ReceiptDate, cancellationToken);
 
         var account = await _db.TreasuryAccounts.FirstOrDefaultAsync(a => a.Id == request.TreasuryAccountId, cancellationToken)
             ?? throw new NotFoundException("TreasuryAccount", request.TreasuryAccountId);

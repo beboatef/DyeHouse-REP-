@@ -14,13 +14,35 @@ export default function PeriodClosingPage() {
 
   const { data: periods, isLoading } = useQuery({ queryKey: ["period-closes"], queryFn: () => PeriodClosingApi.list() });
 
+  // Client-side date-order check: an end date earlier than the start date is
+  // never a valid period, so block the submit and say so next to the fields
+  // instead of relying on the server to reject it.
+  const dateOrderInvalid =
+    periodStart !== "" && periodEnd !== "" && periodEnd < periodStart;
+
   const closeMutation = useMutation({
-    mutationFn: () => PeriodClosingApi.close({ periodStart, periodEnd, notes: notes || undefined }),
+    mutationFn: () => {
+      if (dateOrderInvalid) {
+        // Never reach for the network with a backwards range; surface a typed,
+        // shaped ServerError so the same "show the server's 400 detail" code path
+        // renders the local message too.
+        return Promise.reject({
+          response: {
+            status: 400,
+            data: { title: "نطاق فترة غير صالح", detail: "تاريخ النهاية أسبق من تاريخ البداية - صحّح التاريخين ثم أعد الإقفال." }
+          }
+        });
+      }
+      return PeriodClosingApi.close({ periodStart, periodEnd, notes: notes || undefined });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["period-closes"] });
       setShowForm(false); setPeriodStart(""); setPeriodEnd(""); setNotes(""); setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ - تأكد أن حسابك يملك صلاحية settings.manage")
+    // Prefer the ProblemDetails body the API actually returns on HTTP 400
+    // (detail when present, then title), not a generic fallback message.
+    onError: (err: any) =>
+      setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? err?.message ?? "حدث خطأ - تأكد أن حسابك يملك صلاحية settings.manage")
   });
 
   const reopenMutation = useMutation({
@@ -39,10 +61,19 @@ export default function PeriodClosingPage() {
       {showForm && (
         <Card className="p-5 mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); closeMutation.mutate(); }}>
-            <div><label className="field-label">من تاريخ</label><Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} required /></div>
-            <div><label className="field-label">إلى تاريخ</label><Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} required /></div>
+            <div>
+              <label className="field-label">من تاريخ</label>
+              <Input type="date" value={periodStart} onChange={(e) => { setPeriodStart(e.target.value); setError(null); }} required />
+            </div>
+            <div>
+              <label className="field-label">إلى تاريخ</label>
+              <Input type="date" value={periodEnd} onChange={(e) => { setPeriodEnd(e.target.value); setError(null); }} required />
+              {dateOrderInvalid && (
+                <p className="form-error mt-1 text-sm">تاريخ النهاية أسبق من تاريخ البداية - صحّح النطاق ثم أعد الإقفال.</p>
+              )}
+            </div>
             <div><label className="field-label">ملاحظات</label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-            <Button type="submit" disabled={closeMutation.isPending}>{closeMutation.isPending ? "جارٍ الإقفال..." : "إقفال"}</Button>
+            <Button type="submit" disabled={closeMutation.isPending || dateOrderInvalid}>{closeMutation.isPending ? "جارٍ الإقفال..." : "إقفال"}</Button>
           </form>
           {error && <p className="form-error mt-2">{error}</p>}
         </Card>
