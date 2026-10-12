@@ -66,6 +66,7 @@ public class CreateProductionStageDefinitionCommandHandler
         Name = s.Name,
         Sequence = s.Sequence,
         IsActive = s.IsActive,
+        RequiresDrawingNumber = s.RequiresDrawingNumber,
         RequiresInputQuantity = s.RequiresInputQuantity,
         RequiresOutputQuantity = s.RequiresOutputQuantity,
         RequiresApproval = s.RequiresApproval,

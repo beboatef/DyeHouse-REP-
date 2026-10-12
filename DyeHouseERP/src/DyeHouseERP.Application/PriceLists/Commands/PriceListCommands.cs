@@ -186,6 +186,9 @@ public class ApplyServicePriceToJobOrderCommandHandler
             .FirstOrDefaultAsync(s => s.Id == request.StageDefinitionId, cancellationToken)
             ?? throw new NotFoundException("ProductionStageDefinition", request.StageDefinitionId);
 
+        if (stage.IsReadyGoodsStage)
+            throw new DomainException("Ready Goods is not a chargeable production service.");
+
         decimal pricePerUnit;
         Guid? sourceCustomerId = null;
         var isOverride = request.PricePerUnit.HasValue;
@@ -219,7 +222,7 @@ public class ApplyServicePriceToJobOrderCommandHandler
         }
 
         var snapshot = await _db.ProductionOrderServicePrices
-            .FirstOrDefaultAsync(s => s.ProductionOrderId == request.ProductionOrderId && s.Unit == request.Unit, cancellationToken);
+            .FirstOrDefaultAsync(s => s.ProductionOrderId == request.ProductionOrderId && s.StageDefinitionId == request.StageDefinitionId && s.Unit == request.Unit, cancellationToken);
 
         if (snapshot is null)
         {

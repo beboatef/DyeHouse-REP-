@@ -247,6 +247,7 @@ public class ClearCheckCommandHandler : IRequestHandler<ClearCheckCommand, Check
             .FirstOrDefaultAsync(c => c.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Check", request.Id);
 
+        var movementsBefore = CheckWorkflow.SnapshotMovements(entity);
         var movementDate = request.MovementDate ?? DateTime.UtcNow;
         await _periodClose.EnsureOpenAsync(movementDate, cancellationToken);
 
@@ -275,6 +276,10 @@ public class ClearCheckCommandHandler : IRequestHandler<ClearCheckCommand, Check
         _db.TreasuryTransactions.Add(new TreasuryTransaction(
             account.Id, movementDate, DocumentType.CheckRegister, entity.CheckNumber, entity.Id,
             entity.Amount, direction, description, _currentUser.UserName));
+
+        // The movements this clear appended (the deposit, when it was still in hand, and the clearing itself)
+        // are registered explicitly so SaveChangesAsync INSERTs them on this already-persisted check.
+        CheckWorkflow.RegisterNewMovements(_db, entity, movementsBefore);
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -344,6 +349,22 @@ public class CancelCheckCommandHandler : IRequestHandler<CancelCheckCommand, Che
 
 internal static class CheckWorkflow
 {
+    /// <summary>
+    /// The movements the check already has, taken BEFORE the transition runs. A movement appended to a
+    /// check that is already in the store keeps the key it was created with, so EF change detection would
+    /// take it for an existing row and save an UPDATE that hits nothing - which ends as
+    /// DbUpdateConcurrencyException and loses the whole transition. Everything the transition appends is
+    /// therefore registered explicitly, exactly like a new RawAllocation or a newly activated stage.
+    /// The create/register path needs none of this: there the whole graph is inserted with its new parent.
+    /// </summary>
+    public static HashSet<Guid> SnapshotMovements(Check check) => check.Movements.Select(m => m.Id).ToHashSet();
+
+    public static void RegisterNewMovements(IApplicationDbContext db, Check check, HashSet<Guid> before)
+    {
+        foreach (var movement in check.Movements.Where(m => !before.Contains(m.Id)))
+            db.CheckMovements.Add(movement);
+    }
+
     public static async Task<CheckDto> MutateAsync(
         IApplicationDbContext db, Guid id, Action<Check> mutate, CancellationToken cancellationToken)
     {
@@ -351,7 +372,9 @@ internal static class CheckWorkflow
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken)
             ?? throw new NotFoundException("Check", id);
 
+        var movementsBefore = SnapshotMovements(entity);
         mutate(entity);
+        RegisterNewMovements(db, entity, movementsBefore);
         await db.SaveChangesAsync(cancellationToken);
 
         var list = await CheckDtoBuilder.BuildManyAsync(db, new List<Check> { entity }, true, cancellationToken);

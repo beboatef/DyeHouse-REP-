@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.CustomerReturns.DTOs;
 using DyeHouseERP.Application.CustomerReturns.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -123,6 +124,14 @@ public class CreateCustomerReturnCommandHandler : IRequestHandler<CreateCustomer
         var warehouses = await _db.Warehouses.AsNoTracking()
             .Where(w => messages.Select(m => m.WarehouseId).Contains(w.Id))
             .ToDictionaryAsync(w => w.Id, cancellationToken);
+
+        // A return posts a NEW IN row into each lot's warehouse, so every warehouse this
+        // document will write into must exist and still be active. Checked once per
+        // distinct warehouse, before the lock and before any row - a refused return has
+        // no side effects, and the warehouses it already posted into stay untouched.
+        foreach (var warehouseId in warehouses.Keys)
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, warehouseId, cancellationToken, "to receive a customer return into it");
 
         foreach (var (input, lotId, _) in resolved)
         {

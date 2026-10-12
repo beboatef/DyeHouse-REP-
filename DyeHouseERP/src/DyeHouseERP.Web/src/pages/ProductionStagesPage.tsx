@@ -16,15 +16,18 @@ const emptyDraft = (): Draft => ({
   allowSkip: false, allowRepeat: false, allowRework: true, allowReturn: false, notes: ""
 });
 
-const flags: { key: keyof Draft; label: string }[] = [
-  { key: "requiresInputQuantity", label: "يتطلب كمية مدخلة" },
-  { key: "requiresOutputQuantity", label: "يتطلب كمية مخرجة" },
-  { key: "requiresApproval", label: "يتطلب اعتماد" },
-  { key: "allowSkip", label: "يسمح بالتخطي" },
-  { key: "allowRepeat", label: "يسمح بالتكرار" },
-  { key: "allowRework", label: "يسمح بإعادة المعالجة" },
-  { key: "allowReturn", label: "يسمح بالإرجاع" }
+/** `key` is the domain field sent to the API; the label is an i18n key, translated where it renders. */
+const flags: { key: keyof Draft; labelKey: string }[] = [
+  { key: "requiresInputQuantity", labelKey: "stg.flag.requiresInputQuantity" },
+  { key: "requiresOutputQuantity", labelKey: "stg.flag.requiresOutputQuantity" },
+  { key: "requiresApproval", labelKey: "stg.flag.requiresApproval" },
+  { key: "allowSkip", labelKey: "stg.flag.allowSkip" },
+  { key: "allowRepeat", labelKey: "stg.flag.allowRepeat" },
+  { key: "allowRework", labelKey: "stg.flag.allowRework" },
+  { key: "allowReturn", labelKey: "stg.flag.allowReturn" }
 ];
+
+type EditDraft = { name: string; sequence: string; notes: string };
 
 export default function ProductionStagesPage() {
   const { t } = useI18n();
@@ -32,6 +35,18 @@ export default function ProductionStagesPage() {
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [error, setError] = useState<string | null>(null);
+
+  /** Free-text filter, applied by the API next to the activity filter. */
+  const [search, setSearch] = useState("");
+  /** The row currently being edited in place (name / sequence / notes), if any. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft>({ name: "", sequence: "", notes: "" });
+
+  /** Every write funnels through here so one invalidation covers list, create, edit and toggle. */
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["production-stages"] });
+
+  const apiError = (err: any) =>
+    err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error");
 
   /**
    * Setting a route marker MOVES it off whichever stage held it before, so the
@@ -41,11 +56,14 @@ export default function ProductionStagesPage() {
   const markerMutation = useMutation({
     mutationFn: ({ id, kind }: { id: string; kind: "formation" | "readyGoods" }) =>
       kind === "formation" ? ProductionStagesApi.setFormationStage(id) : ProductionStagesApi.setReadyGoodsStage(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-stages"] }),
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "حدث خطأ")
+    onSuccess: () => { invalidate(); setError(null); },
+    onError: (err: any) => setError(apiError(err))
   });
 
-  const { data: stages, isLoading } = useQuery({ queryKey: ["production-stages"], queryFn: () => ProductionStagesApi.list() });
+  const { data: stages, isLoading, isError } = useQuery({
+    queryKey: ["production-stages", search],
+    queryFn: () => ProductionStagesApi.list({ search: search.trim() || undefined })
+  });
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -56,21 +74,70 @@ export default function ProductionStagesPage() {
         allowRework: draft.allowRework, allowReturn: draft.allowReturn, notes: draft.notes || undefined
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["production-stages"] });
+      invalidate();
       setShowForm(false);
       setDraft(emptyDraft());
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
+    onError: (err: any) => setError(apiError(err))
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (id: string) =>
+      ProductionStagesApi.update(id, {
+        name: editDraft.name,
+        sequence: Number(editDraft.sequence),
+        notes: editDraft.notes.trim() || undefined
+      }),
+    onSuccess: () => {
+      invalidate();
+      setEditingId(null);
+      setEditDraft({ name: "", sequence: "", notes: "" });
+      setError(null);
+    },
+    onError: (err: any) => setError(apiError(err))
+  });
+
+  /**
+   * Deactivate / reactivate one stage. Deactivating never deletes history: the executions
+   * that already reference this stage keep their id and stay readable, the stage simply
+   * stops being offered for new Job Orders and new transfers.
+   */
+  const activeMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      ProductionStagesApi.setActive(id, isActive),
+    onSuccess: () => { invalidate(); setError(null); },
+    onError: (err: any) => setError(apiError(err))
+  });
+
+  const startEdit = (id: string, name: string, sequence: number, notes: string | null) => {
+    setEditingId(id);
+    setEditDraft({ name, sequence: String(sequence), notes: notes ?? "" });
+    setError(null);
+  };
 
   return (
     <>
       <PageHeader
-        title="مراحل التشغيل"
-        subtitle="لا توجد أسماء مراحل ثابتة في النظام - كل مرحلة يتم تعريفها هنا، بالترتيب الذي تحدده، وتُطبَّق تلقائيًا على كل أمر تشغيل جديد"
-        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ مرحلة جديدة"}</Button>}
+        title={t("nav.productionStages")}
+        subtitle={t("stg.subtitle")}
+        action={<Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("stg.new")}</Button>}
       />
+
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("common.searchPlaceholder")}
+          aria-label={t("common.search")}
+          className="w-full sm:w-72"
+        />
+        <span className="text-xs text-gray-500">
+          {t("common.results")}: {stages?.length ?? 0}
+        </span>
+      </div>
+
+      {error && <p className="form-error mb-4" role="alert">{error}</p>}
 
       {showForm && (
         <Card className="p-5 mb-6">
@@ -83,15 +150,15 @@ export default function ProductionStagesPage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="field-label">كود المرحلة</label>
+                <label className="field-label">{t("stg.code")}</label>
                 <Input value={draft.code} onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))} required maxLength={20} />
               </div>
               <div>
-                <label className="field-label">اسم المرحلة</label>
+                <label className="field-label">{t("stg.name")}</label>
                 <Input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} required maxLength={200} />
               </div>
               <div>
-                <label className="field-label">الترتيب</label>
+                <label className="field-label">{t("stg.sequence")}</label>
                 <Input type="number" value={draft.sequence} onChange={(e) => setDraft((d) => ({ ...d, sequence: e.target.value }))} required min={1} />
               </div>
             </div>
@@ -104,20 +171,19 @@ export default function ProductionStagesPage() {
                     checked={draft[f.key] as boolean}
                     onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.checked }))}
                   />
-                  {f.label}
+                  {t(f.labelKey)}
                 </label>
               ))}
             </div>
 
             <div>
-              <label className="field-label">ملاحظات</label>
+              <label className="field-label">{t("common.notes")}</label>
               <Input value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} />
             </div>
 
             <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
+              {createMutation.isPending ? t("common.saving") : t("common.save")}
             </Button>
-            {error && <p className="form-error">{error}</p>}
           </form>
         </Card>
       )}
@@ -126,31 +192,67 @@ export default function ProductionStagesPage() {
         <table className="table">
           <thead>
             <tr>
-              <th>الترتيب</th>
-              <th>الكود</th>
-              <th>الاسم</th>
-              <th>الخصائص</th>
-              <th>الحالة</th>
-              <th>دور المرحلة</th>
+              <th>{t("stg.sequence")}</th>
+              <th>{t("common.code")}</th>
+              <th>{t("common.name")}</th>
+              <th>{t("stg.flags")}</th>
+              <th>{t("common.status")}</th>
+              <th>{t("stg.role")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
-            {!isLoading && stages?.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لم يتم تعريف أي مراحل بعد</td></tr>
+            {isLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>}
+            {isError && <tr><td colSpan={7} className="px-4 py-6 text-center text-red-500">{t("common.error")}</td></tr>}
+            {!isLoading && !isError && stages?.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
             )}
             {stages?.map((s) => (
               <tr key={s.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="ltr-nums">{s.sequence}</td>
+                <td className="ltr-nums">
+                  {editingId === s.id ? (
+                    <Input
+                      type="number"
+                      min={1}
+                      value={editDraft.sequence}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, sequence: e.target.value }))}
+                      className="w-20"
+                      aria-label={t("stg.sequence")}
+                    />
+                  ) : (
+                    s.sequence
+                  )}
+                </td>
                 <td className="font-medium ltr-nums">{s.code}</td>
-                <td>{s.name}</td>
+                <td>
+                  {editingId === s.id ? (
+                    <div className="space-y-2 min-w-[200px]">
+                      <Input
+                        value={editDraft.name}
+                        onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                        maxLength={200}
+                        aria-label={t("common.name")}
+                      />
+                      <Input
+                        value={editDraft.notes}
+                        onChange={(e) => setEditDraft((d) => ({ ...d, notes: e.target.value }))}
+                        placeholder={t("common.notes")}
+                        aria-label={t("common.notes")}
+                      />
+                    </div>
+                  ) : (
+                    s.name
+                  )}
+                </td>
                 <td className="space-x-1 space-x-reverse">
-                  {s.requiresApproval && <Badge tone="yellow">اعتماد</Badge>}
-                  {s.allowSkip && <Badge tone="blue">قابل للتخطي</Badge>}
-                  {s.allowRework && <Badge tone="gray">إعادة معالجة</Badge>}
+                  {s.requiresApproval && <Badge tone="yellow">{t("stg.badgeApproval")}</Badge>}
+                  {s.allowSkip && <Badge tone="blue">{t("stg.badgeSkip")}</Badge>}
+                  {s.allowRework && <Badge tone="gray">{t("stg.badgeRework")}</Badge>}
                 </td>
                 <td>
-                  <Badge tone={s.isActive ? "green" : "gray"}>{s.isActive ? "نشطة" : "غير نشطة"}</Badge>
+                  <Badge tone={s.isActive ? "green" : "gray"}>
+                    {s.isActive ? t("common.active") : t("common.inactive")}
+                  </Badge>
                 </td>
                 {/* The two route markers are explicit buttons, never derived from
                     the sequence column - spec sections 12 and 17. */}
@@ -184,6 +286,51 @@ export default function ProductionStagesPage() {
                       </Button>
                     )}
                   </div>
+                </td>
+                <td>
+                  {editingId === s.id ? (
+                    <div className="flex flex-wrap gap-1">
+                      <Button
+                        size="sm"
+                        disabled={updateMutation.isPending || !editDraft.name.trim() || !editDraft.sequence}
+                        onClick={() => updateMutation.mutate(s.id)}
+                      >
+                        {updateMutation.isPending ? t("common.saving") : t("common.save")}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                        {t("common.cancel")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => startEdit(s.id, s.name, s.sequence, s.notes)}>
+                        {t("common.edit")}
+                      </Button>
+                      {s.isActive ? (
+                        /* A stage that IS the route's start or its final stop cannot be switched off:
+                           doing so would leave new Job Orders with no formation stage. It is disabled
+                           here with the reason, and the API refuses it as well. */
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={s.isFormationStage || s.isReadyGoodsStage || activeMutation.isPending}
+                          title={s.isFormationStage || s.isReadyGoodsStage ? t("stg.routeStageLocked") : undefined}
+                          onClick={() => activeMutation.mutate({ id: s.id, isActive: false })}
+                        >
+                          {t("common.deactivate")}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={activeMutation.isPending}
+                          onClick={() => activeMutation.mutate({ id: s.id, isActive: true })}
+                        >
+                          {t("common.activate")}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

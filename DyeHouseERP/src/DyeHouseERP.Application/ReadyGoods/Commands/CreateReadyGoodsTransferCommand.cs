@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ReadyGoods.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -66,14 +67,21 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
         if (order.Status == ProductionOrderStatus.Cancelled)
             throw new DocumentLockedException("Production Order", order.OrderNumber);
 
+        // H1: a ready-goods transfer creates a document AND an IN stock movement, so it
+        // is refused outright while the order is not 100% allocated - checked here, before
+        // the warehouse/lot lock and before any row is written.
+        await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
+
         // R2: the destination must exist and genuinely be a Ready Goods
         // warehouse. Validated BEFORE the lock so a bad request never queues
         // behind a live poster. (The posting itself targets request.WarehouseId,
         // while deliveries lock the ready warehouse they resolve - the lock key
         // deliberately excludes the warehouse so the two still serialize.)
-        var warehouse = await _db.Warehouses.AsNoTracking()
-            .FirstOrDefaultAsync(w => w.Id == request.WarehouseId, cancellationToken)
-            ?? throw new NotFoundException("Warehouse", request.WarehouseId);
+        // WarehouseGuard also refuses a DEACTIVATED warehouse: a new ready-goods document
+        // may not be created against one, while every transfer already posted into it stays
+        // readable and traceable.
+        var warehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, request.WarehouseId, cancellationToken, "to post ready-goods stock into it");
         if (warehouse.Kind != WarehouseKind.ReadyGoods)
             throw new DomainException("Ready goods transfers must target a Ready Goods warehouse.");
 

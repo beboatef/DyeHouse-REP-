@@ -15,7 +15,11 @@ using DyeHouseERP.Application.Treasury.DTOs;
 using DyeHouseERP.Application.Users.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Exceptions;
+using DyeHouseERP.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
 namespace DyeHouseERP.IntegrationTests;
@@ -507,5 +511,175 @@ public class JwtSessionInvalidationTests : SqlServerConcurrencyTestBase
         update.EnsureSuccessStatusCode();
 
         (await CallAsUserAsync(Client, token)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+}
+
+/// <summary>
+/// H7: the receiving-inspection rejection race on a real SQL Server. A rejection accumulates
+/// on the receipt line and posts one correcting OUT row, so the second of two inspections
+/// reporting the SAME rejection must compute its delta against what the first one COMMITTED -
+/// not against a snapshot read before the lot lock. sp_getapplock has no InMemory
+/// equivalent, which is exactly why this belongs here and not in the unit suite.
+/// </summary>
+[Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
+public class ConcurrentInspectionRejectionTests : SqlServerConcurrencyTestBase
+{
+    [Fact]
+    public async Task Two_Concurrent_Inspections_Rejecting_The_Same_Quantity_Post_Exactly_One_Correcting_Row()
+    {
+        var (customerId, itemId, rawWarehouseId, _) = await SeedMasterDataAsync("INSP-RACE");
+
+        var message = (await (await Client.PostAsJsonAsync("/api/raw-messages", new
+        {
+            receiptDate = DateTime.UtcNow, customerId, warehouseId = rawWarehouseId,
+            lines = new[] { new { itemId, quantityKg = 100m } }
+        })).Content.ReadFromJsonAsync<RawMessageDto>(Json))!;
+
+        var lineId = message.Lines.Single().Id;
+        var rejection = new
+        {
+            result = InspectionStatus.Rejected,
+            notes = "the same rejection, twice",
+            rejections = new[] { new { lineId, rejectedQuantityKg = 60m, rejectedQuantityMeter = (decimal?)null } }
+        };
+
+        var responses = await Task.WhenAll(
+            Client.PostAsJsonAsync($"/api/raw-messages/{message.Id}/inspection", rejection),
+            Client.PostAsJsonAsync($"/api/raw-messages/{message.Id}/inspection", rejection));
+
+        responses.Count(r => r.IsSuccessStatusCode)
+            .Should().Be(1, "60 KG committed plus the 60 KG reported is more than the 100 KG received");
+
+        responses.Single(r => !r.IsSuccessStatusCode).StatusCode
+            .Should().Be(HttpStatusCode.UnprocessableEntity,
+                "the losing request is refused by the received-quantity rule, never by a server fault");
+
+        var messages = await Client.GetFromJsonAsync<List<RawMessageDto>>($"/api/raw-messages?customerId={customerId}", Json);
+        var persisted = messages!.Single(m => m.Id == message.Id);
+
+        persisted.Lines.Single().RejectedQuantityKg.Should().Be(60m, "the rejection is recorded once, never doubled");
+
+        // One correcting OUT row: exactly 60 of the 100 received KG left the customer's lot.
+        BalanceKgOf(messages!, message.Id).Should().Be(40m);
+    }
+}
+
+/// <summary>
+/// H7: the warehouse deactivation window. ApplicationDbContext.SaveChangesAsync re-checks,
+/// under a warehouse row lock inside the INSERT's own transaction, that every warehouse a new
+/// ledger row points at is still active. A deactivation landing between the handler's check
+/// and the INSERT therefore can no longer let a new stock row into a retired warehouse.
+/// The row lock is T-SQL, so these tests execute the real thing on SQL Server.
+/// </summary>
+[Trait("Category", "Concurrency")]
+[Collection("IntegrationDatabase")]
+public class WarehouseWriteTimeGuardSqlTests : SqlServerConcurrencyTestBase
+{
+    private static DbContextOptions<ApplicationDbContext> Options() =>
+        new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer(CustomWebApplicationFactory.ConnectionString)
+            .Options;
+
+    private async Task<Guid> CreateWarehouseAsync(string prefix)
+    {
+        var warehouse = (await (await Client.PostAsJsonAsync("/api/warehouses", new
+        {
+            code = $"{prefix}{Guid.NewGuid():N}"[..16], name = "Write Guard WH", kind = WarehouseKind.RawMaterial
+        })).Content.ReadFromJsonAsync<WarehouseDto>(Json))!;
+
+        return warehouse.Id;
+    }
+
+    private static InventoryTransaction Movement(Guid warehouseId, string documentNumber) => new(
+        DocumentType.StockAdjustment, documentNumber, Guid.NewGuid(), DateTime.UtcNow,
+        warehouseId, Guid.NewGuid(), Guid.NewGuid(),
+        rawMessageId: null, productionOrderId: null,
+        quantityKg: 5m, quantityMeter: null,
+        direction: TransactionDirection.In, createdBy: "sql-test");
+
+    [Fact]
+    public async Task A_New_Ledger_Row_Is_Refused_When_The_Warehouse_Was_Deactivated_In_The_Meantime()
+    {
+        var warehouseId = await CreateWarehouseAsync("WGD");
+
+        (await Client.PostAsJsonAsync($"/api/warehouses/{warehouseId}/active", new { isActive = false }))
+            .EnsureSuccessStatusCode();
+
+        var options = Options();
+
+        await using (var db = new ApplicationDbContext(options))
+        {
+            db.InventoryTransactions.Add(Movement(warehouseId, "GUARD-REFUSED"));
+
+            var act = async () => await db.SaveChangesAsync();
+
+            var ex = await act.Should().ThrowAsync<DomainException>();
+            ex.Which.Message.Should().Contain("was deactivated while this stock movement was being posted");
+        }
+
+        await using (var verify = new ApplicationDbContext(options))
+            verify.InventoryTransactions.Count(t => t.SourceDocumentNumber == "GUARD-REFUSED")
+                .Should().Be(0, "the check and the INSERT share one transaction, so nothing may be written");
+    }
+
+    [Fact]
+    public async Task An_Active_Warehouse_Still_Accepts_A_New_Ledger_Row()
+    {
+        var warehouseId = await CreateWarehouseAsync("WGA");
+        var options = Options();
+
+        await using (var db = new ApplicationDbContext(options))
+        {
+            db.InventoryTransactions.Add(Movement(warehouseId, "GUARD-ACCEPTED"));
+            await db.SaveChangesAsync();
+        }
+
+        await using (var verify = new ApplicationDbContext(options))
+            verify.InventoryTransactions.Count(t => t.SourceDocumentNumber == "GUARD-ACCEPTED")
+                .Should().Be(1, "the write-time guard must never refuse a posting into an active warehouse");
+    }
+
+    [Fact]
+    public async Task A_Concurrent_Deactivation_Waits_For_The_Row_Lock_A_Posting_Holds()
+    {
+        var warehouseId = await CreateWarehouseAsync("WGL");
+        var options = Options();
+
+        // A posting holds the guard's warehouse row lock, inside its own transaction ...
+        await using var poster = new ApplicationDbContext(options);
+        await using var posting = await poster.Database.BeginTransactionAsync();
+
+        await using (var command = poster.Database.GetDbConnection().CreateCommand())
+        {
+            command.Transaction = posting.GetDbTransaction();
+            command.CommandText = "SELECT [IsActive] FROM [Warehouses] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = @warehouseId";
+
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@warehouseId";
+            parameter.Value = warehouseId;
+            command.Parameters.Add(parameter);
+
+            await command.ExecuteScalarAsync();
+        }
+
+        // ... so deactivating the same warehouse cannot complete while that transaction is open.
+        await using var deactivator = new ApplicationDbContext(options);
+        var deactivate = Task.Run(async () =>
+        {
+            var warehouse = await deactivator.Warehouses.SingleAsync(w => w.Id == warehouseId);
+            warehouse.Deactivate("sql-test");
+            await deactivator.SaveChangesAsync();
+        });
+
+        var finished = await Task.WhenAny(deactivate, Task.Delay(TimeSpan.FromSeconds(3)));
+        finished.Should().NotBe(deactivate,
+            "a deactivation must queue behind the warehouse row lock a stock posting holds");
+
+        await posting.CommitAsync();
+        await deactivate;
+
+        await using var verify = new ApplicationDbContext(options);
+        (await verify.Warehouses.SingleAsync(w => w.Id == warehouseId)).IsActive.Should().BeFalse();
     }
 }

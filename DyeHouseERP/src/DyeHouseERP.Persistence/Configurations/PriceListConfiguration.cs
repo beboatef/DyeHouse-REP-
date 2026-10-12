@@ -52,7 +52,7 @@ public class ProductionOrderServicePriceConfiguration : IEntityTypeConfiguration
         builder.Property(s => s.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(s => s.ModifiedBy).HasMaxLength(100);
 
-        builder.HasIndex(s => new { s.ProductionOrderId, s.Unit }).IsUnique();
+        builder.HasIndex(s => new { s.ProductionOrderId, s.StageDefinitionId, s.Unit }).IsUnique();
         builder.HasIndex(s => s.StageDefinitionId);
     }
 }

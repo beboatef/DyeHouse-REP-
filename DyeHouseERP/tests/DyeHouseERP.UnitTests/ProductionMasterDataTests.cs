@@ -54,14 +54,17 @@ public class ProductionStageSeedTests
     }
 
     [Fact]
-    public async Task Seeder_IsIdempotent_AndProducesExactlyTwentyOneStages()
+    public async Task Seeder_IsIdempotent_AndPreservesTwentyOneStagesPlusPrinting()
     {
         await using var db = NewDb();
 
         await ProductionStageSeeder.SeedAsync(db, NullLogger.Instance);
         await ProductionStageSeeder.SeedAsync(db, NullLogger.Instance); // re-run must not duplicate
 
-        (await db.ProductionStageDefinitions.CountAsync()).Should().Be(21);
+        (await db.ProductionStageDefinitions.CountAsync()).Should().Be(22);
+        var printing = await db.ProductionStageDefinitions.SingleAsync(s => s.Code == "PRINTING");
+        printing.RequiresDrawingNumber.Should().BeTrue();
+        printing.Name.Should().Be("الطباعة");
     }
 
     [Fact]

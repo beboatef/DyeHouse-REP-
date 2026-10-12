@@ -17,6 +17,8 @@ public class StageExecutionDto
 {
     public Guid Id { get; set; }
     public Guid StageDefinitionId { get; set; }
+    public bool RequiresDrawingNumber { get; set; }
+    public string? DrawingNumber { get; set; }
     public string StageCode { get; set; } = string.Empty;
     public string StageName { get; set; } = string.Empty;
     public int Sequence { get; set; }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -37,13 +38,14 @@ public record TransferToNextStageCommand(
     decimal? OutputMeter,
     decimal? SeparatesKg,
     decimal? SeparatesMeter,
-    string? Notes) : IRequest<ProductionOrderDto>;
+    string? Notes, string? DrawingNumber = null) : IRequest<ProductionOrderDto>;
 
 public class TransferToNextStageCommandValidator : AbstractValidator<TransferToNextStageCommand>
 {
     public TransferToNextStageCommandValidator()
     {
         RuleFor(x => x.StageExecutionId).NotEmpty();
+        RuleFor(x => x.DrawingNumber).MaximumLength(100);
         RuleFor(x => x.NextStageDefinitionId).NotEmpty();
         RuleFor(x => x)
             .Must(x => x.OutputKg is > 0 || x.OutputMeter is > 0)
@@ -99,6 +101,24 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             throw new DomainException(
                 $"Production order {order.OrderNumber} is paused. Resume it before transferring a stage.");
 
+        // H1: the transfer is where production output is recorded, so the 100% rule is
+        // checked BEFORE anything is written. This single call covers both branches:
+        // activating the next stage, and the ready-goods branch that posts the ready
+        // document + IN movement and completes the order (spec section 17).
+        await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
+
+        stage.EnsureDrawingNumber();
+        var drawingNumber = request.DrawingNumber;
+        // Rework of the same operation retains this order's recorded drawing unless
+        // the operator explicitly supplies another. Never borrow another order's number.
+        if (nextStage.RequiresDrawingNumber && drawingNumber is null)
+            drawingNumber = await _db.ProductionOrderStageExecutions.AsNoTracking()
+                .Where(s => s.ProductionOrderId == order.Id && s.StageDefinitionId == nextStage.Id && s.DrawingNumber != null)
+                .OrderByDescending(s => s.StartedAtUtc).Select(s => s.DrawingNumber).FirstOrDefaultAsync(cancellationToken);
+        if (nextStage.RequiresDrawingNumber &&
+            (string.IsNullOrWhiteSpace(drawingNumber) || drawingNumber.Trim().Length > 100))
+            throw new DomainException("Drawing number is required before printing. رقم الرسمة مطلوب قبل تنفيذ الطباعة.");
+
         var previousOutputKg = stage.OutputKg;
         var previousOutputMeter = stage.OutputMeter;
 
@@ -136,6 +156,13 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 .FirstOrDefaultAsync(cancellationToken)
                 ?? throw new DomainException("No Ready Goods warehouse is configured.");
 
+            // A retired warehouse never receives a new stock row: this branch posts the
+            // ready-goods transfer AND its IN movement, so the destination must still be
+            // active. The warehouse is resolved HERE (not supplied by the caller), so the
+            // check is on the exact row this handler is about to write.
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, readyWarehouse.Id, cancellationToken, "to post ready-goods stock into it");
+
             var transferNumber = await _numberGenerator.NextAsync(
                 DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
 
@@ -162,7 +189,15 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
         else
         {
             // Step 5: activate ONLY the chosen stage, baselined on this stage's output.
-            order.ActivateNextStage(nextStage, request.OutputKg, request.OutputMeter, _currentUser.UserName);
+            var activated = order.ActivateNextStage(
+                nextStage, request.OutputKg, request.OutputMeter, _currentUser.UserName, drawingNumber);
+
+            // Added explicitly, exactly like a new RawAllocation (AllocateRawCommand) or a
+            // resumed cycle's allocation: EF change detection finds an entity whose
+            // client-generated key is already set and treats it as an EXISTING row, so
+            // without this Add the new stage would be saved as an UPDATE against a row that
+            // was never inserted and every stage transfer would fail on SaveChanges.
+            _db.ProductionOrderStageExecutions.Add(activated);
 
             if (order.Status == ProductionOrderStatus.RawAllocated)
                 order.MarkInProduction();
@@ -197,6 +232,13 @@ public class UpdateStageOutputCommandHandler : IRequestHandler<UpdateStageOutput
         var stage = await _db.ProductionOrderStageExecutions
             .FirstOrDefaultAsync(s => s.Id == request.StageExecutionId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrderStageExecution", request.StageExecutionId);
+
+        // H1: editing the open stage's output IS recording production, so the same gate
+        // applies as for a transfer or a stage completion.
+        var order = await _db.ProductionOrders.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == stage.ProductionOrderId, cancellationToken)
+            ?? throw new NotFoundException("ProductionOrder", stage.ProductionOrderId);
+        await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
 
         var beforeKg = stage.OutputKg;
         var beforeMeter = stage.OutputMeter;

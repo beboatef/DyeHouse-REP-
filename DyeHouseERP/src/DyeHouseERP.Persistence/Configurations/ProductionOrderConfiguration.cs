@@ -81,6 +81,7 @@ public class ProductionOrderStageExecutionConfiguration : IEntityTypeConfigurati
 
         builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.Operator).HasMaxLength(100);
+        builder.Property(s => s.DrawingNumber).HasMaxLength(100);
         builder.Property(s => s.Notes).HasMaxLength(2000);
         builder.Property(s => s.ApprovedBy).HasMaxLength(100);
 

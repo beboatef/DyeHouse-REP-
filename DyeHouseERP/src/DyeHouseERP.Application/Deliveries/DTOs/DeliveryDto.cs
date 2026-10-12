@@ -14,6 +14,7 @@ public class DeliveryLineDto
     public decimal? QuantityMeter { get; set; }
     public int? PieceCount { get; set; }
     public string? RawOrigin { get; set; }
+    public List<string> DrawingNumbers { get; set; } = new();
 }
 
 public class DeliveryDto

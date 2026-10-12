@@ -199,10 +199,20 @@ export const ItemImportApi = {
 };
 
 export const WarehousesApi = {
-  list: (params?: { kind?: string }) =>
+  list: (params?: { kind?: string; search?: string }) =>
     api.get<Warehouse[]>("/warehouses", { params }).then((r) => r.data),
   create: (body: { code: string; name: string; kind: string }) =>
-    api.post<Warehouse>("/warehouses", body).then((r) => r.data)
+    api.post<Warehouse>("/warehouses", body).then((r) => r.data),
+  /**
+   * Renames a warehouse. The current `kind` is sent back unchanged on purpose: reinterpreting
+   * an existing warehouse's kind would silently reinterpret every balance it already holds -
+   * the same reason the import flow is create-only - so the UI never offers to change it.
+   */
+  update: (id: string, body: { name: string; kind: string }) =>
+    api.put<Warehouse>(`/warehouses/${id}`, { id, ...body }).then((r) => r.data),
+  /** Deactivation is the delete substitute: movements and documents must stay resolvable. */
+  setActive: (id: string, isActive: boolean) =>
+    api.post<Warehouse>(`/warehouses/${id}/active`, { isActive }).then((r) => r.data)
 };
 
 // ---------------- Purchase units of measure (spec section 44) ----------------
@@ -415,6 +425,7 @@ export const RawMessagesApi = {
 // ---------------- Production Stages (configurable engine) ----------------
 
 export interface ProductionStageDefinition {
+  requiresDrawingNumber: boolean;
   id: string;
   code: string;
   name: string;
@@ -439,7 +450,7 @@ export const ProductionStagesApi = {
     api.post<ProductionStageDefinition>(`/production-stages/${id}/formation-stage`).then((r) => r.data),
   setReadyGoodsStage: (id: string) =>
     api.post<ProductionStageDefinition>(`/production-stages/${id}/ready-goods-stage`).then((r) => r.data),
-  list: (params?: { activeOnly?: boolean }) =>
+  list: (params?: { activeOnly?: boolean; search?: string }) =>
     api.get<ProductionStageDefinition[]>("/production-stages", { params }).then((r) => r.data),
   create: (body: {
     code: string;
@@ -453,7 +464,16 @@ export const ProductionStagesApi = {
     allowRework: boolean;
     allowReturn: boolean;
     notes?: string;
-  }) => api.post<ProductionStageDefinition>("/production-stages", body).then((r) => r.data)
+  }) => api.post<ProductionStageDefinition>("/production-stages", body).then((r) => r.data),
+  /** Renames / re-sequences / re-notes a stage. The two route markers keep their own endpoints. */
+  update: (id: string, body: { name: string; sequence: number; notes?: string }) =>
+    api.put<ProductionStageDefinition>(`/production-stages/${id}`, { id, ...body }).then((r) => r.data),
+  /**
+   * Deactivation is the delete substitute: stages that historical Job Orders already ran must stay
+   * resolvable, and the API refuses to deactivate the formation or the ready-goods stage.
+   */
+  setActive: (id: string, isActive: boolean) =>
+    api.post<ProductionStageDefinition>(`/production-stages/${id}/active`, { isActive }).then((r) => r.data)
 };
 
 // ---------------- Production Orders ----------------
@@ -475,6 +495,8 @@ export interface RawAllocationLine {
 }
 
 export interface StageExecution {
+  drawingNumber: string | null;
+  requiresDrawingNumber: boolean;
   id: string;
   stageDefinitionId: string;
   stageCode: string;
@@ -584,10 +606,13 @@ export const ProductionOrdersApi = {
     stageExecutionId: string,
     body: {
       nextStageDefinitionId: string;
+      drawingNumber?: string;
       outputKg?: number; outputMeter?: number;
       separatesKg?: number; separatesMeter?: number; notes?: string;
     }
   ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/transfer`, body).then((r) => r.data),
+  updateDrawing: (id: string, drawingNumber: string, reason: string) =>
+    api.post<ProductionOrder>(`/production-orders/stage-executions/${id}/drawing`, { drawingNumber, reason }).then((r) => r.data),
   /** Edits the OPEN stage's output. The baseline never moves; the change is audited. */
   updateStageOutput: (
     stageExecutionId: string,
@@ -883,6 +908,7 @@ export const ReadyGoodsApi = {
 export type DeliveryStatus = "Draft" | "Prepared" | "Delivered" | "Cancelled";
 
 export interface DeliveryLine {
+  drawingNumbers: string[];
   id: string; productionOrderId: string; productionOrderNumber: string; itemId: string; itemCode: string;
   color: string | null; quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null; rawOrigin: string | null;
 }

@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -62,6 +63,12 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
         // Spec section 43: a raw receipt is a stock posting, so its date must
         // fall outside any closed period.
         await _periodClose.EnsureOpenAsync(request.ReceiptDate, cancellationToken);
+
+        // A receipt is written into exactly the warehouse the caller picked, so the
+        // warehouse must exist and still be active. Deactivated warehouses stay readable
+        // for every message already received into them.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, request.WarehouseId, cancellationToken, "to receive raw material into it");
 
         // Section 6: the message number is ALWAYS system-generated via the
         // concurrency-safe sequence engine - never typed by the user.

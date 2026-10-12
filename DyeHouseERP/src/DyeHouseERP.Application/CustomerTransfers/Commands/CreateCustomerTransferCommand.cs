@@ -86,6 +86,12 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         var message = await _db.RawMessages.FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 
+        // The transfer posts a NEW OUT row and a NEW IN row, both against the message's
+        // warehouse: ownership moves, but the stock row is still new stock movement in
+        // that warehouse, so it is refused while the warehouse is deactivated.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, message.WarehouseId, cancellationToken, "to transfer stock between customers");
+
         // H6: lock both ownership dimensions (sender and receiver) for the whole
         // validate-then-post window, so a concurrent movement cannot change the
         // sender's balance between the check and the OUT row.

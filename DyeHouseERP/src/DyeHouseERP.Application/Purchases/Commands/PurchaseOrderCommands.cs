@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Purchases.DTOs;
 using DyeHouseERP.Application.Purchases.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -125,7 +126,13 @@ public class AddPurchaseOrderLineCommandHandler : IRequestHandler<AddPurchaseOrd
             ?? throw new NotFoundException("PurchaseOrder", request.OrderId);
 
         await PurchaseRules.EnsureMaterialExists(_db, request.MaterialId, cancellationToken);
-        order.AddLine(request.MaterialId, request.Quantity, request.Unit, request.UnitPrice, request.Notes, _currentUser.UserName);
+        var line = order.AddLine(request.MaterialId, request.Quantity, request.Unit, request.UnitPrice, request.Notes, _currentUser.UserName);
+
+        // A line added to an order that is ALREADY persisted keeps the key it was created with, so EF
+        // change detection would take it for an existing row and save an UPDATE that hits nothing
+        // (DbUpdateConcurrencyException), losing the line. Registering it explicitly makes
+        // SaveChangesAsync INSERT it - the same rule a new RawAllocation follows.
+        _db.PurchaseOrderLines.Add(line);
 
         await _db.SaveChangesAsync(cancellationToken);
         return await _mediator.Send(new GetPurchaseOrderByIdQuery(order.Id), cancellationToken);
@@ -273,11 +280,13 @@ internal static class PurchaseRules
             throw new NotFoundException("Supplier", supplierId);
     }
 
+    /// <summary>
+    /// A new purchase order or receipt may only be booked into a warehouse that exists and
+    /// is still active. Delegates to the shared <see cref="WarehouseGuard"/> rather than
+    /// duplicating the rule, so purchasing behaves exactly like every other document.
+    /// </summary>
     public static async Task EnsureWarehouseExists(IApplicationDbContext db, Guid warehouseId, CancellationToken ct)
-    {
-        if (!await db.Warehouses.AnyAsync(w => w.Id == warehouseId, ct))
-            throw new NotFoundException("Warehouse", warehouseId);
-    }
+        => await WarehouseGuard.EnsureUsableForNewDocumentAsync(db, warehouseId, ct);
 
     public static async Task EnsureMaterialExists(IApplicationDbContext db, Guid materialId, CancellationToken ct)
     {

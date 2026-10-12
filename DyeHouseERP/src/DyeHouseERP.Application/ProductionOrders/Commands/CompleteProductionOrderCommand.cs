@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using FluentValidation;
@@ -38,6 +39,11 @@ public class CompleteProductionOrderCommandHandler : IRequestHandler<CompletePro
     {
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
+
+        // H1: completing the Job Order (with or without output) needs 100% of the raw
+        // allocated. Abandoning an unallocated order stays possible through Cancel, which
+        // is the correct way to close a job that never consumed material.
+        await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
 
         // Load stage executions explicitly since the aggregate's private
         // collection is backed by its own table, not always populated by a

@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using DyeHouseERP.Domain.Enums;
@@ -34,6 +35,9 @@ public class StartStageCommandHandler : IRequestHandler<StartStageCommand, Produ
 
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == stage.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", stage.ProductionOrderId);
+
+        // H1: production does not start before 100% of the requested quantity is allocated.
+        await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
 
         if (order.Status == ProductionOrderStatus.RawAllocated)
             order.MarkInProduction();
@@ -90,6 +94,14 @@ public class CompleteStageCommandHandler : IRequestHandler<CompleteStageCommand,
             .FirstOrDefaultAsync(d => d.Id == stage.StageDefinitionId, cancellationToken)
             ?? throw new NotFoundException("ProductionStageDefinition", stage.StageDefinitionId);
 
+        // H1: a stage closing IS recorded production, so it cannot happen on an order
+        // that is not 100% allocated. The order is loaded once here and re-used by the
+        // separates branch below.
+        var order = await _db.ProductionOrders.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == stage.ProductionOrderId, cancellationToken)
+            ?? throw new NotFoundException("ProductionOrder", stage.ProductionOrderId);
+        await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
+
         // Enforce which quantities THIS stage type actually requires (spec
         // sections 20-21) - never a single formula forced on every stage.
         if (definition.RequiresInputQuantity && request.InputKg is null && request.InputMeter is null)
@@ -107,10 +119,6 @@ public class CompleteStageCommandHandler : IRequestHandler<CompleteStageCommand,
         // own trackable record from the moment it's produced.
         if (request.SeparatesKg is > 0 || request.SeparatesMeter is > 0)
         {
-            var order = await _db.ProductionOrders.AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == stage.ProductionOrderId, cancellationToken)
-                ?? throw new NotFoundException("ProductionOrder", stage.ProductionOrderId);
-
             _db.Separates.Add(new Domain.Entities.Separate(
                 order.Id, stage.Id, order.CustomerId, order.ItemId,
                 request.SeparatesKg, request.SeparatesMeter, _currentUser.UserName,
@@ -155,6 +163,14 @@ public class SkipStageCommandHandler : IRequestHandler<SkipStageCommand, Product
         var definition = await _db.ProductionStageDefinitions.AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == stage.StageDefinitionId, cancellationToken)
             ?? throw new NotFoundException("ProductionStageDefinition", stage.StageDefinitionId);
+
+        // H1: the same gate as every other stage-execution write. Skipping records no
+        // quantity by itself, but it moves the order along its route, and a path that
+        // skips the gate is a path that bypasses it.
+        var order = await _db.ProductionOrders.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == stage.ProductionOrderId, cancellationToken)
+            ?? throw new NotFoundException("ProductionOrder", stage.ProductionOrderId);
+        await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
 
         stage.Skip(definition.AllowSkip, request.Reason, _currentUser.UserName);
 

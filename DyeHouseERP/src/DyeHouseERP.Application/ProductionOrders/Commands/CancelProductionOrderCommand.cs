@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -140,6 +141,20 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
             // re-issue that committed while we were queueing changes what is
             // owed, and returning the stale figure would double-credit the lot.
             var outstanding = await ProductionOrderIssueLedger.GetOutstandingIssuePerLotAsync(_db, order.Id, cancellationToken);
+
+            // A retired warehouse is never a way to reverse raw material: cancellation posts
+            // one compensating IN row per lot that is still owed, so every warehouse that will
+            // actually receive a row must still be active. Checked HERE, against the lots that
+            // are genuinely outstanding and before any row is written, for two reasons: the
+            // refusal then has no side effect at all, and an order that owes nothing still
+            // cancels normally - deactivating a warehouse must not block closing an order that
+            // would return no material.
+            foreach (var warehouseId in outstanding
+                         .Where(l => l.Value.Kg > 0 || l.Value.Meter > 0)
+                         .Select(l => messages[l.Key.MessageId].WarehouseId)
+                         .Distinct())
+                await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                    _db, warehouseId, cancellationToken, "to reverse outstanding raw material back into it");
 
             var returned = new List<object>();
             foreach (var lot in outstanding.Where(l => l.Value.Kg > 0 || l.Value.Meter > 0))

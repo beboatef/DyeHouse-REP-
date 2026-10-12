@@ -17,6 +17,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 export type Lang = "ar" | "en";
 
 const ar: Record<string, string> = {
+  "printing.drawingNumber": "رقم الرسمة",
+  "printing.required": "رقم الرسمة مطلوب قبل تنفيذ الطباعة",
+  "printing.correct": "حفظ تصحيح رقم الرسمة",
   // ---------------- shell ----------------
   "app.subtitle": "نظام إدارة مصنع الصباغة والتجهيز",
   "app.logout": "خروج",
@@ -871,10 +874,50 @@ const ar: Record<string, string> = {
   "profit.legacyValue": "قيمة التشغيل القديمة (للمقارنة فقط)",
   "profit.source.ReadyGoodsTransfer": "كمية مرحّلة إلى الجاهز",
   "profit.source.LastStageOutput": "ناتج آخر مرحلة مكتملة",
-  "profit.source.None": "لا يوجد ناتج بعد"
+  "profit.source.None": "لا يوجد ناتج بعد",
+
+  // ---------------- stage & warehouse administration (edit / activate / deactivate / search) ----------------
+  // `common.activate` / `common.deactivate` already exist above and are reused as-is.
+  "stg.sequence": "الترتيب",
+  "stg.routeStageLocked": "لا يمكن تعطيل مرحلة التشكيل أو مرحلة الجاهز - انقل الدور إلى مرحلة أخرى أولًا",
+
+  // ---------------- warehouse administration screen (labels, kinds, import) ----------------
+  // `common.status` / `common.code` / `common.name` / `common.notes` / `common.cancel` and
+  // `nav.warehouses` already exist above and are reused on these two screens as they are.
+  "common.type": "النوع",
+  "wh.new": "+ مخزن جديد",
+  "wh.masterSubtitle": "عدد ونوع المخازن قابل للتخصيص بالكامل - لا يوجد عدد ثابت مفروض على النظام",
+  "wh.importTitle": "استيراد المخازن من Excel",
+  "wh.code": "كود المخزن",
+  "wh.name": "اسم المخزن",
+  "wh.kind": "نوع المخزن",
+  "wh.kind.RawMaterial": "مخزن خام",
+  "wh.kind.Materials": "مخزن مواد/كيماويات",
+  "wh.kind.ReadyGoods": "مخزن جاهز",
+
+  // ---------------- production stage administration screen (labels and feature flags) ----------------
+  "stg.new": "+ مرحلة جديدة",
+  "stg.subtitle": "لا توجد أسماء مراحل ثابتة في النظام - كل مرحلة يتم تعريفها هنا، بالترتيب الذي تحدده، وتُطبَّق تلقائيًا على كل أمر تشغيل جديد",
+  "stg.code": "كود المرحلة",
+  "stg.name": "اسم المرحلة",
+  "stg.flags": "الخصائص",
+  "stg.role": "دور المرحلة",
+  "stg.flag.requiresInputQuantity": "يتطلب كمية مدخلة",
+  "stg.flag.requiresOutputQuantity": "يتطلب كمية مخرجة",
+  "stg.flag.requiresApproval": "يتطلب اعتماد",
+  "stg.flag.allowSkip": "يسمح بالتخطي",
+  "stg.flag.allowRepeat": "يسمح بالتكرار",
+  "stg.flag.allowRework": "يسمح بإعادة المعالجة",
+  "stg.flag.allowReturn": "يسمح بالإرجاع",
+  "stg.badgeApproval": "اعتماد",
+  "stg.badgeSkip": "قابل للتخطي",
+  "stg.badgeRework": "إعادة معالجة"
 };
 
 const en: Record<string, string> = {
+  "printing.drawingNumber": "Drawing number",
+  "printing.required": "A drawing number is required before printing",
+  "printing.correct": "Save drawing correction",
   // Purchases payments export (spec section 35) - kept at the top so it stays
   // inside the editable window; key order in this dictionary is irrelevant.
   "pur.exportPayments": "Export payments",
@@ -1717,7 +1760,44 @@ const en: Record<string, string> = {
   "profit.legacyValue": "Legacy processing value (comparison only)",
   "profit.source.ReadyGoodsTransfer": "Transferred to ready goods",
   "profit.source.LastStageOutput": "Last completed stage's output",
-  "profit.source.None": "No output yet"
+  "profit.source.None": "No output yet",
+
+  // ---------------- stage & warehouse administration (edit / activate / deactivate / search) ----------------
+  // `common.activate` / `common.deactivate` already exist above and are reused as-is.
+  "stg.sequence": "Sequence",
+  "stg.routeStageLocked": "The formation and ready-goods stages cannot be deactivated - move the role to another stage first",
+
+  // ---------------- warehouse administration screen (labels, kinds, import) ----------------
+  // `common.status` / `common.code` / `common.name` / `common.notes` / `common.cancel` and
+  // `nav.warehouses` already exist above and are reused on these two screens as they are.
+  "common.type": "Type",
+  "wh.new": "+ New warehouse",
+  "wh.masterSubtitle": "How many warehouses exist and what they are is fully configurable - no fixed count is imposed on the system",
+  "wh.importTitle": "Import warehouses from Excel",
+  "wh.code": "Warehouse code",
+  "wh.name": "Warehouse name",
+  "wh.kind": "Warehouse kind",
+  "wh.kind.RawMaterial": "Raw material warehouse",
+  "wh.kind.Materials": "Materials / chemicals warehouse",
+  "wh.kind.ReadyGoods": "Ready-goods warehouse",
+
+  // ---------------- production stage administration screen (labels and feature flags) ----------------
+  "stg.new": "+ New stage",
+  "stg.subtitle": "No stage names are fixed in the system - every stage is defined here, in the order you set, and applies automatically to every new Job Order",
+  "stg.code": "Stage code",
+  "stg.name": "Stage name",
+  "stg.flags": "Properties",
+  "stg.role": "Stage role",
+  "stg.flag.requiresInputQuantity": "Requires input quantity",
+  "stg.flag.requiresOutputQuantity": "Requires output quantity",
+  "stg.flag.requiresApproval": "Requires approval",
+  "stg.flag.allowSkip": "May be skipped",
+  "stg.flag.allowRepeat": "May be repeated",
+  "stg.flag.allowRework": "May be reworked",
+  "stg.flag.allowReturn": "May be returned",
+  "stg.badgeApproval": "Approval",
+  "stg.badgeSkip": "Skippable",
+  "stg.badgeRework": "Rework"
 };
 
 const dictionaries: Record<Lang, Record<string, string>> = { ar, en };

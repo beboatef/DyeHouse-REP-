@@ -71,10 +71,10 @@ public class ProductionOrdersController : ControllerBase
     {
         var order = await _mediator.Send(new GetProductionOrderByIdQuery(id));
 
-        var headers = new List<string> { "Stage", "Status", "Input", "Output", "Loss", "Separates" };
+        var headers = new List<string> { "Stage", "Status", "Input", "Output", "Loss", "Separates", "Drawing number / رقم الرسمة" };
         var rows = order.StageExecutions.Select(s => new object?[]
         {
-            s.StageName, s.Status, s.InputKg, s.OutputKg, s.LossKg, s.SeparatesKg
+            s.StageName, s.Status, s.InputKg, s.OutputKg, s.LossKg, s.SeparatesKg, s.DrawingNumber
         }).ToList();
 
         var subtitle = $"{order.CustomerCode} - {order.CustomerName}  |  {order.ItemCode} - {order.ItemName}{(order.Color is null ? "" : $" ({order.Color})")}  |  {order.Status}";
@@ -160,7 +160,7 @@ public class ProductionOrdersController : ControllerBase
     public async Task<ActionResult<ProductionOrderDto>> TransferStage(Guid stageExecutionId, [FromBody] TransferStageRequest request)
         => Ok(await _mediator.Send(new TransferToNextStageCommand(
             stageExecutionId, request.NextStageDefinitionId,
-            request.OutputKg, request.OutputMeter, request.SeparatesKg, request.SeparatesMeter, request.Notes)));
+            request.OutputKg, request.OutputMeter, request.SeparatesKg, request.SeparatesMeter, request.Notes, request.DrawingNumber)));
 
     /// <summary>
     /// Edits the OPEN stage's output weight (spec section 16). No approval needed,
@@ -172,6 +172,11 @@ public class ProductionOrdersController : ControllerBase
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductionOrderDto>> UpdateStageOutput(Guid stageExecutionId, [FromBody] UpdateStageOutputRequest request)
         => Ok(await _mediator.Send(new UpdateStageOutputCommand(stageExecutionId, request.OutputKg, request.OutputMeter, request.Reason)));
+
+    [HttpPost("stage-executions/{stageExecutionId:guid}/drawing")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
+    public async Task<ActionResult<ProductionOrderDto>> UpdateDrawing(Guid stageExecutionId, [FromBody] UpdateStageDrawingRequest request)
+        => Ok(await _mediator.Send(new UpdateStageDrawingCommand(stageExecutionId, request.DrawingNumber, request.Reason)));
 
     [HttpPost("{id:guid}/pause")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
@@ -197,7 +202,9 @@ public class ProductionOrdersController : ControllerBase
 public record TransferStageRequest(
     Guid NextStageDefinitionId,
     decimal? OutputKg, decimal? OutputMeter,
-    decimal? SeparatesKg, decimal? SeparatesMeter, string? Notes);
+    decimal? SeparatesKg, decimal? SeparatesMeter, string? Notes, string? DrawingNumber = null);
+
+public record UpdateStageDrawingRequest(string DrawingNumber, string Reason);
 
 public record UpdateStageOutputRequest(decimal? OutputKg, decimal? OutputMeter, string? Reason);
 

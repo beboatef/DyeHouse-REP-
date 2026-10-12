@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Body of the activate/deactivate request (spec section 19).</summary>
+public record SetStageActiveRequest(bool IsActive);
+
 /// <summary>
 /// Admin configuration for the production stage engine (spec section 19).
 /// There is no fixed list of stage names anywhere in the system - whatever
@@ -26,8 +29,9 @@ public class ProductionStagesController : ControllerBase
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
     [ProducesResponseType(typeof(List<ProductionStageDefinitionDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<ProductionStageDefinitionDto>>> Get([FromQuery] bool? activeOnly)
-        => Ok(await _mediator.Send(new GetProductionStageDefinitionsQuery(activeOnly)));
+    public async Task<ActionResult<List<ProductionStageDefinitionDto>>> Get(
+        [FromQuery] bool? activeOnly, [FromQuery] string? search)
+        => Ok(await _mediator.Send(new GetProductionStageDefinitionsQuery(activeOnly, search)));
 
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
@@ -60,4 +64,28 @@ public class ProductionStagesController : ControllerBase
     [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductionStageDefinitionDto>> SetReadyGoodsStage(Guid id)
         => Ok(await _mediator.Send(new SetReadyGoodsStageCommand(id)));
+
+    /// <summary>
+    /// Edits the display name, the notes and the order of an existing stage (spec section 19).
+    /// Reordering is a display concern only, and the stage code is its stable identity, so
+    /// neither changing the order nor renaming touches a Job Order's route or history.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
+    [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionStageDefinitionDto>> Update(
+        Guid id, [FromBody] UpdateProductionStageDefinitionCommand command)
+        => Ok(await _mediator.Send(command with { StageDefinitionId = id }));
+
+    /// <summary>
+    /// Activates or deactivates a stage (spec section 19). Deactivation never deletes: the
+    /// row, the machine links and every past execution stay, and the stage simply stops being
+    /// offered for new production. The formation stage and the ready-goods stage cannot be
+    /// deactivated - that role has to be moved to another stage first.
+    /// </summary>
+    [HttpPost("{id:guid}/active")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
+    [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionStageDefinitionDto>> SetActive(Guid id, [FromBody] SetStageActiveRequest request)
+        => Ok(await _mediator.Send(new SetProductionStageActiveCommand(id, request.IsActive)));
 }

@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Materials.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -50,6 +51,14 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);
 
+        // Both ends of a new transfer must exist and still be active: stock is never moved
+        // into or out of a deactivated warehouse by a document created after the fact.
+        // The warehouses are also returned here so the DTO below needs no second query.
+        var fromWh = await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, request.FromWarehouseId, cancellationToken, "to move stock out of it");
+        var toWh = await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, request.ToWarehouseId, cancellationToken, "to move stock into it");
+
         // H6: lock both warehouses in one deterministic acquisition so a
         // simultaneous transfer of the same material the other way round cannot
         // deadlock, and so both the source check and the IN/OUT pair are atomic
@@ -80,15 +89,12 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        var fromWh = await _db.Warehouses.AsNoTracking().FirstOrDefaultAsync(w => w.Id == request.FromWarehouseId, cancellationToken);
-        var toWh = await _db.Warehouses.AsNoTracking().FirstOrDefaultAsync(w => w.Id == request.ToWarehouseId, cancellationToken);
-
         return new MaterialTransferDto
         {
             Id = transfer.Id, TransferNumber = transfer.TransferNumber, TransferDate = transfer.TransferDate,
             MaterialId = material.Id, MaterialCode = material.Code,
-            FromWarehouseId = request.FromWarehouseId, FromWarehouseName = fromWh?.Name ?? "",
-            ToWarehouseId = request.ToWarehouseId, ToWarehouseName = toWh?.Name ?? "",
+            FromWarehouseId = request.FromWarehouseId, FromWarehouseName = fromWh.Name,
+            ToWarehouseId = request.ToWarehouseId, ToWarehouseName = toWh.Name,
             Quantity = transfer.Quantity, Notes = transfer.Notes
         };
         }

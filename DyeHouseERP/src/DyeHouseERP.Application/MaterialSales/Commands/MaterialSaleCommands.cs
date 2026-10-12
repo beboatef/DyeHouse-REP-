@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.MaterialSales.DTOs;
 using DyeHouseERP.Application.MaterialSales.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -45,9 +46,9 @@ public class CreateMaterialSaleCommandHandler : IRequestHandler<CreateMaterialSa
 
     public async Task<MaterialSaleDto> Handle(CreateMaterialSaleCommand request, CancellationToken cancellationToken)
     {
-        var warehouse = await _db.Warehouses.AsNoTracking()
-            .FirstOrDefaultAsync(w => w.Id == request.WarehouseId, cancellationToken)
-            ?? throw new NotFoundException("Warehouse", request.WarehouseId);
+        // A new sale may only draw from a warehouse that exists and is still active;
+        // deactivated warehouses stay readable for everything already sold from them.
+        var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, request.WarehouseId, cancellationToken);
 
         if (request.CustomerId is not null &&
             !await _db.Customers.AnyAsync(c => c.Id == request.CustomerId, cancellationToken))
@@ -98,6 +99,12 @@ public class AddMaterialSaleLineCommandHandler : IRequestHandler<AddMaterialSale
             .FirstOrDefaultAsync(s => s.Id == request.MaterialSaleId, cancellationToken)
             ?? throw new NotFoundException("MaterialSale", request.MaterialSaleId);
 
+        // A line on a DRAFT is not a movement yet, but posting the sale will draw it out of this
+        // warehouse - so a retired warehouse cannot be extended with new lines either. (A sale
+        // posted before the warehouse was retired never accepts another line.)
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, sale.WarehouseId, cancellationToken, "to add a line to it");
+
         var material = await _db.Materials.AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);
@@ -112,7 +119,14 @@ public class AddMaterialSaleLineCommandHandler : IRequestHandler<AddMaterialSale
         if (requested > balance)
             throw new NegativeStockException(balance, requested);
 
-        sale.AddLine(material.Id, request.Quantity, material.Unit, request.UnitPrice ?? material.PurchasePrice, request.Description);
+        var line = sale.AddLine(material.Id, request.Quantity, material.Unit, request.UnitPrice ?? material.PurchasePrice, request.Description);
+
+        // A line added to a sale that is ALREADY persisted keeps the key it was created with, so EF
+        // change detection would take it for an existing row and save an UPDATE that hits nothing
+        // (DbUpdateConcurrencyException) - HTTP 409 and the line is lost. Registering it explicitly makes
+        // SaveChangesAsync INSERT it, exactly like a new PurchaseOrderLine or RawAllocation.
+        _db.MaterialSaleLines.Add(line);
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return (await MaterialSaleDtoBuilder.BuildManyAsync(_db, new[] { sale }, cancellationToken))[0];
@@ -193,6 +207,11 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
         var sale = await _db.MaterialSales.Include(s => s.Lines)
             .FirstOrDefaultAsync(s => s.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("MaterialSale", request.Id);
+
+        // Posting writes one OUT row per line, so the warehouse must still be active: a draft
+        // written while it was active is not a licence to draw from it later.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, sale.WarehouseId, cancellationToken, "to post a stock movement out of it");
 
         // H6: lock every material this sale consumes, then re-check availability
         // and post under those locks.
@@ -279,6 +298,16 @@ public class CancelMaterialSaleCommandHandler : IRequestHandler<CancelMaterialSa
             ?? throw new NotFoundException("MaterialSale", request.Id);
 
         var wasPosted = sale.Status == MaterialSaleStatus.Posted;
+
+        if (wasPosted)
+        {
+            // Only a POSTED sale is reversed, and the reversal is a brand-new IN row, so the
+            // warehouse must still be active for it. Checked BEFORE the document is touched, so
+            // a refusal leaves the aggregate, the ledger and the customer account exactly as
+            // they were. Cancelling a draft writes no stock row at all, so it needs no check.
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, sale.WarehouseId, cancellationToken, "to reverse its stock movements");
+        }
 
         sale.Cancel(request.Reason, _currentUser.UserName);
 

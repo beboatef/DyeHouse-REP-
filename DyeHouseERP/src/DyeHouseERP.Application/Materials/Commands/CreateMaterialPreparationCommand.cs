@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Materials.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -51,6 +52,11 @@ public class CreateMaterialPreparationCommandHandler : IRequestHandler<CreateMat
 
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.OriginalMaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.OriginalMaterialId);
+
+        // Preparation consumes stock and writes its own ledger row, so it is a new movement:
+        // the warehouse must still be active. Existing preparations and their rows are untouched.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, request.WarehouseId, cancellationToken, "to consume material out of it");
 
         // H6: dilution consumes the original material's stock, so the check and
         // the consuming OUT row run under that (warehouse, material) lock.

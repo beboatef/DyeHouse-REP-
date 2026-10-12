@@ -115,6 +115,8 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
                 {
                     Id = s.Id,
                     StageDefinitionId = s.StageDefinitionId,
+                    RequiresDrawingNumber = s.RequiresDrawingNumber,
+                    DrawingNumber = s.DrawingNumber,
                     StageCode = def?.Code ?? string.Empty,
                     StageName = def?.Name ?? string.Empty,
                     Sequence = s.Sequence,

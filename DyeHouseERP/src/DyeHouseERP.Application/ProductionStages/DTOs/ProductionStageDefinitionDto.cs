@@ -7,6 +7,7 @@ public class ProductionStageDefinitionDto
     public string Name { get; set; } = string.Empty;
     public int Sequence { get; set; }
     public bool IsActive { get; set; }
+    public bool RequiresDrawingNumber { get; set; }
     public bool RequiresInputQuantity { get; set; }
     public bool RequiresOutputQuantity { get; set; }
     public bool RequiresApproval { get; set; }

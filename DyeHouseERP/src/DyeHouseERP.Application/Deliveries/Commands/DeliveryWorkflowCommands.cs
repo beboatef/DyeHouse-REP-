@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Deliveries.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -94,6 +95,12 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             .OrderBy(w => w.Id)
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new DomainException("No Ready Goods warehouse is configured.");
+
+        // A deactivated warehouse keeps its history but never receives a fresh stock row,
+        // and delivering posts one OUT row per line against this warehouse - so the state
+        // is checked here, before the stock lock and before anything is written.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, readyWarehouse.Id, cancellationToken, "to deliver ready goods out of it");
 
         // R2: the key mirrors the balance query's own filter - (item, production
         // order), with NO warehouse and NO customer term, because the query below
@@ -199,6 +206,13 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
             var originalRows = await _db.InventoryTransactions
                 .Where(t => t.SourceDocumentId == delivery.Id && t.SourceDocumentType == DocumentType.Delivery)
                 .ToListAsync(cancellationToken);
+
+            // The reversal is itself a new posting: it credits stock back into the warehouses
+            // the original OUT rows left from, so each of them must still be active. History is
+            // never blocked or rewritten - only the new row is refused.
+            foreach (var reversalWarehouseId in originalRows.Select(r => r.WarehouseId).Distinct())
+                await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                    _db, reversalWarehouseId, cancellationToken, "to reverse a delivery into it");
 
             // Lock exactly the lots the reversal will credit back, using the
             // same key shape the delivery itself locks (R2) so a cancel and a

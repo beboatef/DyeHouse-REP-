@@ -75,6 +75,10 @@ public class ReadyGoodsStageTraceabilityTests
             "PRD-2026-0001", customer.Id, item.Id, DateTime.UtcNow, "seed", requestedQuantityKg: 600m);
         db.ProductionOrders.Add(order);
 
+        // H1: output may only be produced on a fully allocated order, so the fixture
+        // carries the 600 KG an operator would have allocated before working the job.
+        db.RawAllocations.Add(order.AllocateRaw(Guid.NewGuid(), item.Id, 600m, null, "seed"));
+
         var formation = new ProductionStageDefinition("PS002", "التشكيل", 2, "seed", isFormationStage: true);
         var readyGoods = new ProductionStageDefinition("PS003", "الجاهز", 3, "seed",
             isReadyGoodsStage: true);

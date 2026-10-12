@@ -41,6 +41,11 @@ public class GetDeliveriesQueryHandler : IRequestHandler<GetDeliveriesQuery, Lis
         var itemIds = lines.Select(l => l.ItemId).Distinct().ToList();
         var items = await db.Items.AsNoTracking().Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
 
+        // Resolve from the actual executions, never copy drawing numbers onto delivery rows.
+        var drawings = await db.ProductionOrderStageExecutions.AsNoTracking()
+            .Where(s => orderIds.Contains(s.ProductionOrderId) && s.RequiresDrawingNumber && s.DrawingNumber != null)
+            .Select(s => new { s.ProductionOrderId, s.DrawingNumber }).ToListAsync(cancellationToken);
+
         return new DeliveryDto
         {
             Id = delivery.Id, DeliveryNumber = delivery.DeliveryNumber, DeliveryDate = delivery.DeliveryDate,
@@ -50,6 +55,8 @@ public class GetDeliveriesQueryHandler : IRequestHandler<GetDeliveriesQuery, Lis
             {
                 Id = l.Id, ProductionOrderId = l.ProductionOrderId, ProductionOrderNumber = orders.GetValueOrDefault(l.ProductionOrderId)?.OrderNumber ?? "",
                 ItemId = l.ItemId, ItemCode = items.GetValueOrDefault(l.ItemId)?.Code ?? "", Color = l.Color,
+                DrawingNumbers = drawings.Where(s => s.ProductionOrderId == l.ProductionOrderId)
+                    .Select(s => s.DrawingNumber!).Distinct().ToList(),
                 QuantityKg = l.QuantityKg, QuantityMeter = l.QuantityMeter, PieceCount = l.PieceCount, RawOrigin = l.RawOrigin
             }).ToList()
         };

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Deliveries.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -108,6 +109,12 @@ public class EditDeliveredDeliveryCommandHandler
             .OrderBy(w => w.Id)
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new DomainException("No Ready Goods warehouse is configured.");
+
+        // A correction posts a NEW compensating row (an IN when the quantity goes down, an OUT
+        // when it goes up), so the ready warehouse must still be active. The original rows are
+        // never touched, and a retired warehouse keeps its whole history readable.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, readyWarehouse.Id, cancellationToken, "to post a delivery correction into it");
 
         // Same lock key shape the delivery itself uses (R2), so a correction and a
         // second delivery of the same lot cannot interleave.

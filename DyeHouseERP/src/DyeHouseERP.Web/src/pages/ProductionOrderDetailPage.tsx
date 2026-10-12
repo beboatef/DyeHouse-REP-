@@ -285,6 +285,9 @@ export default function ProductionOrderDetailPage() {
 
       {/* Stage transfer (spec sections 13-17) and Pause/Resume (spec section 19). */}
       <StageFlowPanel order={order} />
+      {order.stageExecutions.filter((s) => s.drawingNumber).map((s) => (
+        <p key={`drawing-${s.id}`} className="mt-2 text-sm">{s.stageName} · {t("printing.drawingNumber")}: <b dir="auto">{s.drawingNumber}</b></p>
+      ))}
 
       {/* Job order costing tab (spec section 34): estimate, live actual, approved. */}
       <CostPanel
@@ -318,6 +321,8 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   const qc = useQueryClient();
 
   const [nextStageId, setNextStageId] = useState("");
+  const [drawingNumber, setDrawingNumber] = useState("");
+  const [drawingReason, setDrawingReason] = useState("");
   const [outputKg, setOutputKg] = useState("");
   const [outputMeter, setOutputMeter] = useState("");
   const [notes, setNotes] = useState("");
@@ -351,6 +356,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
     mutationFn: () =>
       ProductionOrdersApi.transferStage(current!.id, {
         nextStageDefinitionId: nextStageId,
+        drawingNumber: drawingNumber.trim() || undefined,
         outputKg: outputKg ? Number(outputKg) : undefined,
         outputMeter: outputMeter ? Number(outputMeter) : undefined,
         notes: notes.trim() || undefined
@@ -358,6 +364,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
     onSuccess: () => {
       invalidate();
       setNextStageId("");
+      setDrawingNumber("");
       setOutputKg("");
       setOutputMeter("");
       setNotes("");
@@ -412,6 +419,13 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   // Pause is only offered while the job is genuinely running and has material
   // issued; a draft or finished order has nothing to release.
   const canPause = !isPaused && (order.status === "InProduction" || order.status === "RawAllocated");
+  const drawingMutation = useMutation({
+    mutationFn: () => ProductionOrdersApi.updateDrawing(current!.id, drawingNumber.trim(), drawingReason.trim()),
+    onSuccess: () => { invalidate(); setDrawingNumber(""); setDrawingReason(""); setFlowError(null); },
+    onError: (err) => setFlowError(errorMessage(err, t("common.error")))
+  });
+  const nextRequiresDrawing = stages?.find((s) => s.id === nextStageId)?.requiresDrawingNumber ?? false;
+  const existingDrawing = order.stageExecutions.find((s) => s.stageDefinitionId === nextStageId && s.drawingNumber)?.drawingNumber;
   const nextIsReadyGoods = stages?.find((s) => s.id === nextStageId)?.isReadyGoodsStage ?? false;
   const candidateStages = (stages ?? []).filter(
     (s) => s.isActive && s.id !== current?.stageDefinitionId && !s.isFormationStage
@@ -548,6 +562,20 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
             </div>
           </div>
 
+          {order.stageExecutions.filter((s) => s.drawingNumber).map((s) => (
+            <p key={s.id} className="mb-2 text-sm">{s.stageName} · {t("printing.drawingNumber")}: <b dir="auto">{s.drawingNumber}</b></p>
+          ))}
+          {(nextRequiresDrawing || current.requiresDrawingNumber) && (
+            <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label={t("printing.drawingNumber")}>
+                <Input maxLength={100} value={drawingNumber} onChange={(e) => setDrawingNumber(e.target.value)} placeholder={t("printing.required")} />
+              </Field>
+              {current.requiresDrawingNumber && !nextRequiresDrawing && <>
+                <Field label={t("pause.reason")}><Input value={drawingReason} onChange={(e) => setDrawingReason(e.target.value)} /></Field>
+                <Button disabled={!drawingNumber.trim() || !drawingReason.trim() || drawingMutation.isPending} onClick={() => drawingMutation.mutate()}>{t("printing.correct")}</Button>
+              </>}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <Field label={t("stage.nextStage")}>
               <Select value={nextStageId} onChange={(e) => setNextStageId(e.target.value)}>
@@ -576,7 +604,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
 
           <div className="mt-3">
             <Button
-              disabled={!nextStageId || (!outputKg && !outputMeter) || transferMutation.isPending}
+              disabled={!nextStageId || (!outputKg && !outputMeter) || (nextRequiresDrawing && !drawingNumber.trim() && !existingDrawing) || transferMutation.isPending}
               onClick={() => transferMutation.mutate()}
             >
               {t("stage.transfer")}
@@ -835,7 +863,7 @@ function ProfitabilityPanel({ productionOrderId }: { productionOrderId: string }
         ? t("profit.source.LastStageOutput")
         : t("profit.source.None");
 
-  const stageOptions = (stages ?? []).filter((s) => s.isActive);
+  const stageOptions = (stages ?? []).filter((s) => s.isActive && !s.isReadyGoodsStage);
 
   return (
     <Card className="p-5 mt-6">

@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Materials.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -53,6 +54,12 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
             ?? throw new NotFoundException("Material", request.MaterialId);
         var order = await _db.ProductionOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
+
+        // Issuing material writes an OUT row against this warehouse, so the warehouse must
+        // still be active: a deactivated one never receives a new stock row, while everything
+        // already issued from it stays readable and unchanged.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, request.WarehouseId, cancellationToken, "to issue material out of it");
 
         // H6: material stock is guarded by the same lock mechanism as raw
         // inventory, keyed on (warehouse, material) - the exact dimension the

@@ -1,13 +1,17 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DeliveriesApi } from "@/api/client";
+import { useI18n } from "@/i18n";
 import PrintPreviewLayout from "@/components/PrintPreviewLayout";
 
 export default function DeliveryPrintPage() {
+  const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
-  const { data: delivery, isLoading } = useQuery({ queryKey: ["delivery-print", id], queryFn: () => DeliveriesApi.get(id!), enabled: !!id });
+  const { data: delivery, isLoading, isError } = useQuery({ queryKey: ["delivery-print", id], queryFn: () => DeliveriesApi.get(id!), enabled: !!id });
 
-  if (isLoading || !delivery) return <div className="p-10 text-center text-gray-400">جارٍ التحميل...</div>;
+  if (isError) return <div role="alert" className="p-10 text-center">{t("common.error")}</div>;
+  if (isLoading) return <div className="p-10 text-center">{t("common.loading")}</div>;
+  if (!delivery) return <div className="p-10 text-center">{t("common.noData")}</div>;
 
   return (
     <PrintPreviewLayout
@@ -19,6 +23,7 @@ export default function DeliveryPrintPage() {
         { label: "الحالة", value: delivery.status }
       ]}
       columns={[
+        { header: t("printing.drawingNumber"), render: (l) => l.drawingNumbers?.join(", ") || "—" },
         { header: "أمر التشغيل", render: (l) => l.productionOrderNumber },
         { header: "الصنف", render: (l) => `${l.itemCode}${l.color ? ` (${l.color})` : ""}` },
         { header: "كجم", render: (l) => l.quantityKg ?? "-", align: "end" },

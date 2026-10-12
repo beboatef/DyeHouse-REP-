@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Purchases.DTOs;
 using DyeHouseERP.Application.Purchases.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -75,7 +76,14 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
     {
         await _periodClose.EnsureOpenAsync(request.ReceiptDate, cancellationToken);
         await PurchaseRules.EnsureSupplierExists(_db, request.SupplierId, cancellationToken);
-        await PurchaseRules.EnsureWarehouseExists(_db, request.WarehouseId, cancellationToken);
+
+        // Unlike a purchase ORDER (a commercial document with no stock effect until it is
+        // received), creating a receipt IS the stock movement: one IN row per line, written
+        // further down. So this is the movement check, not the new-document one - a retired
+        // warehouse never receives new stock, while the receipts already booked into it keep
+        // their lines, their ledger rows and their traceability exactly as they were.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, request.WarehouseId, cancellationToken, "to receive stock into it");
 
         PurchaseOrder? order = null;
         if (request.PurchaseOrderId.HasValue)

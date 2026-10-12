@@ -151,6 +151,12 @@ public class PauseProductionOrderCommandHandler : IRequestHandler<PauseProductio
                 throw new DomainException(
                     $"Cannot release {releaseMeter} Meter from raw message {chosen.RawMessageId}: only {chosen.OutstandingMeter} Meter of what this Job Order took from that lot is still outstanding.");
 
+            // A retired warehouse never receives a new stock row: the release posts an IN
+            // row into the chosen lot's warehouse, so that warehouse must still be active.
+            // Checked before the state change below, so a refusal leaves nothing half-written.
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, chosen.WarehouseId, cancellationToken, "to return unused raw material into it");
+
             // The state change happens first, so a refused pause never leaves a
             // half-written movement behind in the change tracker.
             order.Pause(request.Reason, _currentUser.UserName);
@@ -264,6 +270,11 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
             throw new DomainException(
                 $"Item '{request.ItemId}' is not a line on message '{message.MessageNumber}'. Pick one of the message's item lines.");
 
+        // A retired warehouse never receives a new stock row: the re-issue posts an OUT row
+        // against the message's warehouse, so that warehouse must still be active.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, message.WarehouseId, cancellationToken, "to re-issue raw material out of it");
+
         await using (await _allocationLock.AcquireAsync(
             StockLockKey.RawLot(message.WarehouseId, request.ItemId, order.CustomerId, message.Id), cancellationToken))
         {
@@ -271,6 +282,18 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
                 message.Id, request.ItemId, order.CustomerId, message.WarehouseId, cancellationToken);
 
             await EnsureSufficientBalanceAsync(request, message, order, balanceKg, balanceMeter, cancellationToken);
+
+            // H1: resuming puts the order straight back to InProduction, so it is a
+            // production start and must clear the same 100%-allocation rule. The material
+            // being re-issued in THIS operation counts towards it (it is about to be
+            // allocated) - so a previously complete order always passes, and a partially
+            // allocated one is only allowed to continue once the re-issue actually covers it.
+            // Placed after the balance/authorisation check on purpose: a negative-stock
+            // request must still report its own (approval) error first.
+            await RawAllocationGuard.EnsureCompleteAsync(
+                _db, order, cancellationToken,
+                additionalQuantityKg: request.QuantityKg ?? 0m,
+                additionalQuantityMeter: request.QuantityMeter ?? 0m);
 
             // The allocation itself goes through the ordinary path, so a resumed
             // cycle produces exactly the same ledger shape as a first cycle.

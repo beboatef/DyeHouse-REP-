@@ -19,11 +19,65 @@ public class Warehouse : AuditableEntity
 
     public Warehouse(string code, string name, WarehouseKind kind, string createdBy)
     {
+        if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Warehouse code is required.", nameof(code));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Warehouse name is required.", nameof(name));
+
         Code = code.Trim();
         Name = name.Trim();
         Kind = kind;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Renames the warehouse (spec section 15). The Code is the stable identity every
+    /// document, ledger row and report already refers to, so it is deliberately never
+    /// editable - only the human-facing name is.
+    /// </summary>
+    public void SetName(string name, string modifiedBy)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Warehouse name is required.", nameof(name));
+
+        Name = name.Trim();
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Changes the warehouse's kind. This is a classification change only: no stock is
+    /// moved, no ledger row is written and no existing document loses its warehouse
+    /// reference. Which kind a NEW document may use is enforced where that document is
+    /// created (for example a ready-goods transfer requires a ReadyGoods warehouse).
+    /// </summary>
+    public void SetKind(WarehouseKind kind, string modifiedBy)
+    {
+        if (!Enum.IsDefined(typeof(WarehouseKind), kind))
+            throw new ArgumentException("Unknown warehouse kind.", nameof(kind));
+
+        Kind = kind;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Takes the warehouse out of use for NEW documents. Nothing is ever deleted: the row
+    /// stays, its balances and ledger rows stay readable, and every document that already
+    /// points at it keeps its reference - deactivation is a flag, never a removal
+    /// (spec sections 15 and 42).
+    /// </summary>
+    public void Deactivate(string modifiedBy)
+    {
+        IsActive = false;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Puts a deactivated warehouse back into use for new documents.</summary>
+    public void Activate(string modifiedBy)
+    {
+        IsActive = true;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
     }
 }
 

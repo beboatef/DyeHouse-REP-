@@ -1,6 +1,8 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Deliveries.Commands;
 using DyeHouseERP.Application.Deliveries.DTOs;
+using DyeHouseERP.Application.RawReceipts.Commands;
+using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Application.Treasury.Commands;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -463,5 +465,191 @@ public class UserSessionValidatorTests
         using var db = new Persistence.ApplicationDbContext(_options);
         var state = await new UserSessionValidator(db).GetSessionStateAsync(Guid.NewGuid());
         state.Should().BeNull();
+    }
+}
+
+/// <summary>
+/// H7: the receiving-inspection REJECTION path. A rejected quantity accumulates on
+/// the receipt line, is capped by the received quantity, and posts one correcting OUT
+/// ledger row - so the delta a request posts is only correct against the COMMITTED line
+/// state. These tests pin the handler behaviour (the rejection is recorded, the cap
+/// holds) and the concurrency fix: the aggregate is re-read INSIDE the lot lock, so a
+/// request that lost the race can no longer post a second correcting row.
+/// </summary>
+public class RawInspectionRejectionConcurrencyTests
+{
+    private readonly DbContextOptions<Persistence.ApplicationDbContext> _options =
+        new DbContextOptionsBuilder<Persistence.ApplicationDbContext>()
+            .UseInMemoryDatabase($"inspection-{Guid.NewGuid()}")
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
+    private Persistence.ApplicationDbContext NewDb() => new(_options);
+
+    private (Guid MessageId, Guid WarehouseId, Guid CustomerId, Guid ItemId, Guid LineId) SeedMessage(decimal receivedKg)
+    {
+        var customer = new Customer("C-INSPECT", "Inspection Customer", "seed");
+        var warehouse = new Warehouse("RAW-INSPECT", "Raw Warehouse", WarehouseKind.RawMaterial, "seed");
+        var message = new RawMessage("RAW-2026-INSPECT", DateTime.UtcNow, customer.Id, warehouse.Id, "receiver", "seed");
+        var line = message.AddLine(Guid.NewGuid(), receivedKg, null, null, null);
+
+        using var db = NewDb();
+        db.Customers.Add(customer);
+        db.Warehouses.Add(warehouse);
+        db.RawMessages.Add(message);
+        db.InventoryTransactions.Add(new InventoryTransaction(DocumentType.RawReceiptMessage, message.MessageNumber, message.Id,
+            DateTime.UtcNow, warehouse.Id, customer.Id, line.ItemId, message.Id, null, receivedKg, null, TransactionDirection.In, "seed"));
+        db.SaveChanges();
+
+        return (message.Id, warehouse.Id, customer.Id, line.ItemId, line.Id);
+    }
+
+    private static RecordInspectionCommandHandler Handler(
+        Persistence.ApplicationDbContext db, IAllocationLockService stockLock) => new(
+        db,
+        Mock.Of<ICurrentUserService>(u => u.UserName == "inspector"),
+        new FixedClock(),
+        new OpenPeriod(),
+        stockLock);
+
+    private static RecordInspectionCommand Rejecting(
+        Guid messageId, Guid lineId, decimal rejectedKg, string notes) => new(
+        messageId, InspectionStatus.Rejected, notes,
+        new List<RawMessageLineRejectionInput> { new() { LineId = lineId, RejectedQuantityKg = rejectedKg } });
+
+    [Fact]
+    public async Task A_Rejection_Is_Recorded_And_Posts_Exactly_One_Correcting_Out_Row()
+    {
+        var seed = SeedMessage(receivedKg: 100m);
+        using var db = NewDb();
+        var stockLock = new RecordingStockLock();
+
+        await Handler(db, stockLock).Handle(
+            Rejecting(seed.MessageId, seed.LineId, 30m, "torn fabric"), CancellationToken.None);
+
+        // The lot dimension is resolved from the message's OWN lines, which only works when
+        // the line graph is actually loaded. The previous implementation loaded the message
+        // with FindAsync - which never populates a collection navigation - so there were no
+        // lock dimensions and recording a rejection failed outright.
+        stockLock.Dimensions.Should().ContainSingle(k =>
+            k.WarehouseId == seed.WarehouseId && k.ItemId == seed.ItemId &&
+            k.CustomerId == seed.CustomerId && k.RawMessageId == seed.MessageId);
+
+        using var verify = NewDb();
+        var outRows = verify.InventoryTransactions
+            .Where(t => t.RawMessageId == seed.MessageId && t.Direction == TransactionDirection.Out)
+            .ToList();
+
+        outRows.Should().ContainSingle();
+        outRows[0].QuantityKg.Should().Be(30m);
+        verify.Set<RawMessageLine>().Single(l => l.Id == seed.LineId).RejectedQuantityKg.Should().Be(30m);
+    }
+
+    [Fact]
+    public async Task A_Rejection_Beyond_What_Was_Received_Is_Refused_And_Adds_No_Second_Row()
+    {
+        var seed = SeedMessage(receivedKg: 100m);
+
+        // The first inspection committed 60 KG of rejections on the line.
+        using (var first = NewDb())
+            await Handler(first, new RecordingStockLock()).Handle(
+                Rejecting(seed.MessageId, seed.LineId, 60m, "first inspection"), CancellationToken.None);
+
+        // A later inspection reporting another 60 KG (110 KG in total) must hit the cap.
+        using var db = NewDb();
+        var act = async () => await Handler(db, new RecordingStockLock()).Handle(
+            Rejecting(seed.MessageId, seed.LineId, 60m, "second inspection"), CancellationToken.None);
+
+        var ex = await act.Should().ThrowAsync<DomainException>();
+        ex.Which.Message.Should().Contain("cannot exceed the received quantity");
+
+        using var verify = NewDb();
+        verify.InventoryTransactions.Count(t => t.RawMessageId == seed.MessageId && t.Direction == TransactionDirection.Out)
+            .Should().Be(1);
+        verify.Set<RawMessageLine>().Single(l => l.Id == seed.LineId).RejectedQuantityKg.Should().Be(60m);
+    }
+
+    [Fact]
+    public async Task Rejection_Cannot_Deduct_Raw_That_Was_Already_Consumed()
+    {
+        var seed = SeedMessage(100m);
+        using (var consumed = NewDb())
+        {
+            consumed.InventoryTransactions.Add(new InventoryTransaction(DocumentType.ProductionOrder, "CONSUMED", Guid.NewGuid(),
+                DateTime.UtcNow, seed.WarehouseId, seed.CustomerId, seed.ItemId, seed.MessageId, Guid.NewGuid(), 90m, null, TransactionDirection.Out, "operator"));
+            await consumed.SaveChangesAsync();
+        }
+        using var db = NewDb();
+        var act = async () => await Handler(db, new RecordingStockLock()).Handle(
+            Rejecting(seed.MessageId, seed.LineId, 20m, "too late"), default);
+        await act.Should().ThrowAsync<NegativeStockException>();
+        using var verify = NewDb();
+        verify.Set<RawMessageLine>().Single(l => l.Id == seed.LineId).RejectedQuantityKg.Should().BeNull();
+        verify.InventoryTransactions.Count().Should().Be(2);
+    }
+
+    [Fact]
+    public async Task A_Request_That_Lost_The_Race_Computes_Its_Delta_From_The_Committed_Line()
+    {
+        var seed = SeedMessage(receivedKg: 100m);
+        using var db = NewDb();
+
+        // The competing inspection commits at the exact moment this request takes its lot
+        // lock: the snapshot this request read before the lock is already stale, which is the
+        // real SQL Server race expressed deterministically for the InMemory provider.
+        var stockLock = new CommitOnAcquireLock(async () =>
+        {
+            using var competing = NewDb();
+            await Handler(competing, new RecordingStockLock()).Handle(
+                Rejecting(seed.MessageId, seed.LineId, 60m, "won the race"), CancellationToken.None);
+        });
+
+        var act = async () => await Handler(db, stockLock).Handle(
+            Rejecting(seed.MessageId, seed.LineId, 50m, "lost the race"), CancellationToken.None);
+
+        // 60 committed + 50 reported > 100 received: the delta must be judged against what is
+        // committed, not against the pre-lock snapshot (which saw nothing rejected).
+        await act.Should().ThrowAsync<DomainException>();
+
+        using var verify = NewDb();
+        verify.InventoryTransactions.Count(t => t.RawMessageId == seed.MessageId && t.Direction == TransactionDirection.Out)
+            .Should().Be(1, "only the request that committed may correct the customer's raw stock");
+        verify.Set<RawMessageLine>().Single(l => l.Id == seed.LineId).RejectedQuantityKg.Should().Be(60m);
+    }
+
+    /// <summary>
+    /// Stands in for the SQL Server lot lock while injecting the competitor at the moment the
+    /// lock is taken. It proves the HANDLER re-reads; the real sp_getapplock behaviour it
+    /// stands in for is proven by the SQL Server integration suite, never here.
+    /// </summary>
+    private sealed class CommitOnAcquireLock : IAllocationLockService
+    {
+        private readonly Func<Task> _onAcquire;
+
+        public CommitOnAcquireLock(Func<Task> onAcquire) => _onAcquire = onAcquire;
+
+        public async Task<IAsyncDisposable> AcquireAsync(StockLockKey key, CancellationToken cancellationToken = default)
+        {
+            await _onAcquire();
+            return Noop.Instance;
+        }
+
+        public async Task<IAsyncDisposable> AcquireManyAsync(IEnumerable<StockLockKey> keys, CancellationToken cancellationToken = default)
+        {
+            await _onAcquire();
+            return Noop.Instance;
+        }
+
+        public async Task<IAsyncDisposable> AcquireNamedAsync(string resource, CancellationToken cancellationToken = default)
+        {
+            await _onAcquire();
+            return Noop.Instance;
+        }
+
+        private sealed class Noop : IAsyncDisposable
+        {
+            public static readonly Noop Instance = new();
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }

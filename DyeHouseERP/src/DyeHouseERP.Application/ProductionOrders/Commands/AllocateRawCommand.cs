@@ -116,6 +116,12 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
             ?? throw new DomainException(
                 $"Item '{request.ItemId}' is not a line on message '{message.MessageNumber}'. Pick one of the message's item lines.");
 
+        // A retired warehouse never receives a new stock row: this allocation posts an OUT
+        // row against the message's warehouse, so that warehouse must still be active.
+        // Historical messages, their lines and their movements stay readable and unchanged.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, message.WarehouseId, cancellationToken, "to issue raw material out of it");
+
         // R1: lock on the UNIFIED stock dimension. The previous call used a
         // bespoke (rawMessage, item, customer) overload whose resource string
         // did not match the one every other stock path uses, so allocation and

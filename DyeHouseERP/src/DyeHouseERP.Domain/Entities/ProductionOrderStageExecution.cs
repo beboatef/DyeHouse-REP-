@@ -59,6 +59,26 @@ public class ProductionOrderStageExecution : BaseEntity
     public Guid? MachineId { get; private set; }
     public Guid? ProductionShiftId { get; private set; }
 
+    public bool RequiresDrawingNumber { get; private set; }
+    public string? DrawingNumber { get; private set; }
+
+    public void SetDrawingNumber(string drawingNumber)
+    {
+        if (!RequiresDrawingNumber)
+            throw new DomainException("This stage does not require a drawing number.");
+        if (Status is StageExecutionStatus.Completed or StageExecutionStatus.Skipped)
+            throw new DomainException("A closed stage's drawing number cannot be changed.");
+        if (string.IsNullOrWhiteSpace(drawingNumber) || drawingNumber.Trim().Length > 100)
+            throw new DomainException("Drawing number is required and must not exceed 100 characters. رقم الرسمة مطلوب بحد أقصى 100 حرف.");
+        DrawingNumber = drawingNumber.Trim();
+    }
+
+    public void EnsureDrawingNumber()
+    {
+        if (RequiresDrawingNumber && string.IsNullOrWhiteSpace(DrawingNumber))
+            throw new DomainException("Drawing number is required before printing. رقم الرسمة مطلوب قبل تنفيذ الطباعة.");
+    }
+
     public string? Operator { get; private set; }
     public string? Notes { get; private set; }
     public DateTime? StartedAtUtc { get; private set; }
@@ -77,8 +97,10 @@ public class ProductionOrderStageExecution : BaseEntity
 
     private ProductionOrderStageExecution() { } // EF Core
 
-    internal ProductionOrderStageExecution(Guid productionOrderId, Guid stageDefinitionId, int sequence)
+    internal ProductionOrderStageExecution(Guid productionOrderId, Guid stageDefinitionId, int sequence, bool requiresDrawingNumber = false, string? drawingNumber = null)
     {
+        RequiresDrawingNumber = requiresDrawingNumber;
+        if (drawingNumber is not null) SetDrawingNumber(drawingNumber);
         ProductionOrderId = productionOrderId;
         StageDefinitionId = stageDefinitionId;
         Sequence = sequence;
@@ -94,6 +116,7 @@ public class ProductionOrderStageExecution : BaseEntity
         if (Status != StageExecutionStatus.Pending)
             throw new DomainException($"Stage is {Status} and cannot be activated.");
 
+        EnsureDrawingNumber();
         BaselineKg = baselineKg;
         BaselineMeter = baselineMeter;
         Status = StageExecutionStatus.InProgress;
@@ -121,6 +144,9 @@ public class ProductionOrderStageExecution : BaseEntity
         if (outputKg is null && outputMeter is null)
             throw new DomainException("Enter the final output quantity for this stage.");
 
+        EnsureDrawingNumber();
+        if (outputKg is < 0 || outputMeter is < 0 || separatesKg is < 0 || separatesMeter is < 0)
+            throw new DomainException("Stage quantities cannot be negative.");
         OutputKg = outputKg;
         OutputMeter = outputMeter;
         SeparatesKg = separatesKg;
@@ -198,6 +224,7 @@ public class ProductionOrderStageExecution : BaseEntity
         if (Status != StageExecutionStatus.Pending)
             throw new DomainException($"Stage is already {Status} and cannot be started again.");
 
+        EnsureDrawingNumber();
         Status = StageExecutionStatus.InProgress;
         Operator = operatorName;
         StartedAtUtc = DateTime.UtcNow;
@@ -221,6 +248,10 @@ public class ProductionOrderStageExecution : BaseEntity
         if (approvalRequired && string.IsNullOrWhiteSpace(approvedBy))
             throw new DomainException("This stage requires approval before it can be completed.");
 
+        EnsureDrawingNumber();
+        if (inputKg is < 0 || inputMeter is < 0 || outputKg is < 0 || outputMeter is < 0 ||
+            separatesKg is < 0 || separatesMeter is < 0)
+            throw new DomainException("Stage quantities cannot be negative.");
         InputKg = inputKg; InputMeter = inputMeter;
         OutputKg = outputKg; OutputMeter = outputMeter;
         LossKg = lossKg; LossMeter = lossMeter;
@@ -239,6 +270,9 @@ public class ProductionOrderStageExecution : BaseEntity
         if (!stageAllowsSkip)
             throw new DomainException("This stage is not configured to allow being skipped.");
 
+        if (Status is StageExecutionStatus.Completed or StageExecutionStatus.Skipped)
+            throw new DomainException("A closed stage cannot be skipped.");
+        if (StartedAtUtc.HasValue) EnsureDrawingNumber();
         Status = StageExecutionStatus.Skipped;
         Notes = string.IsNullOrWhiteSpace(Notes) ? $"[Skipped by {modifiedBy}] {reason}" : $"{Notes}\n[Skipped by {modifiedBy}] {reason}";
         CompletedAtUtc = DateTime.UtcNow;

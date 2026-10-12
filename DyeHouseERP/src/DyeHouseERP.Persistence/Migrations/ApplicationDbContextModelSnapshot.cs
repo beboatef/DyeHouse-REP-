@@ -4114,7 +4114,7 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.HasIndex("StageDefinitionId");
 
-                    b.HasIndex("ProductionOrderId", "Unit")
+                    b.HasIndex("ProductionOrderId", "StageDefinitionId", "Unit")
                         .IsUnique();
 
                     b.ToTable("ProductionOrderServicePrices", (string)null);
@@ -4144,6 +4144,10 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DrawingNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<decimal?>("InputKg")
                         .HasPrecision(18, 3)
@@ -4191,6 +4195,9 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.Property<Guid?>("ProductionShiftId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RequiresDrawingNumber")
+                        .HasColumnType("bit");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -4421,6 +4428,9 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<bool>("RequiresApproval")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresDrawingNumber")
                         .HasColumnType("bit");
 
                     b.Property<bool>("RequiresInputQuantity")

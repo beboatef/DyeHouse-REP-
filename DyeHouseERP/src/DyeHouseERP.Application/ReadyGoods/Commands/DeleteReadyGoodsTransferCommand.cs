@@ -76,6 +76,13 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
             .Where(t => t.SourceDocumentId == request.Id && t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)
             .ToListAsync(cancellationToken);
 
+        // Cancelling posts a reversal - a NEW ledger row - back into the warehouse the transfer
+        // posted into, so a deactivated warehouse is refused here. Its posted history is left
+        // exactly as it is: nothing is deleted, edited or hidden.
+        foreach (var reversalWarehouseId in originalRows.Select(r => r.WarehouseId).Distinct())
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, reversalWarehouseId, cancellationToken, "to reverse a ready-goods transfer into it");
+
         // H6/R2: the reversal credits the same ready lot the transfer debited,
         // locked with the same key shape the delivery path uses, so a
         // cancellation cannot interleave with a delivery of the same order.

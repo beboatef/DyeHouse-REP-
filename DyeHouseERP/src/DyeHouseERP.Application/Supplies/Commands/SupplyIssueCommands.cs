@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Supplies.DTOs;
 using DyeHouseERP.Application.Supplies.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -45,9 +46,9 @@ public class CreateSupplyIssueCommandHandler : IRequestHandler<CreateSupplyIssue
 
     public async Task<SupplyIssueDto> Handle(CreateSupplyIssueCommand request, CancellationToken cancellationToken)
     {
-        var warehouse = await _db.Warehouses.AsNoTracking()
-            .FirstOrDefaultAsync(w => w.Id == request.WarehouseId, cancellationToken)
-            ?? throw new NotFoundException("Warehouse", request.WarehouseId);
+        // A new issue may only target a warehouse that exists and is still active;
+        // deactivated warehouses stay readable for everything already issued from them.
+        var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, request.WarehouseId, cancellationToken);
 
         if (request.DepartmentId is not null &&
             !await _db.Departments.AnyAsync(d => d.Id == request.DepartmentId, cancellationToken))
@@ -93,6 +94,13 @@ public class AddSupplyIssueLineCommandHandler : IRequestHandler<AddSupplyIssueLi
             .FirstOrDefaultAsync(i => i.Id == request.SupplyIssueId, cancellationToken)
             ?? throw new NotFoundException("SupplyIssue", request.SupplyIssueId);
 
+        // A line added to a DRAFT is not a movement yet, but posting the issue will draw it out of
+        // this warehouse - so extending a draft that points at a retired warehouse is refused here,
+        // exactly as posting it would be. (A warehouse retired after the issue was posted cannot be
+        // reached at all: a posted issue never accepts another line.)
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, issue.WarehouseId, cancellationToken, "to add a line to it");
+
         var material = await _db.Materials.AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.MaterialId);
@@ -107,7 +115,14 @@ public class AddSupplyIssueLineCommandHandler : IRequestHandler<AddSupplyIssueLi
         if (requested > balance)
             throw new NegativeStockException(balance, requested);
 
-        issue.AddLine(material.Id, request.Quantity, material.Unit, request.UnitCost ?? material.PurchasePrice, request.Notes);
+        var line = issue.AddLine(material.Id, request.Quantity, material.Unit, request.UnitCost ?? material.PurchasePrice, request.Notes);
+
+        // A line added to an issue that is ALREADY persisted keeps the key it was created with, so EF
+        // change detection would take it for an existing row and save an UPDATE that hits nothing
+        // (DbUpdateConcurrencyException) - HTTP 409 and the line is lost. Registering it explicitly makes
+        // SaveChangesAsync INSERT it, exactly like a new PurchaseOrderLine or RawAllocation.
+        _db.SupplyIssueLines.Add(line);
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return (await SupplyIssueDtoBuilder.BuildManyAsync(_db, new[] { issue }, cancellationToken))[0];
@@ -163,6 +178,12 @@ public class PostSupplyIssueCommandHandler : IRequestHandler<PostSupplyIssueComm
         var issue = await _db.SupplyIssues.Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("SupplyIssue", request.Id);
+
+        // Posting writes one OUT row per line, so the warehouse must still be active. A draft
+        // created while it was active is NOT a licence to draw from it afterwards: retiring a
+        // warehouse stops all new movements from it, whichever step tries to write them.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, issue.WarehouseId, cancellationToken, "to post a stock movement out of it");
 
         // Re-check availability at posting time: stock may have moved since the
         // lines were typed. Negative stock is never allowed implicitly.
@@ -232,6 +253,16 @@ public class CancelSupplyIssueCommandHandler : IRequestHandler<CancelSupplyIssue
             ?? throw new NotFoundException("SupplyIssue", request.Id);
 
         var wasPosted = issue.Status == SupplyIssueStatus.Posted;
+
+        if (wasPosted)
+        {
+            // Only a POSTED issue is reversed, and the reversal is a brand-new IN row, so the
+            // warehouse must still be active for it. Checked BEFORE the document is touched, so
+            // a refusal leaves the aggregate and the ledger exactly as they were. Cancelling a
+            // draft writes no row at all, which is why that case needs no check.
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, issue.WarehouseId, cancellationToken, "to reverse its stock movements");
+        }
 
         issue.Cancel(request.Reason, _currentUser.UserName);
 

@@ -23,7 +23,10 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString, sql =>
             {
                 sql.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
-                sql.EnableRetryOnFailure(maxRetryCount: 3);
+                // Session-owned stock application locks cannot survive a reconnect.
+                // Retrying only SaveChanges would reuse a pre-lock balance after losing
+                // the lock. Fail the request instead; a fresh request repeats all checks.
+                // Enable retries only around a future whole-operation transaction/lock scope.
             });
             options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
         });

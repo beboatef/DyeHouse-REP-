@@ -55,10 +55,10 @@ public class DeliveriesController : ControllerBase
     {
         var delivery = await _mediator.Send(new GetDeliveryByIdQuery(id));
 
-        var headers = new List<string> { "Production Order", "Item", "Color", "Qty KG", "Qty Meter", "Pieces" };
+        var headers = new List<string> { "Production Order", "Item", "Color", "Qty KG", "Qty Meter", "Pieces", "Drawing number / رقم الرسمة" };
         var rows = delivery.Lines.Select(l => new object?[]
         {
-            l.ProductionOrderNumber, l.ItemCode, l.Color, l.QuantityKg, l.QuantityMeter, l.PieceCount
+            l.ProductionOrderNumber, l.ItemCode, l.Color, l.QuantityKg, l.QuantityMeter, l.PieceCount, string.Join(", ", l.DrawingNumbers)
         }).ToList();
 
         var subtitle = $"{delivery.CustomerCode} - {delivery.CustomerName}  |  {delivery.DeliveryDate:yyyy-MM-dd}  |  {delivery.Status}";

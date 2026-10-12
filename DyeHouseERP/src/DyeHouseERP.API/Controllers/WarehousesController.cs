@@ -4,6 +4,8 @@ using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Application.Common.Import;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Warehouses.Commands;
+using DyeHouseERP.Application.Warehouses.DTOs;
+using DyeHouseERP.Application.Warehouses.Queries;
 using DyeHouseERP.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -14,6 +16,8 @@ namespace DyeHouseERP.API.Controllers;
 
 public record WarehouseDto(Guid Id, string Code, string Name, WarehouseKind Kind, bool IsActive);
 public record CreateWarehouseRequest(string Code, string Name, WarehouseKind Kind);
+public record UpdateWarehouseRequest(string Name, WarehouseKind Kind);
+public record SetWarehouseActiveRequest(bool IsActive);
 
 [ApiController]
 [Route("api/[controller]")]
@@ -21,39 +25,50 @@ public record CreateWarehouseRequest(string Code, string Name, WarehouseKind Kin
 public class WarehousesController : ControllerBase
 {
     private readonly IApplicationDbContext _db;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ISender _mediator;
 
-    public WarehousesController(IApplicationDbContext db, ICurrentUserService currentUser)
+    public WarehousesController(IApplicationDbContext db, ISender mediator)
     {
         _db = db;
-        _currentUser = currentUser;
+        _mediator = mediator;
     }
+
+    private static WarehouseDto ToApi(WarehouseMasterDto w) => new(w.Id, w.Code, w.Name, w.Kind, w.IsActive);
 
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
-    public async Task<ActionResult<List<WarehouseDto>>> Get([FromQuery] WarehouseKind? kind)
+    public async Task<ActionResult<List<WarehouseDto>>> Get(
+        [FromQuery] WarehouseKind? kind, [FromQuery] bool? activeOnly, [FromQuery] string? search)
     {
-        var query = _db.Warehouses.AsNoTracking().AsQueryable();
-        if (kind.HasValue) query = query.Where(w => w.Kind == kind);
-
-        var result = await query
-            .OrderBy(w => w.Code)
-            .Select(w => new WarehouseDto(w.Id, w.Code, w.Name, w.Kind, w.IsActive))
-            .ToListAsync();
-
-        return Ok(result);
+        var warehouses = await _mediator.Send(new GetWarehousesQuery(kind, activeOnly, search));
+        return Ok(warehouses.Select(ToApi).ToList());
     }
 
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<WarehouseDto>> Create([FromBody] CreateWarehouseRequest request)
     {
-        var warehouse = new Warehouse(request.Code, request.Name, request.Kind, _currentUser.UserName);
-        _db.Warehouses.Add(warehouse);
-        await _db.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(Get), new { }, new WarehouseDto(warehouse.Id, warehouse.Code, warehouse.Name, warehouse.Kind, warehouse.IsActive));
+        var warehouse = await _mediator.Send(new CreateWarehouseCommand(request.Code, request.Name, request.Kind));
+        return CreatedAtAction(nameof(Get), new { }, ToApi(warehouse));
     }
+
+    /// <summary>
+    /// Renames a warehouse and/or re-classifies its kind. The code stays immutable: it is
+    /// the identity every document, ledger row and report already carries.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
+    public async Task<ActionResult<WarehouseDto>> Update(Guid id, [FromBody] UpdateWarehouseRequest request)
+        => Ok(ToApi(await _mediator.Send(new UpdateWarehouseCommand(id, request.Name, request.Kind))));
+
+    /// <summary>
+    /// Activates or deactivates a warehouse. Deactivation is a flag only - nothing is deleted,
+    /// stock history stays readable, and the warehouse can be reactivated at any time.
+    /// </summary>
+    [HttpPost("{id:guid}/active")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
+    public async Task<ActionResult<WarehouseDto>> SetActive(Guid id, [FromBody] SetWarehouseActiveRequest request)
+        => Ok(ToApi(await _mediator.Send(new SetWarehouseActiveCommand(id, request.IsActive))));
 
     // ------------------------------------------- export / import (spec sections 15 + 38)
 

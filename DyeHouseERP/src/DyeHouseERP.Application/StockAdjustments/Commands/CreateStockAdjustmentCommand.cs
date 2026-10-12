@@ -76,6 +76,12 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
 
         await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
 
+        // The adjustment posts a NEW IN/OUT row against the message's warehouse. A
+        // deactivated warehouse keeps the history of everything already posted and
+        // stays readable, but it never receives a new stock row to correct.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, message.WarehouseId, cancellationToken, "to post a stock adjustment against it");
+
         // H6: the balance read, the negative-stock decision and the ledger write
         // must not interleave with any other movement on the same raw lot.
         await using (await _stockLock.AcquireAsync(

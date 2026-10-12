@@ -51,6 +51,8 @@ public class ProductionStageDefinition : AuditableEntity
     /// </summary>
     public bool IsReadyGoodsStage { get; private set; }
 
+    // Semantic capability, never inferred from a name or sequence number.
+    public bool RequiresDrawingNumber { get; private set; }
     public string? Notes { get; private set; }
 
     private ProductionStageDefinition() { } // EF Core
@@ -60,7 +62,8 @@ public class ProductionStageDefinition : AuditableEntity
         bool requiresInputQuantity = true, bool requiresOutputQuantity = true,
         bool requiresApproval = false, bool allowSkip = false, bool allowRepeat = false,
         bool allowRework = true, bool allowReturn = false, string? notes = null,
-        bool isFormationStage = false, bool isReadyGoodsStage = false)
+        bool isFormationStage = false, bool isReadyGoodsStage = false,
+        bool requiresDrawingNumber = false)
     {
         if (isFormationStage && isReadyGoodsStage)
             throw new ArgumentException(
@@ -79,6 +82,7 @@ public class ProductionStageDefinition : AuditableEntity
         AllowReturn = allowReturn;
         IsFormationStage = isFormationStage;
         IsReadyGoodsStage = isReadyGoodsStage;
+        RequiresDrawingNumber = requiresDrawingNumber;
         Notes = notes;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
@@ -119,6 +123,30 @@ public class ProductionStageDefinition : AuditableEntity
     public void Reorder(int sequence, string modifiedBy)
     {
         Sequence = sequence;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Edits the administrative fields of a stage: its display name, its notes and its
+    /// display order.
+    ///
+    /// The CODE is deliberately not editable - it is the stable identity the starting data
+    /// and the machine map refer to, so renaming in the UI can never orphan a row. Nothing
+    /// here touches a Production Order either: an existing stage execution keeps its
+    /// StageDefinitionId and its whole recorded history, whatever the stage is called
+    /// afterwards.
+    /// </summary>
+    public void UpdateDetails(string name, int sequence, string? notes, string modifiedBy)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Stage name is required.", nameof(name));
+        if (sequence < 1)
+            throw new ArgumentException("The stage order must be 1 or greater.", nameof(sequence));
+
+        Name = name.Trim();
+        Sequence = sequence;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
         ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }

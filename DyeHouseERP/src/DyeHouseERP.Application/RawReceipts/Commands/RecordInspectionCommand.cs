@@ -1,10 +1,12 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.RawReceipts.Commands;
 
@@ -68,27 +70,67 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
         // so the inspection date must fall outside any closed period.
         await _periodClose.EnsureOpenAsync(_clock.UtcNow, cancellationToken);
 
-        var message = await _db.RawMessages.FindAsync(new object[] { request.RawMessageId }, cancellationToken)
+        // No correcting ledger row is written when nothing is rejected, so a plain
+        // inspection result needs neither a lot lock nor a warehouse movement check.
+        if (request.Rejections is not { Count: > 0 })
+        {
+            var inspected = await _db.RawMessages
+                .FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
+                ?? throw new NotFoundException("RawMessage", request.RawMessageId);
+
+            inspected.RecordInspection(request.Result, _currentUser.UserName, request.Notes, _clock.UtcNow);
+
+            await _db.SaveChangesAsync(cancellationToken);
+            return Unit.Value;
+        }
+
+        var rejections = request.Rejections!;
+
+        // The message graph is read TWICE. First as a read-only snapshot, only to resolve
+        // the lot dimensions that must be locked. Then - inside the lock - as the tracked
+        // aggregate that actually records the rejection.
+        //
+        // H7 (concurrency): this is what closes the check-then-act window. A rejection
+        // ACCUMULATES on the line and is capped by the received quantity, so the OUT row a
+        // request posts is only correct against the COMMITTED line state. Recording the
+        // rejection from an aggregate loaded before the lock let two racing inspections see
+        // the same starting point and each post its own correcting OUT row: the customer's
+        // raw stock was deducted twice for one rejection and the recorded total could pass
+        // the received quantity. The lock alone does not help - it is the RE-READ under the
+        // lock (the same pattern the allocation path uses) that makes the second request
+        // compute its delta against what the first one actually committed.
+        var snapshot = await _db.RawMessages.AsNoTracking()
+            .Include(m => m.Lines)
+            .FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 
-        message.RecordInspection(request.Result, _currentUser.UserName, request.Notes, _clock.UtcNow);
+        // A retired warehouse never receives a new stock row: a rejection posts a
+        // correcting OUT row against the message's warehouse, so that warehouse must
+        // still be active. Reading the message and its inspection history stays possible.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, snapshot.WarehouseId, cancellationToken, "to record a rejected quantity against it");
 
-        if (request.Rejections is { Count: > 0 })
+        // H6: a rejected quantity posts a correcting OUT row on the same raw
+        // lot, so it takes the same lot locks the allocation/adjustment paths
+        // use - a rejection and a concurrent allocation can no longer both
+        // act on a stale view of the same balance.
+        var rejectedLineIds = rejections.Select(r => r.LineId).ToHashSet();
+        var lockKeys = snapshot.Lines
+            .Where(l => rejectedLineIds.Contains(l.Id))
+            .Select(l => StockLockKey.RawLot(snapshot.WarehouseId, l.ItemId, snapshot.CustomerId, snapshot.Id))
+            .Distinct()
+            .ToList();
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
         {
-            // H6: a rejected quantity posts a correcting OUT row on the same raw
-            // lot, so it takes the same lot locks the allocation/adjustment paths
-            // use - a rejection and a concurrent allocation can no longer both
-            // act on a stale view of the same balance.
-            var lockKeys = request.Rejections
-                .Select(r => message.Lines.FirstOrDefault(l => l.Id == r.LineId))
-                .Where(l => l is not null)
-                .Select(l => StockLockKey.RawLot(message.WarehouseId, l!.ItemId, message.CustomerId, message.Id))
-                .Distinct()
-                .ToList();
+            var message = await _db.RawMessages
+                .Include(m => m.Lines)
+                .FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
+                ?? throw new NotFoundException("RawMessage", request.RawMessageId);
 
-            await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
-            {
-            foreach (var rejection in request.Rejections)
+            message.RecordInspection(request.Result, _currentUser.UserName, request.Notes, _clock.UtcNow);
+
+            foreach (var rejection in rejections)
             {
                 var (deltaKg, deltaMeter) = message.RecordLineRejection(
                     rejection.LineId, rejection.RejectedQuantityKg, rejection.RejectedQuantityMeter);
@@ -97,6 +139,21 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
                     continue;
 
                 var line = message.Lines.First(l => l.Id == rejection.LineId);
+
+                // Rejection and allocation share this lock. Check the live remaining
+                // balance, not only the original received quantity: already consumed raw
+                // must not be deducted again by a later inspection.
+                var rows = await _db.InventoryTransactions.AsNoTracking()
+                    .Where(t => t.RawMessageId == message.Id && t.ItemId == line.ItemId &&
+                        t.CustomerId == message.CustomerId && t.WarehouseId == message.WarehouseId)
+                    .Select(t => new { t.Id, t.QuantityKg, t.QuantityMeter, t.Direction }).ToListAsync(cancellationToken);
+                var persistedIds = rows.Select(t => t.Id).ToHashSet();
+                var pending = _db.InventoryTransactions.Local.Where(t => t.RawMessageId == message.Id &&
+                    t.ItemId == line.ItemId && t.CustomerId == message.CustomerId && t.WarehouseId == message.WarehouseId && !persistedIds.Contains(t.Id));
+                var kg = rows.Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction) + pending.Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction);
+                var meter = rows.Sum(t => (t.QuantityMeter ?? 0m) * (int)t.Direction) + pending.Sum(t => (t.QuantityMeter ?? 0m) * (int)t.Direction);
+                if (deltaKg > kg) throw new Domain.Exceptions.NegativeStockException(kg, deltaKg.Value);
+                if (deltaMeter > meter) throw new Domain.Exceptions.NegativeStockException(meter, deltaMeter.Value);
 
                 // The receipt posted the full received quantity as an IN row. The
                 // rejected part is corrected with one OUT row referencing the same
@@ -107,12 +164,13 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
                     _clock.UtcNow, message.WarehouseId, message.CustomerId, line.ItemId,
                     rawMessageId: message.Id, productionOrderId: null,
                     quantityKg: deltaKg, quantityMeter: deltaMeter,
-                    direction: TransactionDirection.Out,                    createdBy: _currentUser.UserName));
+                    direction: TransactionDirection.Out,
+                    createdBy: _currentUser.UserName));
             }
-            }
+
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }
 }

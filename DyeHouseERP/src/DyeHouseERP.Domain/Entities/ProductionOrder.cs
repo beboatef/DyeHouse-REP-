@@ -152,7 +152,7 @@ public class ProductionOrder : AuditableEntity
             ?? throw new DomainException(
                 "No production stage is marked as the formation stage (IsFormationStage). Configure one before creating Job Orders.");
 
-        var first = new ProductionOrderStageExecution(Id, formation.Id, formation.Sequence);
+        var first = new ProductionOrderStageExecution(Id, formation.Id, formation.Sequence, formation.RequiresDrawingNumber);
 
         // First-stage baseline is the Job Order's actual weight (spec section 15).
         first.Activate(RequestedQuantityKg, RequestedQuantityMeter, startedBy);
@@ -165,9 +165,11 @@ public class ProductionOrder : AuditableEntity
     /// the route after it stays open until the user picks again.
     /// </summary>
     public ProductionOrderStageExecution ActivateNextStage(
-        ProductionStageDefinition nextStage, decimal? baselineKg, decimal? baselineMeter, string startedBy)
+        ProductionStageDefinition nextStage, decimal? baselineKg, decimal? baselineMeter, string startedBy,
+        string? drawingNumber = null)
     {
-        var next = new ProductionOrderStageExecution(Id, nextStage.Id, nextStage.Sequence);
+        var next = new ProductionOrderStageExecution(Id, nextStage.Id, nextStage.Sequence,
+            nextStage.RequiresDrawingNumber, drawingNumber);
         next.Activate(baselineKg, baselineMeter, startedBy);
         _stageExecutions.Add(next);
         return next;
@@ -192,8 +194,89 @@ public class ProductionOrder : AuditableEntity
         return allocation;
     }
 
+    // =================================================================
+    // H1 - the 100% raw-allocation rule (spec section 13)
+    // =================================================================
+
+    /// <summary>
+    /// Total KG allocated across the allocation rows currently loaded on the
+    /// aggregate. KG and Meter are INDEPENDENT units: this figure is never derived
+    /// from, and never converted into, <see cref="AllocatedQuantityMeter"/>.
+    /// </summary>
+    public decimal AllocatedQuantityKg => _rawAllocations.Sum(a => a.QuantityKg ?? 0m);
+
+    /// <summary>Total Meter allocated on the aggregate (see <see cref="AllocatedQuantityKg"/>).</summary>
+    public decimal AllocatedQuantityMeter => _rawAllocations.Sum(a => a.QuantityMeter ?? 0m);
+
+    /// <summary>
+    /// True when THIS aggregate - allocations loaded with it - may start production.
+    /// A plainly loaded order carries none of its allocation rows (they live in their
+    /// own table), so handlers must not judge completeness from this property; they
+    /// enforce the rule through <c>RawAllocationGuard</c>, which reads the rows back.
+    /// </summary>
+    public bool HasCompleteRawAllocation =>
+        IsRawAllocationComplete(AllocatedQuantityKg, AllocatedQuantityMeter);
+
+    /// <summary>
+    /// THE central rule (H1): production may not start - and no production transition
+    /// may record stage output, create ready-goods stock or complete the order - until
+    /// 100% of the requested quantity has been allocated. KG and Meter are checked
+    /// INDEPENDENTLY and are never converted into one another, so a Meter allocation
+    /// can never stand in for an outstanding KG requirement (or the reverse).
+    /// </summary>
+    /// <param name="allocatedQuantityKg">Allocated KG, summed over this order's allocation rows.</param>
+    /// <param name="allocatedQuantityMeter">Allocated Meter, summed over this order's allocation rows.</param>
+    public bool IsRawAllocationComplete(decimal allocatedQuantityKg, decimal allocatedQuantityMeter)
+    {
+        // The same tolerance the ready-goods cap uses (EnsureTransfersWithinOutput):
+        // a stored 3-decimal quantity must not be refused over rounding dust.
+        const decimal tolerance = 0.001m;
+
+        var requestedKg = RequestedQuantityKg ?? 0m;
+        var requestedMeter = RequestedQuantityMeter ?? 0m;
+
+        // A unit that was never requested imposes no requirement - and is never
+        // satisfied by material allocated in the OTHER unit.
+        var kgCovered = requestedKg <= 0m || allocatedQuantityKg + tolerance >= requestedKg;
+        var meterCovered = requestedMeter <= 0m || allocatedQuantityMeter + tolerance >= requestedMeter;
+
+        // An order whose requested quantity was never recorded (data predating the
+        // current validators) still may not run on nothing: it needs at least one
+        // genuinely positive allocation.
+        var hasRawMaterial = allocatedQuantityKg > 0m || allocatedQuantityMeter > 0m;
+
+        return kgCovered && meterCovered && hasRawMaterial;
+    }
+
+    /// <summary>
+    /// Refuses the operation unless 100% of the requested quantity is allocated, with a
+    /// message naming the exact shortfall (see <see cref="IsRawAllocationComplete"/>).
+    /// </summary>
+    public void EnsureRawAllocationComplete(decimal allocatedQuantityKg, decimal allocatedQuantityMeter)
+    {
+        if (IsRawAllocationComplete(allocatedQuantityKg, allocatedQuantityMeter))
+            return;
+
+        throw new DomainException(
+            $"Job Order {OrderNumber} is not fully allocated: {allocatedQuantityKg} of {RequestedQuantityKg ?? 0m} KG and " +
+            $"{allocatedQuantityMeter} of {RequestedQuantityMeter ?? 0m} Meter are allocated. Production cannot start, no stage " +
+            "may record output and no ready-goods stock may be created until 100% of the requested quantity is allocated " +
+            "(KG and Meter are independent units and are never converted into one another).");
+    }
+
+    /// <summary>
+    /// Convenience overload for a caller whose aggregate genuinely carries its allocation
+    /// rows; handlers holding a plainly loaded order use the RawAllocationGuard instead.
+    /// </summary>
+    public void EnsureRawAllocationComplete() =>
+        EnsureRawAllocationComplete(AllocatedQuantityKg, AllocatedQuantityMeter);
+
     public void MarkInProduction()
     {
+        // Zero allocations is exactly the Draft state below (the first allocation moves
+        // the order to RawAllocated), so this stays the domain-level backstop for the
+        // 0% case. The 100% rule - including partial allocation - is enforced by
+        // EnsureRawAllocationComplete through RawAllocationGuard on every productive path.
         if (Status == ProductionOrderStatus.Draft)
             throw new DomainException("Cannot start production before raw material has been allocated to this order.");
         if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)

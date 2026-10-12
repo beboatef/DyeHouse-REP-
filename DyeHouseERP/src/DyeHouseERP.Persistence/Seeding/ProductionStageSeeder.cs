@@ -105,6 +105,14 @@ public static class ProductionStageSeeder
             sequence++;
         }
 
+        // Separate stable code: adding Printing never renumbers the original 21 operations.
+        if (!existingCodes.Contains("PRINTING"))
+        {
+            db.ProductionStageDefinitions.Add(new ProductionStageDefinition(
+                "PRINTING", "الطباعة", sequence, "seed", allowRework: false, requiresDrawingNumber: true));
+            added++;
+        }
+
         if (added > 0)
         {
             await db.SaveChangesAsync(cancellationToken);

@@ -225,6 +225,13 @@ internal static class FormationRequestGroupWriter
             else
             {
                 group = request.AddGroup(input.Name, input.PlannedQuantity, input.Unit, input.TubCount, input.Color, input.Notes, user);
+
+                // A group appended to a request that is ALREADY persisted keeps the key it was created
+                // with, so EF change detection would take it for an existing row and save an UPDATE against
+                // a row that was never inserted (DbUpdateConcurrencyException). The create path needs no help
+                // because the whole graph is inserted together with its new parent; here the new group is
+                // registered explicitly, exactly like a new RawAllocation or a newly activated stage.
+                db.FormationGroups.Add(group);
             }
 
             if (input.SpecificationTemplateId.HasValue && templates.TryGetValue(input.SpecificationTemplateId.Value, out var template))
@@ -256,7 +263,7 @@ internal static class FormationRequestGroupWriter
             // Basins are written LAST so the group's own quantity/specification is already in place and each
             // new basin can inherit it. Writing them also re-derives the group's quantity from its basins,
             // which is what keeps the request total correct without touching the header.
-            ApplyBasins(request, input, group.Id, user);
+            ApplyBasins(db, request, input, group.Id, user);
         }
 
         request.RenumberGroups(user);
@@ -273,7 +280,7 @@ internal static class FormationRequestGroupWriter
     /// again, which is restated from the input below so it can never keep a stale basin sum.
     /// </summary>
     private static void ApplyBasins(
-        FormationRequest request, FormationGroupInput input, Guid groupId, string user)
+        IApplicationDbContext db, FormationRequest request, FormationGroupInput input, Guid groupId, string user)
     {
         var basins = input.Basins;
         if (basins is null) return;
@@ -287,18 +294,28 @@ internal static class FormationRequestGroupWriter
 
         foreach (var basinInput in basins)
         {
-            var target = basinInput.Id.HasValue && keptIds.Contains(basinInput.Id.Value)
-                ? request.UpdateBasin(
+            FormationBasin target;
+            if (basinInput.Id.HasValue && keptIds.Contains(basinInput.Id.Value))
+            {
+                target = request.UpdateBasin(
                     groupId, basinInput.Id.Value, basinInput.Name, basinInput.PlannedQuantity, basinInput.Unit,
                     basinInput.TubCount, basinInput.Color,
                     basinInput.Specification?.WidthCm, basinInput.Specification?.MetersPerKg, basinInput.Specification?.Gsm,
                     basinInput.Specification?.TubFormat, basinInput.Specification?.WindingTapeFormat,
                     basinInput.Specification?.QualityInstructions, basinInput.Specification?.LabInstructions,
                     basinInput.Specification?.InternalInstructions, basinInput.Specification?.CustomerInstructions,
-                    basinInput.Notes, user)
-                : request.AddBasin(
+                    basinInput.Notes, user);
+            }
+            else
+            {
+                target = request.AddBasin(
                     groupId, basinInput.Name, basinInput.PlannedQuantity, basinInput.Unit, basinInput.TubCount,
                     basinInput.Color, basinInput.Notes, user);
+
+                // Same rule as a new group above: the basin hangs off a group that already exists in the
+                // store, so it is registered explicitly to be INSERTed instead of updated.
+                db.FormationBasins.Add(target);
+            }
 
             // An existing basin keeps its specification when the client sends none, exactly like a group does.
             if (basinInput.Specification is not null && basinInput.Id.HasValue)

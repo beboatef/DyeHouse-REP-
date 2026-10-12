@@ -88,6 +88,12 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
             throw new DomainException(
                 $"Message '{message.MessageNumber}' is not available for release (status: {message.Status}).");
 
+        // A release posts a NEW OUT row against the message's own warehouse, so a
+        // deactivated warehouse cannot take part: its history stays readable and
+        // untouched, but no new stock row may be written into it.
+        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, message.WarehouseId, cancellationToken, "to release raw material out of it");
+
         // H6: releasing material to an external processor is an OUT from the same
         // raw lot the allocation path locks, so the two cannot oversubscribe it
         // concurrently.
