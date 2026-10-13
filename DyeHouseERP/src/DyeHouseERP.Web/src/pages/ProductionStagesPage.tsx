@@ -6,25 +6,24 @@ import { useI18n } from "@/i18n";
 
 type Draft = {
   code: string; name: string; sequence: string;
-  requiresInputQuantity: boolean; requiresOutputQuantity: boolean; requiresApproval: boolean;
-  allowSkip: boolean; allowRepeat: boolean; allowRework: boolean; allowReturn: boolean; notes: string;
+  requiresInputQuantity: boolean; requiresOutputQuantity: boolean;
+  allowSkip: boolean; notes: string;
 };
 
 const emptyDraft = (): Draft => ({
   code: "", name: "", sequence: "",
-  requiresInputQuantity: true, requiresOutputQuantity: true, requiresApproval: false,
-  allowSkip: false, allowRepeat: false, allowRework: true, allowReturn: false, notes: ""
+  requiresInputQuantity: true, requiresOutputQuantity: true,
+  allowSkip: false, notes: ""
 });
 
 /** `key` is the domain field sent to the API; the label is an i18n key, translated where it renders. */
 const flags: { key: keyof Draft; labelKey: string }[] = [
   { key: "requiresInputQuantity", labelKey: "stg.flag.requiresInputQuantity" },
   { key: "requiresOutputQuantity", labelKey: "stg.flag.requiresOutputQuantity" },
-  { key: "requiresApproval", labelKey: "stg.flag.requiresApproval" },
-  { key: "allowSkip", labelKey: "stg.flag.allowSkip" },
-  { key: "allowRepeat", labelKey: "stg.flag.allowRepeat" },
-  { key: "allowRework", labelKey: "stg.flag.allowRework" },
-  { key: "allowReturn", labelKey: "stg.flag.allowReturn" }
+  // Only allowSkip is a real capability: SkipStageCommand reads it. The three inert
+  // switches (repeat / rework / return) were removed rather than left advertising
+  // behaviour no workflow implements (D3).
+  { key: "allowSkip", labelKey: "stg.flag.allowSkip" }
 ];
 
 type EditDraft = { name: string; sequence: string; notes: string };
@@ -70,8 +69,7 @@ export default function ProductionStagesPage() {
       ProductionStagesApi.create({
         code: draft.code, name: draft.name, sequence: Number(draft.sequence),
         requiresInputQuantity: draft.requiresInputQuantity, requiresOutputQuantity: draft.requiresOutputQuantity,
-        requiresApproval: draft.requiresApproval, allowSkip: draft.allowSkip, allowRepeat: draft.allowRepeat,
-        allowRework: draft.allowRework, allowReturn: draft.allowReturn, notes: draft.notes || undefined
+        allowSkip: draft.allowSkip, notes: draft.notes || undefined
       }),
     onSuccess: () => {
       invalidate();
@@ -245,9 +243,7 @@ export default function ProductionStagesPage() {
                   )}
                 </td>
                 <td className="space-x-1 space-x-reverse">
-                  {s.requiresApproval && <Badge tone="yellow">{t("stg.badgeApproval")}</Badge>}
                   {s.allowSkip && <Badge tone="blue">{t("stg.badgeSkip")}</Badge>}
-                  {s.allowRework && <Badge tone="gray">{t("stg.badgeRework")}</Badge>}
                 </td>
                 <td>
                   <Badge tone={s.isActive ? "green" : "gray"}>

@@ -9,9 +9,9 @@ namespace DyeHouseERP.UnitTests;
 public class ProductionOrderTests
 {
     private static ProductionStageDefinition Stage(
-        string code, int sequence, bool allowSkip = false, bool requiresApproval = false,
+        string code, int sequence, bool allowSkip = false,
         bool isFormationStage = false, bool isReadyGoodsStage = false) =>
-        new(code, code, sequence, "tester", allowSkip: allowSkip, requiresApproval: requiresApproval,
+        new(code, code, sequence, "tester", allowSkip: allowSkip,
             isFormationStage: isFormationStage, isReadyGoodsStage: isReadyGoodsStage);
 
     private static ProductionOrder CreateOrder() =>
@@ -126,21 +126,6 @@ public class ProductionOrderStageExecutionTests
         .StageExecutions.Single();
 
     [Fact]
-    public void Complete_WhenApprovalRequiredButNotProvided_Throws()
-    {
-        // No Start() call: the formation stage is already running as soon as the
-        // Job Order is created (spec section 12).
-        var execution = NewExecution();
-
-        var act = () => execution.Complete(
-            inputKg: 100m, inputMeter: null, outputKg: 90m, outputMeter: null,
-            lossKg: 10m, lossMeter: null, separatesKg: null, separatesMeter: null,
-            notes: null, approvalRequired: true, approvedBy: null);
-
-        act.Should().Throw<DomainException>();
-    }
-
-    [Fact]
     public void Skip_WhenStageDoesNotAllowSkip_Throws()
     {
         var execution = NewExecution();
@@ -159,7 +144,7 @@ public class ProductionOrderStageExecutionTests
         // there is no separate "start" step for it (spec section 12).
         execution.Status.Should().Be(StageExecutionStatus.InProgress);
 
-        execution.Complete(100m, null, 90m, null, 10m, null, null, null, null, approvalRequired: false, approvedBy: null);
+        execution.Complete(100m, null, 90m, null, 10m, null, null, null, null);
         execution.Status.Should().Be(StageExecutionStatus.Completed);
     }
 
@@ -253,5 +238,113 @@ internal static class TestExtensions
     {
         action(value);
         return value;
+    }
+}
+
+/// <summary>
+/// The order's editable surface (spec sections 12 + 16). Edits are allowed while the order is open and
+/// are refused once it is Completed or Cancelled - never a blanket immutable-after-save rule, but also
+/// never a rewrite of the order's identity, its requested quantity (the formation stage's baseline) or
+/// anything already posted.
+/// </summary>
+public class ProductionOrderEditTests
+{
+    private static ProductionOrder OpenOrder()
+    {
+        var formation = new ProductionStageDefinition("A", "Formation", 1, "tester",
+            allowSkip: true, isFormationStage: true);
+        var order = new ProductionOrder("PRD-2026-000900", Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow, "tester",
+            color: "Navy", requestedQuantityKg: 1000m, rawOrigin: "Lot A",
+            customerReference: "CR-1", notes: "first note");
+        order.BuildStageRoute(new[] { formation }, "tester");
+        return order;
+    }
+
+    [Fact]
+    public void UpdateDetails_EditsTheDescriptiveAndSchedulingFields_WhileTheOrderIsOpen()
+    {
+        var order = OpenOrder();
+        var newDate = DateTime.UtcNow.Date.AddDays(-2);
+
+        order.UpdateDetails("Red", "Lot B", "CR-2", "corrected note", ProductionPriority.High, newDate, "planner");
+
+        order.Color.Should().Be("Red");
+        order.RawOrigin.Should().Be("Lot B");
+        order.CustomerReference.Should().Be("CR-2");
+        order.Notes.Should().Be("corrected note");
+        order.Priority.Should().Be(ProductionPriority.High);
+        order.OrderDate.Should().Be(newDate);
+        order.ModifiedBy.Should().Be("planner");
+    }
+
+    [Fact]
+    public void UpdateDetails_LeavesTheIdentityAndTheRequestedQuantityUntouched()
+    {
+        var order = OpenOrder();
+        var customerId = order.CustomerId;
+        var itemId = order.ItemId;
+
+        order.UpdateDetails("Red", null, null, null, ProductionPriority.Low, DateTime.UtcNow, "planner");
+
+        order.CustomerId.Should().Be(customerId, "the order's identity is never re-pointed by an edit");
+        order.ItemId.Should().Be(itemId);
+        order.RequestedQuantityKg.Should().Be(1000m);
+        order.StageExecutions.Single().BaselineKg.Should().Be(1000m,
+            "the formation stage's baseline is the requested quantity and is never desynced by an edit");
+    }
+
+    [Fact]
+    public void UpdateDetails_AndTheLineType_AreStillAllowedOnceProductionHasStarted()
+    {
+        var order = OpenOrder();
+        order.AllocateRaw(Guid.NewGuid(), order.ItemId, 1000m, null, "operator");
+        order.MarkInProduction();
+        order.Status.Should().Be(ProductionOrderStatus.InProduction);
+
+        order.UpdateDetails("Red", null, null, "note", ProductionPriority.High, DateTime.UtcNow, "planner");
+        order.Color.Should().Be("Red", "descriptive fields are ordinary planning data, not production history");
+
+        // The line type is a CLASSIFICATION of the order - nothing posted is derived from it - so a
+        // wrong value is corrected by an ordinary, audited edit while the order is still running.
+        order.SetJobOrderType(JobOrderType.OpenLine, "planner");
+        order.JobOrderType.Should().Be(JobOrderType.OpenLine);
+        order.ModifiedBy.Should().Be("planner", "the automatic audit interceptor records who changed it and when");
+    }
+
+    [Fact]
+    public void TheLineType_StaysLockedOnACompletedOrder()
+    {
+        var order = OpenOrder();
+        order.StageExecutions.Single().Skip(stageAllowsSkip: true, reason: "scrapped", modifiedBy: "tester");
+        order.CompleteWithReason("closed with no output");
+
+        var act = () => order.SetJobOrderType(JobOrderType.OpenLine, "planner");
+
+        act.Should().Throw<DocumentLockedException>("a completed order's history is frozen");
+    }
+
+    [Fact]
+    public void UpdateDetails_OnACompletedOrder_IsRefused()
+    {
+        var order = OpenOrder();
+        order.StageExecutions.Single().Skip(stageAllowsSkip: true, reason: "scrapped", modifiedBy: "tester");
+        order.CompleteWithReason("closed with no output");
+
+        var act = () => order.UpdateDetails("Red", null, null, null, ProductionPriority.Low, DateTime.UtcNow, "planner");
+
+        act.Should().Throw<DocumentLockedException>();
+        order.Color.Should().Be("Navy", "a refused edit changes nothing");
+    }
+
+    [Fact]
+    public void UpdateDetails_OnACancelledOrder_IsRefused()
+    {
+        var order = OpenOrder();
+        order.Cancel("customer withdrew", "tester");
+
+        var act = () => order.UpdateDetails("Red", null, null, null, ProductionPriority.Low, DateTime.UtcNow, "planner");
+
+        act.Should().Throw<DocumentLockedException>();
+        order.Color.Should().Be("Navy");
     }
 }

@@ -19,11 +19,16 @@ public class ProductionStageDefinition : AuditableEntity
 
     public bool RequiresInputQuantity { get; private set; }
     public bool RequiresOutputQuantity { get; private set; }
-    public bool RequiresApproval { get; private set; }
+
+    /// <summary>
+    /// The ONLY capability flag a stage carries, because it is the only one any workflow honours:
+    /// <c>SkipStageCommand</c> consults it before marking a stage Skipped. It was previously joined by
+    /// AllowRepeat/AllowRework/AllowReturn, which no code path ever read - the stage-admin screen
+    /// advertised behaviour that did not exist, so those three were removed rather than implemented
+    /// (D3). A stage that must run more than once is supported where the business needs it - a printing
+    /// stage, identified by <see cref="RequiresDrawingNumber"/> - through the ordinary transfer workflow.
+    /// </summary>
     public bool AllowSkip { get; private set; }
-    public bool AllowRepeat { get; private set; }
-    public bool AllowRework { get; private set; }
-    public bool AllowReturn { get; private set; }
 
     /// <summary>
     /// Marks the stage that every new Job Order starts at - التشكيل.
@@ -60,8 +65,7 @@ public class ProductionStageDefinition : AuditableEntity
     public ProductionStageDefinition(
         string code, string name, int sequence, string createdBy,
         bool requiresInputQuantity = true, bool requiresOutputQuantity = true,
-        bool requiresApproval = false, bool allowSkip = false, bool allowRepeat = false,
-        bool allowRework = true, bool allowReturn = false, string? notes = null,
+        bool allowSkip = false, string? notes = null,
         bool isFormationStage = false, bool isReadyGoodsStage = false,
         bool requiresDrawingNumber = false)
     {
@@ -75,11 +79,7 @@ public class ProductionStageDefinition : AuditableEntity
         Sequence = sequence;
         RequiresInputQuantity = requiresInputQuantity;
         RequiresOutputQuantity = requiresOutputQuantity;
-        RequiresApproval = requiresApproval;
         AllowSkip = allowSkip;
-        AllowRepeat = allowRepeat;
-        AllowRework = allowRework;
-        AllowReturn = allowReturn;
         IsFormationStage = isFormationStage;
         IsReadyGoodsStage = isReadyGoodsStage;
         RequiresDrawingNumber = requiresDrawingNumber;

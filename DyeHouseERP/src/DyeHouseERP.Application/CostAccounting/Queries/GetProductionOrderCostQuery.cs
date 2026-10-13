@@ -30,8 +30,11 @@ public class GetProductionOrderCostQueryHandler : IRequestHandler<GetProductionO
         var order = await _db.ProductionOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 
+        // Cancelled issues are excluded: the OUT row they posted is reversed by a compensating IN row
+        // on the material ledger, so counting them here would overstate the order's material cost.
         var materialCost = await _db.MaterialIssues.AsNoTracking()
-            .Where(i => i.ProductionOrderId == request.ProductionOrderId)
+            .Where(i => i.ProductionOrderId == request.ProductionOrderId
+                && i.Status != MaterialIssueStatus.Cancelled)
             .SumAsync(i => (decimal?)(i.Quantity * i.UnitCost), cancellationToken) ?? 0;
 
         var preparationCost = await _db.MaterialPreparations.AsNoTracking()
@@ -85,7 +88,10 @@ public class GetProductionOrderCostQueryHandler : IRequestHandler<GetProductionO
             var lastStage = await _db.ProductionOrderStageExecutions.AsNoTracking()
                 .Where(s => s.ProductionOrderId == request.ProductionOrderId
                          && s.Status == StageExecutionStatus.Completed)
-                .OrderByDescending(s => s.Sequence)
+                // A printing stage can run more than once at the same Sequence, so the most
+                // RECENTLY completed execution is the real "last stage" - ordering by Sequence
+                // alone would pick an arbitrary one of the print runs.
+                .OrderByDescending(s => s.Sequence).ThenByDescending(s => s.CompletedAtUtc)
                 .Select(s => new { s.OutputKg, s.OutputMeter })
                 .FirstOrDefaultAsync(cancellationToken);
 

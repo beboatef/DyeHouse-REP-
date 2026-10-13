@@ -49,7 +49,6 @@ const ROUTES = [
   ["/period-closing", "Period closing"],
   ["/production-stages", "Production stages"],
   ["/production-orders", "Job orders"],
-  ["/customer-portal", "Customer portal"],
   ["/production-floor", "Production floor"]
 ];
 

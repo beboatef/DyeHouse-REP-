@@ -1,3 +1,5 @@
+using DyeHouseERP.Domain.Enums;
+
 namespace DyeHouseERP.Application.Materials.DTOs;
 
 public class MaterialTransferDto
@@ -30,6 +32,12 @@ public class MaterialIssueDto
     public decimal UnitCost { get; set; }
     public decimal TotalCost { get; set; }
     public string? Notes { get; set; }
+
+    public MaterialIssueStatus Status { get; set; }
+    public bool IsCancelled { get; set; }
+    public string? CancelledBy { get; set; }
+    public DateTime? CancelledAtUtc { get; set; }
+    public string? CancellationReason { get; set; }
 }
 
 public class MaterialPreparationDto

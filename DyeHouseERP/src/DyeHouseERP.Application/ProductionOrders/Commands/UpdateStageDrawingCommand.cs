@@ -37,7 +37,9 @@ public class UpdateStageDrawingCommandHandler : IRequestHandler<UpdateStageDrawi
         var stage = await _db.ProductionOrderStageExecutions.SingleOrDefaultAsync(s => s.Id == request.StageExecutionId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrderStageExecution", request.StageExecutionId);
         var before = stage.DrawingNumber;
-        stage.SetDrawingNumber(request.DrawingNumber);
+        // The reason is passed INTO the domain rule, so a closed (completed) print run can only be
+        // corrected as an explicit, audited correction - never silently, and never without one.
+        stage.SetDrawingNumber(request.DrawingNumber, request.Reason);
         _db.AuditLogEntries.Add(new AuditLogEntry(_clock.UtcNow, _user.UserName, "DrawingCorrection",
             "ProductionOrderStageExecution", stage.Id.ToString(),
             JsonSerializer.Serialize(new { drawingNumber = before }),

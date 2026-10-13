@@ -41,6 +41,13 @@ public class RawMessageDto
     public InspectionStatus InspectionStatus { get; set; }
     public RawMessageStatus Status { get; set; }
     public bool HasRejections { get; set; }
+
+    /// <summary>Why the receipt was cancelled, when it was (spec sections 10-11 + 49). Null while it stands.</summary>
+    public string? CancellationReason { get; set; }
+
+    /// <summary>Who cancelled it and when - the audit half of the correction.</summary>
+    public string? CancelledBy { get; set; }
+    public DateTime? CancelledAtUtc { get; set; }
     public List<RawMessageLineDto> Lines { get; set; } = new();
 }
 

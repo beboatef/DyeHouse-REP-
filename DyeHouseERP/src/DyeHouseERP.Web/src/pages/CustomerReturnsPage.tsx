@@ -55,6 +55,13 @@ export default function CustomerReturnsPage() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Correcting a return entered in error (wrong lot, quantity or customer) is a cancellation with a
+  // mandatory reason - never an edit and never a delete. Refused by the backend if the returned
+  // material has already been used, and it says exactly which lot and how much.
+  const [cancelFor, setCancelFor] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
   const { data: returns, isLoading, error } = useQuery({
     queryKey: ["customer-returns", filterCustomerId, fromDate, toDate, search],
     queryFn: () => CustomerReturnsApi.list({
@@ -121,6 +128,19 @@ export default function CustomerReturnsPage() {
       resetForm();
     },
     onError: (err) => setFormError(errorMessage(err, t("common.error")))
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (input: { id: string; reason: string }) => CustomerReturnsApi.cancel(input.id, input.reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customer-returns"] });
+      qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-summary"] });
+      setCancelFor(null);
+      setCancelReason("");
+      setCancelError(null);
+    },
+    onError: (err) => setCancelError(errorMessage(err, t("common.error")))
   });
 
   const resetForm = () => {
@@ -375,7 +395,10 @@ export default function CustomerReturnsPage() {
                   <Fragment key={ret.id}>
                     <tr className="cursor-pointer"
                       onClick={() => setExpandedId(expanded ? null : ret.id)}>
-                      <td className="ltr-nums font-medium">{ret.returnNumber}</td>
+                      <td className="ltr-nums font-medium">
+                        {ret.returnNumber}
+                        {ret.isCancelled && <span className="ms-2"><Badge tone="red">{t("returns.statusCancelled")}</Badge></span>}
+                      </td>
                       <td className="ltr-nums text-ink-muted">
                         {new Date(ret.returnDate).toLocaleDateString("en-GB")}
                       </td>
@@ -432,6 +455,52 @@ export default function CustomerReturnsPage() {
                               </tbody>
                             </table>
                           </div>
+
+                          {ret.isCancelled ? (
+                            <div className="mx-3 mb-3 rounded-lg border border-red-200 bg-red-50/50 px-4 py-3 text-sm text-red-900">
+                              <div className="font-semibold">{t("returns.cancel.title")}</div>
+                              <div className="ltr-nums text-xs text-red-800">
+                                {ret.cancelledBy} · {ret.cancelledAtUtc ? new Date(ret.cancelledAtUtc).toLocaleString("en-GB") : ""}
+                              </div>
+                              <div className="mt-1" dir="auto">{ret.cancellationReason}</div>
+                            </div>
+                          ) : cancelFor === ret.id ? (
+                            <div className="mx-3 mb-3 rounded-lg border border-red-200 bg-red-50/60 p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                                <span className="text-sm font-semibold text-red-900">{t("returns.cancel.title")}</span>
+                                <span className="text-xs text-red-800">{t("returns.cancel.hint")}</span>
+                              </div>
+                              <div className="mt-3">
+                                <Field label={t("returns.cancel.reason")}>
+                                  <Input
+                                    value={cancelReason}
+                                    maxLength={1000}
+                                    onChange={(e) => setCancelReason(e.target.value)}
+                                  />
+                                </Field>
+                              </div>
+                              <div className="mt-3 flex items-center gap-2">
+                                <Button
+                                  variant="danger"
+                                  disabled={!cancelReason.trim() || cancelMutation.isPending}
+                                  onClick={() => cancelMutation.mutate({ id: ret.id, reason: cancelReason.trim() })}
+                                >
+                                  {cancelMutation.isPending ? t("common.saving") : t("returns.cancel.submit")}
+                                </Button>
+                                <Button variant="ghost" onClick={() => setCancelFor(null)}>{t("common.cancel")}</Button>
+                                {cancelError && <span className="form-error">{cancelError}</span>}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="px-3 pb-3">
+                              <Button
+                                variant="ghost"
+                                onClick={() => { setCancelFor(ret.id); setCancelReason(""); setCancelError(null); }}
+                              >
+                                {t("returns.cancel")}
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}

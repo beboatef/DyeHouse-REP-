@@ -42,11 +42,6 @@ public class StartStageCommandHandler : IRequestHandler<StartStageCommand, Produ
         if (order.Status == ProductionOrderStatus.RawAllocated)
             order.MarkInProduction();
 
-        // If this order was converted from an approved Formation Request, the request moves to
-        // In Progress at the same moment - the chain stays consistent (spec sections 31-32).
-        await DyeHouseERP.Application.FormationRequests.Commands.FormationProductionSync
-            .OnProductionStartedAsync(_db, order, _currentUser.UserName, cancellationToken);
-
         stage.Start(_currentUser.UserName);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -64,7 +59,7 @@ public record CompleteStageCommand(
     decimal? OutputKg, decimal? OutputMeter,
     decimal? LossKg, decimal? LossMeter,
     decimal? SeparatesKg, decimal? SeparatesMeter,
-    string? Notes, string? ApprovedBy) : IRequest<ProductionOrderDto>;
+    string? Notes) : IRequest<ProductionOrderDto>;
 
 public class CompleteStageCommandValidator : AbstractValidator<CompleteStageCommand>
 {
@@ -112,7 +107,7 @@ public class CompleteStageCommandHandler : IRequestHandler<CompleteStageCommand,
         stage.Complete(
             request.InputKg, request.InputMeter, request.OutputKg, request.OutputMeter,
             request.LossKg, request.LossMeter, request.SeparatesKg, request.SeparatesMeter,
-            request.Notes, definition.RequiresApproval, request.ApprovedBy);
+            request.Notes);
 
         // Auto-track any Separates recorded on this stage (spec section 22) -
         // they are never just a number on the stage row; each becomes its

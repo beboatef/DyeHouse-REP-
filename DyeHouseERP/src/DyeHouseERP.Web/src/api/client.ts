@@ -88,8 +88,12 @@ export interface RawMessage {
   receivingUser: string;
   notes: string | null;
   inspectionStatus: "PendingInspection" | "Accepted" | "AcceptedWithNotes" | "Rejected";
-  status: "Open" | "PartiallyUsed" | "Depleted" | "Closed";
+  status: "Open" | "PartiallyUsed" | "Depleted" | "Closed" | "Cancelled";
   hasRejections: boolean;
+  /** Set only on a cancelled receipt: who corrected it, when and why. */
+  cancellationReason: string | null;
+  cancelledBy: string | null;
+  cancelledAtUtc: string | null;
   lines: RawMessageLine[];
 }
 
@@ -285,6 +289,12 @@ export interface CustomerReturn {
   notes: string | null;
   createdBy: string;
   createdAtUtc: string;
+  /** True once the return was cancelled through the correction workflow: the document
+   *  and its ledger rows stay, and the stock it restored is reversed. */
+  isCancelled: boolean;
+  cancellationReason: string | null;
+  cancelledBy: string | null;
+  cancelledAtUtc: string | null;
   lines: CustomerReturnLine[];
 }
 
@@ -315,7 +325,15 @@ export const CustomerReturnsApi = {
     api.get<CustomerReturn[]>("/customer-returns", { params }).then((r) => r.data),
   get: (id: string) => api.get<CustomerReturn>(`/customer-returns/${id}`).then((r) => r.data),
   create: (body: CustomerReturnInput) =>
-    api.post<CustomerReturn>("/customer-returns", body).then((r) => r.data)
+    api.post<CustomerReturn>("/customer-returns", body).then((r) => r.data),
+  /**
+   * Cancels a return entered in error (wrong lot, quantity or customer). A reason is mandatory:
+   * it is stored on the document and written to the audit trail. Existing ledger rows are kept and
+   * the returned stock is taken back out with a reversing row - never edited or deleted.
+   * Requires the raw.return_cancel permission; refused while the material has already been used.
+   */
+  cancel: (id: string, reason: string) =>
+    api.post<CustomerReturn>(`/customer-returns/${id}/cancel`, { reason }).then((r) => r.data)
 };
 
 // ---------------- Price lists (spec sections 34 + 36) ----------------
@@ -419,7 +437,15 @@ export const RawMessagesApi = {
       notes?: string;
       rejections?: { lineId: string; rejectedQuantityKg?: number; rejectedQuantityMeter?: number }[];
     }
-  ) => api.post(`/raw-messages/${id}/inspection`, body)
+  ) => api.post(`/raw-messages/${id}/inspection`, body),
+  /**
+   * Cancels a receipt entered in error (wrong customer/item/warehouse). A reason is
+   * mandatory: it is stored on the receipt and written to the audit trail. The receipt
+   * and its ledger rows are preserved and the stock is reversed - never edited or deleted.
+   * Requires the raw.receipt_cancel permission; the backend refuses while any Job Order
+   * holds the receipt or its balance is no longer intact.
+   */
+  cancel: (id: string, reason: string) => api.post(`/raw-messages/${id}/cancel`, { reason })
 };
 
 // ---------------- Production Stages (configurable engine) ----------------
@@ -433,11 +459,8 @@ export interface ProductionStageDefinition {
   isActive: boolean;
   requiresInputQuantity: boolean;
   requiresOutputQuantity: boolean;
-  requiresApproval: boolean;
+  /** The only capability flag a workflow honours: SkipStageCommand reads it. */
   allowSkip: boolean;
-  allowRepeat: boolean;
-  allowRework: boolean;
-  allowReturn: boolean;
   /** Exactly one stage has this: التشكيل, where every Job Order starts. */
   isFormationStage: boolean;
   /** Exactly one stage has this: الجاهز, the final stage that moves output to Ready Goods. */
@@ -458,11 +481,7 @@ export const ProductionStagesApi = {
     sequence: number;
     requiresInputQuantity: boolean;
     requiresOutputQuantity: boolean;
-    requiresApproval: boolean;
     allowSkip: boolean;
-    allowRepeat: boolean;
-    allowRework: boolean;
-    allowReturn: boolean;
     notes?: string;
   }) => api.post<ProductionStageDefinition>("/production-stages", body).then((r) => r.data),
   /** Renames / re-sequences / re-notes a stage. The two route markers keep their own endpoints. */
@@ -521,7 +540,6 @@ export interface StageExecution {
   notes: string | null;
   startedAtUtc: string | null;
   completedAtUtc: string | null;
-  requiresApproval: boolean;
   allowSkip: boolean;
 }
 
@@ -537,6 +555,7 @@ export interface ProductionOrder {
   color: string | null;
   requestedQuantityKg: number | null;
   requestedQuantityMeter: number | null;
+  rawOrigin: string | null;
   customerReference: string | null;
   notes: string | null;
   priority: ProductionPriority;
@@ -548,13 +567,6 @@ export interface ProductionOrder {
   expectedOutputKg: number | null;
   expectedOutputMeter: number | null;
   reprocessingOfProductionOrderId: string | null;
-  formationRequestId: string | null;
-  formationRequestNumber: string | null;
-  formationGroupId: string | null;
-  formationGroupNumber: number | null;
-  /** Set when this Job Order fulfils one formation basin (spec sections 10-11). */
-  formationBasinId: string | null;
-  formationBasinNumber: number | null;
   rawAllocations: RawAllocationLine[];
   stageExecutions: StageExecution[];
 }
@@ -564,7 +576,6 @@ export const ProductionOrdersApi = {
     customerId?: string;
     status?: ProductionOrderStatus;
     jobOrderType?: JobOrderType;
-    formationRequestId?: string;
   }) => api.get<ProductionOrder[]>("/production-orders", { params }).then((r) => r.data),
   get: (id: string) => api.get<ProductionOrder>(`/production-orders/${id}`).then((r) => r.data),
   create: (body: {
@@ -580,6 +591,22 @@ export const ProductionOrdersApi = {
     priority: ProductionPriority;
     jobOrderType?: JobOrderType;
   }) => api.post<ProductionOrder>("/production-orders", body).then((r) => r.data),
+  /**
+   * Edits an OPEN order's descriptive/scheduling fields. Customer, item and requested quantity are
+   * deliberately absent: they are corrected by cancelling the order and re-creating it.
+   */
+  update: (
+    id: string,
+    body: {
+      orderDate: string;
+      color?: string;
+      rawOrigin?: string;
+      customerReference?: string;
+      notes?: string;
+      priority: ProductionPriority;
+      jobOrderType: JobOrderType;
+    }
+  ) => api.put<ProductionOrder>(`/production-orders/${id}`, body).then((r) => r.data),
   allocateRaw: (
     id: string,
     body: { rawMessageId: string; itemId: string; quantityKg?: number; quantityMeter?: number }
@@ -591,7 +618,7 @@ export const ProductionOrdersApi = {
     body: {
       inputKg?: number; inputMeter?: number; outputKg?: number; outputMeter?: number;
       lossKg?: number; lossMeter?: number; separatesKg?: number; separatesMeter?: number;
-      notes?: string; approvedBy?: string;
+      notes?: string;
     }
   ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/complete`, body).then((r) => r.data),
   skipStage: (stageExecutionId: string, reason: string) =>
@@ -634,6 +661,12 @@ export const ProductionOrdersApi = {
       quantityKg?: number; quantityMeter?: number;
     }
   ) => api.post<ProductionOrder>(`/production-orders/${id}/resume`, body).then((r) => r.data),
+  /**
+   * Cancels the order and reverses whatever raw material it still holds as NEW compensating
+   * IN rows through the ledger. A completed order cannot be cancelled; the reason is mandatory.
+   */
+  cancel: (id: string, reason: string) =>
+    api.post<ProductionOrder>(`/production-orders/${id}/cancel`, { reason }).then((r) => r.data),
   /** Completing requires a reason: it is recorded on the order (a zero-output close must be explainable). */
   complete: (id: string, reason: string) =>
     api.post<ProductionOrder>(`/production-orders/${id}/complete`, { reason }).then((r) => r.data)
@@ -849,12 +882,17 @@ export interface MaterialIssue {
   id: string; issueNumber: string; issueDate: string; materialId: string; materialCode: string; materialName: string;
   warehouseId: string; productionOrderId: string; productionOrderNumber: string;
   quantity: number; unitCost: number; totalCost: number; notes: string | null;
+  status: number; isCancelled: boolean; cancelledBy: string | null; cancelledAtUtc: string | null;
+  cancellationReason: string | null;
 }
 
 export const MaterialIssuesApi = {
   list: (params?: { productionOrderId?: string }) => api.get<MaterialIssue[]>("/material-issues", { params }).then((r) => r.data),
   create: (body: { materialId: string; warehouseId: string; productionOrderId: string; quantity: number; unitCost?: number; notes?: string }) =>
-    api.post<MaterialIssue>("/material-issues", body).then((r) => r.data)
+    api.post<MaterialIssue>("/material-issues", body).then((r) => r.data),
+  /** Reversal, not a delete: the backend keeps the original OUT ledger row and posts a compensating IN row. */
+  cancel: (id: string, reason: string) =>
+    api.post<MaterialIssue>(`/material-issues/${id}/cancel`, { reason }).then((r) => r.data)
 };
 
 export interface MaterialPreparation {
@@ -953,6 +991,7 @@ export interface InvoiceLine {
 export interface Invoice {
   id: string; invoiceNumber: string; invoiceDate: string;
   customerId: string; customerCode: string; customerName: string;
+  deliveryId: string | null;
   status: InvoiceStatus; discount: number; tax: number; subTotal: number; total: number;
   notes: string | null; lines: InvoiceLine[];
 }
@@ -965,7 +1004,19 @@ export const InvoicesApi = {
     lines: { productionOrderId?: string; itemId: string; color?: string; quantity: number; processingPrice: number }[];
   }) => api.post<Invoice>("/invoices", body).then((r) => r.data),
   issue: (id: string) => api.post<Invoice>(`/invoices/${id}/issue`).then((r) => r.data),
-  cancel: (id: string, reason: string) => api.post<Invoice>(`/invoices/${id}/cancel`, { reason }).then((r) => r.data)
+  cancel: (id: string, reason: string) => api.post<Invoice>(`/invoices/${id}/cancel`, { reason }).then((r) => r.data),
+  /** Draft-only: edit the header behind the configurable invoices.edit permission. */
+  update: (id: string, body: { invoiceDate: string; deliveryId?: string; discount: number; tax: number; notes?: string }) =>
+    api.put<Invoice>(`/invoices/${id}`, body).then((r) => r.data),
+  /** Draft-only: append a line. */
+  addLine: (id: string, body: { productionOrderId?: string; itemId: string; color?: string; quantity: number; processingPrice: number; notes?: string }) =>
+    api.post<Invoice>(`/invoices/${id}/lines`, body).then((r) => r.data),
+  /** Draft-only: edit a line in place (its Id is preserved). */
+  updateLine: (id: string, lineId: string, body: { quantity: number; processingPrice: number; color?: string; notes?: string }) =>
+    api.put<Invoice>(`/invoices/${id}/lines/${lineId}`, body).then((r) => r.data),
+  /** Draft-only: remove a line. */
+  removeLine: (id: string, lineId: string) =>
+    api.delete<Invoice>(`/invoices/${id}/lines/${lineId}`).then((r) => r.data)
 };
 
 export interface CustomerStatementLine {
@@ -1049,12 +1100,15 @@ export const PaymentsApi = {
 export interface TreasuryTransfer {
   id: string; transferNumber: string; transferDate: string;
   fromAccountId: string; fromAccountName: string; toAccountId: string; toAccountName: string; amount: number; description: string | null;
+  status: "Posted" | "Cancelled";
 }
 
 export const TreasuryTransfersApi = {
   list: () => api.get<TreasuryTransfer[]>("/treasury-transfers").then((r) => r.data),
   create: (body: { transferDate: string; fromAccountId: string; toAccountId: string; amount: number; description?: string }) =>
-    api.post<TreasuryTransfer>("/treasury-transfers", body).then((r) => r.data)
+    api.post<TreasuryTransfer>("/treasury-transfers", body).then((r) => r.data),
+  cancel: (id: string, reason: string) =>
+    api.post<TreasuryTransfer>(`/treasury-transfers/${id}/cancel`, { reason }).then((r) => r.data)
 };
 
 // ---------------- Cost Accounting ----------------
@@ -1373,28 +1427,6 @@ export const CostAccountingApi = {
     api.get<ProductionOrderProfitability>(`/production-orders/${productionOrderId}/cost/profitability`).then((r) => r.data),
   exportFile: (productionOrderId: string, format: "excel" | "pdf", fileName: string) =>
     downloadBlob(`/production-orders/${productionOrderId}/cost/export`, { productionOrderId, format }, fileName)
-};
-
-// ---------------- Customer Portal (Production Requests) ----------------
-
-export type ProductionRequestStatus = "Pending" | "Approved" | "Rejected" | "ConvertedToOrder";
-
-export interface ProductionRequest {
-  id: string; requestNumber: string; requestDate: string;
-  customerId: string; customerCode: string; itemId: string; itemCode: string; itemName: string;
-  color: string | null; requestedQuantityKg: number | null; requestedQuantityMeter: number | null;
-  notes: string | null; status: ProductionRequestStatus;
-  convertedProductionOrderId: string | null; convertedOrderNumber: string | null; staffNotes: string | null;
-}
-
-export const ProductionRequestsApi = {
-  list: (params?: { customerId?: string; status?: ProductionRequestStatus }) =>
-    api.get<ProductionRequest[]>("/production-requests", { params }).then((r) => r.data),
-  create: (body: { customerId: string; itemId: string; requestDate: string; color?: string; requestedQuantityKg?: number; requestedQuantityMeter?: number; notes?: string }) =>
-    api.post<ProductionRequest>("/production-requests", body).then((r) => r.data),
-  approve: (id: string, staffNotes?: string) => api.post<ProductionRequest>(`/production-requests/${id}/approve`, { staffNotes }).then((r) => r.data),
-  reject: (id: string, reason: string) => api.post<ProductionRequest>(`/production-requests/${id}/reject`, { reason }).then((r) => r.data),
-  convert: (id: string, orderDate: string) => api.post<ProductionRequest>(`/production-requests/${id}/convert`, { orderDate }).then((r) => r.data)
 };
 
 // ---------------- Production Floor Dashboard ----------------
@@ -1765,8 +1797,6 @@ export interface FormationRequest {
   unit: UnitOfMeasure;
   notes: string | null;
   status: FormationRequestStatus;
-  productionOrderId: string | null;
-  productionOrderNumber: string | null;
   submittedBy: string | null;
   submittedAtUtc: string | null;
   approvedBy: string | null;
@@ -1777,6 +1807,8 @@ export interface FormationRequest {
   cancelledBy: string | null;
   cancelledAtUtc: string | null;
   cancellationReason: string | null;
+  /** Set when this request is a revision of an earlier one (the original is left untouched). */
+  revisionOfFormationRequestId: string | null;
   createdBy: string;
   createdAtUtc: string;
   producedQuantity: number;
@@ -1874,15 +1906,21 @@ export const FormationRequestsApi = {
     api.post<FormationRequest>(`/formation-requests/${id}/reject`, { reason }).then((r) => r.data),
   cancel: (id: string, reason: string) =>
     api.post<FormationRequest>(`/formation-requests/${id}/cancel`, { reason }).then((r) => r.data),
-  convertToJobOrder: (id: string, body: {
-    groupId?: string | null; basinId?: string | null; jobOrderType: JobOrderType; priority?: ProductionPriority;
-    orderDate?: string; color?: string | null; notes?: string | null; customerReference?: string | null;
-    /** Required when a single basin is converted: its ACTUAL weighed weight (spec sections 8, 10). */
-    actualBasinQuantity?: number | null;
-  }) => api.post<FormationRequest>(`/formation-requests/${id}/convert-to-job-order`, body).then((r) => r.data),
-  /** Weighs one basin before it is converted: the Job Order quantity is taken from this figure. */
+  /** Creates a new Draft revision of an already submitted/approved request; the original is left intact. */
+  revise: (id: string) => api.post<FormationRequest>(`/formation-requests/${id}/revise`).then((r) => r.data),
+  remove: (id: string) => api.delete(`/formation-requests/${id}`).then((r) => r.data),
+  /** Records a basin's own actual weighed quantity (planning data on the request itself). */
   recordBasinActualQuantity: (id: string, basinId: string, body: { groupId: string; actualQuantity: number }) =>
     api.post<FormationRequest>(`/formation-requests/${id}/basins/${basinId}/actual-quantity`, body).then((r) => r.data),
+  /** Moves an approved request into production. The request is its own document: no Job Order and no stock. */
+  startProduction: (id: string) =>
+    api.post<FormationRequest>(`/formation-requests/${id}/start-production`).then((r) => r.data),
+  /** Records produced quantity against a group that has no basins (accumulates, never overwrites). */
+  recordGroupProduction: (id: string, groupId: string, quantity: number) =>
+    api.post<FormationRequest>(`/formation-requests/${id}/groups/${groupId}/production`, { quantity }).then((r) => r.data),
+  /** Records produced quantity against one basin; the group's produced figure is re-derived from its basins. */
+  recordBasinProduction: (id: string, basinId: string, body: { groupId: string; quantity: number }) =>
+    api.post<FormationRequest>(`/formation-requests/${id}/basins/${basinId}/production`, body).then((r) => r.data),
   exportExcel: (params?: { customerId?: string; status?: FormationRequestStatus }) => {
     const query = new URLSearchParams();
     if (params?.customerId) query.set("customerId", params.customerId);
@@ -2244,6 +2282,9 @@ export const PurchasesApi = {
     api.post<PurchaseOrder>(`/purchases/orders/${id}/lines`, { orderId: id, ...body }).then((r) => r.data),
   removeOrderLine: (id: string, lineId: string) =>
     api.delete<PurchaseOrder>(`/purchases/orders/${id}/lines/${lineId}`).then((r) => r.data),
+  /** Corrects the ORDERED quantity of a line already partly received (reason required). Never rewrites received quantity. */
+  correctOrderLineQuantity: (id: string, lineId: string, body: { newQuantity: number; reason: string }) =>
+    api.post<PurchaseOrder>(`/purchases/orders/${id}/lines/${lineId}/correct-quantity`, body).then((r) => r.data),
   submitOrder: (id: string) => api.post<PurchaseOrder>(`/purchases/orders/${id}/submit`).then((r) => r.data),
   approveOrder: (id: string) => api.post<PurchaseOrder>(`/purchases/orders/${id}/approve`).then((r) => r.data),
   cancelOrder: (id: string, reason: string) =>
@@ -2304,7 +2345,7 @@ export const PurchasesApi = {
 // ---------------- Payroll & wages (spec section 36) ----------------
 
 export type EmployeeStatus = "Active" | "Suspended" | "Terminated";
-export type PayrollRunStatus = "Draft" | "Approved" | "Posted" | "Cancelled";
+export type PayrollRunStatus = "Draft" | "Calculated" | "UnderReview" | "Approved" | "Posted" | "Cancelled" | "Reversed";
 
 export interface Department {
   id: string;
@@ -2375,6 +2416,22 @@ export interface PayrollRun {
   approvedBy: string | null;
   postedBy: string | null;
   cancellationReason: string | null;
+  /** Calculation / review workflow (spec section 39). */
+  calculatedBy: string | null;
+  calculatedAtUtc: string | null;
+  submittedBy: string | null;
+  submittedAtUtc: string | null;
+  reviewedBy: string | null;
+  reviewedAtUtc: string | null;
+  reviewNotes: string | null;
+  /** Reversal traceability: a posted run is never edited, it is reversed by a linked adjustment run. */
+  reversedBy: string | null;
+  reversedAtUtc: string | null;
+  reversalReason: string | null;
+  /** Set on an adjustment run: the posted run it corrects. */
+  reversesPayrollRunId: string | null;
+  /** Set on the original run: the adjustment run that reversed it. */
+  reversedByPayrollRunId: string | null;
   createdBy: string;
   createdAtUtc: string;
   lines: PayrollRunLine[];
@@ -2417,6 +2474,16 @@ export const PayrollApi = {
     api.delete<PayrollRun>(`/payroll/runs/${id}/lines/${lineId}`).then((r) => r.data),
   setRunAccount: (id: string, treasuryAccountId: string | null) =>
     api.put<PayrollRun>(`/payroll/runs/${id}/account`, { treasuryAccountId }).then((r) => r.data),
+  /** Fills a draft/calculated run's amounts from the configured masters and moves it to Calculated. */
+  calculateRun: (id: string) => api.post<PayrollRun>(`/payroll/runs/${id}/calculate`).then((r) => r.data),
+  /** Calculated -> UnderReview: submits the run for a second pair of eyes (approval needs payroll.approve). */
+  submitRun: (id: string) => api.post<PayrollRun>(`/payroll/runs/${id}/submit`).then((r) => r.data),
+  /** UnderReview -> Calculated: the reviewer sends the run back for correction. */
+  returnRun: (id: string, notes?: string) =>
+    api.post<PayrollRun>(`/payroll/runs/${id}/return`, { notes: notes ?? null }).then((r) => r.data),
+  /** Reverses a posted run: posts the opposite treasury row and opens a linked adjustment draft. */
+  reverseRun: (id: string, reason: string) =>
+    api.post<PayrollRun>(`/payroll/runs/${id}/reverse`, { reason }).then((r) => r.data),
   approveRun: (id: string) => api.post<PayrollRun>(`/payroll/runs/${id}/approve`).then((r) => r.data),
   postRun: (id: string) => api.post<PayrollRun>(`/payroll/runs/${id}/post`).then((r) => r.data),
   cancelRun: (id: string, reason: string) =>

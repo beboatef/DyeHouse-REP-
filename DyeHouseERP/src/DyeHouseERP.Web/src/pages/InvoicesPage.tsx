@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomersApi, CustomerStatementApi, InvoicesApi, ItemsApi } from "@/api/client";
+import type { Invoice, Item } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { InvoicesExports, StatementsExports } from "@/api/exports";
@@ -46,6 +47,7 @@ export default function InvoicesPage() {
   });
 
   const issueMutation = useMutation({ mutationFn: InvoicesApi.issue, onSuccess: invalidate });
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [cancelReasonById, setCancelReasonById] = useState<Record<string, string>>({});
   const cancelMutation = useMutation({
     mutationFn: (vars: { id: string; reason: string }) => InvoicesApi.cancel(vars.id, vars.reason), onSuccess: invalidate
@@ -130,6 +132,11 @@ export default function InvoicesPage() {
                   <Badge tone={statusTone[inv.status]}>{statusLabel[inv.status]}</Badge>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {inv.status === "Draft" && (
+                    <Button variant="secondary" onClick={() => setEditingId(editingId === inv.id ? null : inv.id)}>
+                      {editingId === inv.id ? "إغلاق التعديل" : "تعديل المسودة"}
+                    </Button>
+                  )}
                   {inv.status === "Draft" && <Button variant="secondary" onClick={() => issueMutation.mutate(inv.id)}>اعتماد</Button>}
                   <Link to={`/print/invoice/${inv.id}`} target="_blank"><Button type="button" variant="ghost">معاينة قبل الطباعة</Button></Link>
                   <Button variant="ghost" onClick={InvoicesExports.documentPdf(inv.id)}>تنزيل PDF</Button>
@@ -140,6 +147,9 @@ export default function InvoicesPage() {
                     </>
                   )}
                 </div>
+                {editingId === inv.id && inv.status === "Draft" && (
+                  <DraftInvoiceEditor invoice={inv} items={items ?? []} onDone={invalidate} onClose={() => setEditingId(null)} />
+                )}
               </Card>
             ))}
           </div>
@@ -197,5 +207,119 @@ export default function InvoicesPage() {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * Draft-invoice editor (spec section 32). A Draft has posted nothing yet (no customer-ledger row),
+ * so its header and lines are ordinary working data - edited here behind the configurable
+ * invoices.edit permission, enforced server-side. Totals are always derived from the lines, so the
+ * screen never has to recompute them. An Issued/Cancelled invoice is never edited here; it is
+ * corrected through the cancellation workflow.
+ */
+function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
+  invoice: Invoice; items: Item[]; onDone: () => void; onClose: () => void;
+}) {
+  const [invoiceDate, setInvoiceDate] = useState(invoice.invoiceDate.slice(0, 10));
+  const [discount, setDiscount] = useState(String(invoice.discount));
+  const [tax, setTax] = useState(String(invoice.tax));
+  const [notes, setNotes] = useState(invoice.notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  // Per-line edit buffer, keyed by line id. Lines are saved individually so an edit is never
+  // silently applied to a line the user did not touch.
+  const [lineEdits, setLineEdits] = useState<Record<string, { quantity: string; processingPrice: string; color: string }>>(
+    () => Object.fromEntries(invoice.lines.map((l) => [l.id, {
+      quantity: String(l.quantity), processingPrice: String(l.processingPrice), color: l.color ?? ""
+    }]))
+  );
+  const [newLine, setNewLine] = useState({ itemId: "", quantity: "", processingPrice: "", color: "" });
+
+  const after = (msg?: string) => { onDone(); setError(msg ?? null); };
+
+  const headerMutation = useMutation({
+    mutationFn: () => InvoicesApi.update(invoice.id, {
+      invoiceDate, discount: Number(discount || 0), tax: Number(tax || 0), notes: notes || undefined,
+      // Round-trip the delivery link unchanged so a header edit never silently clears it.
+      deliveryId: invoice.deliveryId ?? undefined
+    }),
+    onSuccess: () => after(),
+    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر حفظ بيانات الفاتورة")
+  });
+
+  const lineMutation = useMutation({
+    mutationFn: (vars: { lineId: string; quantity: number; processingPrice: number; color?: string }) =>
+      InvoicesApi.updateLine(invoice.id, vars.lineId, { quantity: vars.quantity, processingPrice: vars.processingPrice, color: vars.color }),
+    onSuccess: () => after(),
+    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر حفظ البند")
+  });
+
+  const removeLineMutation = useMutation({
+    mutationFn: (lineId: string) => InvoicesApi.removeLine(invoice.id, lineId),
+    onSuccess: () => after(),
+    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر حذف البند")
+  });
+
+  const addLineMutation = useMutation({
+    mutationFn: () => InvoicesApi.addLine(invoice.id, {
+      itemId: newLine.itemId, quantity: Number(newLine.quantity), processingPrice: Number(newLine.processingPrice || 0),
+      color: newLine.color || undefined
+    }),
+    onSuccess: () => { onDone(); setNewLine({ itemId: "", quantity: "", processingPrice: "", color: "" }); },
+    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر إضافة البند")
+  });
+
+  const patch = (lineId: string, p: Partial<{ quantity: string; processingPrice: string; color: string }>) =>
+    setLineEdits((prev) => ({ ...prev, [lineId]: { ...prev[lineId], ...p } }));
+
+  return (
+    <div className="mt-4 border-t border-gray-100 pt-4 space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+        <div><label className="field-label">تاريخ الفاتورة</label><Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
+        <div><label className="field-label">الخصم</label><Input type="number" step="0.01" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} /></div>
+        <div><label className="field-label">الضريبة</label><Input type="number" step="0.01" min="0" value={tax} onChange={(e) => setTax(e.target.value)} /></div>
+        <div><label className="field-label">ملاحظات</label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+      </div>
+      <div className="flex justify-end">
+        <Button variant="secondary" disabled={headerMutation.isPending} onClick={() => headerMutation.mutate()}>حفظ البيانات</Button>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-sm font-medium text-gray-700">بنود الفاتورة</div>
+        {invoice.lines.map((l) => {
+          const edit = lineEdits[l.id] ?? { quantity: String(l.quantity), processingPrice: String(l.processingPrice), color: l.color ?? "" };
+          return (
+            <div key={l.id} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end bg-gray-50 rounded-lg p-3">
+              <div className="text-sm"><div className="field-label">الصنف</div>{l.itemCode}</div>
+              <div><label className="field-label">اللون</label><Input value={edit.color} onChange={(e) => patch(l.id, { color: e.target.value })} /></div>
+              <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={edit.quantity} onChange={(e) => patch(l.id, { quantity: e.target.value })} /></div>
+              <div><label className="field-label">السعر</label><Input type="number" step="0.01" min="0" value={edit.processingPrice} onChange={(e) => patch(l.id, { processingPrice: e.target.value })} /></div>
+              <div className="flex gap-1">
+                <Button variant="secondary" disabled={lineMutation.isPending} onClick={() => lineMutation.mutate({
+                  lineId: l.id, quantity: Number(edit.quantity), processingPrice: Number(edit.processingPrice || 0), color: edit.color || undefined
+                })}>حفظ</Button>
+                <Button variant="ghost" disabled={removeLineMutation.isPending} onClick={() => removeLineMutation.mutate(l.id)}>حذف</Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end bg-green-50 rounded-lg p-3">
+        <div>
+          <label className="field-label">إضافة بند - الصنف</label>
+          <Select value={newLine.itemId} onChange={(e) => setNewLine((p) => ({ ...p, itemId: e.target.value }))}>
+            <option value="">اختر...</option>{items.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}
+          </Select>
+        </div>
+        <div><label className="field-label">اللون</label><Input value={newLine.color} onChange={(e) => setNewLine((p) => ({ ...p, color: e.target.value }))} /></div>
+        <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={newLine.quantity} onChange={(e) => setNewLine((p) => ({ ...p, quantity: e.target.value }))} /></div>
+        <div><label className="field-label">السعر</label><Input type="number" step="0.01" min="0" value={newLine.processingPrice} onChange={(e) => setNewLine((p) => ({ ...p, processingPrice: e.target.value }))} /></div>
+        <Button variant="secondary" disabled={!newLine.itemId || !newLine.quantity || addLineMutation.isPending} onClick={() => addLineMutation.mutate()}>إضافة</Button>
+      </div>
+
+      {error && <p className="form-error">{error}</p>}
+      <div className="flex justify-end"><Button variant="ghost" onClick={onClose}>إغلاق</Button></div>
+    </div>
   );
 }

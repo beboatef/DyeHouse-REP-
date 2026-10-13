@@ -25,7 +25,6 @@ import ChecksPage from "@/pages/ChecksPage";
 import FormationRequestsPage from "@/pages/FormationRequestsPage";
 import FormationRequestDetailPage from "@/pages/FormationRequestDetailPage";
 import FormationSpecificationsPage from "@/pages/FormationSpecificationsPage";
-import CustomerPortalPage from "@/pages/CustomerPortalPage";
 import ProductionFloorPage from "@/pages/ProductionFloorPage";
 import UsersPage from "@/pages/UsersPage";
 import ReportsPage from "@/pages/ReportsPage";
@@ -89,7 +88,6 @@ export default function App() {
             (spec sections 26 + 27) - they are factory-owned stock, not custodies. */}
         <Route path="/supplies" element={<SuppliesPage />} />
         <Route path="/material-sales" element={<MaterialSalesPage />} />
-        <Route path="/customer-portal" element={<CustomerPortalPage />} />
         <Route path="/production-floor" element={<ProductionFloorPage />} />
         <Route path="/production-stages" element={<ProductionStagesPage />} />
         <Route path="/production-orders" element={<ProductionOrdersPage />} />

@@ -101,11 +101,7 @@ public class ModelLinkageAndPayrollConfigTests
 
         foreach (var name in new[]
                  {
-                     nameof(ProductionStageDefinition.RequiresApproval),
                      nameof(ProductionStageDefinition.AllowSkip),
-                     nameof(ProductionStageDefinition.AllowRepeat),
-                     nameof(ProductionStageDefinition.AllowRework),
-                     nameof(ProductionStageDefinition.AllowReturn),
                      nameof(ProductionStageDefinition.RequiresInputQuantity),
                      nameof(ProductionStageDefinition.RequiresOutputQuantity),
                      nameof(ProductionStageDefinition.Notes)
@@ -117,16 +113,36 @@ public class ModelLinkageAndPayrollConfigTests
         stage.FindProperty(nameof(ProductionStageDefinition.Notes))!.GetMaxLength().Should().Be(1000);
     }
 
+    // ------------------------------------------------------------- removals
+
     [Fact]
-    public void StageExecution_KeepsTheApprovalTrackingColumns()
+    public void StageApprovalColumns_AreNoLongerMapped()
     {
         var model = Model();
+        var stage = Entity(model, typeof(ProductionStageDefinition));
         var execution = Entity(model, typeof(ProductionOrderStageExecution));
 
-        execution.FindProperty(nameof(ProductionOrderStageExecution.ApprovalRequired)).Should().NotBeNull();
-        execution.FindProperty(nameof(ProductionOrderStageExecution.ApprovedBy)).Should().NotBeNull();
-        execution.FindProperty(nameof(ProductionOrderStageExecution.ApprovedAtUtc)).Should().NotBeNull();
-        execution.FindProperty(nameof(ProductionOrderStageExecution.ApprovedBy))!.GetMaxLength().Should().Be(100);
+        // Production stage approval was removed by decision: the flags and the
+        // approval-tracking columns must never come back under any name.
+        stage.FindProperty("RequiresApproval").Should().BeNull();
+        execution.FindProperty("ApprovalRequired").Should().BeNull();
+        execution.FindProperty("ApprovedBy").Should().BeNull();
+        execution.FindProperty("ApprovedAtUtc").Should().BeNull();
+    }
+
+    [Fact]
+    public void FormationRequestLinkColumns_AreNoLongerMapped()
+    {
+        var model = Model();
+        var order = Entity(model, typeof(ProductionOrder));
+        var request = Entity(model, typeof(FormationRequest));
+
+        // A Formation Request and a Production Order are independent documents:
+        // neither may carry a reference to the other.
+        order.FindProperty("FormationRequestId").Should().BeNull();
+        order.FindProperty("FormationGroupId").Should().BeNull();
+        order.FindProperty("FormationBasinId").Should().BeNull();
+        request.FindProperty("ProductionOrderId").Should().BeNull();
     }
 
     // ---------------------------------------------------------------- payroll

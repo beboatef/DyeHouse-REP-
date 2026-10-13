@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApprovalsApi, ProductionOrdersApi, RawMessagesApi, CostAccountingApi, CostCategory, ProductionStagesApi, type ProductionOrder, type UnitOfMeasure } from "@/api/client";
+import { ApprovalsApi, ProductionOrdersApi, RawMessagesApi, CostAccountingApi, CostCategory, ProductionStagesApi, type ProductionOrder, type ProductionPriority, type JobOrderType, type UnitOfMeasure } from "@/api/client";
 
 /**
  * The cost-line categories a user can add (spec section 35). Order matters - it
@@ -49,6 +49,15 @@ export default function ProductionOrderDetailPage() {
   const [allocError, setAllocError] = useState<string | null>(null);
   const [negativeStockDetail, setNegativeStockDetail] = useState<{ shortage: number; reason: string } | null>(null);
   const [approvalRequested, setApprovalRequested] = useState<string | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState({
+    orderDate: "", color: "", rawOrigin: "", customerReference: "", notes: "",
+    priority: "Normal" as ProductionPriority, jobOrderType: "ClosedLine" as JobOrderType
+  });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["production-orders", id] });
 
@@ -103,8 +112,46 @@ export default function ProductionOrderDetailPage() {
     onError: (err: any) => setAllocError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
   });
 
+  const editMutation = useMutation({
+    mutationFn: (order: ProductionOrder) =>
+      ProductionOrdersApi.update(order.id, {
+        orderDate: editValues.orderDate,
+        color: editValues.color || undefined,
+        rawOrigin: editValues.rawOrigin || undefined,
+        customerReference: editValues.customerReference || undefined,
+        notes: editValues.notes || undefined,
+        priority: editValues.priority,
+        jobOrderType: editValues.jobOrderType
+      }),
+    onSuccess: () => { invalidate(); setEditOpen(false); setEditError(null); },
+    onError: (err: any) => setEditError(errorMessage(err, t("common.error")))
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => ProductionOrdersApi.cancel(id!, cancelReason.trim()),
+    onSuccess: () => { invalidate(); setCancelOpen(false); setCancelReason(""); setCancelError(null); },
+    onError: (err: any) => setCancelError(errorMessage(err, t("common.error")))
+  });
+
   if (isLoading || !order) return <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>;
 
+  const canCancel = order.status !== "Completed" && order.status !== "Cancelled";
+  // Descriptive/scheduling edits are allowed while the order is open; the identity (customer/item),
+  // the requested quantity, posted ledger rows, recorded stage output and approved costs never change here.
+  const canEdit = order.status !== "Completed" && order.status !== "Cancelled";
+  const openEdit = () => {
+    setEditValues({
+      orderDate: order.orderDate.slice(0, 10),
+      color: order.color ?? "",
+      rawOrigin: order.rawOrigin ?? "",
+      customerReference: order.customerReference ?? "",
+      notes: order.notes ?? "",
+      priority: order.priority,
+      jobOrderType: order.jobOrderType
+    });
+    setEditError(null);
+    setEditOpen(true);
+  };
   const selectedMessage = candidateMessages?.find((m) => m.id === selectedMessageId);
   const selectedLine = selectedMessage?.lines.find((l) => l.itemId === selectedLineItemId);
 
@@ -122,25 +169,86 @@ export default function ProductionOrderDetailPage() {
         }
       />
 
-      {/* Origin of this order in the formation plan (spec sections 10-11, 31): request -> group -> basin. */}
-      {order.formationRequestNumber && (
-        <Card className="p-4 mb-6 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-ink-subtle text-xs">{t("fr.title")}</span>
-          <Link
-            to={`/formation-requests/${order.formationRequestId}`}
-            className="ltr-nums font-medium text-brand-600 hover:underline"
-          >
-            {order.formationRequestNumber}
-          </Link>
-          {order.formationGroupNumber != null && (
-            <span className="text-ink-subtle">
-              · {t("fr.group")} #{order.formationGroupNumber}
-            </span>
+      {canCancel && (
+        <Card className="p-4 mb-6">
+          {!cancelOpen ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-2xs text-ink-subtle">{t("po.cancelHint")}</p>
+              <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>{t("po.cancelOrder")}</Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-2xs text-ink-subtle">{t("po.cancelHint")}</p>
+              <Field label={t("po.cancelReason")}>
+                <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+              </Field>
+              {cancelError && <p className="form-error">{cancelError}</p>}
+              <div className="flex gap-2">
+                <Button
+                  disabled={cancelReason.trim() === "" || cancelMutation.isPending}
+                  onClick={() => cancelMutation.mutate()}
+                >
+                  {t("po.confirmCancel")}
+                </Button>
+                <Button variant="secondary" onClick={() => { setCancelOpen(false); setCancelReason(""); setCancelError(null); }}>
+                  {t("common.close")}
+                </Button>
+              </div>
+            </div>
           )}
-          {order.formationBasinNumber != null && (
-            <span className="text-ink-subtle">
-              · {t("fr.basin")} #{order.formationBasinNumber}
-            </span>
+        </Card>
+      )}
+
+      {canEdit && (
+        <Card className="p-4 mb-6">
+          {!editOpen ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-2xs text-ink-subtle">{t("po.editHint")}</p>
+              <Button variant="ghost" size="sm" onClick={openEdit}>{t("po.editDetails")}</Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-2xs text-ink-subtle">{t("po.editHint")}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <Field label={t("po.orderDate")}>
+                  <Input type="date" value={editValues.orderDate} onChange={(e) => setEditValues({ ...editValues, orderDate: e.target.value })} />
+                </Field>
+                <Field label={t("po.color")}>
+                  <Input value={editValues.color} onChange={(e) => setEditValues({ ...editValues, color: e.target.value })} />
+                </Field>
+                <Field label={t("po.customerReference")}>
+                  <Input value={editValues.customerReference} onChange={(e) => setEditValues({ ...editValues, customerReference: e.target.value })} />
+                </Field>
+                <Field label={t("po.rawOrigin")}>
+                  <Input value={editValues.rawOrigin} onChange={(e) => setEditValues({ ...editValues, rawOrigin: e.target.value })} />
+                </Field>
+                <Field label={t("po.priority")}>
+                  <Select value={editValues.priority} onChange={(e) => setEditValues({ ...editValues, priority: e.target.value as ProductionPriority })}>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </Select>
+                </Field>
+                <Field label={t("po.lineType")}>
+                  <Select value={editValues.jobOrderType} onChange={(e) => setEditValues({ ...editValues, jobOrderType: e.target.value as JobOrderType })}>
+                    <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
+                    <option value="OpenLine">{t("jo.type.OpenLine")}</option>
+                  </Select>
+                </Field>
+                <Field label={t("common.notes")}>
+                  <Input value={editValues.notes} onChange={(e) => setEditValues({ ...editValues, notes: e.target.value })} />
+                </Field>
+              </div>
+              <p className="text-2xs text-amber-600">{t("po.editRestricted")}</p>
+              {editError && <p className="form-error">{editError}</p>}
+              <div className="flex gap-2">
+                <Button disabled={editMutation.isPending || editValues.orderDate === ""} onClick={() => order && editMutation.mutate(order)}>
+                  {t("common.save")}
+                </Button>
+                <Button variant="secondary" onClick={() => { setEditOpen(false); setEditError(null); }}>{t("common.close")}</Button>
+              </div>
+            </div>
           )}
         </Card>
       )}
@@ -424,12 +532,33 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
     onSuccess: () => { invalidate(); setDrawingNumber(""); setDrawingReason(""); setFlowError(null); },
     onError: (err) => setFlowError(errorMessage(err, t("common.error")))
   });
+  // Correcting the drawing number of a run that has ALREADY CLOSED. The figure is documentary (the
+  // delivery statement reads it live from the executions), so a typo stays correctable - but only with
+  // a reason, which the backend requires and writes to the audit trail with the old value.
+  const [drawingFixFor, setDrawingFixFor] = useState<string | null>(null);
+  const [drawingFixValue, setDrawingFixValue] = useState("");
+  const [drawingFixReason, setDrawingFixReason] = useState("");
+  const drawingFixMutation = useMutation({
+    mutationFn: (input: { id: string; drawingNumber: string; reason: string }) =>
+      ProductionOrdersApi.updateDrawing(input.id, input.drawingNumber, input.reason),
+    onSuccess: () => { invalidate(); setDrawingFixFor(null); setDrawingFixValue(""); setDrawingFixReason(""); setFlowError(null); },
+    onError: (err) => setFlowError(errorMessage(err, t("common.error")))
+  });
   const nextRequiresDrawing = stages?.find((s) => s.id === nextStageId)?.requiresDrawingNumber ?? false;
   const existingDrawing = order.stageExecutions.find((s) => s.stageDefinitionId === nextStageId && s.drawingNumber)?.drawingNumber;
   const nextIsReadyGoods = stages?.find((s) => s.id === nextStageId)?.isReadyGoodsStage ?? false;
-  const candidateStages = (stages ?? []).filter(
-    (s) => s.isActive && s.id !== current?.stageDefinitionId && !s.isFormationStage
+  // A printing stage may run MORE THAN ONCE on the same Job Order - one execution per drawing,
+  // each with its own drawing number and quantities (spec sections 19-22). The stage currently in
+  // progress is therefore offered again as "another print run" when it requires a drawing number.
+  // Every other stage keeps the original rule: choose a different next stage.
+  const isAnotherPrintRun = nextStageId !== "" && nextStageId === current?.stageDefinitionId;
+  const currentStageOption = (stages ?? []).filter(
+    (s) => s.isActive && current?.requiresDrawingNumber && s.id === current?.stageDefinitionId
   );
+  const candidateStages = [
+    ...(stages ?? []).filter((s) => s.isActive && s.id !== current?.stageDefinitionId && !s.isFormationStage),
+    ...currentStageOption
+  ];
   const resumeLines = messages?.find((m) => m.id === resumeMessageId)?.lines ?? [];
 
   return (
@@ -563,7 +692,45 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
           </div>
 
           {order.stageExecutions.filter((s) => s.drawingNumber).map((s) => (
-            <p key={s.id} className="mb-2 text-sm">{s.stageName} · {t("printing.drawingNumber")}: <b dir="auto">{s.drawingNumber}</b></p>
+            <div key={s.id} className="mb-2">
+              <p className="text-sm">
+                {s.stageName} · {t("printing.drawingNumber")}: <b dir="auto">{s.drawingNumber}</b>
+                {s.requiresDrawingNumber && s.status === "Completed" && (
+                  <button
+                    type="button"
+                    className="btn-link ms-2"
+                    onClick={() => {
+                      if (drawingFixFor === s.id) { setDrawingFixFor(null); return; }
+                      setDrawingFixFor(s.id);
+                      setDrawingFixValue(s.drawingNumber ?? "");
+                      setDrawingFixReason("");
+                    }}
+                  >
+                    {t("printing.correct")}
+                  </button>
+                )}
+              </p>
+              {drawingFixFor === s.id && (
+                <div className="mt-2 grid grid-cols-1 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 sm:grid-cols-3">
+                  <Field label={t("printing.drawingNumber")}>
+                    <Input maxLength={100} value={drawingFixValue} onChange={(e) => setDrawingFixValue(e.target.value)} />
+                  </Field>
+                  <Field label={t("pause.reason")}>
+                    <Input value={drawingFixReason} onChange={(e) => setDrawingFixReason(e.target.value)} />
+                  </Field>
+                  <div className="flex items-end gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!drawingFixValue.trim() || !drawingFixReason.trim() || drawingFixMutation.isPending}
+                      onClick={() => drawingFixMutation.mutate({ id: s.id, drawingNumber: drawingFixValue.trim(), reason: drawingFixReason.trim() })}
+                    >
+                      {t("printing.correct")}
+                    </Button>
+                    <p className="kpi-footnote">{t("printing.closedRunHint")}</p>
+                  </div>
+                </div>
+              )}
+            </div>
           ))}
           {(nextRequiresDrawing || current.requiresDrawingNumber) && (
             <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -583,6 +750,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
                 {candidateStages.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}{s.isReadyGoodsStage ? " (الجاهز)" : ""}
+                    {s.id === current?.stageDefinitionId ? ` — ${t("stage.anotherPrintRun")}` : ""}
                   </option>
                 ))}
               </Select>
@@ -602,9 +770,19 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
             <p className="mt-2 text-2xs text-success-ink">{t("stage.readyGoodsHint")}</p>
           )}
 
+          {isAnotherPrintRun && (
+            <p className="mt-2 text-2xs text-brand-700">{t("stage.anotherPrintRunHint")}</p>
+          )}
+
           <div className="mt-3">
             <Button
-              disabled={!nextStageId || (!outputKg && !outputMeter) || (nextRequiresDrawing && !drawingNumber.trim() && !existingDrawing) || transferMutation.isPending}
+              disabled={!nextStageId || (!outputKg && !outputMeter)
+                // An additional print run must name its OWN drawing: a previous run's number is never
+                // silently reused. Revisiting a printing stage later in the route may still carry the
+                // order's recorded drawing forward, exactly as before.
+                || (nextRequiresDrawing && isAnotherPrintRun && !drawingNumber.trim())
+                || (nextRequiresDrawing && !isAnotherPrintRun && !drawingNumber.trim() && !existingDrawing)
+                || transferMutation.isPending}
               onClick={() => transferMutation.mutate()}
             >
               {t("stage.transfer")}

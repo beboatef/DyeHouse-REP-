@@ -60,12 +60,6 @@ public class CompleteProductionOrderCommandHandler : IRequestHandler<CompletePro
             separate?.MarkReprocessed();
         }
 
-        // Completing the Job Order that came from a Formation Request group records that group's
-        // produced quantity and re-derives the request's status (In Progress / Partially Completed /
-        // Completed). Only the increment is recorded, so nothing is ever counted twice (spec sections 31-32, 53).
-        await DyeHouseERP.Application.FormationRequests.Commands.FormationProductionSync
-            .OnProductionCompletedAsync(_db, order, _currentUser.UserName, cancellationToken);
-
         await _db.SaveChangesAsync(cancellationToken);
         return await GetProductionOrderByIdQueryHandler.LoadDtoAsync(_db, order.Id, cancellationToken);
     }

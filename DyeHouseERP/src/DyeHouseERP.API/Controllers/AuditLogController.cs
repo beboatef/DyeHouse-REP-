@@ -8,10 +8,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
-/// <summary>Audit trail (spec sections 35, 42) - who did what, when, before/after. Admin-only.</summary>
+/// <summary>
+/// Audit trail (spec sections 35, 42) - who did what, when, before/after. Access is decided by the
+/// granular audit.view permission, so the administrator can delegate read-only access to the trail
+/// without handing over user management. Authentication is always required.
+/// </summary>
 [ApiController]
 [Route("api/audit-log")]
-[Authorize(Roles = "admin")]
+[Authorize]
 public class AuditLogController : ControllerBase
 {
     private readonly ISender _mediator;

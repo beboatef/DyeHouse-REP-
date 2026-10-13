@@ -31,6 +31,15 @@ public class CustomerReturn : AuditableEntity
     public string? Reason { get; private set; }
     public string? Notes { get; private set; }
 
+    // ---- Cancellation / correction audit (spec sections 32-33 + 49) ----
+    // A return entered by mistake (wrong lot, wrong quantity, wrong customer) is corrected by
+    // CANCELLING it: the document and its IN ledger rows stay readable, and the stock it restored
+    // is taken back out with an equal-and-opposite OUT row. These fields record who, when and why.
+    public bool IsCancelled { get; private set; }
+    public string? CancelledBy { get; private set; }
+    public DateTime? CancelledAtUtc { get; private set; }
+    public string? CancellationReason { get; private set; }
+
     /// <summary>
     /// H1 optimistic concurrency token, maintained by SQL Server. A return posts
     /// ledger rows, so two concurrent operations on the same document must not
@@ -71,6 +80,12 @@ public class CustomerReturn : AuditableEntity
         Guid rawMessageId, Guid itemId, decimal? quantityKg, decimal? quantityMeter,
         Guid? productionOrderId = null, Guid? formationGroupId = null, string? notes = null)
     {
+        // The document locks itself the moment it posts (see Post), so its ledger rows stay
+        // append-only: a line can never be added to a return that already posted stock. The
+        // correction path is the audited cancellation, not an edit.
+        if (IsLocked)
+            throw new DocumentLockedException("Customer Return", ReturnNumber);
+
         if (rawMessageId == Guid.Empty)
             throw new DomainException("A customer return line must name the raw material lot it returns into.");
         if (itemId == Guid.Empty)
@@ -92,6 +107,26 @@ public class CustomerReturn : AuditableEntity
     /// return is corrected with a compensating movement rather than an edit.
     /// </summary>
     public void Post() => Lock();
+
+    /// <summary>
+    /// Cancels a posted return. The caller writes the compensating OUT ledger rows and has already
+    /// proved that the returned stock is still on its lot - this method only enforces the invariants
+    /// it owns: a reason is mandatory, and a second cancellation is refused.
+    /// </summary>
+    public void Cancel(string reason, string modifiedBy)
+    {
+        if (IsCancelled)
+            throw new DomainException($"Customer return {ReturnNumber} is already cancelled.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("A cancellation reason is required.");
+
+        IsCancelled = true;
+        CancellationReason = reason.Trim();
+        CancelledBy = modifiedBy;
+        CancelledAtUtc = DateTime.UtcNow;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
 }
 
 public class CustomerReturnLine : BaseEntity

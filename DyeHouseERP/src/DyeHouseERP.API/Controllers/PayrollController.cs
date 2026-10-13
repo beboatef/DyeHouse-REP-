@@ -204,6 +204,48 @@ public class PayrollController : ControllerBase
         => Ok(await _mediator.Send(new CancelPayrollRunCommand(id, request.Reason)));
 
     /// <summary>
+    /// Calculates a draft/calculated run's amounts from the configured masters (attendance, approved
+    /// overtime, active advances, pay components and contribution rules). No financial effect: it only
+    /// fills the run's own editable lines and moves it to Calculated (spec sections 35-39).
+    /// </summary>
+    [HttpPost("runs/{id:guid}/calculate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
+    [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PayrollRunDto>> CalculateRun(Guid id)
+        => Ok(await _mediator.Send(new CalculatePayrollRunCommand(id)));
+
+    /// <summary>
+    /// Submits a CALCULATED run for review (spec section 39): Calculated -&gt; UnderReview. Approval needs a
+    /// different authority (payroll.approve), so the preparer never approves their own run.
+    /// </summary>
+    [HttpPost("runs/{id:guid}/submit")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
+    [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PayrollRunDto>> SubmitRun(Guid id)
+        => Ok(await _mediator.Send(new SubmitPayrollRunForReviewCommand(id)));
+
+    /// <summary>
+    /// Returns an UNDER-REVIEW run to the calculated stage so a line can be corrected (spec section 39):
+    /// UnderReview -&gt; Calculated. The reviewing authority (payroll.approve) is the one that sends it back.
+    /// </summary>
+    [HttpPost("runs/{id:guid}/return")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollApprove)]
+    [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PayrollRunDto>> ReturnRun(Guid id, [FromBody] ReturnPayrollRunRequest? request)
+        => Ok(await _mediator.Send(new ReturnPayrollRunForCorrectionCommand(id, request?.Notes)));
+
+    /// <summary>
+    /// Reverses a POSTED run (spec section 39): posts the equal-and-opposite IN treasury row, marks the run
+    /// Reversed and opens a linked ADJUSTMENT draft for the same period carrying the original figures. Nothing
+    /// posted is edited or deleted, and the reason is mandatory. A non-posted run is refused.
+    /// </summary>
+    [HttpPost("runs/{id:guid}/reverse")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCancel)]
+    [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PayrollRunDto>> ReverseRun(Guid id, [FromBody] ReversePayrollRunRequest request)
+        => Ok(await _mediator.Send(new ReversePayrollRunCommand(id, request.Reason)));
+
+    /// <summary>
     /// Payslip PDF for one employee within a run (spec section 49). Built from
     /// the run's own line, so the printed figures are exactly what was approved
     /// and posted - never recomputed from the employee master.
@@ -276,3 +318,9 @@ public record SetPayrollAccountRequest(Guid? TreasuryAccountId);
 
 /// <summary>Body for cancelling a payroll run - a documented reason is mandatory (spec section 46).</summary>
 public record CancelPayrollRequest(string Reason);
+
+/// <summary>Body for returning a run under review - the note is optional.</summary>
+public record ReturnPayrollRunRequest(string? Notes = null);
+
+/// <summary>Body for reversing a posted run - the reason is mandatory (spec section 39).</summary>
+public record ReversePayrollRunRequest(string Reason);

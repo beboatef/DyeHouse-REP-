@@ -27,6 +27,18 @@ public class RawMessage : AuditableEntity
 
     public RawMessageStatus Status { get; private set; } = RawMessageStatus.Open;
 
+    // ---- Cancellation / correction audit (spec sections 10-11 + 49) ----
+    // A receipt entered against the wrong customer, item or warehouse is corrected by
+    // CANCELLING it, not by editing or deleting it: the document stays readable, its
+    // original IN ledger rows stay untouched, and the stock is reversed with an
+    // equal-and-opposite OUT row. These three fields record who cancelled it, when and why.
+    public string? CancelledBy { get; private set; }
+    public DateTime? CancelledAtUtc { get; private set; }
+    public string? CancellationReason { get; private set; }
+
+    /// <summary>True once this receipt has been cancelled through the correction workflow.</summary>
+    public bool IsCancelled => Status == RawMessageStatus.Cancelled;
+
     private readonly List<RawMessageLine> _lines = new();
     public IReadOnlyCollection<RawMessageLine> Lines => _lines.AsReadOnly();
 
@@ -101,8 +113,34 @@ public class RawMessage : AuditableEntity
     public bool IsAvailableForAllocation =>
         Status is RawMessageStatus.Open or RawMessageStatus.PartiallyUsed;
 
+    /// <summary>
+    /// Cancels a receipt that was received in error (wrong customer, item or warehouse),
+    /// preserving the document and its ledger history. The caller is responsible for
+    /// writing the compensating OUT ledger rows and for having proved that nothing
+    /// downstream has consumed the material - the domain only refuses a second
+    /// cancellation and requires a reason.
+    /// </summary>
+    public void Cancel(string reason, string modifiedBy)
+    {
+        if (IsCancelled)
+            throw new DomainException($"Raw receipt {MessageNumber} is already cancelled.");
+
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("A cancellation reason is required.");
+
+        Status = RawMessageStatus.Cancelled;
+        CancellationReason = reason.Trim();
+        CancelledBy = modifiedBy;
+        CancelledAtUtc = DateTime.UtcNow;
+    }
+
     public void RecalculateStatus(bool hasRemainingBalance, bool hasAnyUsage)
     {
+        // A cancelled receipt stays cancelled: a later return or allocation must never bring
+        // it back to Open/PartiallyUsed, or reversed stock would become allocatable again.
+        if (IsCancelled)
+            return;
+
         Status = (hasRemainingBalance, hasAnyUsage) switch
         {
             (true, false) => RawMessageStatus.Open,

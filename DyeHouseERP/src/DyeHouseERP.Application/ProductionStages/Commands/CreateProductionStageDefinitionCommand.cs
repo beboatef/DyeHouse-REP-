@@ -10,9 +10,8 @@ namespace DyeHouseERP.Application.ProductionStages.Commands;
 
 public record CreateProductionStageDefinitionCommand(
     string Code, string Name, int Sequence,
-    bool RequiresInputQuantity, bool RequiresOutputQuantity, bool RequiresApproval,
-    bool AllowSkip, bool AllowRepeat, bool AllowRework, bool AllowReturn,
-    string? Notes, bool IsFormationStage = false) : IRequest<ProductionStageDefinitionDto>;
+    bool RequiresInputQuantity, bool RequiresOutputQuantity,
+    bool AllowSkip, string? Notes, bool IsFormationStage = false) : IRequest<ProductionStageDefinitionDto>;
 
 public class CreateProductionStageDefinitionCommandValidator : AbstractValidator<CreateProductionStageDefinitionCommand>
 {
@@ -44,9 +43,8 @@ public class CreateProductionStageDefinitionCommandHandler
 
         var stage = new ProductionStageDefinition(
             request.Code, request.Name, request.Sequence, _currentUser.UserName,
-            request.RequiresInputQuantity, request.RequiresOutputQuantity, request.RequiresApproval,
-            request.AllowSkip, request.AllowRepeat, request.AllowRework, request.AllowReturn,
-            request.Notes, request.IsFormationStage);
+            request.RequiresInputQuantity, request.RequiresOutputQuantity,
+            request.AllowSkip, request.Notes, request.IsFormationStage);
 
         // At most one stage may be the formation stage (التشكيل), so creating a new
         // formation stage moves the flag rather than adding a second one.
@@ -69,11 +67,7 @@ public class CreateProductionStageDefinitionCommandHandler
         RequiresDrawingNumber = s.RequiresDrawingNumber,
         RequiresInputQuantity = s.RequiresInputQuantity,
         RequiresOutputQuantity = s.RequiresOutputQuantity,
-        RequiresApproval = s.RequiresApproval,
         AllowSkip = s.AllowSkip,
-        AllowRepeat = s.AllowRepeat,
-        AllowRework = s.AllowRework,
-        AllowReturn = s.AllowReturn,
         IsFormationStage = s.IsFormationStage,
         IsReadyGoodsStage = s.IsReadyGoodsStage,
         Notes = s.Notes

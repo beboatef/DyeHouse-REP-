@@ -725,16 +725,15 @@ export default function FormationRequestsPage() {
                 <th>{t("fr.basins")}</th>
                 <th>{t("fr.totalQuantity")}</th>
               <th>{t("common.status")}</th>
-              <th>{t("fr.jobOrder")}</th>
               <th>{t("common.pdf")}</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
             )}
             {!isLoading && requests?.length === 0 && (
-              <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
             )}
             {requests?.map((request) => (
               <tr key={request.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
@@ -762,7 +761,6 @@ export default function FormationRequestsPage() {
                 <td>
                   <Badge tone={statusTone[request.status]}>{t(`fr.status.${request.status}`)}</Badge>
                 </td>
-                <td className="ltr-nums text-gray-600">{request.productionOrderNumber ?? "—"}</td>
               </tr>
             ))}
           </tbody>

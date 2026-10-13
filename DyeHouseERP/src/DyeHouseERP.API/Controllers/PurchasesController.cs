@@ -87,6 +87,17 @@ public class PurchasesController : ControllerBase
     public async Task<ActionResult<PurchaseOrderDto>> RemoveOrderLine(Guid id, Guid lineId)
         => Ok(await _mediator.Send(new RemovePurchaseOrderLineCommand(id, lineId)));
 
+    /// <summary>
+    /// Corrects the ORDERED quantity of a line that has already been partly or fully received, without ever
+    /// rewriting the received quantity or a posted stock movement. Reason required; the corrected quantity can
+    /// never go below what already arrived. Gated by the dedicated purchases.edit_after_receipt right.
+    /// </summary>
+    [HttpPost("orders/{id:guid}/lines/{lineId:guid}/correct-quantity")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesEditAfterReceipt)]
+    [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PurchaseOrderDto>> CorrectOrderLineQuantity(Guid id, Guid lineId, [FromBody] CorrectQuantityRequest request)
+        => Ok(await _mediator.Send(new CorrectPurchaseOrderLineQuantityCommand(id, lineId, request.NewQuantity, request.Reason)));
+
     [HttpPost("orders/{id:guid}/submit")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesSubmit)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
@@ -437,5 +448,6 @@ public class PurchasesController : ControllerBase
 
 /// <summary>Shared body for the cancel actions that require a documented reason (spec section 46).</summary>
 public record CancelRequest(string Reason);
+public record CorrectQuantityRequest(decimal NewQuantity, string Reason);
 
 public record CancelSupplierPaymentRequest(string Reason);

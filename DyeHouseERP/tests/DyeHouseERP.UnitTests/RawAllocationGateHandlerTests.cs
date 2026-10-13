@@ -389,7 +389,7 @@ public class RawAllocationGateHandlerTests
         var stage = order.StageExecutions.Single();
 
         var act = () => CompleteStageHandler(db).Handle(
-            new CompleteStageCommand(stage.Id, 500m, null, 450m, null, null, null, null, null, "done", null),
+            new CompleteStageCommand(stage.Id, 500m, null, 450m, null, null, null, null, null, "done"),
             CancellationToken.None);
 
         (await act.Should().ThrowAsync<DomainException>()).WithMessage("*not fully allocated*");
@@ -409,7 +409,7 @@ public class RawAllocationGateHandlerTests
         var stage = order.StageExecutions.Single();
 
         await CompleteStageHandler(db).Handle(
-            new CompleteStageCommand(stage.Id, 1000m, null, 930m, null, null, null, null, null, "done", null),
+            new CompleteStageCommand(stage.Id, 1000m, null, 930m, null, null, null, null, null, "done"),
             CancellationToken.None);
 
         var reloaded = await db.ProductionOrderStageExecutions.AsNoTracking().SingleAsync(s => s.Id == stage.Id);

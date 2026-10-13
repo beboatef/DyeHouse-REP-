@@ -16,6 +16,10 @@ import { Ruler, Plus } from "lucide-react";
  *     stay resolvable, so the lifecycle is deactivate/reactivate.
  *   * There is NO automatic conversion. A conversion exists only when the user
  *     explicitly supplies both a factor and the unit it converts into.
+ *
+ * Scope (documented here and shown on screen): these units are master data only.
+ * No purchasing document consumes the conversion factor yet, and KG and Meter are
+ * never converted into each other by this module or anywhere else.
  */
 
 interface FormState {
@@ -312,9 +316,12 @@ export default function PurchaseUnitsPage() {
           </p>
         )}
 
-        <div className="flex items-center gap-2 border-t border-line px-4 py-3 text-2xs text-ink-subtle">
-          <Ruler size={14} />
-          {t("units.footerNote")}
+        <div className="flex items-start gap-2 border-t border-line px-4 py-3 text-2xs text-ink-subtle">
+          <Ruler size={14} className="mt-0.5 shrink-0" />
+          <div className="space-y-1">
+            <p>{t("units.footerNote")}</p>
+            <p>{t("units.masterDataOnly")}</p>
+          </div>
         </div>
       </Card>
     </>

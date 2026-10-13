@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Approvals.Commands;
+using DyeHouseERP.Application.Approvals.Queries;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.Commands;
@@ -217,6 +218,39 @@ public class ApprovalWorkflowTests
     /// exercised without building a whole movement. The signature is what binds
     /// an approval to the exact facts, so it has to match the stored payload.
     /// </summary>
+    // ------------------------------------------- payroll approval queue
+
+    /// <summary>
+    /// The centralized queue (spec section 44) lists a payroll run that is waiting for an approver: a Draft
+    /// run (the simple path the domain documents) and a run that was calculated and SUBMITTED for review
+    /// (UnderReview). A merely Calculated run is still editable and has not been submitted, so it is not listed.
+    /// </summary>
+    [Fact]
+    public async Task PayrollRunsWaitingForApproval_AreListed_ButNotMerelyCalculatedOnes()
+    {
+        using var db = NewDb();
+        var draft = new PayrollRun("PRL-2026-000101", 2026, 1, "hr");
+        var submitted = new PayrollRun("PRL-2026-000102", 2026, 2, "hr");
+        var calculatedOnly = new PayrollRun("PRL-2026-000103", 2026, 3, "hr");
+        db.PayrollRuns.AddRange(draft, submitted, calculatedOnly);
+        await db.SaveChangesAsync();
+
+        submitted.MarkCalculated(new Dictionary<Guid, PayrollLineAmounts>(),
+            new Dictionary<Guid, Guid?>(), new Dictionary<Guid, Guid?>(), "hr");
+        submitted.SubmitForReview("hr");
+        calculatedOnly.MarkCalculated(new Dictionary<Guid, PayrollLineAmounts>(),
+            new Dictionary<Guid, Guid?>(), new Dictionary<Guid, Guid?>(), "hr");
+        await db.SaveChangesAsync();
+
+        var handler = new GetApprovalCenterQueryHandler(db, new FakeUser("manager", Permissions.PayrollApprove));
+        var center = await handler.Handle(new GetApprovalCenterQuery(), CancellationToken.None);
+
+        var payrollIds = center.Items.Where(i => i.Category == "PayrollRun").Select(i => i.Id).ToList();
+        payrollIds.Should().Contain(draft.Id);
+        payrollIds.Should().Contain(submitted.Id);
+        payrollIds.Should().NotContain(calculatedOnly.Id, "a calculated run has not been submitted for review");
+    }
+
     private sealed class StubOperation : IApprovalBoundOperation
     {
         public StubOperation(ApprovalRequestType type, Guid documentId, string signature = "stub-operation")

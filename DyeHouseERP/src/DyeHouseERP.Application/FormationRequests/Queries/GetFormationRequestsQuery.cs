@@ -65,9 +65,9 @@ public class GetFormationRequestByIdQueryHandler : IRequestHandler<GetFormationR
 }
 
 /// <summary>
-/// The full chain for one request (spec section 31): Customer -&gt; Raw Material Message -&gt; Formation Request -&gt;
-/// Job Order -&gt; Production -&gt; Ready Goods -&gt; Delivery. Every link carries the route the UI should navigate to,
-/// so users can walk the chain forward and backward.
+/// The traceable chain for one request (spec section 31): Customer -&gt; Raw Material Message -&gt; Formation Request.
+/// Formation Requests are independent documents, so the chain stops at the request itself and never reaches
+/// into production; every link carries the route the UI should navigate to.
 /// </summary>
 public record GetFormationRequestTraceabilityQuery(Guid Id) : IRequest<FormationTraceabilityDto>;
 
@@ -121,102 +121,6 @@ public class GetFormationRequestTraceabilityQueryHandler
             EntityId = dto.Id,
             DateUtc = dto.RequestDate
         });
-
-        // One request can fan out into several Job Orders - one per group or per basin (spec sections 10-11).
-        // The chain therefore walks every order linked to the request, not just the one on the header, so a
-        // four-basin order is traceable all four ways through production, ready goods and delivery.
-        var orders = await _db.ProductionOrders.AsNoTracking()
-            .Include(o => o.StageExecutions)
-            .Where(o => o.FormationRequestId == dto.Id)
-            .OrderBy(o => o.OrderNumber)
-            .ToListAsync(cancellationToken);
-
-        if (orders.Count == 0 && dto.ProductionOrderId.HasValue)
-        {
-            var linked = await _db.ProductionOrders.AsNoTracking()
-                .Include(o => o.StageExecutions)
-                .FirstOrDefaultAsync(o => o.Id == dto.ProductionOrderId.Value, cancellationToken);
-            if (linked is not null) orders.Add(linked);
-        }
-
-        // Stage names are never hard-coded (spec section 19) - resolve them from the configurable stage
-        // definitions so the chain matches what production actually did.
-        var stageNames = await _db.ProductionStageDefinitions.AsNoTracking()
-            .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
-
-        foreach (var order in orders)
-        {
-            var groupNumber = dto.Groups.FirstOrDefault(g => g.Id == order.FormationGroupId)?.GroupNumber;
-            var basinNumber = dto.Groups
-                .FirstOrDefault(g => g.Id == order.FormationGroupId)?
-                .Basins.FirstOrDefault(b => b.Id == order.FormationBasinId)?.BasinNumber;
-
-            var orderDetail = $"{order.JobOrderType} · {order.Status}";
-            if (groupNumber.HasValue && basinNumber.HasValue) orderDetail += $" · Group {groupNumber} / Basin {basinNumber}";
-            else if (groupNumber.HasValue) orderDetail += $" · Group {groupNumber}";
-
-            links.Add(new FormationTraceabilityLinkDto
-            {
-                Stage = "JobOrder",
-                Reference = order.OrderNumber,
-                Detail = orderDetail,
-                Route = $"/production-orders/{order.Id}",
-                EntityId = order.Id,
-                DateUtc = order.OrderDate
-            });
-
-            foreach (var stage in order.StageExecutions.OrderBy(s => s.Sequence))
-            {
-                links.Add(new FormationTraceabilityLinkDto
-                {
-                    Stage = "Production",
-                    Reference = stageNames.TryGetValue(stage.StageDefinitionId, out var stageName) ? stageName : $"#{stage.Sequence}",
-                    Detail = stage.Status.ToString(),
-                    Route = $"/production-orders/{order.Id}",
-                    EntityId = stage.Id,
-                    DateUtc = stage.CompletedAtUtc ?? stage.StartedAtUtc
-                });
-            }
-
-            var readyGoods = await _db.ReadyGoodsTransfers.AsNoTracking()
-                .Where(t => t.ProductionOrderId == order.Id)
-                .ToListAsync(cancellationToken);
-            foreach (var transfer in readyGoods)
-            {
-                links.Add(new FormationTraceabilityLinkDto
-                {
-                    Stage = "ReadyGoods",
-                    Reference = transfer.TransferNumber,
-                    Detail = $"{transfer.QuantityKg ?? 0} KG / {transfer.QuantityMeter ?? 0} M",
-                    Route = "/ready-goods",
-                    EntityId = transfer.Id,
-                    DateUtc = transfer.TransferDate
-                });
-            }
-
-            var deliveries = await _db.DeliveryLines.AsNoTracking()
-                .Where(l => l.ProductionOrderId == order.Id)
-                .Select(l => l.DeliveryId)
-                .Distinct()
-                .ToListAsync(cancellationToken);
-
-            var deliveryDocs = await _db.Deliveries.AsNoTracking()
-                .Where(d => deliveries.Contains(d.Id))
-                .ToListAsync(cancellationToken);
-
-            foreach (var delivery in deliveryDocs)
-            {
-                links.Add(new FormationTraceabilityLinkDto
-                {
-                    Stage = "Delivery",
-                    Reference = delivery.DeliveryNumber,
-                    Detail = delivery.Status.ToString(),
-                    Route = $"/print/delivery/{delivery.Id}",
-                    EntityId = delivery.Id,
-                    DateUtc = delivery.DeliveryDate
-                });
-            }
-        }
 
         return new FormationTraceabilityDto { Request = dto, Links = links };
     }

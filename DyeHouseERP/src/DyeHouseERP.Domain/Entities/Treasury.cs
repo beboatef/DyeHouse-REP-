@@ -180,7 +180,12 @@ public enum TreasuryDocumentStatus
     Cancelled = 2
 }
 
-/// <summary>Transfer between two treasury accounts (spec section 34).</summary>
+/// <summary>
+/// Transfer between two treasury accounts (spec section 34). Like every other
+/// posted treasury document it is append-only: a wrong transfer is not edited or
+/// deleted, its status flips to Cancelled and the two ledger rows it posted are
+/// reversed by linked opposite rows (B4).
+/// </summary>
 public class TreasuryTransfer : AuditableEntity
 {
     public string TransferNumber { get; private set; } = string.Empty;
@@ -189,6 +194,14 @@ public class TreasuryTransfer : AuditableEntity
     public Guid ToAccountId { get; private set; }
     public decimal Amount { get; private set; }
     public string? Description { get; private set; }
+    public TreasuryDocumentStatus Status { get; private set; } = TreasuryDocumentStatus.Posted;
+
+    /// <summary>
+    /// Optimistic concurrency token, maintained by SQL Server. A transfer posts two ledger rows, so a concurrent
+    /// cancel-vs-cancel attempt must fail explicitly rather than double-reverse the same movement.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private TreasuryTransfer() { } // EF Core
 
@@ -206,5 +219,21 @@ public class TreasuryTransfer : AuditableEntity
         Description = description;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Flips to Cancelled and records the reason in the description (the same convention as Receipt/Payment).
+    /// The reversal ledger rows are written by the handler against the original rows; the original rows and
+    /// the transfer's own amount/number are never touched.
+    /// </summary>
+    public void Cancel(string reason, string cancelledBy)
+    {
+        if (Status == TreasuryDocumentStatus.Cancelled)
+            throw new DomainException($"Treasury transfer '{TransferNumber}' is already cancelled.");
+
+        Status = TreasuryDocumentStatus.Cancelled;
+        Description = string.IsNullOrWhiteSpace(Description) ? $"[Cancelled] {reason}" : $"{Description}\n[Cancelled] {reason}";
+        ModifiedBy = cancelledBy;
+        ModifiedAtUtc = DateTime.UtcNow;
     }
 }

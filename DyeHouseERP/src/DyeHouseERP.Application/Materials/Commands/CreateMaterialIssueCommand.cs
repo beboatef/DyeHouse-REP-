@@ -93,7 +93,8 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
             Id = issue.Id, IssueNumber = issue.IssueNumber, IssueDate = issue.IssueDate,
             MaterialId = material.Id, MaterialCode = material.Code, MaterialName = material.Name,
             WarehouseId = issue.WarehouseId, ProductionOrderId = order.Id, ProductionOrderNumber = order.OrderNumber,
-            Quantity = issue.Quantity, UnitCost = issue.UnitCost,            TotalCost = issue.TotalCost, Notes = issue.Notes
+            Quantity = issue.Quantity, UnitCost = issue.UnitCost, TotalCost = issue.TotalCost, Notes = issue.Notes,
+            Status = issue.Status, IsCancelled = issue.IsCancelled
         };
         }
     }

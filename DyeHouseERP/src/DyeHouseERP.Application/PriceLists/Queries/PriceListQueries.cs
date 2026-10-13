@@ -143,7 +143,9 @@ public class GetProductionOrderProfitabilityQueryHandler
 
         var lastStage = await _db.ProductionOrderStageExecutions.AsNoTracking()
             .Where(s => s.ProductionOrderId == productionOrderId && s.Status == StageExecutionStatus.Completed)
-            .OrderByDescending(s => s.Sequence)
+            // Multiple executions may share a Sequence (repeated printing runs); the most recently
+            // completed one carries the order's real current output.
+            .OrderByDescending(s => s.Sequence).ThenByDescending(s => s.CompletedAtUtc)
             .Select(s => new { s.OutputKg, s.OutputMeter })
             .FirstOrDefaultAsync(cancellationToken);
 

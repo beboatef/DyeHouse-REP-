@@ -16,9 +16,11 @@ namespace DyeHouseERP.Persistence.Seeding;
 /// Goods). Every other stage is simply available for the operator to select at transfer
 /// time (spec section 13).
 ///
-/// Because rework is not modelled as a row, <c>AllowRework</c> is left FALSE throughout:
-/// a redo is an explicit capability of the operation being run rather than a Job Order
-/// moving backwards, which keeps a redo from being counted twice.
+/// A redo is an explicit capability of the operation being run rather than a Job Order moving
+/// backwards, which keeps a redo from being counted twice; that is why no "rework" flag exists on a
+/// stage. Only <c>AllowSkip</c> is carried, because only SkipStageCommand actually reads it. A printing
+/// stage may still run more than once - driven by its own RequiresDrawingNumber semantics through the
+/// ordinary transfer workflow (each run carries its own drawing number and quantities).
 ///
 /// Seeding is idempotent by Code: an existing stage is never modified or overwritten, so
 /// an administrator's renames and deactivations survive.
@@ -86,15 +88,9 @@ public static class ProductionStageSeeder
                     createdBy: "seed",
                     requiresInputQuantity: true,
                     requiresOutputQuantity: true,
-                    requiresApproval: false,
                     // No skipping: every stage the operator runs must keep its
                     // baseline so the loss chain stays intact.
                     allowSkip: false,
-                    allowRepeat: false,
-                    // Rework is an explicit capability of the operation, so it is not
-                    // also modelled as moving a Job Order backwards.
-                    allowRework: false,
-                    allowReturn: false,
                     notes: null,
                     isFormationStage: name == "التشكيل",
                     isReadyGoodsStage: name == "الجاهز"));
@@ -109,7 +105,7 @@ public static class ProductionStageSeeder
         if (!existingCodes.Contains("PRINTING"))
         {
             db.ProductionStageDefinitions.Add(new ProductionStageDefinition(
-                "PRINTING", "الطباعة", sequence, "seed", allowRework: false, requiresDrawingNumber: true));
+                "PRINTING", "الطباعة", sequence, "seed", requiresDrawingNumber: true));
             added++;
         }
 

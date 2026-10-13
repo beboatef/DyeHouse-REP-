@@ -52,7 +52,6 @@ public interface IApplicationDbContext
     DbSet<Payment> Payments { get; }
     DbSet<TreasuryTransfer> TreasuryTransfers { get; }
     DbSet<CostEntry> CostEntries { get; }
-    DbSet<ProductionRequest> ProductionRequests { get; }
     DbSet<User> Users { get; }
     DbSet<AuditLogEntry> AuditLogEntries { get; }
     DbSet<CompanySettings> CompanySettings { get; }

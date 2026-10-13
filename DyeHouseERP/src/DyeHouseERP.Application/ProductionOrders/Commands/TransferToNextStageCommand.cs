@@ -91,7 +91,15 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
 
         if (!nextStage.IsActive)
             throw new DomainException($"Stage '{nextStage.Name}' is inactive and cannot be selected.");
-        if (nextStage.Id == stage.StageDefinitionId)
+        // A Job Order may take a PRINTING stage more than once: one execution per drawing, each with
+        // its own drawing number and its own recorded quantities (spec sections 19-22). The ability is
+        // derived from the stage's OWN semantics - a stage that requires a drawing number - so no new
+        // capability flag is introduced, and it stays the same transfer workflow every other stage uses:
+        // the closed run is recorded and locked, and the next print run is activated with the output it
+        // just produced as its baseline. Every other stage keeps the original "choose a different next
+        // stage" rule, so no repeat/return/rework route is invented here.
+        var isAdditionalPrintRun = nextStage.Id == stage.StageDefinitionId;
+        if (isAdditionalPrintRun && !nextStage.RequiresDrawingNumber)
             throw new DomainException(
                 $"'{nextStage.Name}' is the stage this Job Order is already on. Choose a different next stage.");
 
@@ -109,9 +117,16 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
 
         stage.EnsureDrawingNumber();
         var drawingNumber = request.DrawingNumber;
-        // Rework of the same operation retains this order's recorded drawing unless
+
+        // A further print run of the SAME stage is a NEW drawing: it must name its own number, and it
+        // must never silently inherit the previous run's, so the carry-forward below is skipped for it.
+        if (isAdditionalPrintRun && string.IsNullOrWhiteSpace(drawingNumber))
+            throw new DomainException(
+                "Each printing run has its own drawing number. رقم الرسمة مطلوب لكل تشغيل طباعة.");
+
+        // Revisiting the same operation LATER in the route retains this order's recorded drawing unless
         // the operator explicitly supplies another. Never borrow another order's number.
-        if (nextStage.RequiresDrawingNumber && drawingNumber is null)
+        if (nextStage.RequiresDrawingNumber && !isAdditionalPrintRun && drawingNumber is null)
             drawingNumber = await _db.ProductionOrderStageExecutions.AsNoTracking()
                 .Where(s => s.ProductionOrderId == order.Id && s.StageDefinitionId == nextStage.Id && s.DrawingNumber != null)
                 .OrderByDescending(s => s.StartedAtUtc).Select(s => s.DrawingNumber).FirstOrDefaultAsync(cancellationToken);

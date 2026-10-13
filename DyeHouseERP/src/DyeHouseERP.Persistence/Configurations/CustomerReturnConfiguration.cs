@@ -21,6 +21,10 @@ public class CustomerReturnConfiguration : IEntityTypeConfiguration<CustomerRetu
         builder.Property(r => r.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(r => r.ModifiedBy).HasMaxLength(100);
 
+        // Correction audit (spec section 49): who cancelled the return, when and why.
+        builder.Property(r => r.CancelledBy).HasMaxLength(100);
+        builder.Property(r => r.CancellationReason).HasMaxLength(1000);
+
         builder.Metadata.FindNavigation(nameof(CustomerReturn.Lines))!.SetPropertyAccessMode(PropertyAccessMode.Field);
         builder.HasMany(r => r.Lines).WithOne().HasForeignKey(l => l.CustomerReturnId).OnDelete(DeleteBehavior.Cascade);
 

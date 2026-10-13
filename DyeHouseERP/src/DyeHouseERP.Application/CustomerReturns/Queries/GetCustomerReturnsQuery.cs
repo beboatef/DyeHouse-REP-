@@ -156,6 +156,10 @@ public class GetCustomerReturnsQueryHandler : IRequestHandler<GetCustomerReturns
                 Notes = r.Notes,
                 CreatedBy = r.CreatedBy,
                 CreatedAtUtc = r.CreatedAtUtc,
+                IsCancelled = r.IsCancelled,
+                CancellationReason = r.CancellationReason,
+                CancelledBy = r.CancelledBy,
+                CancelledAtUtc = r.CancelledAtUtc,
                 Lines = lineDtos
             });
         }

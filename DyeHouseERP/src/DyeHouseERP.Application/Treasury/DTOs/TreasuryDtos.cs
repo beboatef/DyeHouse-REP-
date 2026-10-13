@@ -53,4 +53,6 @@ public class TreasuryTransferDto
     public string ToAccountName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public string? Description { get; set; }
+    /// <summary>Posted or Cancelled (a cancelled transfer has linked reversal rows on both accounts).</summary>
+    public string Status { get; set; } = "Posted";
 }

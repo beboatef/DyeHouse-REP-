@@ -21,6 +21,8 @@ public class RawMessageConfiguration : IEntityTypeConfiguration<RawMessage>
         builder.Property(m => m.InspectionNotes).HasMaxLength(1000);
         builder.Property(m => m.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(m => m.ModifiedBy).HasMaxLength(100);
+        builder.Property(m => m.CancelledBy).HasMaxLength(100);
+        builder.Property(m => m.CancellationReason).HasMaxLength(1000);
 
         builder.Property(m => m.InspectionStatus).HasConversion<string>().HasMaxLength(30);
         builder.Property(m => m.Status).HasConversion<string>().HasMaxLength(30);
@@ -28,6 +30,7 @@ public class RawMessageConfiguration : IEntityTypeConfiguration<RawMessage>
         // Derived/behavioural members - never persisted columns.
         builder.Ignore(m => m.IsAvailableForAllocation);
         builder.Ignore(m => m.HasRejections);
+        builder.Ignore(m => m.IsCancelled);
 
         builder.HasIndex(m => m.CustomerId);
         builder.HasIndex(m => m.WarehouseId);

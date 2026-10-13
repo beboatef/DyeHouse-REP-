@@ -333,14 +333,19 @@ function TransfersTab() {
         <table className="table">
           <thead><tr>
             <th>الرقم</th><th>من</th>
-            <th>إلى</th><th>المبلغ</th>
+            <th>إلى</th><th>المبلغ</th><th>الحالة</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {transfers?.map((t) => (
-              <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={t.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${t.status === "Cancelled" ? "opacity-50" : ""}`}>
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td>{t.fromAccountName}</td>
                 <td>{t.toAccountName}</td><td className="ltr-nums font-medium">{t.amount}</td>
+                <td>
+                  {t.status === "Cancelled"
+                    ? <span className="text-xs text-red-600 font-medium">ملغاة</span>
+                    : <CancelDocButton label="إلغاء" onConfirm={(reason) => TreasuryTransfersApi.cancel(t.id, reason)} invalidate={["treasury-transfers", "treasury-accounts"]} />}
+                </td>
               </tr>
             ))}
           </tbody>

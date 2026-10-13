@@ -29,7 +29,6 @@ public static class DocumentSequenceSeeder
         (DocumentType.MaterialIssue,            "MIS", 6, true,  false),
         (DocumentType.PreparationDilution,      "PRP", 6, true,  false),
         (DocumentType.ReadyGoodsTransfer,       "RGT", 6, true,  false),
-        (DocumentType.ProductionRequest,        "REQ", 6, true,  false),
         (DocumentType.FormationRequest,         "FRM", 6, true,  false),
         (DocumentType.PurchaseOrder,            "PO",  6, true,  false),
         (DocumentType.PurchaseReceipt,          "GRN", 6, true,  false),

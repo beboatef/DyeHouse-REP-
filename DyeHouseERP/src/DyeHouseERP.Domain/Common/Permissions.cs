@@ -23,8 +23,20 @@ public static class Permissions
 
     public const string RawReceive = "raw.receive";
     public const string RawInspect = "raw.inspect";
+    /// <summary>
+    /// Cancelling a raw receipt that was entered in error (wrong customer, item or warehouse).
+    /// A distinct right from <see cref="RawReceive"/>: receiving is daily work, whereas reversing a
+    /// posted stock document is a correction and must never be implied by the ability to receive.
+    /// </summary>
+    public const string RawReceiptCancel = "raw.receipt_cancel";
     public const string RawConsume = "raw.consume";
     public const string RawReturn = "raw.return";
+    /// <summary>
+    /// Cancelling a posted customer return (a correction that takes the returned stock back out of the
+    /// lot). A distinct right from <see cref="RawReturn"/>: recording a return is daily work, whereas
+    /// reversing a posted stock document is a correction and must never be implied by it.
+    /// </summary>
+    public const string RawReturnCancel = "raw.return_cancel";
     public const string RawExternalRelease = "raw.external_release";
     public const string RawTransfer = "raw.transfer";
 
@@ -36,13 +48,12 @@ public static class Permissions
     public const string ProductionReprocess = "production.reprocess";
     /// <summary>Resuming a paused Job Order (spec section 19) - a distinct right from ordinary stage work, because it re-issues raw material.</summary>
     public const string ProductionResume = "production.resume";
+    /// <summary>Cancelling a material issue posted against a Job Order (spec section 27) - a reversal that puts chemicals back into stock, so it is its own right rather than part of ordinary stage work.</summary>
+    public const string ProductionIssueMaterialCancel = "production.issue_material_cancel";
     /// <summary>Maintaining the machines master (spec section 20).</summary>
     public const string ProductionManageMachines = "production.manage_machines";
     /// <summary>Maintaining the production execution shifts master (spec section 19) - separate from the HR attendance shifts.</summary>
     public const string ProductionManageShifts = "production.manage_shifts";
-    /// <summary>Gates completing a stage flagged RequiresApproval (spec section 19-20) - distinct from ProductionExecuteStage, which is ordinary stage work.</summary>
-    public const string StageRequiresApproval = "production.approve_stage";
-
     public const string InventoryView = "inventory.view";
     public const string InventoryEdit = "inventory.edit";
     public const string InventoryDelete = "inventory.delete";
@@ -66,11 +77,23 @@ public static class Permissions
 
     public const string InvoicesView = "invoices.view";
     public const string InvoicesCreate = "invoices.create";
+    /// <summary>
+    /// Editing a DRAFT invoice's header and lines (spec section 32). Separate from
+    /// <see cref="InvoicesCreate"/> so composing an invoice and revising someone else's draft are
+    /// two configurable rights. Never applies to an issued invoice - that is corrected by reversal.
+    /// </summary>
+    public const string InvoicesEdit = "invoices.edit";
     public const string InvoicesIssue = "invoices.issue";
     public const string InvoicesCancel = "invoices.cancel";
 
     public const string TreasuryView = "treasury.view";
     public const string TreasuryCreate = "treasury.create";
+    /// <summary>
+    /// Cancelling/reversing a posted treasury document (receipt, payment, transfer). A distinct right from
+    /// <see cref="TreasuryCreate"/>: recording a movement is daily work, whereas reversing a posted one is a
+    /// correction that must never be implied by the ability to record it.
+    /// </summary>
+    public const string TreasuryCancel = "treasury.cancel";
 
     // ---- Formation Request / طلب تشكيل (spec sections 28-33) ----
     // Granular by action, not just by module: seeing a request, editing a
@@ -84,7 +107,7 @@ public static class Permissions
     public const string FormationApprove = "formation.approve";
     public const string FormationReject = "formation.reject";
     public const string FormationCancel = "formation.cancel";
-    public const string FormationConvertToJobOrder = "formation.convert";
+    public const string FormationDelete = "formation.delete";
     public const string FormationManageGroups = "formation.manage_groups";
     public const string FormationManageSpecifications = "formation.manage_specifications";
     public const string FormationViewTraceability = "formation.traceability";
@@ -111,6 +134,13 @@ public static class Permissions
     public const string PurchasesView = "purchases.view";
     public const string PurchasesCreate = "purchases.create";
     public const string PurchasesEdit = "purchases.edit";
+    /// <summary>
+    /// Correcting the ORDERED quantity of a purchase-order line that has already been partly
+    /// received (spec section 35). Separate from <see cref="PurchasesEdit"/> because it amends a live
+    /// order against real receipts - it never rewrites the received quantity or any posted stock
+    /// movement, and it can never take the ordered quantity below what has already arrived.
+    /// </summary>
+    public const string PurchasesEditAfterReceipt = "purchases.edit_after_receipt";
     public const string PurchasesSubmit = "purchases.submit";
     public const string PurchasesApprove = "purchases.approve";
     public const string PurchasesReceive = "purchases.receive";
@@ -185,18 +215,18 @@ public static class Permissions
         Admin,
         CustomersView, CustomersCreate, CustomersEdit,
         ItemsView, ItemsCreate, ItemsEdit,
-        RawReceive, RawInspect, RawConsume, RawReturn, RawExternalRelease, RawTransfer,
-        ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, ProductionResume, ProductionManageMachines, ProductionManageShifts, StageRequiresApproval,
+        RawReceive, RawInspect, RawReceiptCancel, RawConsume, RawReturn, RawReturnCancel, RawExternalRelease, RawTransfer,
+        ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, ProductionResume, ProductionIssueMaterialCancel, ProductionManageMachines, ProductionManageShifts,
         InventoryView, InventoryEdit, InventoryDelete, InventoryAdjust, InventoryAllowNegativeStock, InventoryApproveNegativeStock,
         ReadyView, ReadyTransfer, ReadyDeliver, ReadyEditPostApproval,
-        InvoicesView, InvoicesCreate, InvoicesIssue, InvoicesCancel,
-        TreasuryView, TreasuryCreate,
+        InvoicesView, InvoicesCreate, InvoicesEdit, InvoicesIssue, InvoicesCancel,
+        TreasuryView, TreasuryCreate, TreasuryCancel,
         FormationView, FormationCreate, FormationEdit, FormationSubmit, FormationApprove,
-        FormationReject, FormationCancel, FormationConvertToJobOrder, FormationManageGroups,
+        FormationReject, FormationCancel, FormationDelete, FormationManageGroups,
         FormationManageSpecifications, FormationViewTraceability, FormationPrint, FormationExport,
         ChecksView, ChecksCreate, ChecksEdit, ChecksEndorse, ChecksDeposit, ChecksClear, ChecksBounce, ChecksCancel, ChecksExport,
         SuppliersView, SuppliersCreate, SuppliersEdit,
-        PurchasesView, PurchasesCreate, PurchasesEdit, PurchasesSubmit, PurchasesApprove,
+        PurchasesView, PurchasesCreate, PurchasesEdit, PurchasesEditAfterReceipt, PurchasesSubmit, PurchasesApprove,
         PurchasesReceive, PurchasesCancel, PurchasesInvoice, PurchasesPay, PurchasesExport,
         PayrollView, PayrollManageEmployees, PayrollCreate, PayrollApprove, PayrollPost, PayrollCancel, PayrollAccounting,
         HrView, HrManage, HrAttendance, HrLeaveRequest, HrLeaveApprove, HrOvertimeRequest, HrOvertimeApprove,

@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Users.DTOs;
+using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
@@ -8,7 +9,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.Users.Commands;
 
-/// <summary>Creates a login (spec: role-based access such as inventory.allow_negative_stock / production.approve_stage). Roles are passed as a plain list and stored comma-separated - see User.Roles.</summary>
+/// <summary>
+/// Creates a login (spec: role-based access such as inventory.allow_negative_stock). Roles are passed as a
+/// plain list and stored comma-separated - see User.Roles.
+///
+/// Permission names are validated against <see cref="Permissions.All"/> on create exactly as they are on
+/// update, so a typo can never silently store a right that does not exist (and therefore grants nothing).
+/// </summary>
 public record CreateUserCommand(string Username, string Password, string DisplayName, List<string> Roles) : IRequest<UserDto>;
 
 public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
@@ -21,7 +28,13 @@ public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8).MaximumLength(200)
             .WithMessage("Password must be between 8 and 200 characters.");
         RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(200);
+        RuleForEach(x => x.Roles).Must(BeKnownPermission)
+            .WithMessage("'{PropertyValue}' is not a known permission.");
     }
+
+    private static bool BeKnownPermission(string role) =>
+        string.Equals(role, Permissions.Admin, StringComparison.OrdinalIgnoreCase) ||
+        Permissions.All.Contains(role, StringComparer.OrdinalIgnoreCase);
 }
 
 public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, UserDto>

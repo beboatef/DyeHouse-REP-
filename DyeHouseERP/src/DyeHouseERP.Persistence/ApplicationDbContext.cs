@@ -59,7 +59,6 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<TreasuryTransfer> TreasuryTransfers => Set<TreasuryTransfer>();
     public DbSet<CostEntry> CostEntries => Set<CostEntry>();
-    public DbSet<ProductionRequest> ProductionRequests => Set<ProductionRequest>();
     public DbSet<User> Users => Set<User>();
     public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();

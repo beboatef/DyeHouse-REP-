@@ -25,7 +25,14 @@ public enum RawMessageStatus
     Open = 1,        // still has un-allocated balance
     PartiallyUsed = 2,
     Depleted = 3,
-    Closed = 4
+    Closed = 4,
+
+    /// <summary>
+    /// The receipt was received in error (wrong customer, item or warehouse) and has been
+    /// cancelled through the permission-protected correction workflow. The document and its
+    /// original IN ledger rows are preserved; the reversal is an equal-and-opposite OUT row.
+    /// </summary>
+    Cancelled = 5
 }
 
 /// <summary>
@@ -49,7 +56,6 @@ public enum DocumentType
     MaterialIssue = 13,
     PreparationDilution = 14,
     ReadyGoodsTransfer = 15,
-    ProductionRequest = 16,
     FormationRequest = 17,
 
     /// <summary>
@@ -289,14 +295,6 @@ public enum CostCategory
     Repair = 8
 }
 
-/// <summary>Lifecycle of a customer-submitted processing request (spec section 36) before it becomes an internal Production Order.</summary>
-public enum ProductionRequestStatus
-{
-    Pending = 1,
-    Approved = 2,
-    Rejected = 3,
-    ConvertedToOrder = 4
-}
 
 /// <summary>Lifecycle of a purchase order (spec section 35). Receiving is what moves it towards Received - never a manual status edit.</summary>
 public enum PurchaseOrderStatus
@@ -370,6 +368,18 @@ public enum MaterialSaleStatus
     Draft = 1,
     Posted = 2,
     Cancelled = 3
+}
+
+/// <summary>
+/// Lifecycle of a material issue charged to a Production Order (spec section 27).
+/// A material issue is a stock posting the moment it is created - there is no draft
+/// step - so cancellation only ever reverses an already-posted document with a
+/// compensating IN row rather than deleting the OUT row.
+/// </summary>
+public enum MaterialIssueStatus
+{
+    Posted = 1,
+    Cancelled = 2
 }
 /// <summary>
 /// The reason a user requested a second user to authorise an action (spec section 24).

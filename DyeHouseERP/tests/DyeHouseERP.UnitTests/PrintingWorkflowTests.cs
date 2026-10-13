@@ -36,15 +36,31 @@ public class PrintingWorkflowTests
     }
 
     [Fact]
-    public void Drawing_Is_Trimmed_And_Closed_Stage_Cannot_Be_Corrected_Or_Skipped()
+    public void Drawing_Is_Trimmed_And_A_Closed_Stage_Is_Only_Corrected_With_A_Reason()
     {
         var stage = Order().ActivateNextStage(Printing(), 100m, null, "operator", " DR-123 ");
         stage.DrawingNumber.Should().Be("DR-123");
         stage.CloseWithOutput(95m, null, null, null, null, "operator");
-        var edit = () => stage.SetDrawingNumber("OTHER");
+
+        // A closed run is never SILENTLY rewritten: without a reason the correction is refused...
+        var silent = () => stage.SetDrawingNumber("OTHER");
+        silent.Should().Throw<DomainException>();
+        stage.DrawingNumber.Should().Be("DR-123");
+
+        // ...and a skipped run's drawing is meaningless, so that stays refused too.
         var skip = () => stage.Skip(true, "bypass", "operator");
-        edit.Should().Throw<DomainException>();
         skip.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void A_Closed_Print_Run_Can_Be_Corrected_With_A_Reason()
+    {
+        var stage = Order().ActivateNextStage(Printing(), 100m, null, "operator", "DR-124");
+        stage.CloseWithOutput(95m, null, null, null, null, "operator");
+
+        // The drawing number is documentary: correcting a typo after the run closed must be possible.
+        stage.SetDrawingNumber("DR-142", correctionReason: "typo on the drawing number");
+        stage.DrawingNumber.Should().Be("DR-142");
     }
 
     [Fact]
@@ -104,7 +120,7 @@ public class PrintingWorkflowTests
         var stage = (ProductionOrderStageExecution)Activator.CreateInstance(typeof(ProductionOrderStageExecution), nonPublic: true)!;
         typeof(ProductionOrderStageExecution).GetProperty(nameof(stage.RequiresDrawingNumber))!.SetValue(stage, true);
         var start = () => stage.Start("operator");
-        var complete = () => stage.Complete(100m, null, 95m, null, 5m, null, null, null, null, false, null);
+        var complete = () => stage.Complete(100m, null, 95m, null, 5m, null, null, null, null);
         var transfer = () => stage.CloseWithOutput(95m, null, null, null, null, "operator");
         start.Should().Throw<DomainException>();
         complete.Should().Throw<DomainException>();

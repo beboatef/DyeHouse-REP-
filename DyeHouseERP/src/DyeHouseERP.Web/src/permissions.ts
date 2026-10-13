@@ -57,8 +57,10 @@ export const Permissions: PermissionOption[] = [
 
   { value: "raw.receive", group: "استلام الخام", label: "استلام الخام" },
   { value: "raw.inspect", group: "استلام الخام", label: "فحص الخام" },
+  { value: "raw.receipt_cancel", group: "استلام الخام", label: "إلغاء رسالة استلام خام (تصحيح)" },
   { value: "raw.consume", group: "استلام الخام", label: "استهلاك الخام" },
   { value: "raw.return", group: "استلام الخام", label: "إرجاع الخام" },
+  { value: "raw.return_cancel", group: "استلام الخام", label: "إلغاء مرتجع عميل (تصحيح)" },
   { value: "raw.external_release", group: "استلام الخام", label: "تشغيل خارجي" },
   { value: "raw.transfer", group: "استلام الخام", label: "تحويل خام بين العملاء" },
 
@@ -68,8 +70,8 @@ export const Permissions: PermissionOption[] = [
   { value: "production.execute_stage", group: "الإنتاج", label: "تنفيذ مرحلة" },
   { value: "production.complete", group: "الإنتاج", label: "إكمال أمر التشغيل" },
   { value: "production.reprocess", group: "الإنتاج", label: "إعادة التشغيل" },
-  { value: "production.approve_stage", group: "الإنتاج", label: "اعتماد مراحل التشغيل" },
   { value: "production.resume", group: "الإنتاج", label: "استئناف أمر تشغيل موقوف" },
+  { value: "production.issue_material_cancel", group: "الإنتاج", label: "إلغاء صرف مواد على أمر تشغيل" },
   { value: "production.manage_machines", group: "الإنتاج", label: "إدارة الماكينات" },
   { value: "production.manage_shifts", group: "الإنتاج", label: "إدارة ورديات التشغيل" },
 
@@ -87,11 +89,13 @@ export const Permissions: PermissionOption[] = [
 
   { value: "invoices.view", group: "الفواتير", label: "عرض الفواتير" },
   { value: "invoices.create", group: "الفواتير", label: "إنشاء فاتورة" },
+  { value: "invoices.edit", group: "الفواتير", label: "تعديل مسودة فاتورة" },
   { value: "invoices.issue", group: "الفواتير", label: "إصدار فاتورة" },
   { value: "invoices.cancel", group: "الفواتير", label: "إلغاء فاتورة" },
 
   { value: "treasury.view", group: "الخزينة", label: "عرض الخزينة" },
   { value: "treasury.create", group: "الخزينة", label: "حركة خزينة" },
+  { value: "treasury.cancel", group: "الخزينة", label: "إلغاء حركة خزينة (تصحيح)" },
 
   { value: "formation.view", group: "التشكيل", label: "عرض طلبات التشكيل" },
   { value: "formation.create", group: "التشكيل", label: "إنشاء طلب تشكيل" },
@@ -100,7 +104,7 @@ export const Permissions: PermissionOption[] = [
   { value: "formation.approve", group: "التشكيل", label: "اعتماد طلب التشكيل" },
   { value: "formation.reject", group: "التشكيل", label: "رفض طلب التشكيل" },
   { value: "formation.cancel", group: "التشكيل", label: "إلغاء طلب التشكيل" },
-  { value: "formation.convert", group: "التشكيل", label: "تحويل لطلب إلى أمر تشغيل" },
+  { value: "formation.delete", group: "التشكيل", label: "حذف طلب تشكيل (مسودة/مرفوض)" },
   { value: "formation.manage_groups", group: "التشكيل", label: "إدارة مجموعات التشكيل" },
   { value: "formation.manage_specifications", group: "التشكيل", label: "إدارة خلايا المواصفات" },
   { value: "formation.traceability", group: "التشكيل", label: "تتبع التشكيل" },
@@ -124,6 +128,7 @@ export const Permissions: PermissionOption[] = [
   { value: "purchases.view", group: "المشتريات", label: "عرض المشتريات" },
   { value: "purchases.create", group: "المشتريات", label: "إنشاء أمر توريد" },
   { value: "purchases.edit", group: "المشتريات", label: "تعديل أمر توريد" },
+  { value: "purchases.edit_after_receipt", group: "المشتريات", label: "تصحيح كمية أمر توريد بعد استلام جزئي" },
   { value: "purchases.submit", group: "المشتريات", label: "إرسال أمر توريد" },
   { value: "purchases.approve", group: "المشتريات", label: "اعتماد أمر توريد" },
   { value: "purchases.receive", group: "المشتريات", label: "استلام أصناف" },

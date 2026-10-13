@@ -108,7 +108,7 @@ public class GetTreasuryTransfersQueryHandler : IRequestHandler<GetTreasuryTrans
             Id = t.Id, TransferNumber = t.TransferNumber, TransferDate = t.TransferDate,
             FromAccountId = t.FromAccountId, FromAccountName = accounts.GetValueOrDefault(t.FromAccountId)?.Name ?? "",
             ToAccountId = t.ToAccountId, ToAccountName = accounts.GetValueOrDefault(t.ToAccountId)?.Name ?? "",
-            Amount = t.Amount, Description = t.Description
+            Amount = t.Amount, Description = t.Description, Status = t.Status.ToString()
         }).ToList();
     }
 }

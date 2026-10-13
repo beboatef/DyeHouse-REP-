@@ -44,4 +44,22 @@ public class CustomerReturnsController : ControllerBase
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
+
+    /// <summary>
+    /// Cancels a return entered in error - the wrong lot, quantity or customer (spec sections 32-33 + 49).
+    /// A return posts stock the moment it is created, so it is never edited or deleted: the document and
+    /// its IN rows are preserved and the stock it restored is taken back out with an equal-and-opposite
+    /// OUT row, recorded with the reason and the user. Refused while that material has already been used.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReturnCancel)]
+    [ProducesResponseType(typeof(CustomerReturnDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CustomerReturnDto>> Cancel(Guid id, [FromBody] CancelCustomerReturnRequest request)
+        => Ok(await _mediator.Send(new CancelCustomerReturnCommand(id, request.Reason)));
 }
+
+/// <summary>
+/// A cancellation always carries a reason: it is stored on the return and written to the audit
+/// trail, so a corrected mistake is explainable later.
+/// </summary>
+public record CancelCustomerReturnRequest(string Reason);

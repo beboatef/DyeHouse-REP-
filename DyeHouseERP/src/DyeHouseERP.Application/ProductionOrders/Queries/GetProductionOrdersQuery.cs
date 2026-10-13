@@ -13,8 +13,7 @@ namespace DyeHouseERP.Application.ProductionOrders.Queries;
 public record GetProductionOrdersQuery(
     Guid? CustomerId = null,
     ProductionOrderStatus? Status = null,
-    JobOrderType? JobOrderType = null,
-    Guid? FormationRequestId = null)
+    JobOrderType? JobOrderType = null)
     : IRequest<List<ProductionOrderDto>>;
 
 public class GetProductionOrdersQueryHandler : IRequestHandler<GetProductionOrdersQuery, List<ProductionOrderDto>>
@@ -29,7 +28,6 @@ public class GetProductionOrdersQueryHandler : IRequestHandler<GetProductionOrde
         if (request.CustomerId.HasValue) query = query.Where(o => o.CustomerId == request.CustomerId);
         if (request.Status.HasValue) query = query.Where(o => o.Status == request.Status);
         if (request.JobOrderType.HasValue) query = query.Where(o => o.JobOrderType == request.JobOrderType);
-        if (request.FormationRequestId.HasValue) query = query.Where(o => o.FormationRequestId == request.FormationRequestId);
 
         var ids = await query.OrderByDescending(o => o.OrderDate).Select(o => o.Id).ToListAsync(cancellationToken);
 

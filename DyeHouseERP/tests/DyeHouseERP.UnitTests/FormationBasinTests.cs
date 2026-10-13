@@ -394,18 +394,4 @@ public class FormationBasinTests
         meter.PlannedQuantity.Should().Be(2500m, "a meter basin is never converted to KG (spec sections 6 and 29)");
     }
 
-    [Fact]
-    public void LinkProductionOrder_KeepsTheFirstOrderAsTheHeaderLink()
-    {
-        var (request, _) = FourBasinGroup();
-        SubmitAndApprove(request);
-        var firstOrder = Guid.NewGuid();
-        var secondOrder = Guid.NewGuid();
-
-        request.LinkProductionOrder(firstOrder, "tester");
-        request.LinkProductionOrder(secondOrder, "tester");
-
-        request.ProductionOrderId.Should().Be(firstOrder,
-            "one request can fan out into several Job Orders; the header keeps the first one");
-    }
 }

@@ -15,8 +15,8 @@ namespace DyeHouseERP.API.Controllers;
 /// <summary>
 /// Formation Request - طلب تشكيل (spec sections 28-33).
 /// One request carries many groups/cells, each with its own specification snapshot taken from the reusable
-/// specification master. Approving freezes those specifications; converting turns a group (or the whole request)
-/// into a Job Order, keeping the Customer -&gt; Message -&gt; Request -&gt; Job Order chain navigable.
+/// specification master. Approving freezes those specifications. A Formation Request is an INDEPENDENT document:
+/// it never creates, links to, or converts into a Job Order, and a Job Order never references it.
 /// </summary>
 [ApiController]
 [Route("api/formation-requests")]
@@ -39,7 +39,7 @@ public class FormationRequestsController : ControllerBase
     public async Task<ActionResult<FormationRequestDto>> GetById(Guid id)
         => Ok(await _mediator.Send(new GetFormationRequestByIdQuery(id)));
 
-    /// <summary>The full chain: Customer -&gt; Raw Material Message -&gt; Formation Request -&gt; Job Order -&gt; Production -&gt; Ready Goods -&gt; Delivery.</summary>
+    /// <summary>The request's chain: Customer -&gt; Raw Material Message -&gt; Formation Request (independent of production).</summary>
     [HttpGet("{id:guid}/traceability")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationViewTraceability)]
     public async Task<ActionResult<FormationTraceabilityDto>> GetTraceability(Guid id)
@@ -82,14 +82,24 @@ public class FormationRequestsController : ControllerBase
     public async Task<ActionResult<FormationRequestDto>> Cancel(Guid id, [FromBody] FormationReasonRequest request)
         => Ok(await _mediator.Send(new CancelFormationRequestCommand(id, request.Reason)));
 
-    /// <summary>Converts the whole request, one group/cell, or one basin into a Job Order (spec sections 16, 31 and 10-11).</summary>
-    [HttpPost("{id:guid}/convert-to-job-order")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationConvertToJobOrder)]
-    public async Task<ActionResult<FormationRequestDto>> ConvertToJobOrder(Guid id, [FromBody] ConvertFormationRequestRequest request)
-        => Ok(await _mediator.Send(new ConvertFormationRequestToJobOrderCommand(
-            id, request.OrderDate ?? DateTime.UtcNow, request.JobOrderType, request.Priority,
-            request.GroupId, request.BasinId, request.Color, request.Notes, request.CustomerReference,
-            request.ActualBasinQuantity)));
+    /// <summary>
+    /// Creates a REVISION of a submitted/approved request that can no longer be edited in place. The original is
+    /// left exactly as it is (its approval history intact) and the revision starts as a fresh Draft that must be
+    /// submitted and approved on its own. Gated by the configurable formation.edit permission.
+    /// </summary>
+    [HttpPost("{id:guid}/revise")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
+    [ProducesResponseType(typeof(FormationRequestDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<FormationRequestDto>> Revise(Guid id)
+        => Ok(await _mediator.Send(new ReviseFormationRequestCommand(id)));
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationDelete)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await _mediator.Send(new DeleteFormationRequestCommand(id));
+        return NoContent();
+    }
 
     /// <summary>
     /// Records a basin's ACTUAL weighed quantity (spec sections 8 and 10) before it is
@@ -102,6 +112,36 @@ public class FormationRequestsController : ControllerBase
         => Ok(await _mediator.Send(new RecordFormationBasinActualQuantityCommand(
             id, request.GroupId, basinId, request.ActualQuantity)));
 
+    /// <summary>
+    /// Moves an approved request into production (spec section 32). A Formation Request is an
+    /// independent document: this never creates or changes a Job Order and never touches stock.
+    /// </summary>
+    [HttpPost("{id:guid}/start-production")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
+    public async Task<ActionResult<FormationRequestDto>> StartProduction(Guid id)
+        => Ok(await _mediator.Send(new StartFormationProductionCommand(id)));
+
+    /// <summary>
+    /// Records produced quantity against one group of a request that has NO basins (spec sections 32-33).
+    /// Accumulates - never overwrites - and re-derives the request's own completion status.
+    /// </summary>
+    [HttpPost("{id:guid}/groups/{groupId:guid}/production")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
+    public async Task<ActionResult<FormationRequestDto>> RecordGroupProduction(
+        Guid id, Guid groupId, [FromBody] RecordGroupOutputRequest request)
+        => Ok(await _mediator.Send(new RecordFormationGroupProductionCommand(id, groupId, request.Quantity)));
+
+    /// <summary>
+    /// Records produced quantity against ONE basin of a group measured per basin (spec sections 10-11, 32).
+    /// The group's produced figure is re-derived from its basins, so it can never exceed what they hold.
+    /// </summary>
+    [HttpPost("{id:guid}/basins/{basinId:guid}/production")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
+    public async Task<ActionResult<FormationRequestDto>> RecordBasinProduction(
+        Guid id, Guid basinId, [FromBody] RecordBasinOutputRequest request)
+        => Ok(await _mediator.Send(new RecordFormationBasinProductionCommand(
+            id, request.GroupId, basinId, request.Quantity)));
+
     [HttpGet("export/excel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationExport)]
     public async Task<IActionResult> ExportExcel(
@@ -112,13 +152,13 @@ public class FormationRequestsController : ControllerBase
         var requests = await _mediator.Send(new GetFormationRequestsQuery(customerId, null, null, status, from, to));
         var headers = new List<string>
         {
-            "RequestNumber", "Date", "Customer", "Item", "Message", "Groups", "Basins", "TotalQuantity", "Unit", "Status", "JobOrder"
+            "RequestNumber", "Date", "Customer", "Item", "Message", "Groups", "Basins", "TotalQuantity", "Unit", "Status"
         };
 
         var rows = requests.Select(r => new object?[]
         {
             r.RequestNumber, r.RequestDate.ToString("yyyy-MM-dd"), r.CustomerCode, r.ItemCode, r.MessageNumber,
-            r.Groups.Count, r.BasinCount, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString(), r.ProductionOrderNumber
+            r.Groups.Count, r.BasinCount, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString()
         }).ToList();
 
         var bytes = export.GenerateExcel("FormationRequests", headers, rows);
@@ -136,13 +176,13 @@ public class FormationRequestsController : ControllerBase
         var requests = await _mediator.Send(new GetFormationRequestsQuery(customerId, null, null, status, from, to));
         var headers = new List<string>
         {
-            "RequestNumber", "Date", "Customer", "Item", "Message", "Groups", "TotalQuantity", "Unit", "Status", "JobOrder"
+            "RequestNumber", "Date", "Customer", "Item", "Message", "Groups", "TotalQuantity", "Unit", "Status"
         };
 
         var rows = requests.Select(r => new object?[]
         {
             r.RequestNumber, r.RequestDate.ToString("yyyy-MM-dd"), r.CustomerCode, r.ItemCode, r.MessageNumber,
-            r.Groups.Count, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString(), r.ProductionOrderNumber
+            r.Groups.Count, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString()
         }).ToList();
 
         return ExportFileHelper.ToFile(export, format, "Customer Formation Requests", "DyeHouse ERP",
@@ -186,16 +226,8 @@ public class FormationRequestsController : ControllerBase
 
 public record FormationReasonRequest(string Reason);
 
-public record ConvertFormationRequestRequest(
-    Guid? GroupId,
-    Guid? BasinId = null,
-    JobOrderType JobOrderType = JobOrderType.ClosedLine,
-    ProductionPriority Priority = ProductionPriority.Normal,
-    DateTime? OrderDate = null,
-    string? Color = null,
-    string? Notes = null,
-    string? CustomerReference = null,
-    // Required when a single basin is converted: its ACTUAL weighed weight (spec sections 8, 10).
-    decimal? ActualBasinQuantity = null);
-
 public record RecordBasinActualQuantityRequest(Guid GroupId, decimal ActualQuantity);
+
+public record RecordGroupOutputRequest(decimal Quantity);
+
+public record RecordBasinOutputRequest(Guid GroupId, decimal Quantity);

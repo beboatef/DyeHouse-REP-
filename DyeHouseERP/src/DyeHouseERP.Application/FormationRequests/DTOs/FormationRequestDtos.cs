@@ -60,9 +60,6 @@ public class FormationRequestDto
     public string? Notes { get; set; }
     public FormationRequestStatus Status { get; set; }
 
-    public Guid? ProductionOrderId { get; set; }
-    public string? ProductionOrderNumber { get; set; }
-
     public string? SubmittedBy { get; set; }
     public DateTime? SubmittedAtUtc { get; set; }
     public string? ApprovedBy { get; set; }
@@ -73,6 +70,9 @@ public class FormationRequestDto
     public string? CancelledBy { get; set; }
     public DateTime? CancelledAtUtc { get; set; }
     public string? CancellationReason { get; set; }
+
+    /// <summary>Set when this request is a revision of an earlier one; the original is left untouched.</summary>
+    public Guid? RevisionOfFormationRequestId { get; set; }
 
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
@@ -127,9 +127,9 @@ public class FormationBasinDto
 }
 
 /// <summary>
-/// One step of the end-to-end chain (spec section 31): Customer -&gt; Raw Material Message -&gt; Formation Request -&gt;
-/// Job Order -&gt; Production -&gt; Winding/Packing -&gt; Ready Goods -&gt; Delivery. Built as a real list of links so the UI
-/// can move forward and backward through the chain.
+/// One step of the request's chain (spec section 31): Customer -&gt; Raw Material Message -&gt; Formation Request.
+/// Built as a real list of links so the UI can move through the chain. Formation Requests are independent of
+/// Production Orders, so the chain never crosses into production.
 /// </summary>
 public class FormationTraceabilityLinkDto
 {

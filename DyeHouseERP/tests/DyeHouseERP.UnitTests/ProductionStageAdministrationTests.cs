@@ -53,7 +53,7 @@ public class ProductionStageAdministrationTests
     private static Task<ProductionStageDefinitionDto> CreateStageAsync(ApplicationDbContext db,
         string code, string name, int sequence, bool formation = false, string? notes = null)
         => Creator(db).Handle(new CreateProductionStageDefinitionCommand(
-            code, name, sequence, true, true, false, false, false, false, false, notes, formation),
+            code, name, sequence, true, true, false, notes, formation),
             CancellationToken.None);
 
     private static async Task SeedStartingStagesAsync(ApplicationDbContext db)

@@ -1,19 +1,19 @@
 import { Fragment, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormationRequestsApi, FormationRequestStatus, JobOrderType, ProductionPriority } from "@/api/client";
+import { FormationRequestsApi, FormationRequestStatus } from "@/api/client";
 import AttachmentsPanel from "@/components/AttachmentsPanel";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Badge } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
 /**
  * Formation Request detail (spec sections 30-33).
  *
  * Shows the frozen specification snapshot of every group/cell, the controlled
- * status workflow (submit / approve / reject / cancel), conversion into a Job
- * Order per group or for the whole request, and the full traceability chain
- * Customer -> Raw Material Message -> Formation Request -> Job Order ->
- * Production -> Ready Goods -> Delivery.
+ * status workflow (submit / approve / reject / cancel / delete) and the
+ * traceability chain Customer -> Raw Material Message -> Formation Request.
+ * A Formation Request is an independent document: it never creates or links to
+ * a Job Order, and no Job Order references it.
  */
 
 const statusTone: Record<FormationRequestStatus, "gray" | "yellow" | "blue" | "green" | "red"> = {
@@ -34,11 +34,6 @@ export default function FormationRequestDetailPage() {
   const qc = useQueryClient();
 
   const [reason, setReason] = useState("");
-  const [convertGroupId, setConvertGroupId] = useState("");
-  const [convertBasinId, setConvertBasinId] = useState("");
-  const [jobOrderType, setJobOrderType] = useState<JobOrderType>("ClosedLine");
-  const [priority, setPriority] = useState<ProductionPriority>("Normal");
-  const [convertActual, setConvertActual] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const { data: request, isLoading } = useQuery({
@@ -57,7 +52,6 @@ export default function FormationRequestDetailPage() {
     qc.invalidateQueries({ queryKey: ["formation-request", id] });
     qc.invalidateQueries({ queryKey: ["formation-request-traceability", id] });
     qc.invalidateQueries({ queryKey: ["formation-requests"] });
-    qc.invalidateQueries({ queryKey: ["production-orders"] });
   };
 
   const onError = (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"));
@@ -74,36 +68,73 @@ export default function FormationRequestDetailPage() {
     onSuccess: () => { setReason(""); refresh(); },
     onError
   });
-  const convertMutation = useMutation({
-    mutationFn: () =>
-      FormationRequestsApi.convertToJobOrder(id as string, {
-        groupId: convertGroupId || null,
-        basinId: convertBasinId || null,
-        jobOrderType,
-        priority,
-        orderDate: new Date().toISOString().slice(0, 10),
-        // A basin is converted from its ACTUAL weighed weight, never from the plan
-        // (spec sections 8 and 10).
-        actualBasinQuantity: convertBasinId ? Number(convertActual) || null : null
-      }),
-    onSuccess: () => { setConvertGroupId(""); setConvertBasinId(""); setConvertActual(""); refresh(); },
+  const deleteMutation = useMutation({
+    mutationFn: () => FormationRequestsApi.remove(id as string),
+    onSuccess: () => { refresh(); navigate("/formation-requests"); },
     onError
   });
+
+  // A submitted/approved request can no longer be edited in place (its specification snapshot is frozen
+  // and its production is accumulating). The correction path is a new DRAFT revision that leaves the
+  // original untouched and must be approved on its own.
+  const reviseMutation = useMutation({
+    mutationFn: () => FormationRequestsApi.revise(id as string),
+    onSuccess: (revised) => { refresh(); navigate(`/formation-requests/${revised.id}`); },
+    onError
+  });
+
+  // The request's OWN production lifecycle (spec section 32). Independent of Job Orders and stock:
+  // recording output accumulates on the request and re-derives its completion status.
+  const startProductionMutation = useMutation({
+    mutationFn: () => FormationRequestsApi.startProduction(id as string),
+    onSuccess: refresh,
+    onError
+  });
+  const recordGroupMutation = useMutation({
+    mutationFn: (vars: { groupId: string; quantity: number }) =>
+      FormationRequestsApi.recordGroupProduction(id as string, vars.groupId, vars.quantity),
+    onSuccess: refresh,
+    onError
+  });
+  const recordBasinMutation = useMutation({
+    mutationFn: (vars: { basinId: string; groupId: string; quantity: number }) =>
+      FormationRequestsApi.recordBasinProduction(id as string, vars.basinId, {
+        groupId: vars.groupId, quantity: vars.quantity
+      }),
+    onSuccess: refresh,
+    onError
+  });
+
+  /** Recording output is only meaningful once the request is approved and not yet finished. */
+  const canRecordProduction = ["Approved", "InProgress", "PartiallyCompleted"].includes(request?.status ?? "");
+
+  const recordGroup = (groupId: string) => {
+    const entered = window.prompt(t("fr.recordProduction"));
+    if (entered === null) return;
+    const quantity = Number(entered);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setError(t("fr.productionQuantityInvalid"));
+      return;
+    }
+    recordGroupMutation.mutate({ groupId, quantity });
+  };
+
+  const recordBasin = (groupId: string, basinId: string) => {
+    const entered = window.prompt(t("fr.recordProduction"));
+    if (entered === null) return;
+    const quantity = Number(entered);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setError(t("fr.productionQuantityInvalid"));
+      return;
+    }
+    recordBasinMutation.mutate({ basinId, groupId, quantity });
+  };
 
   if (isLoading || !request) {
     return <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>;
   }
 
   const canEdit = request.status === "Draft" || request.status === "Rejected";
-  const canConvert = request.status === "Approved" || request.status === "InProgress" || request.status === "PartiallyCompleted";
-  // Basins and groups can be converted one by one (spec sections 10-11). A group that is split into basins
-  // is never offered as a lump - that would plan the same quantity twice - and neither is a whole request
-  // that contains such a group. The API enforces exactly the same rule server-side.
-  const hasBasins = request.groups.some((g) => (g.basins?.length ?? 0) > 0);
-  const convertibleGroups = request.groups.filter((g) => (g.basins?.length ?? 0) === 0);
-  const convertibleBasins = request.groups.flatMap((g) =>
-    (g.basins ?? []).map((b) => ({ group: g.groupNumber, basin: b }))
-  );
 
   return (
     <>
@@ -115,9 +146,23 @@ export default function FormationRequestDetailPage() {
             <Button variant="secondary" onClick={() => FormationRequestsApi.downloadPdf(request.id, request.requestNumber)}>
               {t("common.pdf")}
             </Button>
+            {request.status === "Approved" && (
+              <Button variant="secondary" onClick={() => startProductionMutation.mutate()} disabled={startProductionMutation.isPending}>
+                {t("fr.startProduction")}
+              </Button>
+            )}
             {canEdit && (
               <Button variant="secondary" onClick={() => navigate(`/formation-requests?edit=${request.id}`)}>
                 {t("common.edit")}
+              </Button>
+            )}
+            {["Submitted", "Approved", "InProgress", "PartiallyCompleted", "Completed"].includes(request.status) && (
+              <Button
+                variant="secondary"
+                disabled={reviseMutation.isPending}
+                onClick={() => { if (window.confirm(t("fr.reviseConfirm"))) reviseMutation.mutate(); }}
+              >
+                {t("fr.revise")}
               </Button>
             )}
             <Link to="/formation-requests">
@@ -143,15 +188,6 @@ export default function FormationRequestDetailPage() {
                 </Link>
               ) : (
                 <span className="text-amber-600">—</span>
-              )}
-            </Info>
-            <Info label={t("fr.jobOrder")}>
-              {request.productionOrderId ? (
-                <Link className="btn-link ltr-nums" to={`/production-orders/${request.productionOrderId}`}>
-                  {request.productionOrderNumber}
-                </Link>
-              ) : (
-                <span className="text-gray-400">—</span>
               )}
             </Info>
             <Info label={t("fr.submittedBy")}>
@@ -194,67 +230,19 @@ export default function FormationRequestDetailPage() {
                 </Button>
               </>
             )}
-            {canConvert && (
-              <div className="space-y-2 border-t border-slate-100 pt-3">
-                <p className="text-2xs text-slate-500">{t("fr.convertToJobOrder")}</p>
-                <Select value={convertBasinId} onChange={(e) => {
-                  setConvertBasinId(e.target.value); setConvertGroupId("");
-                  const picked = convertibleBasins.find(({ basin }) => basin.id === e.target.value);
-                  setConvertActual(picked ? String(picked.basin.actualQuantity ?? picked.basin.plannedQuantity) : "");
-                }}>
-                  <option value="">{t("fr.convertBasinNone")}</option>
-                  {convertibleBasins.map(({ group, basin }) => (
-                    <option key={basin.id} value={basin.id}>
-                      {t("fr.group")} #{group} / {t("fr.basin")} #{basin.basinNumber} · {basin.actualQuantity ?? basin.plannedQuantity} {basin.unit}
-                    </option>
-                  ))}
-                </Select>
-                {convertBasinId !== "" && (
-                  <div>
-                    <label className="field-label">{t("fr.actualWeight")}</label>
-                    <Input type="number" min={0} step="0.001" value={convertActual}
-                      onChange={(e) => setConvertActual(e.target.value)} />
-                    {!(Number(convertActual) > 0) && (
-                      <p className="text-2xs text-amber-600 mt-1">{t("fr.actualWeightRequired")}</p>
-                    )}
-                  </div>
-                )}
-                <Select value={convertGroupId} onChange={(e) => { setConvertGroupId(e.target.value); setConvertBasinId(""); }}>
-                  <option value="">{t("fr.convertWhole")}</option>
-                  {convertibleGroups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {t("fr.group")} #{g.groupNumber} · {g.plannedQuantity} {g.unit}
-                    </option>
-                  ))}
-                </Select>
-                {hasBasins && !convertBasinId && (
-                  <p className="text-2xs text-amber-600">{t("fr.convertBasinRequired")}</p>
-                )}
-                <Select value={jobOrderType} onChange={(e) => setJobOrderType(e.target.value as JobOrderType)}>
-                  <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
-                  <option value="OpenLine">{t("jo.type.OpenLine")}</option>
-                </Select>
-                <Select value={priority} onChange={(e) => setPriority(e.target.value as ProductionPriority)}>
-                  <option value="Low">Low</option>
-                  <option value="Normal">Normal</option>
-                  <option value="High">High</option>
-                  <option value="Urgent">Urgent</option>
-                </Select>
-                <Button
-                  className="w-full"
-                  onClick={() => convertMutation.mutate()}
-                  disabled={
-                    convertMutation.isPending || (hasBasins && !convertBasinId && !convertGroupId) ||
-                    (convertBasinId !== "" && !(Number(convertActual) > 0))
-                  }
-                >
-                  {t("fr.convertToJobOrder")}
-                </Button>
-              </div>
-            )}
             {(request.status === "Submitted" || request.status === "Approved" || request.status === "Rejected") && (
               <Button variant="secondary" className="w-full" onClick={() => cancelMutation.mutate()} disabled={!reason}>
                 {t("fr.cancelRequest")}
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => { if (window.confirm(t("fr.confirmDelete"))) deleteMutation.mutate(); }}
+                disabled={deleteMutation.isPending}
+              >
+                {t("fr.deleteRequest")}
               </Button>
             )}
             {(request.status === "Submitted" || request.status === "Approved" || request.status === "Rejected") && (
@@ -302,7 +290,15 @@ export default function FormationRequestDetailPage() {
                       {(g.basins?.length ?? 0) === 0 ? "—" : t("fr.groupTotal")}
                     </td>
                     <td className="ltr-nums">{g.plannedQuantity} {g.unit}</td>
-                    <td className="ltr-nums">{g.producedQuantity}</td>
+                    <td className="ltr-nums">
+                      {g.producedQuantity}
+                      {canRecordProduction && (g.basins?.length ?? 0) === 0 && (
+                        <Button variant="ghost" className="ms-2" onClick={() => recordGroup(g.id)}
+                          disabled={recordGroupMutation.isPending}>
+                          {t("fr.recordProduction")}
+                        </Button>
+                      )}
+                    </td>
                     <td className="ltr-nums">{g.tubCount ?? "—"}</td>
                     <td>{g.color ?? "—"}</td>
                     <td className="ltr-nums">{g.widthCm ?? "—"}</td>
@@ -324,7 +320,15 @@ export default function FormationRequestDetailPage() {
                           <span className="text-gray-400"> / {b.producedQuantity}</span>
                         )}
                       </td>
-                      <td className="ltr-nums">{b.producedQuantity}</td>
+                      <td className="ltr-nums">
+                        {b.producedQuantity}
+                        {canRecordProduction && (
+                          <Button variant="ghost" className="ms-2" onClick={() => recordBasin(g.id, b.id)}
+                            disabled={recordBasinMutation.isPending}>
+                            {t("fr.recordProduction")}
+                          </Button>
+                        )}
+                      </td>
                       <td className="ltr-nums">{b.tubCount ?? "—"}</td>
                       <td>{b.color ?? "—"}</td>
                       <td className="ltr-nums">{b.widthCm ?? g.widthCm ?? "—"}</td>

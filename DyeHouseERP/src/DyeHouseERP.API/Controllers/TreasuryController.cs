@@ -111,7 +111,7 @@ public class ReceiptsController : ControllerBase
 
     /// <summary>Cancels a posted receipt and writes the reversal rows (B4). Reason required; double cancel rejected.</summary>
     [HttpPost("{id:guid}/cancel")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.TreasuryCreate)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.TreasuryCancel)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ReceiptDto>> Cancel(Guid id, [FromBody] CancelReceiptRequest request)
         => Ok(await _mediator.Send(new CancelReceiptCommand(id, request.Reason)));
@@ -141,7 +141,7 @@ public class PaymentsController : ControllerBase
 
     /// <summary>Cancels a posted payment and writes the reversal rows (B4). Reason required; double cancel rejected.</summary>
     [HttpPost("{id:guid}/cancel")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.TreasuryCreate)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.TreasuryCancel)]
     [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaymentDto>> Cancel(Guid id, [FromBody] CancelPaymentRequest request)
         => Ok(await _mediator.Send(new CancelPaymentCommand(id, request.Reason)));
@@ -168,4 +168,13 @@ public class TreasuryTransfersController : ControllerBase
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(Get), new { }, result);
     }
+
+    /// <summary>Cancels a posted transfer and writes the two opposite ledger rows (B4). Reason required; double cancel rejected.</summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.TreasuryCancel)]
+    [ProducesResponseType(typeof(TreasuryTransferDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<TreasuryTransferDto>> Cancel(Guid id, [FromBody] CancelTreasuryTransferRequest request)
+        => Ok(await _mediator.Send(new CancelTreasuryTransferCommand(id, request.Reason)));
 }
+
+public record CancelTreasuryTransferRequest(string Reason);

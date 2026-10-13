@@ -142,6 +142,18 @@ public class MaterialIssuesController : ControllerBase
         return CreatedAtAction(nameof(Get), new { }, result);
     }
 
+    /// <summary>
+    /// Reverses a posted material issue (spec sections 18/27/43). The original OUT row is kept and a
+    /// compensating IN row is posted, so the document is never deleted and balances are never edited.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionIssueMaterialCancel)]
+    public async Task<ActionResult<MaterialIssueDto>> Cancel(Guid id, [FromBody] CancelMaterialIssueRequest body)
+    {
+        var result = await _mediator.Send(new CancelMaterialIssueCommand(id, body.Reason));
+        return Ok(result);
+    }
+
     /// <summary>Chemical issues to Job Orders as Excel or PDF - each row names the Job Order it was charged to.</summary>
     [HttpGet("export")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
@@ -195,3 +207,5 @@ public class MaterialPreparationsController : ControllerBase
         return ExportFileHelper.ToFile(export, format, "Material Preparation", "DyeHouse ERP", headers, rows, "material-preparations", "Preparations");
     }
 }
+
+public record CancelMaterialIssueRequest(string Reason);

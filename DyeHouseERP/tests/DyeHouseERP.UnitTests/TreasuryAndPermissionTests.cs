@@ -88,6 +88,68 @@ public class TreasuryCancellationTests
 }
 
 /// <summary>
+/// B4 for treasury TRANSFERS: a posted transfer is a posted financial document and
+/// must be cancellable through the same append-only reversal model as a receipt or
+/// payment. The original row and its two ledger movements survive; a second cancel is
+/// refused; and the concurrency token exists so two simultaneous cancels cannot both
+/// reverse the same movement.
+/// </summary>
+public class TreasuryTransferCancellationTests
+{
+    private static TreasuryTransfer NewTransfer() =>
+        new("TRF-1", DateTime.UtcNow, Guid.NewGuid(), Guid.NewGuid(), 1000m, "admin");
+
+    [Fact]
+    public void PostedTransfer_CanBeCancelled_AndKeepsItsFacts()
+    {
+        var transfer = NewTransfer();
+
+        transfer.Status.Should().Be(TreasuryDocumentStatus.Posted);
+        transfer.Cancel("wrong destination account", "supervisor");
+
+        transfer.Status.Should().Be(TreasuryDocumentStatus.Cancelled);
+        transfer.Description.Should().Contain("[Cancelled] wrong destination account");
+        transfer.Amount.Should().Be(1000m);
+        transfer.TransferNumber.Should().Be("TRF-1");
+    }
+
+    [Fact]
+    public void DoubleCancel_IsRefused()
+    {
+        var transfer = NewTransfer();
+        transfer.Cancel("first", "supervisor");
+
+        var act = () => transfer.Cancel("second", "supervisor");
+        act.Should().Throw<DomainException>().WithMessage("*already cancelled*");
+    }
+
+    [Fact]
+    public void Cancel_RequiresAReason_AtTheCommandValidatorBoundary()
+    {
+        var validator = new DyeHouseERP.Application.Treasury.Commands.CancelTreasuryTransferCommandValidator();
+        validator.Validate(new DyeHouseERP.Application.Treasury.Commands.CancelTreasuryTransferCommand(Guid.NewGuid(), ""))
+            .IsValid.Should().BeFalse("the reason is mandatory before the handler ever touches the entity");
+        validator.Validate(new DyeHouseERP.Application.Treasury.Commands.CancelTreasuryTransferCommand(Guid.NewGuid(), "duplicate"))
+            .IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Transfer_CarriesAConcurrencyToken()
+    {
+        // Cancel vs cancel (or cancel vs a re-post) must fail explicitly rather than
+        // double-reverse the two ledger rows the transfer posted.
+        typeof(TreasuryTransfer).GetProperty("RowVersion").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void TreasuryCancel_IsADistinctConfigurablePermission()
+    {
+        DyeHouseERP.Domain.Common.Permissions.TreasuryCancel.Should().NotBe(DyeHouseERP.Domain.Common.Permissions.TreasuryCreate);
+        DyeHouseERP.Domain.Common.Permissions.All.Should().Contain(DyeHouseERP.Domain.Common.Permissions.TreasuryCancel);
+    }
+}
+
+/// <summary>
 /// B5: receipts against a cancelled/draft invoice are refused; overpayment
 /// is refused when there is no advance model. The invoice-state and
 /// overpayment guards live in CreateReceiptCommandHandler (DB-dependent);

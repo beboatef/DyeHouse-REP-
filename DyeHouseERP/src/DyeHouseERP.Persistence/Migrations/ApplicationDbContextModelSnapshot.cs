@@ -969,6 +969,17 @@ namespace DyeHouseERP.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -979,6 +990,9 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsLocked")
                         .HasColumnType("bit");
@@ -1947,9 +1961,6 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
-                    b.Property<Guid?>("ProductionOrderId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("RawMessageId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1971,6 +1982,9 @@ namespace DyeHouseERP.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("RevisionOfFormationRequestId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1998,8 +2012,6 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("ItemId");
-
-                    b.HasIndex("ProductionOrderId");
 
                     b.HasIndex("RawMessageId");
 
@@ -2847,6 +2859,17 @@ namespace DyeHouseERP.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2886,6 +2909,9 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("UnitCost")
                         .HasPrecision(18, 4)
@@ -3951,15 +3977,6 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<Guid?>("FormationBasinId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("FormationGroupId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("FormationRequestId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("IsLocked")
                         .HasColumnType("bit");
 
@@ -4028,12 +4045,6 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("FormationBasinId");
-
-                    b.HasIndex("FormationGroupId");
-
-                    b.HasIndex("FormationRequestId");
 
                     b.HasIndex("ItemId");
 
@@ -4125,16 +4136,6 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("ApprovalRequired")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("ApprovedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ApprovedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
 
                     b.Property<decimal?>("BaselineKg")
                         .HasColumnType("decimal(18,2)");
@@ -4240,84 +4241,6 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.ToTable("ProductionOrderStageExecutions", (string)null);
                 });
 
-            modelBuilder.Entity("DyeHouseERP.Domain.Entities.ProductionRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid?>("ConvertedProductionOrderId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("IsLocked")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("ItemId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("ModifiedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ModifiedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime>("RequestDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("RequestNumber")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<decimal?>("RequestedQuantityKg")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<decimal?>("RequestedQuantityMeter")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<string>("StaffNotes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("RequestNumber")
-                        .IsUnique();
-
-                    b.HasIndex("Status");
-
-                    b.ToTable("ProductionRequests", (string)null);
-                });
-
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.ProductionShift", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4374,15 +4297,6 @@ namespace DyeHouseERP.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("AllowRepeat")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowReturn")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("AllowRework")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("AllowSkip")
                         .HasColumnType("bit");
 
@@ -4426,9 +4340,6 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
-
-                    b.Property<bool>("RequiresApproval")
-                        .HasColumnType("bit");
 
                     b.Property<bool>("RequiresDrawingNumber")
                         .HasColumnType("bit");
@@ -4508,6 +4419,12 @@ namespace DyeHouseERP.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -4951,6 +4868,17 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -6184,6 +6112,15 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<string>("ModifiedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("ToAccountId")
                         .HasColumnType("uniqueidentifier");

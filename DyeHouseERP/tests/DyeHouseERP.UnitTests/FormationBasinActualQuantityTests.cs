@@ -1,12 +1,8 @@
 using DyeHouseERP.Application.Common.Interfaces;
-using DyeHouseERP.Application.FormationRequests.Commands;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
-using DyeHouseERP.Persistence;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace DyeHouseERP.UnitTests;
@@ -23,9 +19,9 @@ internal sealed class StubCurrentUser : ICurrentUserService
 }
 
 /// <summary>
-/// Spec sections 8 and 10: a basin is weighed for real BEFORE its Job Order is
-/// created, and the Job Order quantity is that ACTUAL weight - the planned
-/// formation quantity is planning data only and must never reach production.
+/// Spec sections 8 and 10: a basin can be weighed for real while its request is
+/// approved. A Formation Request is an independent document, so this weighing is
+/// the request's own planning data and never creates or drives a Job Order.
 /// </summary>
 public class FormationBasinActualQuantityTests
 {
@@ -142,133 +138,8 @@ public class FormationBasinActualQuantityTests
         basin.EffectiveQuantity.Should().Be(480m);
     }
 
-    // ---------------------------------------------------------- conversion
-
-    private static ApplicationDbContext NewDb() => new(
-        new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase($"fr-basin-{Guid.NewGuid()}")
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
-            .Options);
-
-    private static ConvertFormationRequestToJobOrderCommandHandler Handler(ApplicationDbContext db)
-        => new(db, new StubCurrentUser("planner"), new FixedNumberGenerator());
-
-    private static async Task<ApplicationDbContext> SeedAsync(FormationRequest request)
-    {
-        var db = NewDb();
-        db.FormationRequests.Add(request);
-        db.ProductionStageDefinitions.Add(
-            new ProductionStageDefinition("PS002", "التشكيل", 2, "seed", isFormationStage: true));
-        await db.SaveChangesAsync();
-        return db;
-    }
-
     [Fact]
-    public async Task ConvertingABasin_UsesTheActualWeighedWeight_NotThePlannedQuantity()
-    {
-        var (request, group) = OneBasinGroup(500m);
-        var basin = group.Basins.Single();
-        using var db = await SeedAsync(request);
-
-        await Handler(db).Handle(
-            new ConvertFormationRequestToJobOrderCommand(
-                request.Id, DateTime.UtcNow, JobOrderType.ClosedLine,
-                BasinId: basin.Id, ActualBasinQuantity: 480m),
-            CancellationToken.None);
-
-        var order = await db.ProductionOrders.AsNoTracking().SingleAsync();
-
-        order.RequestedQuantityKg.Should().Be(480m, "the Job Order quantity IS the actual basin weight");
-        order.RequestedQuantityMeter.Should().BeNull("KG and Meter never convert");
-        order.FormationBasinId.Should().Be(basin.Id);
-
-        var storedBasin = await db.FormationBasins.AsNoTracking().SingleAsync();
-        storedBasin.ActualQuantity.Should().Be(480m);
-        storedBasin.PlannedQuantity.Should().Be(500m);
-    }
-
-    [Fact]
-    public async Task ConvertingABasin_WithoutTheActualWeight_IsRefused()
-    {
-        var (request, group) = OneBasinGroup(500m);
-        var basin = group.Basins.Single();
-        using var db = await SeedAsync(request);
-
-        var act = () => Handler(db).Handle(
-            new ConvertFormationRequestToJobOrderCommand(
-                request.Id, DateTime.UtcNow, JobOrderType.ClosedLine, BasinId: basin.Id),
-            CancellationToken.None);
-
-        await act.Should().ThrowAsync<DomainException>()
-            .WithMessage("*ACTUAL weighed weight*");
-
-        (await db.ProductionOrders.CountAsync()).Should().Be(0);
-    }
-
-    [Fact]
-    public async Task TheActualWeightFlowsIntoTheProductionBaseline()
-    {
-        var (request, group) = OneBasinGroup(500m);
-        var basin = group.Basins.Single();
-        using var db = await SeedAsync(request);
-
-        await Handler(db).Handle(
-            new ConvertFormationRequestToJobOrderCommand(
-                request.Id, DateTime.UtcNow, JobOrderType.ClosedLine,
-                BasinId: basin.Id, ActualBasinQuantity: 480m),
-            CancellationToken.None);
-
-        // The first stage's baseline is the order's actual weight, so waste is
-        // measured from the weighed figure rather than the planned one.
-        var stage = await db.ProductionOrderStageExecutions.AsNoTracking().SingleAsync();
-        stage.BaselineKg.Should().Be(480m);
-    }
-
-    [Fact]
-    public async Task ABasinIsConvertedOnce_SoTheSameQuantityIsNeverPlannedTwice()
-    {
-        var (request, group) = OneBasinGroup(500m);
-        var basin = group.Basins.Single();
-        using var db = await SeedAsync(request);
-
-        await Handler(db).Handle(
-            new ConvertFormationRequestToJobOrderCommand(
-                request.Id, DateTime.UtcNow, JobOrderType.ClosedLine,
-                BasinId: basin.Id, ActualBasinQuantity: 480m),
-            CancellationToken.None);
-
-        var act = () => Handler(db).Handle(
-            new ConvertFormationRequestToJobOrderCommand(
-                request.Id, DateTime.UtcNow, JobOrderType.ClosedLine,
-                BasinId: basin.Id, ActualBasinQuantity: 480m),
-            CancellationToken.None);
-
-        await act.Should().ThrowAsync<DomainException>();
-        (await db.ProductionOrders.CountAsync()).Should().Be(1);
-    }
-
-    [Fact]
-    public async Task ConvertingAGroupWithoutBasins_StillUsesThePlannedQuantity()
-    {
-        var request = NewRequest();
-        var group = request.AddGroup("Cell A", 700m, UnitOfMeasure.KG, 2, null, null, "tester");
-        request.UpdateHeader(DateTime.UtcNow, request.RawMessageId, null, 700m, "tester");
-        request.Submit("tester");
-        request.Approve("tester");
-        using var db = await SeedAsync(request);
-
-        await Handler(db).Handle(
-            new ConvertFormationRequestToJobOrderCommand(
-                request.Id, DateTime.UtcNow, JobOrderType.ClosedLine, GroupId: group.Id),
-            CancellationToken.None);
-
-        var order = await db.ProductionOrders.AsNoTracking().SingleAsync();
-        order.RequestedQuantityKg.Should().Be(700m, "a group with no basins has only its planned figure");
-        order.FormationBasinId.Should().BeNull();
-    }
-
-    [Fact]
-    public void NoKgToMeterConversion_AcrossABasinAndItsJobOrder()
+    public void NoKgToMeterConversion_AcrossABasin()
     {
         var request = NewRequest();
         var group = request.AddGroup("Cell A", 2500m, UnitOfMeasure.Meter, 1, null, null, "tester");

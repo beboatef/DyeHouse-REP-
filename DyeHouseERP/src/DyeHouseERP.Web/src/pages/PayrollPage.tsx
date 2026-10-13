@@ -31,9 +31,12 @@ const tabs: { key: TabKey; labelKey: string }[] = [
 
 const runTone: Record<PayrollRunStatus, "gray" | "blue" | "green" | "red"> = {
   Draft: "gray",
+  Calculated: "blue",
+  UnderReview: "blue",
   Approved: "blue",
   Posted: "green",
-  Cancelled: "red"
+  Cancelled: "red",
+  Reversed: "red"
 };
 
 const statusTone: Record<EmployeeStatus, "green" | "yellow" | "red"> = {
@@ -457,6 +460,30 @@ function RunsTab() {
     onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
+  const calculateMutation = useMutation({
+    mutationFn: (id: string) => PayrollApi.calculateRun(id),
+    onSuccess: invalidate,
+    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: (id: string) => PayrollApi.submitRun(id),
+    onSuccess: invalidate,
+    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const returnMutation = useMutation({
+    mutationFn: (vars: { id: string; notes: string }) => PayrollApi.returnRun(vars.id, vars.notes || undefined),
+    onSuccess: invalidate,
+    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const reverseMutation = useMutation({
+    mutationFn: (vars: { id: string; reason: string }) => PayrollApi.reverseRun(vars.id, vars.reason),
+    onSuccess: invalidate,
+    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
   const approveMutation = useMutation({
     mutationFn: (id: string) => PayrollApi.approveRun(id),
     onSuccess: invalidate,
@@ -580,13 +607,41 @@ function RunsTab() {
                     </Button>
                   </>
                 )}
-                {r.status === "Draft" && (
+                {(r.status === "Draft" || r.status === "Calculated") && (
+                  <Button variant="secondary" onClick={() => calculateMutation.mutate(r.id)}>{t("pay.calculateRun")}</Button>
+                )}
+                {r.status === "Calculated" && (
+                  <Button variant="secondary" onClick={() => submitMutation.mutate(r.id)}>{t("pay.submitRun")}</Button>
+                )}
+                {(r.status === "Draft" || r.status === "Calculated" || r.status === "UnderReview") && (
                   <Button variant="secondary" onClick={() => approveMutation.mutate(r.id)}>{t("pay.approve")}</Button>
+                )}
+                {r.status === "UnderReview" && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      const notes = window.prompt(t("pay.returnNotes"));
+                      returnMutation.mutate({ id: r.id, notes: notes ?? "" });
+                    }}
+                  >
+                    {t("pay.returnRun")}
+                  </Button>
                 )}
                 {r.status === "Approved" && (
                   <Button variant="secondary" onClick={() => postMutation.mutate(r.id)}>{t("pay.post")}</Button>
                 )}
-                {r.status !== "Cancelled" && r.status !== "Posted" && (
+                {r.status === "Posted" && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      const reason = window.prompt(t("pay.reverseReason"));
+                      if (reason) reverseMutation.mutate({ id: r.id, reason });
+                    }}
+                  >
+                    {t("pay.reverseRun")}
+                  </Button>
+                )}
+                {r.status !== "Cancelled" && r.status !== "Posted" && r.status !== "Reversed" && (
                   <Button
                     variant="ghost"
                     onClick={() => {
@@ -652,7 +707,7 @@ function RunsTab() {
                                 {t("export.payslip")}
                               </button>
                             )}
-                            {r.status === "Draft" && !editing && (
+                            {(r.status === "Draft" || r.status === "Calculated") && !editing && (
                               <>
                                 <button
                                   className="btn-link"

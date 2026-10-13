@@ -105,6 +105,9 @@ public class GetRawMessagesQueryHandler : IRequestHandler<GetRawMessagesQuery, L
             InspectionStatus = m.InspectionStatus,
             Status = m.Status,
             HasRejections = m.HasRejections,
+            CancellationReason = m.CancellationReason,
+            CancelledBy = m.CancelledBy,
+            CancelledAtUtc = m.CancelledAtUtc,
             Lines = m.Lines
                 .Where(l => !request.ItemId.HasValue || l.ItemId == request.ItemId)
                 .Select(l =>

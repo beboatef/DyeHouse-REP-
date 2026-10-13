@@ -45,6 +45,7 @@ public class GetInvoicesQueryHandler : IRequestHandler<GetInvoicesQuery, List<In
         {
             Id = invoice.Id, InvoiceNumber = invoice.InvoiceNumber, InvoiceDate = invoice.InvoiceDate,
             CustomerId = invoice.CustomerId, CustomerCode = customer?.Code ?? "", CustomerName = customer?.Name ?? "",
+            DeliveryId = invoice.DeliveryId,
             Status = invoice.Status, Discount = invoice.Discount, Tax = invoice.Tax,
             SubTotal = subTotal, Total = subTotal - invoice.Discount + invoice.Tax, Notes = invoice.Notes,
             Lines = lines.Select(l => new InvoiceLineDto

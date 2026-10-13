@@ -86,6 +86,22 @@ public class RawMessagesController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Cancel a raw receipt that was entered in error - wrong customer, wrong item or wrong
+    /// warehouse (spec sections 10-11 + 49). A posted stock document is never edited or deleted:
+    /// the receipt and its original ledger rows are preserved and the stock it brought in is
+    /// reversed with an equal-and-opposite OUT row, recorded with the reason and the user.
+    /// Refused while any Job Order holds the receipt or its balance is no longer intact.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReceiptCancel)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelRawMessageRequest request)
+    {
+        await _mediator.Send(new CancelRawMessageCommand(id, request.Reason));
+        return NoContent();
+    }
+
     /// <summary>Printable raw receipt/message PDF (spec section 39) - the central traceability document for this batch of customer-owned fabric.</summary>
     [HttpGet("{id:guid}/pdf")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
@@ -114,3 +130,9 @@ public record RecordInspectionRequest(
     Domain.Enums.InspectionStatus Result,
     string? Notes,
     List<DyeHouseERP.Application.RawReceipts.DTOs.RawMessageLineRejectionInput>? Rejections = null);
+
+/// <summary>
+/// A cancellation always carries a reason: it is stored on the receipt and written to the
+/// audit trail, so a corrected mistake is explainable later.
+/// </summary>
+public record CancelRawMessageRequest(string Reason);

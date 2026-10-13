@@ -35,7 +35,6 @@ public class StageExecutionDto
     public string? Notes { get; set; }
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
-    public bool RequiresApproval { get; set; }
     public bool AllowSkip { get; set; }
 }
 
@@ -52,6 +51,7 @@ public class ProductionOrderDto
     public string? Color { get; set; }
     public decimal? RequestedQuantityKg { get; set; }
     public decimal? RequestedQuantityMeter { get; set; }
+    public string? RawOrigin { get; set; }
     public string? CustomerReference { get; set; }
     public string? Notes { get; set; }
     public ProductionPriority Priority { get; set; }
@@ -79,15 +79,6 @@ public class ProductionOrderDto
     public decimal? ExpectedOutputMeter { get; set; }
     public Guid? ReprocessingOfProductionOrderId { get; set; }
 
-    /// <summary>Set when this Job Order fulfils an approved Formation Request (spec section 31).</summary>
-    public Guid? FormationRequestId { get; set; }
-    public string? FormationRequestNumber { get; set; }
-    public Guid? FormationGroupId { get; set; }
-    public int? FormationGroupNumber { get; set; }
-
-    /// <summary>The formation basin this order fulfils, when it was converted from one (spec sections 10-11).</summary>
-    public Guid? FormationBasinId { get; set; }
-    public int? FormationBasinNumber { get; set; }
     public List<RawAllocationDto> RawAllocations { get; set; } = new();
     public List<StageExecutionDto> StageExecutions { get; set; } = new();
 }

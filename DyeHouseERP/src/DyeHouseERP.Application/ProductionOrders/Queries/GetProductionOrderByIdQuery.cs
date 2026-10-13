@@ -49,29 +49,6 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             .Where(m => messageIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, cancellationToken);
 
-        // Formation Request link (spec section 31) - shown on the Job Order so the chain
-        // Customer -> Message -> Formation Request -> Job Order stays navigable.
-        string? formationRequestNumber = null;
-        int? formationGroupNumber = null;
-        int? formationBasinNumber = null;
-        if (order.FormationRequestId.HasValue)
-        {
-            var formationRequest = await db.FormationRequests.AsNoTracking()
-                .Include(r => r.Groups).ThenInclude(g => g.Basins)
-                .FirstOrDefaultAsync(r => r.Id == order.FormationRequestId.Value, cancellationToken);
-
-            formationRequestNumber = formationRequest?.RequestNumber;
-            if (order.FormationGroupId.HasValue && formationRequest is not null)
-            {
-                var group = formationRequest.Groups.FirstOrDefault(g => g.Id == order.FormationGroupId.Value);
-                formationGroupNumber = group?.GroupNumber;
-
-                if (order.FormationBasinId.HasValue)
-                    formationBasinNumber = group?.Basins
-                        .FirstOrDefault(b => b.Id == order.FormationBasinId.Value)?.BasinNumber;
-            }
-        }
-
         return new ProductionOrderDto
         {
             Id = order.Id,
@@ -85,6 +62,7 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             Color = order.Color,
             RequestedQuantityKg = order.RequestedQuantityKg,
             RequestedQuantityMeter = order.RequestedQuantityMeter,
+            RawOrigin = order.RawOrigin,
             CustomerReference = order.CustomerReference,
             Notes = order.Notes,
             Priority = order.Priority,
@@ -92,12 +70,6 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             OrderDate = order.OrderDate,
             Status = order.Status,
             ReprocessingOfProductionOrderId = order.ReprocessingOfProductionOrderId,
-            FormationRequestId = order.FormationRequestId,
-            FormationRequestNumber = formationRequestNumber,
-            FormationGroupId = order.FormationGroupId,
-            FormationGroupNumber = formationGroupNumber,
-            FormationBasinId = order.FormationBasinId,
-            FormationBasinNumber = formationBasinNumber,
             RawAllocations = allocations.Select(a => new RawAllocationDto
             {
                 Id = a.Id,
@@ -133,7 +105,6 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
                     Notes = s.Notes,
                     StartedAtUtc = s.StartedAtUtc,
                     CompletedAtUtc = s.CompletedAtUtc,
-                    RequiresApproval = def?.RequiresApproval ?? false,
                     AllowSkip = def?.AllowSkip ?? false
                 };
             }).ToList()

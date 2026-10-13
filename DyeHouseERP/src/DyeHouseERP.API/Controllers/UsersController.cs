@@ -9,10 +9,19 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
-/// <summary>User/login management - restricted to the "admin" role only.</summary>
+/// <summary>
+/// User/login management. Access is decided by the GRANULAR permissions on each action
+/// (users.manage for the account itself, roles.manage for changing a user's permissions) -
+/// an administrator simply holds those rights like any other user, and a non-admin user the
+/// administrator grants them to can use them. Authentication is always required.
+///
+/// The last-admin and self-lockout safeguards (UpdateUserCommand - an admin cannot change
+/// their own permission set; DeactivateUserCommand - the last active admin cannot be
+/// deactivated) remain enforced server-side in the command handlers, not by this attribute.
+/// </summary>
 [ApiController]
 [Route("api/users")]
-[Authorize(Roles = "admin")]
+[Authorize]
 public class UsersController : ControllerBase
 {
     private readonly ISender _mediator;

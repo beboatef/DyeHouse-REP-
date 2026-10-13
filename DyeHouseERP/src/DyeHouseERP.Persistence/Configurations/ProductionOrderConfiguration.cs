@@ -48,12 +48,6 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
         builder.HasIndex(o => o.Status);
         builder.HasIndex(o => o.JobOrderType);
         builder.HasIndex(o => o.ReprocessingOfProductionOrderId);
-        builder.HasIndex(o => o.FormationRequestId);
-        builder.HasIndex(o => o.FormationGroupId);
-
-        // A basin is planned on at most one Job Order (spec sections 10-11) - this index is what the
-        // "already converted" check and the traceability chain read.
-        builder.HasIndex(o => o.FormationBasinId);
 
         builder.Metadata.FindNavigation(nameof(ProductionOrder.StageExecutions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
@@ -83,7 +77,6 @@ public class ProductionOrderStageExecutionConfiguration : IEntityTypeConfigurati
         builder.Property(s => s.Operator).HasMaxLength(100);
         builder.Property(s => s.DrawingNumber).HasMaxLength(100);
         builder.Property(s => s.Notes).HasMaxLength(2000);
-        builder.Property(s => s.ApprovedBy).HasMaxLength(100);
 
         foreach (var qty in new[]
         {

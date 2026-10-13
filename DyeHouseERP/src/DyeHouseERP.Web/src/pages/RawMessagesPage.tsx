@@ -47,6 +47,13 @@ export default function RawMessagesPage() {
   const [rejections, setRejections] = useState<Record<string, RejectionDraft>>({});
   const [inspectionError, setInspectionError] = useState<string | null>(null);
 
+  // Correcting a receipt entered in error (wrong customer, item or warehouse) is a
+  // cancellation with a mandatory reason - never an edit and never a delete. The
+  // receipt must still be untouched; the backend refuses otherwise and says why.
+  const [cancelFor, setCancelFor] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
   const { data: customers } = useQuery({ queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true }) });
   const { data: items } = useQuery({ queryKey: ["items", "active"], queryFn: () => ItemsApi.list({ activeOnly: true }) });
   const { data: warehouses } = useQuery({ queryKey: ["warehouses", "raw"], queryFn: () => WarehousesApi.list({ kind: "RawMaterial" }) });
@@ -78,6 +85,27 @@ export default function RawMessagesPage() {
     },
     onError: (err: any) => setInspectionError(err?.response?.data?.title ?? t("common.error"))
   });
+
+  const cancelMutation = useMutation({
+    mutationFn: (input: { id: string; reason: string }) => RawMessagesApi.cancel(input.id, input.reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      setCancelFor(null);
+      setCancelReason("");
+      setCancelError(null);
+    },
+    onError: (err: any) => setCancelError(err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const openCancel = (message: RawMessage) => {
+    if (cancelFor === message.id) {
+      setCancelFor(null);
+      return;
+    }
+    setCancelFor(message.id);
+    setCancelReason("");
+    setCancelError(null);
+  };
 
   const openInspection = (message: RawMessage) => {
     if (inspectionFor === message.id) {
@@ -265,12 +293,19 @@ export default function RawMessagesPage() {
                 </Link>
                 <Button variant="ghost" onClick={RawMessagesExports.documentPdf(m.id)}>{t("raw.downloadPdf")}</Button>
                 <Badge tone={inspectionTone[m.inspectionStatus]}>{t(inspectionKey[m.inspectionStatus], m.inspectionStatus)}</Badge>
-                <Button variant="secondary" onClick={() => inspectionMutation.mutate({ id: m.id, result: "Accepted" })}>
-                  {t("raw.inspection.accept")}
-                </Button>
-                <Button variant="secondary" onClick={() => openInspection(m)}>
-                  {t("raw.inspection.partial")}
-                </Button>
+                {m.status === "Cancelled" ? (
+                  <Badge tone="red">{t("raw.statusCancelled")}</Badge>
+                ) : (
+                  <>
+                    <Button variant="secondary" onClick={() => inspectionMutation.mutate({ id: m.id, result: "Accepted" })}>
+                      {t("raw.inspection.accept")}
+                    </Button>
+                    <Button variant="secondary" onClick={() => openInspection(m)}>
+                      {t("raw.inspection.partial")}
+                    </Button>
+                    <Button variant="ghost" onClick={() => openCancel(m)}>{t("raw.cancel")}</Button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -317,6 +352,47 @@ export default function RawMessagesPage() {
                 ))}
               </tbody>
             </table>
+
+            {m.status === "Cancelled" && m.cancellationReason && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50/50 px-4 py-3 text-sm text-red-900">
+                <div className="font-semibold">{t("raw.cancel.title")}</div>
+                <div className="ltr-nums text-xs text-red-800">
+                  {m.cancelledBy} · {m.cancelledAtUtc ? new Date(m.cancelledAtUtc).toLocaleString("en-GB") : ""}
+                </div>
+                <div className="mt-1" dir="auto">{m.cancellationReason}</div>
+              </div>
+            )}
+
+            {cancelFor === m.id && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                  <span className="text-sm font-semibold text-red-900">{t("raw.cancel.title")}</span>
+                  <span className="text-xs text-red-800">{t("raw.cancel.hint")}</span>
+                </div>
+
+                <div className="mt-3">
+                  <label className="field-label">{t("raw.cancel.reason")}</label>
+                  <Input
+                    value={cancelReason}
+                    maxLength={1000}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder={t("raw.cancel.reason")}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 mt-3">
+                  <Button
+                    variant="danger"
+                    disabled={!cancelReason.trim() || cancelMutation.isPending}
+                    onClick={() => cancelMutation.mutate({ id: m.id, reason: cancelReason.trim() })}
+                  >
+                    {cancelMutation.isPending ? t("common.saving") : t("raw.cancel.submit")}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setCancelFor(null)}>{t("common.cancel")}</Button>
+                  {cancelError && <span className="form-error">{cancelError}</span>}
+                </div>
+              </div>
+            )}
 
             {inspectionFor === m.id && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">

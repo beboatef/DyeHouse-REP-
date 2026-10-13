@@ -62,6 +62,65 @@ public class Invoice : AuditableEntity
         return line;
     }
 
+    // ---------------------------------------------------------------- draft editing
+    // A Draft invoice has posted nothing yet (no customer-ledger row, no delivery link) - it is
+    // ordinary working data, so its header and its lines are freely editable behind a configurable
+    // permission. The moment it is Issued it is financially real, and it becomes read-only here:
+    // further changes go through the cancellation/reversal workflow instead. The totals were always
+    // derived (SubTotal => sum of line values, Total => SubTotal - Discount + Tax), so editing a line
+    // or the header keeps them consistent with no recalculation step to forget.
+
+    /// <summary>Edits the header fields of a Draft invoice. Refused once the invoice has been issued or cancelled.</summary>
+    public void UpdateHeader(DateTime invoiceDate, Guid? deliveryId, decimal discount, decimal tax,
+        string? notes, string modifiedBy)
+    {
+        EnsureDraft();
+        if (discount < 0) throw new DomainException("Invoice discount cannot be negative.");
+        if (tax < 0) throw new DomainException("Invoice tax cannot be negative.");
+
+        InvoiceDate = invoiceDate;
+        DeliveryId = deliveryId;
+        Discount = discount;
+        Tax = tax;
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Edits one line of a Draft invoice in place, keeping its Id so any reference to it stays valid.</summary>
+    public InvoiceLine UpdateLine(Guid lineId, decimal quantity, decimal processingPrice, string? color, string? notes,
+        string modifiedBy)
+    {
+        EnsureDraft();
+        if (quantity <= 0) throw new DomainException("Invoice line quantity must be greater than zero.");
+        if (processingPrice < 0) throw new DomainException("Processing price cannot be negative.");
+
+        var line = FindLine(lineId);
+        line.Update(quantity, processingPrice, color, notes);
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+        return line;
+    }
+
+    /// <summary>Removes a line from a Draft invoice. Refused once the invoice has been issued or cancelled.</summary>
+    public void RemoveLine(Guid lineId, string modifiedBy)
+    {
+        EnsureDraft();
+        _lines.Remove(FindLine(lineId));
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    private InvoiceLine FindLine(Guid lineId) =>
+        _lines.FirstOrDefault(l => l.Id == lineId)
+        ?? throw new DomainException($"Invoice line ({lineId}) does not belong to invoice {InvoiceNumber}.");
+
+    private void EnsureDraft()
+    {
+        if (Status != InvoiceStatus.Draft)
+            throw new DocumentLockedException("Invoice", InvoiceNumber);
+    }
+
     public void Issue()
     {
         if (Status != InvoiceStatus.Draft) throw new DomainException($"Invoice is {Status}, expected Draft.");
@@ -110,6 +169,14 @@ public class InvoiceLine : BaseEntity
         Color = color;
         Quantity = quantity;
         ProcessingPrice = processingPrice;
+        Notes = notes;
+    }
+
+    internal void Update(decimal quantity, decimal processingPrice, string? color, string? notes)
+    {
+        Quantity = quantity;
+        ProcessingPrice = processingPrice;
+        Color = color;
         Notes = notes;
     }
 }

@@ -229,6 +229,14 @@ function MaterialIssuesTab() {
     onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ")
   });
 
+  // Reversal, not a delete: the API keeps the original OUT ledger row and posts a compensating IN row.
+  // A reason is mandatory (the backend validator refuses an empty one), and a second cancellation is refused.
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => MaterialIssuesApi.cancel(id, window.prompt("سبب إلغاء صرف المواد") || ""),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["material-issues"] }); setError(null); },
+    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "حدث خطأ")
+  });
+
   return (
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ صرف جديد"}</Button></div>
@@ -251,18 +259,32 @@ function MaterialIssuesTab() {
           {error && <p className="form-error mt-2">{error}</p>}
         </Card>
       )}
+      {error && !showForm && <p className="form-error mb-2">{error}</p>}
       <Card>
         <table className="table">
           <thead><tr>
             <th>الرقم</th><th>المادة</th>
-            <th>أمر التشغيل</th><th>الكمية</th><th>التكلفة الإجمالية</th>
+            <th>أمر التشغيل</th><th>الكمية</th><th>التكلفة الإجمالية</th><th>الحالة</th><th>إجراءات</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
             {issues?.map((i) => (
               <tr key={i.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                 <td className="font-medium ltr-nums">{i.issueNumber}</td><td>{i.materialCode}</td>
                 <td className="ltr-nums">{i.productionOrderNumber}</td><td className="ltr-nums">{i.quantity}</td><td className="ltr-nums">{i.totalCost}</td>
+                <td>
+                  <Badge tone={i.isCancelled ? "red" : "green"}>{i.isCancelled ? "ملغي" : "مُرحَّل"}</Badge>
+                  {i.isCancelled && i.cancellationReason && (
+                    <div className="text-xs text-gray-400">{i.cancellationReason}</div>
+                  )}
+                </td>
+                <td>
+                  {!i.isCancelled && (
+                    <Button variant="ghost" onClick={() => cancelMutation.mutate(i.id)} disabled={cancelMutation.isPending}>
+                      إلغاء
+                    </Button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

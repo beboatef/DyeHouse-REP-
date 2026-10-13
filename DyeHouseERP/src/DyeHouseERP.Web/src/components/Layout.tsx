@@ -109,7 +109,6 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "nav.group.other",
     items: [
-      { to: "/customer-portal", labelKey: "nav.customerPortal", icon: <Users size={18} /> },
       { to: "/users", labelKey: "nav.users", icon: <UserCog size={18} /> },
       { to: "/settings", labelKey: "nav.settings", icon: <Settings size={18} /> }
     ]

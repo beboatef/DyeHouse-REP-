@@ -10,11 +10,7 @@ public class ProductionStageDefinitionDto
     public bool RequiresDrawingNumber { get; set; }
     public bool RequiresInputQuantity { get; set; }
     public bool RequiresOutputQuantity { get; set; }
-    public bool RequiresApproval { get; set; }
     public bool AllowSkip { get; set; }
-    public bool AllowRepeat { get; set; }
-    public bool AllowRework { get; set; }
-    public bool AllowReturn { get; set; }
 
     /// <summary>The stage every new Job Order starts at - التشكيل. At most one stage has this set.</summary>
     public bool IsFormationStage { get; set; }

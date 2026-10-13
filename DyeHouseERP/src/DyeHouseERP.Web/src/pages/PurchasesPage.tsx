@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -131,6 +131,14 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
   const [editLines, setEditLines] = useState<Record<string, { quantity: string; unitPrice: string }>>({});
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Ordered-quantity correction after a partial receipt (spec section 35). A line that has already
+  // received stock is no longer freely editable; the outstanding balance is corrected here instead,
+  // with a mandatory reason, and the received quantity is never touched.
+  const [correctingLine, setCorrectingLine] = useState<string | null>(null);
+  const [correctQty, setCorrectQty] = useState("");
+  const [correctReason, setCorrectReason] = useState("");
+  const [correctError, setCorrectError] = useState<string | null>(null);
+
   const { data: suppliers } = useQuery({ queryKey: ["suppliers", "active"], queryFn: () => SuppliersApi.list({ activeOnly: true }) });
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => WarehousesApi.list() });
   const { data: materials } = useQuery({ queryKey: ["materials", "active"], queryFn: () => MaterialsApi.list({ activeOnly: true }) });
@@ -190,6 +198,13 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
     onSuccess: invalidate
   });
 
+  const correctLineQuantity = useMutation({
+    mutationFn: (vars: { orderId: string; lineId: string; newQuantity: number; reason: string }) =>
+      PurchasesApi.correctOrderLineQuantity(vars.orderId, vars.lineId, { newQuantity: vars.newQuantity, reason: vars.reason }),
+    onSuccess: () => { invalidate(); setCorrectingLine(null); setCorrectQty(""); setCorrectReason(""); setCorrectError(null); },
+    onError: (err: any) => setCorrectError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
   const saveHeader = useMutation({
     mutationFn: (order: PurchaseOrder) => PurchaseDocumentsApi.updateOrder(order.id, {
       orderDate: new Date(order.orderDate).toISOString(),
@@ -221,6 +236,11 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
   };
 
   const canEditLine = (orderStatus: PurchaseOrderStatus) => orderStatus === "Draft" || orderStatus === "Submitted";
+
+  // A line whose ordered quantity has already attracted receipts is corrected through the
+  // dedicated after-receipt path, never through the ordinary line edit (which the domain refuses).
+  const canCorrectLine = (orderStatus: PurchaseOrderStatus) =>
+    orderStatus === "Approved" || orderStatus === "PartiallyReceived" || orderStatus === "Received";
 
   const cancelOrder = (order: PurchaseOrder) => {
     const reason = window.prompt(t("pur.cancelReason"));
@@ -449,7 +469,8 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                   </thead>
                   <tbody>
                     {o.lines.map((l) => (
-                      <tr key={l.id} className="border-b border-gray-50 last:border-0">
+                      <Fragment key={l.id}>
+                      <tr className="border-b border-gray-50 last:border-0">
                         <td>{l.materialCode} - {l.materialName}</td>
                         <td className="ltr-nums">
                           {editing === o.id && canEditLine(o.status) && l.receivedQuantity === 0 ? (
@@ -499,8 +520,46 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                               </button>
                             </div>
                           )}
+                          {canCorrectLine(o.status) && l.receivedQuantity > 0 && (
+                            <button
+                              className="btn-link"
+                              onClick={() => {
+                                setCorrectingLine(correctingLine === l.id ? null : l.id);
+                                setCorrectQty(String(l.quantity));
+                                setCorrectReason("");
+                                setCorrectError(null);
+                              }}
+                            >
+                              {correctingLine === l.id ? t("common.cancel") : t("pur.correctQty")}
+                            </button>
+                          )}
                         </td>
                       </tr>
+                      {correctingLine === l.id && (
+                        <tr className="bg-amber-50 border-b border-amber-100">
+                          <td colSpan={7} className="p-3">
+                            <div className="flex flex-wrap items-end gap-3">
+                              <div className="text-xs text-gray-600 max-w-md">
+                                {t("pur.correctQtyHint", "تصحيح الكمية المطلوبة لا يغيّر الكمية المستلمة أو حركات المخزون، ولا يمكن أن تقل عن الكمية المستلمة.")}
+                              </div>
+                              <div><label className="field-label">{t("pur.newQuantity")}</label>
+                                <Input className="w-28" type="number" step="0.001" min={l.receivedQuantity} value={correctQty} onChange={(e) => setCorrectQty(e.target.value)} /></div>
+                              <div className="flex-1 min-w-[12rem]"><label className="field-label">{t("pur.correctReason")}</label>
+                                <Input value={correctReason} onChange={(e) => setCorrectReason(e.target.value)} /></div>
+                              <Button
+                                disabled={!correctQty || !correctReason.trim() || correctLineQuantity.isPending}
+                                onClick={() => correctLineQuantity.mutate({
+                                  orderId: o.id, lineId: l.id, newQuantity: Number(correctQty), reason: correctReason
+                                })}
+                              >
+                                {t("pur.confirmCorrection")}
+                              </Button>
+                            </div>
+                            {correctError && <p className="form-error mt-2">{correctError}</p>}
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

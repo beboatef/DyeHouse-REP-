@@ -32,9 +32,6 @@ public class FormationRequest : AuditableEntity
     public string? Notes { get; private set; }
     public FormationRequestStatus Status { get; private set; } = FormationRequestStatus.Draft;
 
-    /// <summary>Set when an approved request is converted into a Job Order (spec section 16/31).</summary>
-    public Guid? ProductionOrderId { get; private set; }
-
     public string? SubmittedBy { get; private set; }
     public DateTime? SubmittedAtUtc { get; private set; }
     public string? ApprovedBy { get; private set; }
@@ -45,6 +42,13 @@ public class FormationRequest : AuditableEntity
     public string? CancelledBy { get; private set; }
     public DateTime? CancelledAtUtc { get; private set; }
     public string? CancellationReason { get; private set; }
+
+    /// <summary>
+    /// Set when this request is a REVISION of an earlier, already approved request (spec sections 29-33). The
+    /// original is never reopened or rewritten - a revision is a brand-new Draft that must be submitted and
+    /// approved on its own, so the approval history of both the original and the revision stays intact.
+    /// </summary>
+    public Guid? RevisionOfFormationRequestId { get; private set; }
 
     private readonly List<FormationGroup> _groups = new();
     public IReadOnlyCollection<FormationGroup> Groups => _groups.AsReadOnly();
@@ -304,9 +308,6 @@ public class FormationRequest : AuditableEntity
             throw new DomainException("A completed or already-cancelled formation request cannot be cancelled.");
         if (string.IsNullOrWhiteSpace(reason))
             throw new DomainException("A cancellation reason is required.");
-        if (Status == FormationRequestStatus.Approved && ProductionOrderId.HasValue)
-            throw new DomainException("An approved request that was already converted to a Job Order cannot be cancelled here - cancel the production order instead.");
-
         Status = FormationRequestStatus.Cancelled;
         CancelledBy = cancelledBy;
         CancelledAtUtc = DateTime.UtcNow;
@@ -320,33 +321,6 @@ public class FormationRequest : AuditableEntity
             throw new DomainException("Only an approved formation request can move into production.");
 
         Status = FormationRequestStatus.InProgress;
-        Touch(modifiedBy);
-    }
-
-    /// <summary>
-    /// Links a Job Order converted from this request (spec sections 16 and 31).
-    ///
-    /// The header keeps the FIRST Job Order it produced; the per-group and per-basin links live on the Job
-    /// Orders themselves (FormationRequestId / FormationGroupId / FormationBasinId). That is what allows one
-    /// request to fan out into several Job Orders - one per group or per basin - without the header having to
-    /// remember them all, and without any quantity being planned twice.
-    /// </summary>
-    public void LinkProductionOrder(Guid productionOrderId, string modifiedBy)
-    {
-        if (Status is not (FormationRequestStatus.Approved or FormationRequestStatus.InProgress))
-            throw new DomainException("A Job Order can only be created from an approved formation request.");
-        if (ProductionOrderId.HasValue && ProductionOrderId.Value != productionOrderId)
-        {
-            // The header keeps the FIRST Job Order this request produced. Additional per-group / per-basin
-            // Job Orders are linked on the orders themselves, so one request can fan out into several
-            // without the header losing track of where it started - and without any quantity being planned twice.
-            Touch(modifiedBy);
-            return;
-        }
-
-        ProductionOrderId = productionOrderId;
-        if (Status == FormationRequestStatus.Approved)
-            Status = FormationRequestStatus.InProgress;
         Touch(modifiedBy);
     }
 
@@ -385,6 +359,21 @@ public class FormationRequest : AuditableEntity
             (_, true) => FormationRequestStatus.Completed,
             _ => FormationRequestStatus.PartiallyCompleted
         };
+    }
+
+    /// <summary>
+    /// Marks this (new, Draft) request as a revision of an earlier one. Refused on anything that is not a
+    /// Draft and refused twice, so the link can never be re-pointed at a different original.
+    /// </summary>
+    public void MarkAsRevision(Guid originalFormationRequestId, string modifiedBy)
+    {
+        if (Status != FormationRequestStatus.Draft)
+            throw new DomainException("Only a draft formation request can be marked as a revision.");
+        if (RevisionOfFormationRequestId.HasValue)
+            throw new DomainException("This formation request is already a revision of another request.");
+
+        RevisionOfFormationRequestId = originalFormationRequestId;
+        Touch(modifiedBy);
     }
 
     private void EnsureEditable()

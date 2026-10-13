@@ -43,22 +43,6 @@ public class ProductionOrder : AuditableEntity
     [Timestamp]
     public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
-    /// <summary>
-    /// Set when this Job Order was created from an approved Formation Request
-    /// (spec section 31) - the chain Customer -&gt; Raw Material Message -&gt;
-    /// Formation Request -&gt; Job Order stays navigable in both directions.
-    /// </summary>
-    public Guid? FormationRequestId { get; private set; }
-    public Guid? FormationGroupId { get; private set; }
-
-    /// <summary>
-    /// Set when this Job Order fulfils ONE basin of a formation group (spec sections 10-11). Always null for
-    /// orders that are not derived from a formation request; always set together with FormationGroupId, so the
-    /// chain Request -&gt; Group -&gt; Basin -&gt; Job Order -&gt; Production -&gt; Ready Goods stays navigable and a
-    /// basin's quantity is never planned on more than one order.
-    /// </summary>
-    public Guid? FormationBasinId { get; private set; }
-
     // ---- Job Order costing (spec section 34) ----
     // Three figures, deliberately kept apart so nobody has to guess which one
     // they are looking at:
@@ -105,8 +89,7 @@ public class ProductionOrder : AuditableEntity
         string? color = null, decimal? requestedQuantityKg = null, decimal? requestedQuantityMeter = null,
         string? rawOrigin = null, string? customerReference = null, string? notes = null,
         ProductionPriority priority = ProductionPriority.Normal, Guid? reprocessingOfProductionOrderId = null,
-        JobOrderType jobOrderType = JobOrderType.ClosedLine,
-        Guid? formationRequestId = null, Guid? formationGroupId = null, Guid? formationBasinId = null)
+        JobOrderType jobOrderType = JobOrderType.ClosedLine)
     {
         if (string.IsNullOrWhiteSpace(orderNumber))
             throw new ArgumentException("Order number is required.", nameof(orderNumber));
@@ -123,9 +106,6 @@ public class ProductionOrder : AuditableEntity
         Notes = notes;
         Priority = priority;
         JobOrderType = jobOrderType;
-        FormationRequestId = formationRequestId;
-        FormationGroupId = formationGroupId;
-        FormationBasinId = formationBasinId;
         ReprocessingOfProductionOrderId = reprocessingOfProductionOrderId;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
@@ -285,24 +265,60 @@ public class ProductionOrder : AuditableEntity
         Status = ProductionOrderStatus.InProduction;
     }
 
-    /// <summary>Links this order back to the approved Formation Request/group it fulfils (spec section 31).</summary>
-    public void LinkFormationRequest(
-        Guid formationRequestId, Guid? formationGroupId, Guid? formationBasinId, string modifiedBy)
+    /// <summary>
+    /// Edits the order's descriptive and scheduling fields (spec sections 12 + 16). No blanket
+    /// immutability: an open order's colour, origin, customer reference, notes, priority and order
+    /// date are all ordinary planning data, and the automatic audit interceptor records the old and
+    /// new value of each one, with who and when.
+    ///
+    /// What is deliberately NOT editable here, and why:
+    ///   * CustomerId / ItemId - the order's IDENTITY. Every raw allocation, stage execution,
+    ///     ready-goods transfer, delivery and invoice already references this order, so changing who
+    ///     or what it is would silently re-point all of them at a different party or article.
+    ///   * RequestedQuantityKg / RequestedQuantityMeter - the formation stage's IMMUTABLE baseline
+    ///     (<see cref="BuildStageRoute"/> snapshots it as the first stage's starting weight) and the
+    ///     denominator of the 100%-raw-allocation rule (H1). Changing it here would desync the
+    ///     baseline the loss is measured against and silently change whether the order counts as
+    ///     fully allocated. A wrong quantity is corrected by cancelling the order (Cancel, which
+    ///     reverses the raw material it still holds) and creating a new one with the right figure.
+    ///
+    /// Neither exclusion rewrites anything historical: they simply are not editable fields. Every
+    /// edit made through this method leaves posted ledger rows, recorded stage output and approved
+    /// costs untouched.
+    /// </summary>
+    public void UpdateDetails(
+        string? color, string? rawOrigin, string? customerReference, string? notes,
+        ProductionPriority priority, DateTime orderDate, string modifiedBy)
     {
-        FormationRequestId = formationRequestId;
-        FormationGroupId = formationGroupId;
-        FormationBasinId = formationBasinId;
+        if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+
+        Color = string.IsNullOrWhiteSpace(color) ? null : color.Trim();
+        RawOrigin = string.IsNullOrWhiteSpace(rawOrigin) ? null : rawOrigin.Trim();
+        CustomerReference = string.IsNullOrWhiteSpace(customerReference) ? null : customerReference.Trim();
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        Priority = priority;
+        OrderDate = orderDate;
         ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }
 
-    /// <summary>Changes the line type while the order is still a draft (spec section 16) - never silently after production started.</summary>
+    /// <summary>
+    /// Changes the line type (closed line / open line) of an order that is not yet completed or
+    /// cancelled (spec section 16). The change is gated by the ordinary production.edit permission
+    /// and audited with its old and new value, the user and the time - like every other edit here.
+    ///
+    /// It used to be refused once production had started. That refusal was removed because it was a
+    /// hard-coded status restriction with no accounting or inventory reason behind it: the line type
+    /// is a CLASSIFICATION of the order (it is only read back for display and filtering - no posted
+    /// ledger row, stage output, allocation, delivery or cost is derived from it), so an order that
+    /// started as the wrong line type can be corrected without touching any history. Completed and
+    /// cancelled orders stay locked, like every other field on them.
+    /// </summary>
     public void SetJobOrderType(JobOrderType jobOrderType, string modifiedBy)
     {
         if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
             throw new DocumentLockedException("Production Order", OrderNumber);
-        if (Status == ProductionOrderStatus.InProduction)
-            throw new DomainException("The line type of an order already in production cannot be changed.");
 
         JobOrderType = jobOrderType;
         ModifiedBy = modifiedBy;

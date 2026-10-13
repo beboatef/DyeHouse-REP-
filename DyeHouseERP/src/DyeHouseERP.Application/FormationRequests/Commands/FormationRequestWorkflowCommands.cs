@@ -84,137 +84,40 @@ public class CancelFormationRequestCommandHandler : IRequestHandler<CancelFormat
             entity => entity.Cancel(_currentUser.UserName, request.Reason), cancellationToken);
 }
 
-/// <summary>
-/// Turns an approved request (one basin, one group/cell, or the whole request) into a Job Order
-/// (spec sections 16, 31 and 10-11).
-///
-/// The Job Order carries the request Id and, when a single group or basin is converted, its Id too - so the chain
-/// Customer -&gt; Message -&gt; Formation Request -&gt; Group -&gt; Basin -&gt; Job Order -&gt; Production -&gt; Ready Goods -&gt; Delivery
-/// is navigable in both directions. Groups and basins are converted one by one, which is how a mixed request
-/// (different colours / specifications per basin) is actually processed.
-///
-/// A group that carries basins is never converted as one lump: its basins are already separate plans, so
-/// converting the group as well would plan the same physical quantity twice.
-/// </summary>
-public record ConvertFormationRequestToJobOrderCommand(
-    Guid Id, DateTime OrderDate, JobOrderType JobOrderType, ProductionPriority Priority = ProductionPriority.Normal,
-    Guid? GroupId = null, Guid? BasinId = null, string? Color = null, string? Notes = null, string? CustomerReference = null,
-    // Spec sections 8 and 10: converting ONE basin requires its ACTUAL weighed weight.
-    decimal? ActualBasinQuantity = null)
-    : IRequest<FormationRequestDto>;
+public record DeleteFormationRequestCommand(Guid Id) : IRequest<Unit>;
 
-public class ConvertFormationRequestToJobOrderCommandValidator : AbstractValidator<ConvertFormationRequestToJobOrderCommand>
+public class DeleteFormationRequestCommandValidator : AbstractValidator<DeleteFormationRequestCommand>
 {
-    public ConvertFormationRequestToJobOrderCommandValidator()
-    {
-        RuleFor(x => x.Id).NotEmpty();
-        RuleFor(x => x.JobOrderType).IsInEnum();
-        RuleFor(x => x.Priority).IsInEnum();
-    }
+    public DeleteFormationRequestCommandValidator() => RuleFor(x => x.Id).NotEmpty();
 }
 
-public class ConvertFormationRequestToJobOrderCommandHandler
-    : IRequestHandler<ConvertFormationRequestToJobOrderCommand, FormationRequestDto>
+/// <summary>
+/// Deletes a planning-only Formation Request (spec sections 6 and 7). Allowed only while the request is still a
+/// draft or was rejected, and only when no Job Order was ever created from it - an approved, in-progress or
+/// completed request is history and must be CANCELLED instead, never deleted. The request's groups and basins are
+/// removed with it (the aggregate is configured cascade-delete). Nothing outside the request is touched, because a
+/// Formation Request never moved stock or created a production movement.
+/// </summary>
+public class DeleteFormationRequestCommandHandler : IRequestHandler<DeleteFormationRequestCommand, Unit>
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IDocumentNumberGenerator _numberGenerator;
+    public DeleteFormationRequestCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
+    { _db = db; _currentUser = currentUser; }
 
-    public ConvertFormationRequestToJobOrderCommandHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator)
-    { _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; }
-
-    public async Task<FormationRequestDto> Handle(ConvertFormationRequestToJobOrderCommand request, CancellationToken cancellationToken)
+    public async Task<Unit> Handle(DeleteFormationRequestCommand request, CancellationToken cancellationToken)
     {
         var entity = await _db.FormationRequests.Include(r => r.Groups).ThenInclude(g => g.Basins)
             .FirstOrDefaultAsync(r => r.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Formation Request", request.Id);
 
-        if (entity.Status is FormationRequestStatus.Draft or FormationRequestStatus.Submitted or FormationRequestStatus.Rejected)
-            throw new DomainException("Only an approved formation request can be converted into a Job Order.");
-        if (entity.Status == FormationRequestStatus.Cancelled)
-            throw new DomainException("A cancelled formation request cannot be converted into a Job Order.");
-
-        FormationGroup? group = null;
-        FormationBasin? basin = null;
-
-        if (request.BasinId.HasValue)
-        {
-            basin = entity.Groups.SelectMany(g => g.Basins).FirstOrDefault(b => b.Id == request.BasinId.Value)
-                ?? throw new DomainException(
-                    $"Formation basin ({request.BasinId}) does not belong to request {entity.RequestNumber}.");
-
-            group = entity.Groups.First(g => g.Id == basin.FormationGroupId);
-
-            var basinAlreadyLinked = await _db.ProductionOrders.AsNoTracking()
-                .AnyAsync(o => o.FormationBasinId == basin.Id && o.Status != ProductionOrderStatus.Cancelled, cancellationToken);
-            if (basinAlreadyLinked)
-                throw new DomainException(
-                    $"Basin {group.GroupNumber}/{basin.BasinNumber} already has a Job Order. Each basin is converted once - the same physical quantity must never be planned twice.");
-        }
-        else if (request.GroupId.HasValue)
-        {
-            group = entity.Groups.FirstOrDefault(g => g.Id == request.GroupId.Value)
-                ?? throw new DomainException($"Formation group ({request.GroupId}) does not belong to request {entity.RequestNumber}.");
-
-            if (group.HasBasins)
-                throw new DomainException(
-                    $"Group {group.GroupNumber} is split into {group.Basins.Count} basins. Convert the basins individually - converting the group as well would plan the same quantity twice.");
-
-            var alreadyLinked = await _db.ProductionOrders.AsNoTracking()
-                .AnyAsync(o => o.FormationGroupId == group.Id && o.Status != ProductionOrderStatus.Cancelled, cancellationToken);
-            if (alreadyLinked)
-                throw new DomainException(
-                    $"Group {group.GroupNumber} already has a Job Order. Each group is converted once - the same physical quantity must never be planned twice.");
-        }
-        else if (entity.Groups.Any(g => g.HasBasins))
-        {
+        if (!entity.IsEditable)
             throw new DomainException(
-                "This request is split into basins. Convert the groups and basins individually - converting the whole request would plan the same quantity twice.");
-        }
+                $"Formation request {entity.RequestNumber} is {entity.Status} and cannot be deleted. Only a draft or rejected request can be deleted; cancel it instead.");
 
-        // Spec sections 8 and 10: a basin is weighed for real before its Job Order exists, and
-        // the Job Order's quantity IS that actual weight. The planned formation quantity stays
-        // planning data - it must never be what production is planned from.
-        if (basin is not null)
-        {
-            if (request.ActualBasinQuantity is not > 0)
-                throw new DomainException(
-                    $"Enter the ACTUAL weighed weight for basin {basin.BasinNumber} - a Job Order's quantity IS the basin's real weight, never the planned formation quantity.");
-
-            entity.RecordBasinActualQuantity(group!.Id, basin.Id, request.ActualBasinQuantity.Value, _currentUser.UserName);
-        }
-
-        var unit = basin?.Unit ?? group?.Unit ?? entity.Unit;
-        var quantity = basin?.EffectiveQuantity ?? group?.PlannedQuantity ?? entity.Groups.Sum(g => g.PlannedQuantity);
-        if (quantity <= 0)
-            throw new DomainException("The quantity being converted must be greater than zero.");
-
-        var color = request.Color ?? basin?.Color ?? group?.Color;
-        var orderNumber = await _numberGenerator.NextAsync(DocumentType.ProductionOrder, cancellationToken: cancellationToken);
-
-        var order = new ProductionOrder(
-            orderNumber, entity.CustomerId, entity.ItemId, request.OrderDate, _currentUser.UserName,
-            color: color,
-            requestedQuantityKg: unit == UnitOfMeasure.KG ? quantity : null,
-            requestedQuantityMeter: unit == UnitOfMeasure.Meter ? quantity : null,
-            customerReference: request.CustomerReference,
-            notes: request.Notes,
-            priority: request.Priority,
-            jobOrderType: request.JobOrderType,
-            formationRequestId: entity.Id,
-            formationGroupId: group?.Id,
-            formationBasinId: basin?.Id);
-
-        var activeStages = await _db.ProductionStageDefinitions.AsNoTracking()
-            .Where(s => s.IsActive).OrderBy(s => s.Sequence).ToListAsync(cancellationToken);
-        order.BuildStageRoute(activeStages, _currentUser.UserName);
-
-        _db.ProductionOrders.Add(order);
-        entity.LinkProductionOrder(order.Id, _currentUser.UserName);
-
+        _db.FormationRequests.Remove(entity);
         await _db.SaveChangesAsync(cancellationToken);
-        return await FormationRequestDtoBuilder.BuildAsync(_db, entity, cancellationToken);
+        return Unit.Value;
     }
 }
 
@@ -254,6 +157,200 @@ public class RecordFormationBasinActualQuantityCommandHandler
             entity => entity.RecordBasinActualQuantity(
                 request.GroupId, request.BasinId, request.ActualQuantity, _currentUser.UserName),
             cancellationToken);
+}
+
+/// <summary>
+/// Moves an approved request into production (spec section 32): Approved -&gt; In Progress.
+/// A Formation Request is its own document, so this is where its own production starts - it never
+/// creates, modifies or cancels a Job Order, and it writes nothing to any stock ledger.
+/// </summary>
+public record StartFormationProductionCommand(Guid Id) : IRequest<FormationRequestDto>;
+
+public class StartFormationProductionCommandValidator : AbstractValidator<StartFormationProductionCommand>
+{
+    public StartFormationProductionCommandValidator() => RuleFor(x => x.Id).NotEmpty();
+}
+
+public class StartFormationProductionCommandHandler
+    : IRequestHandler<StartFormationProductionCommand, FormationRequestDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+    public StartFormationProductionCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
+    { _db = db; _currentUser = currentUser; }
+
+    public Task<FormationRequestDto> Handle(StartFormationProductionCommand request, CancellationToken cancellationToken)
+        => FormationRequestWorkflow.MutateAsync(_db, request.Id, _currentUser.UserName,
+            entity => entity.StartProduction(_currentUser.UserName), cancellationToken);
+}
+
+/// <summary>
+/// Records produced quantity against ONE group of a request that has no basins (spec sections 32-33).
+/// Quantities accumulate - the same physical quantity can never be counted twice - and the request's own
+/// completion status is re-derived from what its groups hold. No stock ledger is touched: a Formation
+/// Request is an independent document, so recording its output never posts inventory.
+/// </summary>
+public record RecordFormationGroupProductionCommand(Guid Id, Guid GroupId, decimal Quantity)
+    : IRequest<FormationRequestDto>;
+
+public class RecordFormationGroupProductionCommandValidator
+    : AbstractValidator<RecordFormationGroupProductionCommand>
+{
+    public RecordFormationGroupProductionCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.GroupId).NotEmpty();
+        RuleFor(x => x.Quantity).GreaterThan(0)
+            .WithMessage("A produced quantity must be greater than zero.");
+    }
+}
+
+public class RecordFormationGroupProductionCommandHandler
+    : IRequestHandler<RecordFormationGroupProductionCommand, FormationRequestDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+    public RecordFormationGroupProductionCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
+    { _db = db; _currentUser = currentUser; }
+
+    public Task<FormationRequestDto> Handle(
+        RecordFormationGroupProductionCommand request, CancellationToken cancellationToken)
+        => FormationRequestWorkflow.MutateAsync(_db, request.Id, _currentUser.UserName,
+            entity => entity.RecordGroupProduction(request.GroupId, request.Quantity, _currentUser.UserName),
+            cancellationToken);
+}
+
+/// <summary>
+/// Records produced quantity against ONE basin of a group that is measured per basin (spec sections 10-11
+/// and 32). The group's produced figure is re-derived from its basins immediately afterwards, so a group
+/// can never report more than its basins hold. Nothing is posted to stock and no Job Order is touched.
+/// </summary>
+public record RecordFormationBasinProductionCommand(Guid Id, Guid GroupId, Guid BasinId, decimal Quantity)
+    : IRequest<FormationRequestDto>;
+
+public class RecordFormationBasinProductionCommandValidator
+    : AbstractValidator<RecordFormationBasinProductionCommand>
+{
+    public RecordFormationBasinProductionCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.GroupId).NotEmpty();
+        RuleFor(x => x.BasinId).NotEmpty();
+        RuleFor(x => x.Quantity).GreaterThan(0)
+            .WithMessage("A produced quantity must be greater than zero.");
+    }
+}
+
+public class RecordFormationBasinProductionCommandHandler
+    : IRequestHandler<RecordFormationBasinProductionCommand, FormationRequestDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+    public RecordFormationBasinProductionCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser)
+    { _db = db; _currentUser = currentUser; }
+
+    public Task<FormationRequestDto> Handle(
+        RecordFormationBasinProductionCommand request, CancellationToken cancellationToken)
+        => FormationRequestWorkflow.MutateAsync(_db, request.Id, _currentUser.UserName,
+            entity => entity.RecordBasinProduction(
+                request.GroupId, request.BasinId, request.Quantity, _currentUser.UserName),
+            cancellationToken);
+}
+
+/// <summary>
+/// Creates a REVISION of a formation request that can no longer be edited directly because it has been
+/// submitted or approved (spec sections 29-33). The original is never reopened, never rewritten and never
+/// silently re-approved: the revision is a brand-new DRAFT carrying a copy of the current groups, basins and
+/// specification snapshots, linked back to the original through RevisionOfFormationRequestId. It must be
+/// submitted and approved on its own, so both documents' approval history stays intact.
+///
+/// Only a draft or rejected request is refused (it is edited in place instead), and a cancelled request is
+/// refused (it is dead history). Gated by the configurable formation.edit permission.
+/// </summary>
+public record ReviseFormationRequestCommand(Guid Id) : IRequest<FormationRequestDto>;
+
+public class ReviseFormationRequestCommandValidator : AbstractValidator<ReviseFormationRequestCommand>
+{
+    public ReviseFormationRequestCommandValidator() => RuleFor(x => x.Id).NotEmpty();
+}
+
+public class ReviseFormationRequestCommandHandler : IRequestHandler<ReviseFormationRequestCommand, FormationRequestDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IDocumentNumberGenerator _numberGenerator;
+
+    public ReviseFormationRequestCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
+        IDocumentNumberGenerator numberGenerator)
+    { _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; }
+
+    public async Task<FormationRequestDto> Handle(ReviseFormationRequestCommand request, CancellationToken cancellationToken)
+    {
+        var original = await _db.FormationRequests.Include(r => r.Groups).ThenInclude(g => g.Basins)
+            .FirstOrDefaultAsync(r => r.Id == request.Id, cancellationToken)
+            ?? throw new NotFoundException("Formation Request", request.Id);
+
+        if (original.Status is FormationRequestStatus.Draft or FormationRequestStatus.Rejected)
+            throw new DomainException(
+                $"Formation request {original.RequestNumber} is {original.Status} and can be edited in place - a revision is only needed once it has been submitted or approved.");
+        if (original.Status == FormationRequestStatus.Cancelled)
+            throw new DomainException(
+                $"Formation request {original.RequestNumber} is cancelled and cannot be revised.");
+
+        var user = _currentUser.UserName;
+        var number = await _numberGenerator.NextAsync(DocumentType.FormationRequest, cancellationToken: cancellationToken);
+
+        var revision = new FormationRequest(
+            number, original.RequestDate, original.CustomerId, original.ItemId, original.Unit,
+            user, original.RawMessageId, original.TotalQuantity, original.Notes);
+
+        revision.MarkAsRevision(original.Id, user);
+        _db.FormationRequests.Add(revision);
+
+        CopyGroupsAndBasins(original, revision, user);
+
+        revision.UpdateHeader(original.RequestDate, original.RawMessageId, original.Notes,
+            revision.Groups.Sum(g => g.PlannedQuantity), user);
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return await FormationRequestDtoBuilder.BuildAsync(_db, revision, cancellationToken);
+    }
+
+    /// <summary>
+    /// Deep-copies the groups, basins and their specification snapshots onto the revision. Produced quantities are
+    /// deliberately NOT copied: production belongs to the original document's history, and the revision starts as a
+    /// fresh plan. Each new group/basin is registered explicitly for INSERT, exactly like the ordinary create path.
+    /// </summary>
+    private void CopyGroupsAndBasins(FormationRequest original, FormationRequest revision, string user)
+    {
+        foreach (var group in original.Groups.OrderBy(g => g.GroupNumber))
+        {
+            var newGroup = revision.AddGroup(
+                group.Name, group.PlannedQuantity, group.Unit, group.TubCount, group.Color, group.Notes, user);
+            _db.FormationGroups.Add(newGroup);
+
+            foreach (var basin in group.Basins.OrderBy(b => b.BasinNumber))
+            {
+                var newBasin = revision.AddBasin(
+                    newGroup.Id, basin.Name, basin.PlannedQuantity, basin.Unit, basin.TubCount, basin.Color, basin.Notes, user);
+                _db.FormationBasins.Add(newBasin);
+
+                // Copy the basin's own snapshot (which may differ from its group's).
+                revision.UpdateBasin(
+                    newGroup.Id, newBasin.Id, basin.Name, basin.PlannedQuantity, basin.Unit, basin.TubCount, basin.Color,
+                    basin.WidthCm, basin.MetersPerKg, basin.Gsm, basin.TubFormat, basin.WindingTapeFormat,
+                    basin.QualityInstructions, basin.LabInstructions, basin.InternalInstructions,
+                    basin.CustomerInstructions, basin.Notes, user);
+            }
+
+            // Copy the group's own cell specification last (a group with basins keeps the basin-summed quantity).
+            revision.UpdateGroup(
+                newGroup.Id, group.Name, group.PlannedQuantity, group.Unit, group.TubCount, group.Color,
+                group.WidthCm, group.MetersPerKg, group.Gsm, group.TubFormat, group.WindingTapeFormat,
+                group.QualityInstructions, group.LabInstructions, group.InternalInstructions,
+                group.CustomerInstructions, group.Notes, user);
+        }
+    }
 }
 
 /// <summary>Loads a request with its groups, applies one domain transition, and returns the fresh DTO.</summary>

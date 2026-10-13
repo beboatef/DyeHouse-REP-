@@ -183,3 +183,81 @@ public class CancelPaymentCommandHandler : IRequestHandler<CancelPaymentCommand,
         };
     }
 }
+
+// ============================================================ Treasury transfer cancel
+/// <summary>
+/// Cancels a posted Treasury Transfer (spec section 34). A transfer posts TWO
+/// ledger rows - an OUT on the source account and an IN on the destination - so
+/// the cancellation writes exactly one opposite row per original (IN on the
+/// source, OUT on the destination), each linked to the row it reverses via
+/// ReversesTransactionId. The transfer row and its original ledger rows are
+/// never edited beyond the status/description, and are never deleted - the same
+/// append-only reversal pattern Receipt/Payment use (B4).
+///
+/// A transfer has no downstream customer/supplier link and moves only treasury
+/// balances, so there is no separate "downstream usage" dependency to check: the
+/// only thing that can make the reversal unsafe is a closed accounting period,
+/// which the period guard below enforces by refusing to post into it.
+/// </summary>
+public record CancelTreasuryTransferCommand(Guid TransferId, string Reason) : IRequest<TreasuryTransferDto>;
+
+public class CancelTreasuryTransferCommandValidator : AbstractValidator<CancelTreasuryTransferCommand>
+{
+    public CancelTreasuryTransferCommandValidator() => RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+}
+
+public class CancelTreasuryTransferCommandHandler : IRequestHandler<CancelTreasuryTransferCommand, TreasuryTransferDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IDateTime _clock;
+    private readonly IPeriodCloseService _periodClose;
+
+    public CancelTreasuryTransferCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
+        IDateTime clock, IPeriodCloseService periodClose)
+    {
+        _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose;
+    }
+
+    public async Task<TreasuryTransferDto> Handle(CancelTreasuryTransferCommand request, CancellationToken cancellationToken)
+    {
+        // The reversal rows are dated today - a closed period blocks only if today
+        // itself is closed, matching every other reversal in the system.
+        await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
+
+        var transfer = await _db.TreasuryTransfers.FirstOrDefaultAsync(t => t.Id == request.TransferId, cancellationToken)
+            ?? throw new Common.Exceptions.NotFoundException("TreasuryTransfer", request.TransferId);
+
+        // Double-reversal guard: the entity refuses a second Cancel (and RowVersion
+        // makes a concurrent cancel-vs-cancel fail explicitly).
+        transfer.Cancel(request.Reason, _currentUser.UserName);
+
+        var originals = await _db.TreasuryTransactions
+            .Where(t => t.SourceDocumentId == transfer.Id && t.SourceDocumentType == DocumentType.TreasuryTransfer)
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in originals)
+        {
+            _db.TreasuryTransactions.Add(new TreasuryTransaction(
+                row.TreasuryAccountId, _clock.UtcNow, DocumentType.TreasuryTransfer, transfer.TransferNumber, transfer.Id,
+                row.Amount, row.Direction == TreasuryDirection.In ? TreasuryDirection.Out : TreasuryDirection.In,
+                $"Cancellation of treasury transfer {transfer.TransferNumber}: {request.Reason}",
+                _currentUser.UserName, reversesTransactionId: row.Id));
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        var accountIds = new[] { transfer.FromAccountId, transfer.ToAccountId };
+        var accounts = await _db.TreasuryAccounts.AsNoTracking()
+            .Where(a => accountIds.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, cancellationToken);
+
+        return new TreasuryTransferDto
+        {
+            Id = transfer.Id, TransferNumber = transfer.TransferNumber, TransferDate = transfer.TransferDate,
+            FromAccountId = transfer.FromAccountId, FromAccountName = accounts.GetValueOrDefault(transfer.FromAccountId)?.Name ?? "",
+            ToAccountId = transfer.ToAccountId, ToAccountName = accounts.GetValueOrDefault(transfer.ToAccountId)?.Name ?? "",
+            Amount = transfer.Amount, Description = transfer.Description, Status = transfer.Status.ToString()
+        };
+    }
+}

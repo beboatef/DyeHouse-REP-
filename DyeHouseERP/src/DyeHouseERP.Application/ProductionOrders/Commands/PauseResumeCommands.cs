@@ -331,7 +331,9 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
     {
         var lastCompleted = await _db.ProductionOrderStageExecutions.AsNoTracking()
             .Where(s => s.ProductionOrderId == dto.Id && s.Status == StageExecutionStatus.Completed)
-            .OrderByDescending(s => s.Sequence)
+            // Several executions can share one Sequence (a printing stage that ran more than
+            // once), so the most recently completed one is the real last stage.
+            .OrderByDescending(s => s.Sequence).ThenByDescending(s => s.CompletedAtUtc)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (lastCompleted is null) return;

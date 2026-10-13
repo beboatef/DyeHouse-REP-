@@ -70,7 +70,10 @@ public class MaterialIssueConfiguration : IEntityTypeConfiguration<MaterialIssue
         builder.Property(i => i.Notes).HasMaxLength(1000);
         builder.Property(i => i.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(i => i.ModifiedBy).HasMaxLength(100);
+        builder.Property(i => i.CancelledBy).HasMaxLength(100);
+        builder.Property(i => i.CancellationReason).HasMaxLength(1000);
         builder.Ignore(i => i.TotalCost);
+        builder.Ignore(i => i.IsCancelled);
         builder.HasIndex(i => i.ProductionOrderId);
     }
 }

@@ -82,6 +82,34 @@ public class InvoicesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    // ------------------------------------------------ draft editing (spec section 32)
+    // A Draft invoice has posted nothing (no customer-ledger row), so its header and lines are ordinary
+    // working data, editable behind the configurable invoices.edit right. An Issued/Cancelled invoice is
+    // refused by the domain and is corrected only through the cancellation/reversal workflow below.
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
+    public async Task<ActionResult<InvoiceDto>> Update(Guid id, [FromBody] UpdateInvoiceRequest request)
+        => Ok(await _mediator.Send(new UpdateInvoiceCommand(id, request.InvoiceDate, request.DeliveryId,
+            request.Discount, request.Tax, request.Notes)));
+
+    [HttpPost("{id:guid}/lines")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
+    public async Task<ActionResult<InvoiceDto>> AddLine(Guid id, [FromBody] AddInvoiceLineRequest request)
+        => Ok(await _mediator.Send(new AddInvoiceLineCommand(id, request.ProductionOrderId, request.ItemId,
+            request.Color, request.Quantity, request.ProcessingPrice, request.Notes)));
+
+    [HttpPut("{id:guid}/lines/{lineId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
+    public async Task<ActionResult<InvoiceDto>> UpdateLine(Guid id, Guid lineId, [FromBody] UpdateInvoiceLineRequest request)
+        => Ok(await _mediator.Send(new UpdateInvoiceLineCommand(id, lineId, request.Quantity,
+            request.ProcessingPrice, request.Color, request.Notes)));
+
+    [HttpDelete("{id:guid}/lines/{lineId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
+    public async Task<ActionResult<InvoiceDto>> RemoveLine(Guid id, Guid lineId)
+        => Ok(await _mediator.Send(new RemoveInvoiceLineCommand(id, lineId)));
+
     [HttpPost("{id:guid}/issue")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesIssue)]
     public async Task<ActionResult<InvoiceDto>> Issue(Guid id) => Ok(await _mediator.Send(new IssueInvoiceCommand(id)));
@@ -93,6 +121,10 @@ public class InvoicesController : ControllerBase
 }
 
 public record CancelInvoiceRequest(string Reason);
+
+public record UpdateInvoiceRequest(DateTime InvoiceDate, Guid? DeliveryId, decimal Discount, decimal Tax, string? Notes);
+public record AddInvoiceLineRequest(Guid? ProductionOrderId, Guid ItemId, string? Color, decimal Quantity, decimal ProcessingPrice, string? Notes);
+public record UpdateInvoiceLineRequest(decimal Quantity, decimal ProcessingPrice, string? Color, string? Notes);
 
 [ApiController]
 [Route("api/customers/{customerId:guid}/statement")]

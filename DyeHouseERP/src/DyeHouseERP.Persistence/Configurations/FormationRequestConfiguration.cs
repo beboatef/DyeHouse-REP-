@@ -32,7 +32,6 @@ public class FormationRequestConfiguration : IEntityTypeConfiguration<FormationR
         builder.HasIndex(r => r.ItemId);
         builder.HasIndex(r => r.RawMessageId);
         builder.HasIndex(r => r.Status);
-        builder.HasIndex(r => r.ProductionOrderId);
         builder.HasIndex(r => r.RequestDate);
 
         // The groups are part of the aggregate: loaded with the request,

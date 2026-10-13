@@ -10,8 +10,8 @@ namespace DyeHouseERP.Application.Approvals.Queries;
 /// <summary>
 /// The centralized Approval Center (spec section 44). It does NOT duplicate any
 /// approval logic - it reads the real pending states that already exist in the
-/// modules (a submitted Formation Request, a pending Production Request, a
-/// submitted Purchase Order, a draft Payroll Run) and presents them in one
+/// modules (a submitted Formation Request, a submitted Purchase Order, a
+/// draft Payroll Run) and presents them in one
 /// queue, each with the permission its own module enforces and the link where
 /// it is actually acted on. Approving from the queue runs the module's own
 /// command, so there is exactly one implementation of every rule.
@@ -65,36 +65,6 @@ public class GetApprovalCenterQueryHandler : IRequestHandler<GetApprovalCenterQu
             }));
         }
 
-        // ---- Production Requests awaiting approval (spec section 44) ----
-        if (_currentUser.HasPermission(Permissions.ProductionEdit))
-        {
-            var productionRequests = await _db.ProductionRequests.AsNoTracking()
-                .Where(r => r.Status == ProductionRequestStatus.Pending)
-                .OrderBy(r => r.RequestDate)
-                .Take(200)
-                .ToListAsync(cancellationToken);
-
-            var customerIds = productionRequests.Select(r => r.CustomerId).Distinct().ToList();
-            var customers = await _db.Customers.AsNoTracking()
-                .Where(c => customerIds.Contains(c.Id))
-                .Select(c => new { c.Id, c.Name })
-                .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
-
-            items.AddRange(productionRequests.Select(r => new ApprovalItemDto
-            {
-                Category = "ProductionRequest",
-                Id = r.Id,
-                DocumentNumber = r.RequestNumber,
-                Date = r.RequestDate,
-                Party = customers.TryGetValue(r.CustomerId, out var cn) ? cn : null,
-                Summary = r.RequestedQuantityKg is not null ? $"{r.RequestedQuantityKg:0.###} KG"
-                    : r.RequestedQuantityMeter is not null ? $"{r.RequestedQuantityMeter:0.###} m" : null,
-                RequestedBy = r.CreatedBy,
-                RequestedAtUtc = r.CreatedAtUtc.ToString("O"),
-                RequiredPermission = Permissions.ProductionEdit,
-                LinkPath = "/production-floor"
-            }));
-        }
 
         // ---- Purchase Orders awaiting approval (spec sections 35 + 44) ----
         if (_currentUser.HasPermission(Permissions.PurchasesApprove))
@@ -127,11 +97,15 @@ public class GetApprovalCenterQueryHandler : IRequestHandler<GetApprovalCenterQu
             }));
         }
 
-        // ---- Payroll runs awaiting approval (spec sections 36 + 44) ----
+        // ---- Payroll runs awaiting approval (spec sections 36 + 39 + 44) ----
+        // A Draft run can be approved directly (the simple path the domain documents), and a run that was
+        // calculated and SUBMITTED FOR REVIEW is UnderReview - exactly the state that is waiting for an
+        // approver. A merely Calculated run is deliberately not listed: it is still editable and has not
+        // been submitted yet.
         if (_currentUser.HasPermission(Permissions.PayrollApprove))
         {
             var runs = await _db.PayrollRuns.AsNoTracking().Include(r => r.Lines)
-                .Where(r => r.Status == PayrollRunStatus.Draft)
+                .Where(r => r.Status == PayrollRunStatus.Draft || r.Status == PayrollRunStatus.UnderReview)
                 .OrderBy(r => r.PeriodYear).ThenBy(r => r.PeriodMonth)
                 .Take(60)
                 .ToListAsync(cancellationToken);
@@ -144,8 +118,8 @@ public class GetApprovalCenterQueryHandler : IRequestHandler<GetApprovalCenterQu
                 Date = new DateTime(r.PeriodYear, r.PeriodMonth, 1),
                 Amount = r.TotalNet,
                 Summary = $"{r.PeriodMonth:00}/{r.PeriodYear} - {r.Lines.Count} employee(s)",
-                RequestedBy = r.CreatedBy,
-                RequestedAtUtc = r.CreatedAtUtc.ToString("O"),
+                RequestedBy = r.SubmittedBy ?? r.CreatedBy,
+                RequestedAtUtc = (r.SubmittedAtUtc ?? r.CreatedAtUtc).ToString("O"),
                 RequiredPermission = Permissions.PayrollApprove,
                 LinkPath = "/payroll?tab=runs"
             }));

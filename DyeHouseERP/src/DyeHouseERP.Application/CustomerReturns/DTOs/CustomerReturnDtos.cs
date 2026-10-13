@@ -43,5 +43,12 @@ public class CustomerReturnDto
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
 
+    /// <summary>True once the return was cancelled through the correction workflow (spec section 49).
+    /// The document and its original ledger rows stay; the stock it restored is reversed.</summary>
+    public bool IsCancelled { get; set; }
+    public string? CancellationReason { get; set; }
+    public string? CancelledBy { get; set; }
+    public DateTime? CancelledAtUtc { get; set; }
+
     public List<CustomerReturnLineDto> Lines { get; set; } = new();
 }

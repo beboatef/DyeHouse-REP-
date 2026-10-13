@@ -25,8 +25,8 @@ public class ProductionOrdersController : ControllerBase
     [ProducesResponseType(typeof(List<ProductionOrderDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<ProductionOrderDto>>> Get(
         [FromQuery] Guid? customerId, [FromQuery] ProductionOrderStatus? status,
-        [FromQuery] JobOrderType? jobOrderType, [FromQuery] Guid? formationRequestId)
-        => Ok(await _mediator.Send(new GetProductionOrdersQuery(customerId, status, jobOrderType, formationRequestId)));
+        [FromQuery] JobOrderType? jobOrderType)
+        => Ok(await _mediator.Send(new GetProductionOrdersQuery(customerId, status, jobOrderType)));
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
@@ -43,10 +43,10 @@ public class ProductionOrdersController : ControllerBase
     [HttpGet("export")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] ProductionOrderStatus? status,
-        [FromQuery] JobOrderType? jobOrderType, [FromQuery] Guid? formationRequestId,
+        [FromQuery] JobOrderType? jobOrderType,
         [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
     {
-        var orders = await _mediator.Send(new GetProductionOrdersQuery(customerId, status, jobOrderType, formationRequestId));
+        var orders = await _mediator.Send(new GetProductionOrdersQuery(customerId, status, jobOrderType));
 
         var headers = new[] { "Job order", "Date", "Customer", "Item", "Color", "Requested KG", "Requested M", "Stage", "Completed KG", "Status", "Type" };
         var rows = orders.Select(o =>
@@ -93,6 +93,23 @@ public class ProductionOrdersController : ControllerBase
     }
 
     /// <summary>
+    /// Edits an OPEN order's descriptive and scheduling fields (colour, raw origin, customer reference,
+    /// notes, priority, order date and the closed/open line type) - spec sections 12 + 16. The order's
+    /// IDENTITY (customer, item) and its REQUESTED QUANTITY are not editable: the quantity is the formation
+    /// stage's immutable baseline and the denominator of the 100% allocation rule, and the identity is already
+    /// referenced by allocations, ready goods, deliveries and invoices. A wrong customer/item/quantity is
+    /// corrected by cancelling the order (POST {id}/cancel) and creating a new one. A completed or cancelled
+    /// order is locked. Every edit is captured by the audit log with its before/after value.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> Update(Guid id, [FromBody] UpdateProductionOrderRequest request)
+        => Ok(await _mediator.Send(new UpdateProductionOrderCommand(
+            id, request.OrderDate, request.Color, request.RawOrigin, request.CustomerReference,
+            request.Notes, request.Priority, request.JobOrderType)));
+
+    /// <summary>
     /// Allocates raw material from a specific, user-chosen RawMessage
     /// (spec section 13 - manual selection, no FIFO). Call once per message
     /// being drawn from.
@@ -122,7 +139,7 @@ public class ProductionOrdersController : ControllerBase
         var result = await _mediator.Send(new CompleteStageCommand(
             stageExecutionId, request.InputKg, request.InputMeter, request.OutputKg, request.OutputMeter,
             request.LossKg, request.LossMeter, request.SeparatesKg, request.SeparatesMeter,
-            request.Notes, request.ApprovedBy));
+            request.Notes));
         return Ok(result);
     }
 
@@ -137,6 +154,17 @@ public class ProductionOrdersController : ControllerBase
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductionOrderDto>> Complete(Guid id, [FromBody] CompleteProductionOrderRequest request)
         => Ok(await _mediator.Send(new CompleteProductionOrderCommand(id, request.Reason)));
+
+    /// <summary>
+    /// Cancels a Job Order and reverses the raw material it still holds as a NEW compensating IN row per lot
+    /// through the inventory ledger (spec section 18) - nothing posted is edited or deleted, and the reason is
+    /// mandatory. A completed order cannot be cancelled (its output has already left the raw dimension).
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> Cancel(Guid id, [FromBody] CancelProductionOrderRequest request)
+        => Ok(await _mediator.Send(new CancelProductionOrderCommand(id, request.Reason)));
 
     /// <summary>
     /// Pauses the order (موقوف مؤقتًا) and releases the user's chosen quantity of
@@ -214,6 +242,21 @@ public record PauseProductionOrderRequest(
 
 public record CompleteProductionOrderRequest(string Reason);
 
+public record CancelProductionOrderRequest(string Reason);
+
+/// <summary>
+/// Body for editing an open Job Order. Customer, item and requested quantity are intentionally absent:
+/// they are corrected by cancelling the order and re-creating it, never by editing it in place.
+/// </summary>
+public record UpdateProductionOrderRequest(
+    DateTime OrderDate,
+    string? Color = null,
+    string? RawOrigin = null,
+    string? CustomerReference = null,
+    string? Notes = null,
+    ProductionPriority Priority = ProductionPriority.Normal,
+    JobOrderType JobOrderType = JobOrderType.ClosedLine);
+
 public record ResumeProductionOrderRequest(
     Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,
     bool OverrideNegativeStock = false, string? OverrideReason = null);
@@ -225,6 +268,6 @@ public record AllocateRawRequest(
 public record CompleteStageRequest(
     decimal? InputKg, decimal? InputMeter, decimal? OutputKg, decimal? OutputMeter,
     decimal? LossKg, decimal? LossMeter, decimal? SeparatesKg, decimal? SeparatesMeter,
-    string? Notes, string? ApprovedBy);
+    string? Notes);
 
 public record SkipStageRequest(string Reason);

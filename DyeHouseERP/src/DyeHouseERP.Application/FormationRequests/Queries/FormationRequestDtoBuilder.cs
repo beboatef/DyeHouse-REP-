@@ -7,8 +7,9 @@ namespace DyeHouseERP.Application.FormationRequests.Queries;
 
 /// <summary>
 /// One projection used by the list, detail and traceability queries, so a formation request always looks the same
-/// on every screen. Names come from the real customer/item/message/JO records - never duplicated onto the request -
-/// which is what keeps the chain Customer -&gt; Message -&gt; Formation Request -&gt; Job Order navigable (spec section 31).
+/// on every screen. Names come from the real customer/item/message records - never duplicated onto the request -
+/// which is what keeps the chain Customer -&gt; Message -&gt; Formation Request navigable (spec section 31). A formation
+/// request is an independent document and carries no reference to any Job Order.
 /// </summary>
 internal static class FormationRequestDtoBuilder
 {
@@ -18,7 +19,6 @@ internal static class FormationRequestDtoBuilder
         var customerIds = requests.Select(r => r.CustomerId).Distinct().ToList();
         var itemIds = requests.Select(r => r.ItemId).Distinct().ToList();
         var messageIds = requests.Where(r => r.RawMessageId.HasValue).Select(r => r.RawMessageId!.Value).Distinct().ToList();
-        var orderIds = requests.Where(r => r.ProductionOrderId.HasValue).Select(r => r.ProductionOrderId!.Value).Distinct().ToList();
 
         var customers = await db.Customers.AsNoTracking()
             .Where(c => customerIds.Contains(c.Id))
@@ -34,11 +34,6 @@ internal static class FormationRequestDtoBuilder
             .Where(m => messageIds.Contains(m.Id))
             .Select(m => new { m.Id, m.MessageNumber })
             .ToDictionaryAsync(m => m.Id, m => m.MessageNumber, cancellationToken);
-
-        var orders = await db.ProductionOrders.AsNoTracking()
-            .Where(o => orderIds.Contains(o.Id))
-            .Select(o => new { o.Id, o.OrderNumber })
-            .ToDictionaryAsync(o => o.Id, o => o.OrderNumber, cancellationToken);
 
         return requests.Select(r =>
         {
@@ -62,8 +57,6 @@ internal static class FormationRequestDtoBuilder
                 Unit = r.Unit,
                 Notes = r.Notes,
                 Status = r.Status,
-                ProductionOrderId = r.ProductionOrderId,
-                ProductionOrderNumber = r.ProductionOrderId.HasValue && orders.TryGetValue(r.ProductionOrderId.Value, out var orderNumber) ? orderNumber : null,
                 SubmittedBy = r.SubmittedBy,
                 SubmittedAtUtc = r.SubmittedAtUtc,
                 ApprovedBy = r.ApprovedBy,
@@ -74,6 +67,7 @@ internal static class FormationRequestDtoBuilder
                 CancelledBy = r.CancelledBy,
                 CancelledAtUtc = r.CancelledAtUtc,
                 CancellationReason = r.CancellationReason,
+                RevisionOfFormationRequestId = r.RevisionOfFormationRequestId,
                 CreatedBy = r.CreatedBy,
                 CreatedAtUtc = r.CreatedAtUtc,
                 ModifiedBy = r.ModifiedBy,

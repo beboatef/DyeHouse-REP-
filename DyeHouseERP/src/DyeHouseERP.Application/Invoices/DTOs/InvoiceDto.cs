@@ -23,6 +23,8 @@ public class InvoiceDto
     public Guid CustomerId { get; set; }
     public string CustomerCode { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
+    /// <summary>The delivery this invoice was raised from, if any. Editable while the invoice is a draft.</summary>
+    public Guid? DeliveryId { get; set; }
     public InvoiceStatus Status { get; set; }
     public decimal Discount { get; set; }
     public decimal Tax { get; set; }

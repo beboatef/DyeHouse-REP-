@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
@@ -27,6 +28,14 @@ public class PurchaseOrder : AuditableEntity
     public string? CancelledBy { get; private set; }
     public DateTime? CancelledAtUtc { get; private set; }
     public string? CancellationReason { get; private set; }
+
+    /// <summary>
+    /// Optimistic concurrency token, maintained by SQL Server. An order is touched by receiving and by
+    /// ordered-quantity corrections at the same time; this makes a correction that was computed against a
+    /// stale received quantity fail explicitly rather than push the ordered quantity below what arrived.
+    /// </summary>
+    [Timestamp]
+    public byte[] RowVersion { get; private set; } = Array.Empty<byte>();
 
     private readonly List<PurchaseOrderLine> _lines = new();
     public IReadOnlyCollection<PurchaseOrderLine> Lines => _lines.AsReadOnly();
@@ -101,6 +110,54 @@ public class PurchaseOrder : AuditableEntity
             throw new DomainException("A line that has already been received from can no longer be removed.");
 
         _lines.Remove(line);
+        Touch(modifiedBy);
+    }
+
+    /// <summary>
+    /// Corrects the ORDERED quantity of a line that has already been (partly) received (spec section 35).
+    ///
+    /// This exists because a purchase order was ordered for a quantity that can turn out to be wrong once the
+    /// goods actually start arriving - the supplier delivered short, the order was over-typed, or the remaining
+    /// balance is simply being closed out. It changes ONLY the outstanding part of the order:
+    ///
+    ///   * it never rewrites <see cref="PurchaseOrderLine.ReceivedQuantity"/> or any posted stock movement
+    ///     (receiving already moved real stock into the warehouse and nothing here touches inventory);
+    ///   * it can never take the ordered quantity below what has already arrived, so the outstanding quantity
+    ///     can never go negative and the (Quantity &gt;= ReceivedQuantity) data guard holds;
+    ///   * the reason is mandatory and recorded on the line itself, so the why travels with the order rather
+    ///     than living only in the audit log;
+    ///   * the order status is re-derived afterwards (received / partially received), so the order cannot keep
+    ///     reporting a stale state.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT allowed on a Draft or Submitted order: those are still freely editable through the
+    /// ordinary <see cref="UpdateLine"/> path, which requires no receipt correction and no reason. It is likewise
+    /// refused on a Cancelled order, which is history.
+    /// </remarks>
+    public void CorrectOrderedQuantityAfterReceipt(Guid lineId, decimal newQuantity, string reason, string modifiedBy)
+    {
+        if (Status is PurchaseOrderStatus.Draft or PurchaseOrderStatus.Submitted)
+            throw new DomainException(
+                "An order that has not been approved yet is edited through the ordinary line edit, not through a receipt correction.");
+        if (Status == PurchaseOrderStatus.Cancelled)
+            throw new DocumentLockedException("Purchase Order", OrderNumber);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("Correcting an ordered quantity after receipt requires a reason.");
+        if (newQuantity <= 0)
+            throw new DomainException("An ordered quantity must be greater than zero.");
+
+        var line = FindLine(lineId);
+
+        // The correction must never rewrite what physically arrived. Equal is allowed (it simply closes the
+        // outstanding balance); below the received figure is refused, because the order can never have ordered
+        // less than it already received.
+        if (newQuantity + 0.001m < line.ReceivedQuantity)
+            throw new DomainException(
+                $"The corrected ordered quantity ({newQuantity}) cannot be lower than the {line.ReceivedQuantity} already received on this line. " +
+                "Received quantities and their stock movements are never rewritten - reverse the receipt instead.");
+
+        line.CorrectOrderedQuantity(newQuantity, reason.Trim());
+        RecalculateReceiptStatus();
         Touch(modifiedBy);
     }
 
@@ -241,4 +298,18 @@ public class PurchaseOrderLine : BaseEntity
     }
 
     internal void AddReceivedQuantity(decimal quantity) => ReceivedQuantity += quantity;
+
+    /// <summary>
+    /// Applies a corrected ordered quantity and appends the correction (old → new and why) to the line's notes,
+    /// so the reason is visible wherever the line is read - the same convention the order's own cancellation
+    /// reason uses. Never touches <see cref="ReceivedQuantity"/>.
+    /// </summary>
+    internal void CorrectOrderedQuantity(decimal newQuantity, string reason)
+    {
+        var previous = Quantity;
+        Quantity = newQuantity;
+
+        var note = $"[Ordered quantity corrected: {previous} \u2192 {newQuantity}] {reason}";
+        Notes = string.IsNullOrWhiteSpace(Notes) ? note : $"{Notes}\n{note}";
+    }
 }

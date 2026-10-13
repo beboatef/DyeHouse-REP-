@@ -62,12 +62,26 @@ public class ProductionOrderStageExecution : BaseEntity
     public bool RequiresDrawingNumber { get; private set; }
     public string? DrawingNumber { get; private set; }
 
-    public void SetDrawingNumber(string drawingNumber)
+    /// <summary>
+    /// Sets - or CORRECTS - this execution's drawing number.
+    ///
+    /// A print run that has already been CLOSED may still be corrected, but only as an explicit
+    /// correction carrying a reason: the drawing number is documentary data (delivery statements
+    /// read it live from the executions), so a typo must be fixable, while a silent overwrite of the
+    /// drawing a run actually produced must not be possible. The caller records the old and new value,
+    /// the user, the time and the reason in the audit trail (UpdateStageDrawingCommand).
+    /// A drawn number is never invented or inherited here, a skipped run keeps its own, and a stage
+    /// that does not require a drawing number refuses one outright.
+    /// </summary>
+    public void SetDrawingNumber(string drawingNumber, string? correctionReason = null)
     {
         if (!RequiresDrawingNumber)
             throw new DomainException("This stage does not require a drawing number.");
-        if (Status is StageExecutionStatus.Completed or StageExecutionStatus.Skipped)
-            throw new DomainException("A closed stage's drawing number cannot be changed.");
+        if (Status == StageExecutionStatus.Skipped)
+            throw new DomainException("A skipped stage's drawing number cannot be changed.");
+        if (Status == StageExecutionStatus.Completed && string.IsNullOrWhiteSpace(correctionReason))
+            throw new DomainException(
+                "Correcting the drawing number of a closed stage requires a reason - it is recorded in the audit trail. تصحيح رقم رسمة مرحلة منتهية يتطلب سببًا.");
         if (string.IsNullOrWhiteSpace(drawingNumber) || drawingNumber.Trim().Length > 100)
             throw new DomainException("Drawing number is required and must not exceed 100 characters. رقم الرسمة مطلوب بحد أقصى 100 حرف.");
         DrawingNumber = drawingNumber.Trim();
@@ -83,9 +97,6 @@ public class ProductionOrderStageExecution : BaseEntity
     public string? Notes { get; private set; }
     public DateTime? StartedAtUtc { get; private set; }
     public DateTime? CompletedAtUtc { get; private set; }
-    public bool ApprovalRequired { get; private set; }
-    public string? ApprovedBy { get; private set; }
-    public DateTime? ApprovedAtUtc { get; private set; }
 
     /// <summary>
     /// H1 optimistic concurrency token, maintained by SQL Server. Quantities and
@@ -240,13 +251,10 @@ public class ProductionOrderStageExecution : BaseEntity
     public void Complete(
         decimal? inputKg, decimal? inputMeter, decimal? outputKg, decimal? outputMeter,
         decimal? lossKg, decimal? lossMeter, decimal? separatesKg, decimal? separatesMeter,
-        string? notes, bool approvalRequired, string? approvedBy)
+        string? notes)
     {
         if (Status == StageExecutionStatus.Completed)
             throw new DomainException("Stage is already completed.");
-
-        if (approvalRequired && string.IsNullOrWhiteSpace(approvedBy))
-            throw new DomainException("This stage requires approval before it can be completed.");
 
         EnsureDrawingNumber();
         if (inputKg is < 0 || inputMeter is < 0 || outputKg is < 0 || outputMeter is < 0 ||
@@ -257,9 +265,6 @@ public class ProductionOrderStageExecution : BaseEntity
         LossKg = lossKg; LossMeter = lossMeter;
         SeparatesKg = separatesKg; SeparatesMeter = separatesMeter;
         Notes = notes;
-        ApprovalRequired = approvalRequired;
-        ApprovedBy = approvedBy;
-        ApprovedAtUtc = approvalRequired ? DateTime.UtcNow : null;
 
         Status = StageExecutionStatus.Completed;
         CompletedAtUtc = DateTime.UtcNow;

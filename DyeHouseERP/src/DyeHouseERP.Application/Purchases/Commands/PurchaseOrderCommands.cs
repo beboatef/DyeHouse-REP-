@@ -164,6 +164,53 @@ public class UpdatePurchaseOrderLineCommandHandler : IRequestHandler<UpdatePurch
     }
 }
 
+/// <summary>
+/// Corrects the ORDERED quantity of a purchase-order line that has already been partly (or fully)
+/// received (spec section 35). This is the safe correction path the plain line edit refuses once a
+/// line has receipts: it changes only the outstanding quantity, never the received quantity or any
+/// posted stock movement, and it can never push the ordered quantity below what already arrived.
+/// The reason is mandatory and recorded on the line; the change is audited by the interceptor.
+/// Gated by the dedicated configurable <c>purchases.edit_after_receipt</c> right, not by purchases.edit
+/// and not by the admin role.
+/// </summary>
+public record CorrectPurchaseOrderLineQuantityCommand(
+    Guid OrderId, Guid LineId, decimal NewQuantity, string Reason) : IRequest<PurchaseOrderDto>;
+
+public class CorrectPurchaseOrderLineQuantityCommandValidator
+    : AbstractValidator<CorrectPurchaseOrderLineQuantityCommand>
+{
+    public CorrectPurchaseOrderLineQuantityCommandValidator()
+    {
+        RuleFor(x => x.OrderId).NotEmpty();
+        RuleFor(x => x.LineId).NotEmpty();
+        RuleFor(x => x.NewQuantity).GreaterThan(0);
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+    }
+}
+
+public class CorrectPurchaseOrderLineQuantityCommandHandler
+    : IRequestHandler<CorrectPurchaseOrderLineQuantityCommand, PurchaseOrderDto>
+{
+    private readonly IApplicationDbContext _db;
+    private readonly ICurrentUserService _currentUser;
+    private readonly ISender _mediator;
+
+    public CorrectPurchaseOrderLineQuantityCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, ISender mediator)
+    { _db = db; _currentUser = currentUser; _mediator = mediator; }
+
+    public async Task<PurchaseOrderDto> Handle(CorrectPurchaseOrderLineQuantityCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _db.PurchaseOrders.Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("PurchaseOrder", request.OrderId);
+
+        order.CorrectOrderedQuantityAfterReceipt(request.LineId, request.NewQuantity, request.Reason, _currentUser.UserName);
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return await _mediator.Send(new GetPurchaseOrderByIdQuery(order.Id), cancellationToken);
+    }
+}
+
 public record RemovePurchaseOrderLineCommand(Guid OrderId, Guid LineId) : IRequest<PurchaseOrderDto>;
 
 public class RemovePurchaseOrderLineCommandHandler : IRequestHandler<RemovePurchaseOrderLineCommand, PurchaseOrderDto>

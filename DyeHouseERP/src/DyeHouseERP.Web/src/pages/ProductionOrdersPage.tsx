@@ -179,13 +179,6 @@ export default function ProductionOrdersPage() {
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs text-gray-400">
                 {o.stageExecutions.filter((s) => s.status === "Completed").length} / {o.stageExecutions.length} مراحل مكتملة
-                {o.formationRequestNumber && (
-                  <>
-                    {" · "}
-                    {t("fr.number")}: <span className="ltr-nums font-medium">{o.formationRequestNumber}</span>
-                    {o.formationGroupNumber !== null && <> · {t("fr.group")} #{o.formationGroupNumber}</>}
-                  </>
-                )}
               </div>
               {/* The job-order card, not the detail screen, is where a supervisor
                   actually prints from - so both the PDF and the print preview

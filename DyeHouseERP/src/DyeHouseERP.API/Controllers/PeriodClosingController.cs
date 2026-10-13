@@ -9,10 +9,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
-/// <summary>Period closing (spec section 43) - admin only, since reopening a closed period is a significant, audited action.</summary>
+/// <summary>
+/// Period closing (spec section 43). Access is decided by the granular settings.manage permission -
+/// closing and reopening a period is a significant audited action, so the right is granted explicitly
+/// rather than bundled with the admin role. Authentication is always required.
+/// </summary>
 [ApiController]
 [Route("api/period-closes")]
-[Authorize(Roles = "admin")]
+[Authorize]
 public class PeriodClosingController : ControllerBase
 {
     private readonly ISender _mediator;

@@ -24,7 +24,7 @@ public static class UserSeeder
             DefaultUsername,
             passwordHasher.Hash(DefaultPassword),
             "Administrator",
-            roles: $"admin,{Permissions.InventoryAllowNegativeStock},{Permissions.StageRequiresApproval}",
+            roles: $"admin,{Permissions.InventoryAllowNegativeStock}",
             createdBy: "system");
 
         context.Users.Add(admin);

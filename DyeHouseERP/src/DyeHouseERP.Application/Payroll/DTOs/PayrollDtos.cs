@@ -83,6 +83,25 @@ public class PayrollRunDto
     public string? PostedBy { get; set; }
     public DateTime? PostedAtUtc { get; set; }
     public string? CancellationReason { get; set; }
+
+    // ---- calculation / review workflow (spec section 39) ----
+    public string? CalculatedBy { get; set; }
+    public DateTime? CalculatedAtUtc { get; set; }
+    public string? SubmittedBy { get; set; }
+    public DateTime? SubmittedAtUtc { get; set; }
+    public string? ReviewedBy { get; set; }
+    public DateTime? ReviewedAtUtc { get; set; }
+    public string? ReviewNotes { get; set; }
+
+    // ---- reversal traceability (spec section 39): a posted run is never edited, it is reversed by a linked adjustment run ----
+    public string? ReversedBy { get; set; }
+    public DateTime? ReversedAtUtc { get; set; }
+    public string? ReversalReason { get; set; }
+    /// <summary>Set on an ADJUSTMENT run: the posted run it corrects.</summary>
+    public Guid? ReversesPayrollRunId { get; set; }
+    /// <summary>Set on the ORIGINAL run: the adjustment run that reversed it.</summary>
+    public Guid? ReversedByPayrollRunId { get; set; }
+
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public List<PayrollRunLineDto> Lines { get; set; } = new();
