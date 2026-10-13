@@ -49,6 +49,20 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
         builder.HasIndex(o => o.JobOrderType);
         builder.HasIndex(o => o.ReprocessingOfProductionOrderId);
 
+        // Canonical issue linkage (spec section 5): exactly ONE generated Job Order per issue
+        // transaction, and exactly one order per client idempotency token. Both columns are
+        // nullable - legacy orders (old create-then-allocate path) and reprocessing orders carry
+        // neither - so uniqueness is enforced only for non-null values through a filtered index.
+        builder.HasIndex(o => o.SourceIssueTransactionId).IsUnique()
+            .HasFilter("[SourceIssueTransactionId] IS NOT NULL");
+        builder.HasIndex(o => o.IssueRequestId).IsUnique()
+            .HasFilter("[IssueRequestId] IS NOT NULL");
+
+        // Planning references (Formation Request / basin) - plain lookups, never a second
+        // copy of the planning data.
+        builder.HasIndex(o => o.FormationRequestId);
+        builder.HasIndex(o => o.FormationBasinId);
+
         builder.Metadata.FindNavigation(nameof(ProductionOrder.StageExecutions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
         builder.Metadata.FindNavigation(nameof(ProductionOrder.RawAllocations))!

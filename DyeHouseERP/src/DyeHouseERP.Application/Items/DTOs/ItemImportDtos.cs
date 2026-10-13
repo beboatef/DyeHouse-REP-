@@ -11,6 +11,12 @@ public class ItemImportRowResult
     public string? Category { get; set; }
     public string BaseUnit { get; set; } = string.Empty;
 
+    /// <summary>The optional structured secondary unit (blank when the item uses a single unit).</summary>
+    public string SecondaryUnit { get; set; } = string.Empty;
+
+    /// <summary>Whether the item requires both configured units on every movement.</summary>
+    public bool RequireBothUnits { get; set; }
+
     /// <summary>True when the row is importable (new item, or an existing item being updated with permission).</summary>
     public bool IsValid { get; set; }
 

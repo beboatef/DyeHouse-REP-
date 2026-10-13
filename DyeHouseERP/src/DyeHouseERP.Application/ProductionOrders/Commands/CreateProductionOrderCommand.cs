@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -9,6 +10,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.ProductionOrders.Commands;
 
+/// <summary>
+/// LEGACY / INTERNAL ONLY - not reachable from the API.
+///
+/// There is deliberately NO endpoint that creates a Job Order without an issue: the
+/// canonical workflow is <see cref="IssueRawMaterialCommand"/>, where the raw issue posts the
+/// inventory OUT, creates the order and links the two in ONE transaction (spec sections 5-6).
+/// This handler survives only so existing tests and internal scenarios can build an order
+/// with no issue link (which the old create-then-allocate path produced).
+///
+/// It must NOT be exposed through a controller, and it cannot produce a second stock OUT:
+/// the order it creates has a NULL SourceIssueTransactionId, so the first allocation through
+/// <see cref="AllocateRawCommand"/> posts the only deduction it will ever have, and any later
+/// allocation on an order that DOES carry an issue link is refused outright.
+/// </summary>
 public record CreateProductionOrderCommand(
     Guid CustomerId, Guid ItemId, DateTime OrderDate,
     string? Color, decimal? RequestedQuantityKg, decimal? RequestedQuantityMeter,
@@ -45,6 +60,12 @@ public class CreateProductionOrderCommandHandler : IRequestHandler<CreateProduct
 
     public async Task<ProductionOrderDto> Handle(CreateProductionOrderCommand request, CancellationToken cancellationToken)
     {
+        // Spec sections 5-6: the requested quantity may only use the item's configured
+        // units, and BOTH are required when the item demands both.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.ItemId, request.RequestedQuantityKg, request.RequestedQuantityMeter,
+            cancellationToken, "on this Job Order's requested quantity");
+
         var orderNumber = await _numberGenerator.NextAsync(DocumentType.ProductionOrder, cancellationToken: cancellationToken);
 
         var order = new ProductionOrder(

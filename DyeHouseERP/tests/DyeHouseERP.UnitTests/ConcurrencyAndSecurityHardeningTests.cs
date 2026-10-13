@@ -511,12 +511,16 @@ public class RawInspectionRejectionConcurrencyTests
     {
         var customer = new Customer("C-INSPECT", "Inspection Customer", "seed");
         var warehouse = new Warehouse("RAW-INSPECT", "Raw Warehouse", WarehouseKind.RawMaterial, "seed");
+        // The line's item must be a real row: recording a rejection validates the rejected
+        // quantity against the item's configured units (spec sections 5-6).
+        var item = new Item("IT-INSPECT", "Inspection Item", UnitOfMeasure.KG, "seed", secondaryUnit: UnitOfMeasure.Meter);
         var message = new RawMessage("RAW-2026-INSPECT", DateTime.UtcNow, customer.Id, warehouse.Id, "receiver", "seed");
-        var line = message.AddLine(Guid.NewGuid(), receivedKg, null, null, null);
+        var line = message.AddLine(item.Id, receivedKg, null, null, null);
 
         using var db = NewDb();
         db.Customers.Add(customer);
         db.Warehouses.Add(warehouse);
+        db.Items.Add(item);
         db.RawMessages.Add(message);
         db.InventoryTransactions.Add(new InventoryTransaction(DocumentType.RawReceiptMessage, message.MessageNumber, message.Id,
             DateTime.UtcNow, warehouse.Id, customer.Id, line.ItemId, message.Id, null, receivedKg, null, TransactionDirection.In, "seed"));

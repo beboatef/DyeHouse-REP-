@@ -392,7 +392,14 @@ public enum ApprovalRequestType
     ResumeProduction = 2,
     CustomerTransfer = 3,
     RawExternalRelease = 4,
-    StockAdjustment = 5
+    StockAdjustment = 5,
+
+    /// <summary>
+    /// The canonical raw issue that creates the Job Order (spec section 5): issuing more
+    /// material than the customer owns on the lot needs the same single-use, different-user
+    /// authorisation every other negative-stock exception does.
+    /// </summary>
+    RawIssue = 6
 }
 
 /// <summary>Lifecycle of an approval request (spec section 24).</summary>

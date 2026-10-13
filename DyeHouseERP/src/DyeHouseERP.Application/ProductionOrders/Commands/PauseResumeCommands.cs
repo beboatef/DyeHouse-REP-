@@ -157,6 +157,12 @@ public class PauseProductionOrderCommandHandler : IRequestHandler<PauseProductio
             await WarehouseGuard.EnsureUsableForNewMovementAsync(
                 _db, chosen.WarehouseId, cancellationToken, "to return unused raw material into it");
 
+            // The released quantity is a quantity of the chosen lot's item, so it may only
+            // use that item's configured units (spec sections 5-6).
+            await ItemUnitGuard.EnsureValidQuantitiesAsync(
+                _db, chosen.ItemId, releaseKg > 0 ? releaseKg : null, releaseMeter > 0 ? releaseMeter : null,
+                cancellationToken, "on this pause release", requireAnyQuantity: false);
+
             // The state change happens first, so a refused pause never leaves a
             // half-written movement behind in the change tracker.
             order.Pause(request.Reason, _currentUser.UserName);
@@ -274,6 +280,12 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
         // against the message's warehouse, so that warehouse must still be active.
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, message.WarehouseId, cancellationToken, "to re-issue raw material out of it");
+
+        // Spec sections 5-6: the re-issued quantity may only use the item's configured
+        // units, and both when the item requires both.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.ItemId, request.QuantityKg, request.QuantityMeter,
+            cancellationToken, "on this resume re-issue");
 
         await using (await _allocationLock.AcquireAsync(
             StockLockKey.RawLot(message.WarehouseId, request.ItemId, order.CustomerId, message.Id), cancellationToken))

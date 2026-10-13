@@ -79,6 +79,26 @@ public class ProductionOrderDto
     public decimal? ExpectedOutputMeter { get; set; }
     public Guid? ReprocessingOfProductionOrderId { get; set; }
 
+    /// <summary>
+    /// The inventory OUT row (the raw issue) that created this order through the canonical
+    /// workflow (spec section 5). Null for legacy/reprocessing orders.
+    /// </summary>
+    public Guid? SourceIssueTransactionId { get; set; }
+
+    /// <summary>Planning reference: the Formation Request this issue came from, when applicable.</summary>
+    public Guid? FormationRequestId { get; set; }
+
+    /// <summary>Planning reference: the formation basin this issue came from, when applicable.</summary>
+    public Guid? FormationBasinId { get; set; }
+
+    /// <summary>
+    /// True when production has actually started on this order - a stage output, separates or
+    /// loss was recorded, a stage was closed/skipped/transferred, or the order is InProduction.
+    /// The UI uses this to hide the ordinary unused-raw cancellation, which the backend also
+    /// refuses (spec section 9, case C).
+    /// </summary>
+    public bool HasProductionStarted { get; set; }
+
     public List<RawAllocationDto> RawAllocations { get; set; } = new();
     public List<StageExecutionDto> StageExecutions { get; set; } = new();
 }

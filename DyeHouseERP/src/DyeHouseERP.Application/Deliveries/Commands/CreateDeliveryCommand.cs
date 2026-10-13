@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Deliveries.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -65,6 +66,12 @@ public class CreateDeliveryCommandHandler : IRequestHandler<CreateDeliveryComman
                     $"Production order '{order.OrderNumber}' does not belong to the delivery's customer. " +
                     "A delivery may only contain finished goods for its own customer.");
         }
+
+        // Spec sections 5-6: every delivery line may only carry the units configured on
+        // its item, and both measurements when the item requires them.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.Lines.Select(l => (l.ItemId, l.QuantityKg, l.QuantityMeter)),
+            cancellationToken, "on this delivery");
 
         var deliveryNumber = await _numberGenerator.NextAsync(DocumentType.Delivery, cancellationToken: cancellationToken);
 

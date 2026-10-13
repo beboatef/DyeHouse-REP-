@@ -58,7 +58,10 @@ public class RawAllocationGateHandlerTests
     private static Scene SeedScene(ApplicationDbContext db)
     {
         var customer = new Customer("C-1", "Customer", "seed");
-        var item = new Item("IT-1", "Item", UnitOfMeasure.KG, "seed");
+        // KG primary with Meter as the secondary unit: this suite exercises BOTH units as
+        // fully independent measurements, and the item-unit rules (spec sections 5-6) only
+        // allow a unit the item is actually configured for.
+        var item = new Item("IT-1", "Item", UnitOfMeasure.KG, "seed", secondaryUnit: UnitOfMeasure.Meter);
         var raw = new Warehouse("RAW", "Raw Material", WarehouseKind.RawMaterial, "seed");
         var ready = new Warehouse("RDY", "Ready Goods", WarehouseKind.ReadyGoods, "seed");
         var formation = new ProductionStageDefinition("PS001", "التشكيل", 1, "seed", isFormationStage: true);

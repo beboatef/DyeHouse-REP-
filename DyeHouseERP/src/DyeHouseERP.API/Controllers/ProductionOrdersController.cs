@@ -82,11 +82,19 @@ public class ProductionOrdersController : ControllerBase
         return File(bytes, "application/pdf", $"production-order-{order.OrderNumber}.pdf");
     }
 
-    /// <summary>Creates a Production Order and snapshots the currently-active stage route onto it (spec sections 12, 19).</summary>
-    [HttpPost]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionCreate)]
+    /// <summary>
+    /// THE canonical workflow (spec section 5): issuing raw material creates the Job Order.
+    /// One atomic step posts the inventory OUT movement, creates the Production Order from the
+    /// ACTUAL issued quantities, links the order to that issue transaction, and links the optional
+    /// planning Formation Request/basin. There is deliberately no endpoint that creates an ordinary
+    /// Job Order WITHOUT an issue: the old create-then-allocate route is gone, so a second stock
+    /// OUT for the same material is not reachable. (Reprocessing a Separate is a separate,
+    /// explicit workflow that draws from separates rather than a customer lot.)
+    /// </summary>
+    [HttpPost("issue")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawConsume)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status201Created)]
-    public async Task<ActionResult<ProductionOrderDto>> Create([FromBody] CreateProductionOrderCommand command)
+    public async Task<ActionResult<ProductionOrderDto>> IssueRawMaterial([FromBody] IssueRawMaterialCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);

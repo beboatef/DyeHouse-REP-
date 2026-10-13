@@ -1,7 +1,10 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CustomersApi, ItemsApi, JobOrderType, ProductionOrdersApi, ProductionPriority } from "@/api/client";
+import {
+  ApprovalsApi, CustomersApi, FormationRequestsApi, ItemsApi, JobOrderType,
+  ProductionOrdersApi, ProductionPriority, RawMessagesApi
+} from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { ExportButtons, DocumentActions } from "@/components/ExportButtons";
 import { ProductionOrdersExports } from "@/api/exports";
@@ -14,23 +17,52 @@ const statusTone: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> =
 };
 const priorityLabel: Record<string, string> = { Low: "منخفضة", Normal: "عادية", High: "عالية", Urgent: "عاجلة" };
 
+/**
+ * Job orders (أوامر التشغيل).
+ *
+ * Creating an order IS issuing raw material (spec section 5): the screen collects the
+ * ACTUAL issued quantities and calls the one atomic endpoint that posts the inventory OUT,
+ * creates the order and links them. There is no separate "create order then allocate" step,
+ * which is what used to make a second stock OUT possible.
+ *
+ * The Formation Request is OPTIONAL: pick one to record which plan the issue came from
+ * (and optionally a basin), or leave it empty for a direct issue. Planned quantities are
+ * shown for reference only - the actual issued figures always win and are never enforced
+ * against the plan.
+ */
 export default function ProductionOrdersPage() {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  // Closed line / open line (spec section 16) - a real, filterable property of every Job Order.
+  // A Formation Request can hand its customer/item/request references over to this screen
+  // (Workflow 1). Nothing is issued by that navigation - the ACTUAL quantities are still
+  // entered and confirmed here, and the warehouse may instead issue directly.
+  const [searchParams] = useSearchParams();
+  const prefillCustomerId = searchParams.get("customerId") ?? "";
+  const prefillItemId = searchParams.get("itemId") ?? "";
+  const prefillFormationRequestId = searchParams.get("formationRequestId") ?? "";
+  const [showForm, setShowForm] = useState(Boolean(prefillCustomerId || prefillFormationRequestId));
   const [jobOrderType, setJobOrderType] = useState<JobOrderType>("ClosedLine");
   const [typeFilter, setTypeFilter] = useState<JobOrderType | "">("");
-  const [customerId, setCustomerId] = useState("");
-  const [itemId, setItemId] = useState("");
+  const [customerId, setCustomerId] = useState(prefillCustomerId);
+  const [itemId, setItemId] = useState(prefillItemId);
+  const [rawMessageId, setRawMessageId] = useState("");
+  const [formationRequestId, setFormationRequestId] = useState(prefillFormationRequestId);
+  const [formationBasinId, setFormationBasinId] = useState("");
   const [color, setColor] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
-  const [qtyKg, setQtyKg] = useState("");
-  const [qtyMeter, setQtyMeter] = useState("");
+  const [actualKg, setActualKg] = useState("");
+  const [actualMeter, setActualMeter] = useState("");
   const [priority, setPriority] = useState<ProductionPriority>("Normal");
   const [customerReference, setCustomerReference] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<{ id: string; orderNumber: string } | null>(null);
+  const [negativeStockDetail, setNegativeStockDetail] = useState<{ shortage: number; reason: string } | null>(null);
+  const [approvalRequested, setApprovalRequested] = useState<string | null>(null);
+
+  // One idempotency token per confirmation. Re-sending the same confirmation (a double
+  // click, a retry) returns the SAME order instead of issuing the material twice.
+  const requestId = useRef<string>(crypto.randomUUID());
 
   const { data: customers } = useQuery({ queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true }) });
   const { data: items } = useQuery({ queryKey: ["items", "active"], queryFn: () => ItemsApi.list({ activeOnly: true }) });
@@ -39,24 +71,107 @@ export default function ProductionOrdersPage() {
     queryFn: () => ProductionOrdersApi.list({ jobOrderType: typeFilter || undefined })
   });
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      ProductionOrdersApi.create({
-        customerId, itemId, orderDate, priority, jobOrderType,
-        color: color || undefined,
-        requestedQuantityKg: qtyKg ? Number(qtyKg) : undefined,
-        requestedQuantityMeter: qtyMeter ? Number(qtyMeter) : undefined,
-        customerReference: customerReference || undefined,
-        notes: notes || undefined
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["production-orders"] });
-      setShowForm(false);
-      setColor(""); setQtyKg(""); setQtyMeter(""); setCustomerReference(""); setNotes("");
-      setError(null);
-    },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
+  // Lots of the chosen customer/item that still hold a balance - the material actually
+  // available to issue from.
+  const { data: lots } = useQuery({
+    queryKey: ["raw-messages", "issuable", customerId, itemId],
+    queryFn: () => RawMessagesApi.list({ customerId, itemId: itemId || undefined, onlyWithBalance: true }),
+    enabled: !!customerId
   });
+
+  // Optional planning documents for the same customer/item.
+  const { data: formationRequests } = useQuery({
+    queryKey: ["formation-requests", "issuable", customerId, itemId],
+    queryFn: () => FormationRequestsApi.list({ customerId, itemId: itemId || undefined }),
+    enabled: !!customerId && !!itemId
+  });
+
+  const selectedRequest = useMemo(
+    () => (formationRequests ?? []).find((r) => r.id === formationRequestId),
+    [formationRequests, formationRequestId]
+  );
+
+  const selectedItem = useMemo(() => (items ?? []).find((i) => i.id === itemId), [items, itemId]);
+  const unitLabel = (u: string | null | undefined) => (u === "Meter" ? t("common.meter") : t("common.kg"));
+
+  const issueMutation = useMutation({
+    mutationFn: () =>
+      ProductionOrdersApi.issue({
+        customerId,
+        itemId,
+        rawMessageId,
+        orderDate,
+        actualQuantityKg: actualKg ? Number(actualKg) : undefined,
+        actualQuantityMeter: actualMeter ? Number(actualMeter) : undefined,
+        color: color || undefined,
+        priority,
+        jobOrderType,
+        customerReference: customerReference || undefined,
+        notes: notes || undefined,
+        formationRequestId: formationRequestId || null,
+        formationBasinId: formationBasinId || null,
+        requestId: requestId.current
+      }),
+    onSuccess: (order) => {
+      qc.invalidateQueries({ queryKey: ["production-orders"] });
+      qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      // Show the created order (number + link) - the issue produced it.
+      setCreated({ id: order.id, orderNumber: order.orderNumber });
+      setColor(""); setActualKg(""); setActualMeter(""); setCustomerReference(""); setNotes("");
+      setFormationRequestId(""); setFormationBasinId("");
+      requestId.current = crypto.randomUUID();
+      setError(null);
+      setNegativeStockDetail(null);
+      setApprovalRequested(null);
+    },
+    onError: (err: any) => {
+      // A shortage is NOT overridden by the person doing the issue (requester ≠ approver):
+      // the screen offers to send the exact same issue to the Approval Center instead, and a
+      // DIFFERENT user with inventory.approve_negative_stock decides it there.
+      if (err?.response?.data?.code === "NEGATIVE_STOCK") {
+        setNegativeStockDetail({ shortage: err.response.data.shortage, reason: "" });
+        setError(null);
+      } else {
+        setNegativeStockDetail(null);
+        setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "تعذر تنفيذ الإذن");
+      }
+    }
+  });
+
+  /**
+   * Raises the separation-of-duties request for the SAME issue: the backend stores this exact
+   * command, and approving it posts the very same inventory OUT + Job Order through the one
+   * canonical handler - bound to this lot, item, customer and quantity.
+   */
+  const requestApprovalMutation = useMutation({
+    mutationFn: (approvalReason: string) =>
+      ApprovalsApi.submit({
+        type: "RawIssue",
+        reason: approvalReason,
+        payloadJson: JSON.stringify({
+          customerId, itemId, rawMessageId, orderDate,
+          actualQuantityKg: actualKg ? Number(actualKg) : undefined,
+          actualQuantityMeter: actualMeter ? Number(actualMeter) : undefined,
+          color: color || undefined,
+          customerReference: customerReference || undefined,
+          notes: notes || undefined,
+          priority,
+          jobOrderType,
+          formationRequestId: formationRequestId || null,
+          formationBasinId: formationBasinId || null,
+          requestId: requestId.current
+        })
+      }),
+    onSuccess: (request) => {
+      setNegativeStockDetail(null);
+      setApprovalRequested(request.documentNumber);
+      qc.invalidateQueries({ queryKey: ["approval-requests"] });
+    },
+    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
+  });
+
+  const canSubmit =
+    !!customerId && !!itemId && !!rawMessageId && (!!actualKg || !!actualMeter) && !issueMutation.isPending;
 
   return (
     <>
@@ -69,10 +184,21 @@ export default function ProductionOrdersPage() {
               excel={{ label: t("common.export"), action: ProductionOrdersExports.excel }}
               pdf={{ label: t("common.exportPdf"), action: ProductionOrdersExports.pdf }}
             />
-            <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("fr.new")}</Button>
+            <Button onClick={() => setShowForm((s) => !s)}>
+              {showForm ? t("common.cancel") : t("jo.issueRaw")}
+            </Button>
           </div>
         }
       />
+
+      {created && (
+        <Card className="p-4 mb-4 border-green-300 bg-green-50/50">
+          <span className="text-sm text-green-800">{t("jo.issueCreated")}: </span>
+          <Link to={`/production-orders/${created.id}`} className="font-bold ltr-nums text-brand-600 hover:underline">
+            {created.orderNumber}
+          </Link>
+        </Card>
+      )}
 
       <Card className="p-4 mb-4">
         <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")} className="max-w-xs">
@@ -84,39 +210,106 @@ export default function ProductionOrdersPage() {
 
       {showForm && (
         <Card className="p-5 mb-6">
+          <h3 className="text-sm font-bold text-slate-800">{t("jo.issueRaw")}</h3>
+          <p className="text-2xs text-slate-500 mt-1">{t("jo.issueHint")}</p>
           <form
-            className="space-y-4"
+            className="space-y-4 mt-3"
             onSubmit={(e) => {
               e.preventDefault();
-              createMutation.mutate();
+              setApprovalRequested(null);
+              issueMutation.mutate();
             }}
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="field-label">العميل</label>
-                <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+                <Select
+                  value={customerId}
+                  onChange={(e) => {
+                    setCustomerId(e.target.value);
+                    setRawMessageId(""); setFormationRequestId(""); setFormationBasinId("");
+                  }}
+                  required
+                >
                   <option value="">اختر العميل...</option>
                   {customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
               </div>
               <div>
                 <label className="field-label">الصنف</label>
-                <Select value={itemId} onChange={(e) => setItemId(e.target.value)} required>
+                <Select
+                  value={itemId}
+                  onChange={(e) => {
+                    setItemId(e.target.value);
+                    setRawMessageId(""); setFormationRequestId(""); setFormationBasinId("");
+                  }}
+                  required
+                >
                   <option value="">اختر الصنف...</option>
-                  {items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name}</option>)}
+                  {items?.map((i) => <option key={i.id} value={i.id}>{i.code} - {i.name} ({i.baseUnit})</option>)}
                 </Select>
+              </div>
+              <div>
+                <label className="field-label">الرسالة / المصدر (الرصيد المتاح)</label>
+                <Select value={rawMessageId} onChange={(e) => setRawMessageId(e.target.value)} required disabled={!customerId}>
+                  <option value="">اختر رصيد الرسالة...</option>
+                  {lots?.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.messageNumber} · {m.warehouseName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="field-label">
+                  الكمية الفعلية المنصرفة ({unitLabel(selectedItem?.baseUnit)})
+                </label>
+                <Input type="number" step="0.001" min="0" value={actualKg} onChange={(e) => setActualKg(e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label">
+                  الكمية الفعلية المنصرفة (وحدة ثانية)
+                </label>
+                <Input
+                  type="number" step="0.001" min="0" value={actualMeter}
+                  onChange={(e) => setActualMeter(e.target.value)}
+                  disabled={!selectedItem?.secondaryUnit}
+                  placeholder={selectedItem?.secondaryUnit ? "" : "لا توجد وحدة ثانية"}
+                />
               </div>
               <div>
                 <label className="field-label">اللون</label>
                 <Input value={color} onChange={(e) => setColor(e.target.value)} />
               </div>
               <div>
-                <label className="field-label">الكمية المطلوبة (كجم)</label>
-                <Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} />
+                <label className="field-label">طلب التشكيل (اختياري)</label>
+                <Select
+                  value={formationRequestId}
+                  onChange={(e) => { setFormationRequestId(e.target.value); setFormationBasinId(""); }}
+                  disabled={!itemId}
+                >
+                  <option value="">إذن مباشر بدون طلب تشكيل</option>
+                  {formationRequests?.map((r) => (
+                    <option key={r.id} value={r.id}>{r.requestNumber} ({r.status})</option>
+                  ))}
+                </Select>
               </div>
               <div>
-                <label className="field-label">الكمية المطلوبة (متر)</label>
-                <Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} />
+                <label className="field-label">الحوض (اختياري)</label>
+                <Select
+                  value={formationBasinId}
+                  onChange={(e) => setFormationBasinId(e.target.value)}
+                  disabled={!selectedRequest}
+                >
+                  <option value="">بدون حوض</option>
+                  {selectedRequest?.groups.flatMap((g) =>
+                    g.basins.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {g.name ?? `مجموعة ${g.groupNumber}`} · {b.name ?? `حوض ${b.basinNumber}`} · مخطط {b.plannedQuantity} {b.unit === "Meter" ? "م" : "كجم"}
+                      </option>
+                    ))
+                  )}
+                </Select>
               </div>
               <div>
                 <label className="field-label">{t("jo.type")}</label>
@@ -147,10 +340,43 @@ export default function ProductionOrdersPage() {
               <label className="field-label">ملاحظات</label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button type="submit" disabled={!canSubmit}>
+                {issueMutation.isPending ? "جارٍ التنفيذ..." : t("jo.issueConfirm")}
+              </Button>
+              <span className="text-2xs text-slate-400">{t("jo.issueActualHint")}</span>
+            </div>
             {error && <p className="form-error">{error}</p>}
+
+            {negativeStockDetail && (
+              <Card className="p-4 border-yellow-300 bg-yellow-50">
+                <p className="text-sm text-yellow-800">
+                  الرصيد المتاح من هذه الرسالة لا يكفي، والنقص بمقدار{" "}
+                  <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
+                  لا يتم تجاوز الرصيد السالب من نفس شاشة الصرف: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه
+                  إلا مستخدم آخر يملك صلاحية اعتماد تجاوز الرصيد السالب.
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <Input placeholder="سبب طلب الاعتماد..." value={negativeStockDetail.reason}
+                    onChange={(e) => setNegativeStockDetail({ ...negativeStockDetail, reason: e.target.value })} />
+                  <Button type="button" variant="secondary"
+                    disabled={!negativeStockDetail.reason || requestApprovalMutation.isPending}
+                    onClick={() => { setError(null); requestApprovalMutation.mutate(negativeStockDetail.reason); }}>
+                    {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
+                  </Button>
+                </div>
+                <p className="mt-2 text-2xs text-yellow-800">
+                  الاعتماد مرتبط بنفس الرسالة والصنف والعميل والكمية والوحدة وطلب التشكيل - أي تغيير يتطلب طلبًا جديدًا.
+                </p>
+              </Card>
+            )}
+
+            {approvalRequested && (
+              <p className="text-sm text-green-700">
+                تم إرسال طلب اعتماد على الرسالة <span className="ltr-nums font-bold">{approvalRequested}</span>.
+                لن يُخصم المخزون ولن يُنشأ أمر التشغيل إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
+              </p>
+            )}
           </form>
         </Card>
       )}

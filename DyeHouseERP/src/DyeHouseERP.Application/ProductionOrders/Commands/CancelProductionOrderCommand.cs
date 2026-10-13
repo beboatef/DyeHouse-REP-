@@ -92,6 +92,12 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
         if (order.Status == ProductionOrderStatus.Completed)
             throw new DocumentLockedException("Production Order", order.OrderNumber);
 
+        // Spec section 9, case C: production has already consumed some of this material, so
+        // the ordinary UNUSED-RAW cancellation is refused outright - direct API calls included.
+        // Processed material is not unused raw material: unwinding it here would return WIP to
+        // the raw warehouse as if it had never been worked and would double-count the stock.
+        await EnsureProductionNotStartedAsync(_db, order.Id, order.Status, order.OrderNumber, cancellationToken);
+
         // ---- Lock EVERY lot this order could still hold a claim on ----
         // The allocation rows are the authoritative list of lots the order has
         // ever drawn from; the ledger's own outstanding lots are added as a
@@ -139,6 +145,10 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
                 throw new NotFoundException("ProductionOrder", order.Id);
             if (liveStatus == ProductionOrderStatus.Completed)
                 throw new DocumentLockedException("Production Order", order.OrderNumber);
+
+            // Case C is re-checked INSIDE the lock too: a stage movement that committed while
+            // this request was queueing must still block the unused-raw cancellation.
+            await EnsureProductionNotStartedAsync(_db, order.Id, liveStatus.Value, order.OrderNumber, cancellationToken);
 
             // The outstanding issue is re-derived INSIDE the lock: a release or
             // re-issue that committed while we were queueing changes what is
@@ -214,5 +224,32 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
         }
 
         return await GetProductionOrderByIdQueryHandler.LoadDtoAsync(_db, order.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// The Case C guard (spec section 9): the ordinary unused-raw cancellation may only run
+    /// while production has NOT started. "Started" means the InProduction state, or any stage
+    /// execution that actually recorded something - an output, separates or loss, a closed or
+    /// skipped stage, or a completion timestamp. The formation stage merely existing (and
+    /// sitting InProgress) is the freshly issued state and is NOT production.
+    /// </summary>
+    private static async Task EnsureProductionNotStartedAsync(
+        IApplicationDbContext db, Guid orderId, ProductionOrderStatus status, string orderNumber,
+        CancellationToken cancellationToken)
+    {
+        var hasRecordedProduction = await db.ProductionOrderStageExecutions.AsNoTracking()
+            .AnyAsync(s => s.ProductionOrderId == orderId &&
+                (s.OutputKg != null || s.OutputMeter != null
+                 || s.SeparatesKg != null || s.SeparatesMeter != null
+                 || s.LossKg != null || s.LossMeter != null
+                 || s.Status == StageExecutionStatus.Completed
+                 || s.Status == StageExecutionStatus.Skipped
+                 || s.CompletedAtUtc != null), cancellationToken);
+
+        if (status == ProductionOrderStatus.InProduction || hasRecordedProduction)
+            throw new DomainException(
+                $"Production order {orderNumber} has already started production, so the unused raw-material cancellation " +
+                "cannot be used. Processed material is not unused raw material and must never be returned to the raw " +
+                "warehouse as if it were; use the explicit rework/correction workflow instead.");
     }
 }

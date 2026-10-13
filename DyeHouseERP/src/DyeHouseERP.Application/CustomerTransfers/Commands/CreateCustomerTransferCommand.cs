@@ -95,6 +95,12 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, message.WarehouseId, cancellationToken, "to transfer stock between customers");
 
+        // Spec sections 5-6: the transfer may only use the units configured on its item,
+        // and both measurements when the item requires them.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.ItemId, request.QuantityKg, request.QuantityMeter,
+            cancellationToken, "on this customer transfer");
+
         // H6: lock both ownership dimensions (sender and receiver) for the whole
         // validate-then-post window, so a concurrent movement cannot change the
         // sender's balance between the check and the OUT row.

@@ -115,6 +115,16 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
         // document + IN movement and completes the order (spec section 17).
         await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
 
+        // Spec sections 5-6: the stage output (and any separates) may only be recorded
+        // in the units configured on the order's item, with both required when the item
+        // asks for both. Never converted, never inferred.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, order.ItemId, request.OutputKg, request.OutputMeter,
+            cancellationToken, "as this stage's output");
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, order.ItemId, request.SeparatesKg, request.SeparatesMeter,
+            cancellationToken, "as separates", requireAnyQuantity: false);
+
         stage.EnsureDrawingNumber();
         var drawingNumber = request.DrawingNumber;
 

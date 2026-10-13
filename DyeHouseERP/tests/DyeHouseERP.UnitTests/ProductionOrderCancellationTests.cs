@@ -107,8 +107,11 @@ public class ProductionOrderCancellationTests
                 direction: TransactionDirection.Out, createdBy: "seed"));
         }
 
-        if (lots > 0)
-            order.MarkInProduction();
+        // NOTE (spec section 9, case C): a plainly issued order is NOT InProduction.
+        // Issuing raw material leaves it RawAllocated and the formation stage merely
+        // InProgress; production has started only once a stage records output, separates
+        // or loss, closes/skips, or transfers. The tests that DO record those are the
+        // Case C refusals below.
 
         // Stage history and completion come AFTER the allocations - the real flow
         // issues material first, works it, then closes the order.
@@ -254,7 +257,7 @@ public class ProductionOrderCancellationTests
             .SingleAsync(a => a.Action == "Cancel" && a.EntityName == "ProductionOrder");
         audit.Reason.Should().Be("customer withdrew the job");
         audit.UserName.Should().Be("supervisor");
-        audit.BeforeDataJson.Should().Contain(nameof(ProductionOrderStatus.InProduction));
+        audit.BeforeDataJson.Should().Contain(nameof(ProductionOrderStatus.RawAllocated));
         audit.AfterDataJson.Should().Contain(nameof(ProductionOrderStatus.Cancelled));
         audit.AfterDataJson.Should().Contain("quantityKg");
     }
@@ -418,7 +421,7 @@ public class ProductionOrderCancellationTests
 
         (await OrderRows(db, f.Order.Id).CountAsync()).Should().Be(1, "only the original OUT row exists");
         (await db.ProductionOrders.SingleAsync(o => o.Id == f.Order.Id)).Status
-            .Should().Be(ProductionOrderStatus.InProduction);
+            .Should().Be(ProductionOrderStatus.RawAllocated);
     }
 
     // --------------------------------------- which states may be cancelled
@@ -440,16 +443,22 @@ public class ProductionOrderCancellationTests
     }
 
     [Fact]
-    public async Task Cancel_WithPartialProductionHistory_KeepsTheStageRecordIntact()
+    public async Task Cancel_AfterProductionRecordedOutput_IsRefused_AndKeepsTheStageRecordIntact()
     {
-        // Stage closed at 700 of an 800 baseline - real partial history.
+        // Stage closed at 700 of an 800 baseline - real production history.
         var f = Seed(lots: 1, issuedKgPerLot: 800m, completedStageOutputKg: 700m);
         using var db = NewDb();
 
-        var dto = await CancelHandler(db).Handle(
+        var act = () => CancelHandler(db).Handle(
             new CancelProductionOrderCommand(f.Order.Id, "quality failure"), CancellationToken.None);
 
-        dto.Status.Should().Be(ProductionOrderStatus.Cancelled);
+        // Case C: this is the behavior that USED to be allowed and is deliberately unsafe -
+        // returning processed WIP to the raw warehouse as if it were unused raw material.
+        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*already started production*");
+
+        (await CancelReversals(db, f.Order.Id).CountAsync()).Should().Be(0, "no reversal is posted");
+        (await db.ProductionOrders.SingleAsync(o => o.Id == f.Order.Id)).Status
+            .Should().NotBe(ProductionOrderStatus.Cancelled);
 
         var stage = await db.ProductionOrderStageExecutions
             .AsNoTracking().SingleAsync(s => s.ProductionOrderId == f.Order.Id);
@@ -457,26 +466,26 @@ public class ProductionOrderCancellationTests
         stage.BaselineKg.Should().Be(800m);
         stage.OutputKg.Should().Be(700m);
         stage.LossKg.Should().Be(100m);
-
-        (await CancelReversals(db, f.Order.Id).SingleAsync()).QuantityKg.Should().Be(800m,
-            "the ledger return is unaffected by stage figures - it is what the order still holds");
     }
 
     // --------------------------------------------- a cancelled order is terminal
 
     [Fact]
-    public async Task Cancel_AfterTransferringToAnotherStage_KeepsTheRouteAndReturnsTheIssue()
+    public async Task Cancel_AfterTransferringToAnotherStage_IsRefused_AndTheRouteSurvives()
     {
         // The order was transferred the way the floor does it: the formation
         // stage closed with 780 KG of an 800 KG issue and ONLY the chosen next
-        // stage activated, which is still InProgress when the order is cancelled.
+        // stage activated.
         var f = Seed(lots: 1, issuedKgPerLot: 800m, transferOutputKg: 780m);
         using var db = NewDb();
 
-        var dto = await CancelHandler(db).Handle(
+        var act = () => CancelHandler(db).Handle(
             new CancelProductionOrderCommand(f.Order.Id, "stopped after transfer"), CancellationToken.None);
 
-        dto.Status.Should().Be(ProductionOrderStatus.Cancelled);
+        // Case C: a stage transfer is a production movement, so the unused-raw path is blocked
+        // (the direct API call is blocked exactly like the UI).
+        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*already started production*");
+        (await CancelReversals(db, f.Order.Id).CountAsync()).Should().Be(0);
 
         // The whole route survives as history - transferred stages are not unwound.
         var stages = await db.ProductionOrderStageExecutions
@@ -489,24 +498,25 @@ public class ProductionOrderCancellationTests
         stages[0].OutputKg.Should().Be(780m);
         stages[1].Status.Should().Be(StageExecutionStatus.InProgress);
 
-        // The stock return is driven by the ledger, not by the route.
-        (await CancelReversals(db, f.Order.Id).SingleAsync()).QuantityKg.Should().Be(800m);
-        RawBalanceKg(db, f.Warehouse, f.Customer, f.Item, f.Messages[0]).Should().Be(10_000m);
+        // The material is still issued (no reversal), so the customer's raw balance is unchanged.
+        RawBalanceKg(db, f.Warehouse, f.Customer, f.Item, f.Messages[0]).Should().Be(9_200m);
     }
 
     [Fact]
     public async Task ACancelledOrder_CanNeverBeCompleted()
     {
-        var f = Seed(lots: 1, issuedKgPerLot: 800m, completedStageOutputKg: 700m);
+        // No stage output: this is a case-B order, so it CAN still be cancelled.
+        var f = Seed(lots: 1, issuedKgPerLot: 800m);
         using var db = NewDb();
 
         await CancelHandler(db).Handle(
             new CancelProductionOrderCommand(f.Order.Id, "cancelled"), CancellationToken.None);
 
-        // Via the application command...
+        // Via the application command the completion is refused (the open stage is the
+        // first thing that stops it, and the cancelled state stops it too) ...
         var act = () => new CompleteProductionOrderCommandHandler(db, new StubCurrentUser("operator"))
             .Handle(new CompleteProductionOrderCommand(f.Order.Id, "zero output"), CancellationToken.None);
-        await act.Should().ThrowAsync<DocumentLockedException>();
+        await act.Should().ThrowAsync<DomainException>();
 
         // ...and at the domain level, where the guard lives.
         var reloaded = await db.ProductionOrders.SingleAsync(o => o.Id == f.Order.Id);
@@ -531,9 +541,9 @@ public class ProductionOrderCancellationTests
     [Fact]
     public async Task ReadyGoodsTransfer_ForACancelledOrder_IsRefused()
     {
-        // All stages closed - the only thing stopping a ready-goods posting is
-        // the cancellation itself.
-        var f = Seed(lots: 1, issuedKgPerLot: 800m, completedStageOutputKg: 700m);
+        // A case-B order (issued, no production movement) that is then cancelled: the only
+        // thing stopping a ready-goods posting is the cancellation itself.
+        var f = Seed(lots: 1, issuedKgPerLot: 800m);
         using var db = NewDb();
         db.Warehouses.Add(new Warehouse("RDY", "Ready Goods", WarehouseKind.ReadyGoods, "seed"));
         await db.SaveChangesAsync();

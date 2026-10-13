@@ -3,11 +3,15 @@ using DyeHouseERP.Domain.Enums;
 namespace DyeHouseERP.Application.Items.DTOs;
 
 /// <summary>
-/// Item master DTO (spec sections 6 and 3). Carries both names so the UI can
+/// Item master DTO (spec sections 5-6 and 3). Carries both names so the UI can
 /// render in Arabic or English; <see cref="Name"/> stays as a single
 /// canonical name for documents and reports.
-/// BaseUnit is always exactly one of KG or Meter - there is no automatic
-/// conversion between them and no "Top/توب" unit.
+///
+/// <see cref="BaseUnit"/> is the required primary unit. <see cref="SecondaryUnit"/>
+/// is an optional second unit and, when present, differs from the primary one.
+/// <see cref="RequireBothUnits"/> says whether a movement must record both
+/// quantities. There is no automatic conversion between KG and Meter and no
+/// "Top/توب" unit.
 /// </summary>
 public class ItemDto
 {
@@ -18,5 +22,7 @@ public class ItemDto
     public string NameEn { get; set; } = string.Empty;
     public string? Category { get; set; }
     public UnitOfMeasure BaseUnit { get; set; }
+    public UnitOfMeasure? SecondaryUnit { get; set; }
+    public bool RequireBothUnits { get; set; }
     public bool IsActive { get; set; }
 }

@@ -98,6 +98,17 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
         var order = await _db.ProductionOrders.FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 
+        // No duplicate deduction (spec section 6): an order created by the canonical raw issue
+        // already has its OUT movement AND its allocation row posted in the same transaction.
+        // Allocating to it again would post a SECOND OUT for material the customer has already
+        // been debited for. Corrections go through pause/resume, which post their own linked
+        // compensating movements. Legacy orders created before the issue workflow (no issue
+        // link) keep working exactly as before.
+        if (order.SourceIssueTransactionId is not null)
+            throw new DomainException(
+                $"Job Order {order.OrderNumber} was created by issuing raw material, so its raw deduction is already posted. " +
+                "Adding more here would deduct the customer's stock twice - use pause/resume to release and re-issue material.");
+
         // Lines are loaded explicitly (no lazy loading in this app) so the
         // item-line check below reads real rows, not an empty collection.
         var message = await _db.RawMessages
@@ -121,6 +132,12 @@ public class AllocateRawCommandHandler : IRequestHandler<AllocateRawCommand, Pro
         // Historical messages, their lines and their movements stay readable and unchanged.
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, message.WarehouseId, cancellationToken, "to issue raw material out of it");
+
+        // Spec sections 5-6: the allocation may only use the units this item is
+        // configured for, and both measurements are required when the item asks for them.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.ItemId, request.QuantityKg, request.QuantityMeter,
+            cancellationToken, "on this allocation");
 
         // R1: lock on the UNIFIED stock dimension. The previous call used a
         // bespoke (rawMessage, item, customer) overload whose resource string

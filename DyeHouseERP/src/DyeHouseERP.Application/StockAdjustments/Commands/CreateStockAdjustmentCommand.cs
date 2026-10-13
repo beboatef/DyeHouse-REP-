@@ -82,6 +82,12 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, message.WarehouseId, cancellationToken, "to post a stock adjustment against it");
 
+        // Spec sections 5-6: the adjustment may only use the units configured on its
+        // item, and both measurements when the item requires them.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.ItemId, request.QuantityKg, request.QuantityMeter,
+            cancellationToken, "on this stock adjustment");
+
         // H6: the balance read, the negative-stock decision and the ledger write
         // must not interleave with any other movement on the same raw lot.
         await using (await _stockLock.AcquireAsync(

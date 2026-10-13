@@ -2509,12 +2509,26 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("RequireBothUnits")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("SecondaryUnit")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("Items", (string)null);
+                    b.ToTable("Items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Items_RequireBothUnitsNeedsSecondary", "[RequireBothUnits] = 0 OR [SecondaryUnit] IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_Items_SecondaryUnitDiffers", "[SecondaryUnit] IS NULL OR [SecondaryUnit] <> [BaseUnit]");
+                        });
                 });
 
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.JobPosition", b =>
@@ -3977,8 +3991,17 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<Guid?>("FormationBasinId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("FormationRequestId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsLocked")
                         .HasColumnType("bit");
+
+                    b.Property<Guid?>("IssueRequestId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uniqueidentifier");
@@ -4033,6 +4056,9 @@ namespace DyeHouseERP.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<Guid?>("SourceIssueTransactionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -4046,6 +4072,14 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("FormationBasinId");
+
+                    b.HasIndex("FormationRequestId");
+
+                    b.HasIndex("IssueRequestId")
+                        .IsUnique()
+                        .HasFilter("[IssueRequestId] IS NOT NULL");
+
                     b.HasIndex("ItemId");
 
                     b.HasIndex("JobOrderType");
@@ -4054,6 +4088,10 @@ namespace DyeHouseERP.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ReprocessingOfProductionOrderId");
+
+                    b.HasIndex("SourceIssueTransactionId")
+                        .IsUnique()
+                        .HasFilter("[SourceIssueTransactionId] IS NOT NULL");
 
                     b.HasIndex("Status");
 

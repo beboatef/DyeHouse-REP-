@@ -67,13 +67,20 @@ public class PrintingWorkflowTests
     public async Task Drawing_Persists_Across_Transfers_And_Partial_Deliveries_And_Is_Passed_To_Pdf()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
-        var order = Order();
         var printing = Printing();
         var finishing = new ProductionStageDefinition("FINISH", "Finishing", 2, "seed");
-        var stage = order.ActivateNextStage(printing, 100m, null, "operator", "DR-123");
         var user = Mock.Of<ICurrentUserService>(u => u.UserName == "operator");
+        ProductionOrder order;
+        ProductionOrderStageExecution stage;
         await using (var db = new ApplicationDbContext(options))
         {
+            // The item must exist: the stage-transfer handler validates the recorded
+            // output against the item's CONFIGURED units (spec sections 5-6), so an
+            // order pointing at a non-existent item is refused.
+            var item = new Item("IT-PRINT", "Print Item", UnitOfMeasure.KG, "seed", secondaryUnit: UnitOfMeasure.Meter);
+            order = new ProductionOrder("JOB-PRINT", Guid.NewGuid(), item.Id, DateTime.UtcNow, "seed", requestedQuantityKg: 100m);
+            stage = order.ActivateNextStage(printing, 100m, null, "operator", "DR-123");
+            db.Items.Add(item);
             db.ProductionStageDefinitions.AddRange(printing, finishing);
             db.ProductionOrders.Add(order);
             db.RawAllocations.Add(order.AllocateRaw(Guid.NewGuid(), order.ItemId, 100m, null, "operator"));

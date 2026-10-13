@@ -76,6 +76,68 @@ public class ProductionOrder : AuditableEntity
     /// </summary>
     public Guid? ReprocessingOfProductionOrderId { get; private set; }
 
+    // =================================================================
+    // Canonical issue linkage (spec section 5)
+    // =================================================================
+
+    /// <summary>
+    /// The single inventory OUT row (the raw issue) that created this order through the
+    /// canonical "raw issue creates the Job Order" workflow. There is exactly ONE
+    /// generated order per issue (enforced by a unique index in the database).
+    ///
+    /// Deliberately NULL for orders created through the legacy create-then-allocate path,
+    /// for reprocessing orders and for historical rows - fabricating an issue link for
+    /// those would misstate history.
+    /// </summary>
+    public Guid? SourceIssueTransactionId { get; private set; }
+
+    /// <summary>
+    /// The client-supplied idempotency token of the issue confirmation, when one was sent.
+    /// A retried or double-submitted confirmation carrying the same token returns the
+    /// existing order instead of posting a second issue (unique index as backstop).
+    /// </summary>
+    public Guid? IssueRequestId { get; private set; }
+
+    /// <summary>The planning Formation Request this order was issued from, when applicable (planning-only reference).</summary>
+    public Guid? FormationRequestId { get; private set; }
+
+    /// <summary>The formation basin this order was issued from, when applicable (planning-only reference).</summary>
+    public Guid? FormationBasinId { get; private set; }
+
+    /// <summary>
+    /// True when any production movement has actually been recorded on this order - a stage
+    /// output, separates, loss, a closed/skipped stage, a transfer, or the InProduction state.
+    ///
+    /// This is the Case C guard (spec section 9): the ordinary "unused raw material"
+    /// cancellation returns the raw a job still holds, which is only meaningful BEFORE
+    /// production consumes it. It reads the STAGE EXECUTIONS loaded on this aggregate, so a
+    /// handler that plainly loaded the order must query them (see CancelProductionOrderCommandHandler).
+    /// </summary>
+    public bool HasProductionStarted =>
+        Status == ProductionOrderStatus.InProduction
+        || _stageExecutions.Any(s => s.OutputKg is not null || s.OutputMeter is not null
+            || s.SeparatesKg is not null || s.SeparatesMeter is not null
+            || s.LossKg is not null || s.LossMeter is not null
+            || s.Status is StageExecutionStatus.Completed or StageExecutionStatus.Skipped
+            || s.CompletedAtUtc is not null);
+
+    /// <summary>
+    /// Records the issue that created this order (spec section 5): the OUT ledger row, the
+    /// optional idempotency token, and the optional planning references. Called ONCE, from
+    /// the issue handler, before the order is persisted.
+    /// </summary>
+    public void LinkIssue(
+        Guid issueTransactionId, Guid? issueRequestId, Guid? formationRequestId, Guid? formationBasinId)
+    {
+        if (issueTransactionId == Guid.Empty)
+            throw new ArgumentException("The issue transaction id is required.", nameof(issueTransactionId));
+
+        SourceIssueTransactionId = issueTransactionId;
+        IssueRequestId = issueRequestId;
+        FormationRequestId = formationRequestId;
+        FormationBasinId = formationBasinId;
+    }
+
     private readonly List<ProductionOrderStageExecution> _stageExecutions = new();
     public IReadOnlyCollection<ProductionOrderStageExecution> StageExecutions => _stageExecutions.AsReadOnly();
 
@@ -443,10 +505,25 @@ public class ProductionOrder : AuditableEntity
         Complete();
     }
 
+    /// <summary>
+    /// Cancels an order that has NOT started production (spec section 9, cases A and B).
+    ///
+    /// The ordinary cancellation returns the raw material the order still holds, which is
+    /// only sound while production has not consumed it. Once a stage movement exists the
+    /// backend refuses here - as a domain backstop to the handler's database check - so a
+    /// direct call can never return processed WIP as if it were unused raw.
+    /// </summary>
     public void Cancel(string reason, string modifiedBy)
     {
         if (Status == ProductionOrderStatus.Completed)
             throw new DocumentLockedException("Production Order", OrderNumber);
+        if (Status == ProductionOrderStatus.Cancelled)
+            throw new DomainException($"Production order {OrderNumber} is already cancelled.");
+        if (Status == ProductionOrderStatus.InProduction)
+            throw new DomainException(
+                $"Production order {OrderNumber} has already started production, so the unused raw-material " +
+                "cancellation cannot be used. Processed material is not unused raw material and must never be " +
+                "returned to the raw warehouse as if it were; use the explicit rework/correction workflow instead.");
 
         Status = ProductionOrderStatus.Cancelled;
         Notes = string.IsNullOrWhiteSpace(Notes) ? $"[Cancelled] {reason}" : $"{Notes}\n[Cancelled] {reason}";

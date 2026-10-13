@@ -62,7 +62,9 @@ public class ReadyGoodsStageTraceabilityTests
         using var db = NewDb();
 
         var customer = new Customer("C-1", "Customer", "seed");
-        var item = new Item("IT-1", "Item", UnitOfMeasure.KG, "seed");
+        // KG primary + Meter secondary: the fixture records both a KG and a Meter output,
+        // and the unit rules only allow a unit the item is genuinely configured for.
+        var item = new Item("IT-1", "Item", UnitOfMeasure.KG, "seed", secondaryUnit: UnitOfMeasure.Meter);
         var rawWarehouse = new Warehouse("RAW", "Raw Material", WarehouseKind.RawMaterial, "seed");
         var readyWarehouse = new Warehouse("RDY", "Ready Goods", WarehouseKind.ReadyGoods, "seed");
 

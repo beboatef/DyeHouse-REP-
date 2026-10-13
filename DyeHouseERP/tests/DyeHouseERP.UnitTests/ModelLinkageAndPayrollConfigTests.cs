@@ -131,18 +131,37 @@ public class ModelLinkageAndPayrollConfigTests
     }
 
     [Fact]
-    public void FormationRequestLinkColumns_AreNoLongerMapped()
+    public void FormationRequestLinkColumns_AreOptionalReferencesOnly()
     {
         var model = Model();
         var order = Entity(model, typeof(ProductionOrder));
         var request = Entity(model, typeof(FormationRequest));
 
-        // A Formation Request and a Production Order are independent documents:
-        // neither may carry a reference to the other.
-        order.FindProperty("FormationRequestId").Should().BeNull();
-        order.FindProperty("FormationGroupId").Should().BeNull();
-        order.FindProperty("FormationBasinId").Should().BeNull();
+        // The planning reference was re-introduced by the "raw issue creates the Job Order"
+        // workflow (it records WHICH formation request/basin an issue came from). It stays
+        // strictly OPTIONAL and one-directional, so the two documents remain independent:
+        //   * the column is nullable and has NO foreign key to the planning documents,
+        //     so a formation request never constrains or cascades into a Job Order;
+        //   * a Formation Request still holds no reference back to any Job Order;
+        //   * a direct issue (no formation request) is fully valid.
+        var formationRequestId = order.FindProperty(nameof(ProductionOrder.FormationRequestId));
+        var formationBasinId = order.FindProperty(nameof(ProductionOrder.FormationBasinId));
+
+        formationRequestId.Should().NotBeNull();
+        formationBasinId.Should().NotBeNull();
+        formationRequestId!.ClrType.Should().Be(typeof(Guid?));
+        formationBasinId!.ClrType.Should().Be(typeof(Guid?));
+        formationRequestId.IsNullable.Should().BeTrue("a direct issue has no formation request at all");
+        formationBasinId.IsNullable.Should().BeTrue();
+
+        order.GetForeignKeys().Should().NotContain(f =>
+            f.PrincipalEntityType.Name == nameof(FormationRequest)
+            || f.PrincipalEntityType.Name == nameof(FormationBasin),
+            "the planning documents must never become a required integrity dependency of an order");
+
+        // Never the other way round: a Formation Request is planning-only and points at nothing.
         request.FindProperty("ProductionOrderId").Should().BeNull();
+        request.FindProperty("FormationRequestId").Should().BeNull();
     }
 
     // ---------------------------------------------------------------- payroll

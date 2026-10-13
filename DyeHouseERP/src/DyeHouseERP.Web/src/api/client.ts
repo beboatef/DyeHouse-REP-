@@ -45,7 +45,12 @@ export interface Item {
   nameAr: string;
   nameEn: string;
   category: string | null;
+  /** Required primary unit. */
   baseUnit: UnitOfMeasure;
+  /** Optional structured secondary unit - never a note, and never equal to the base unit. */
+  secondaryUnit: UnitOfMeasure | null;
+  /** Whether every movement for this item must record BOTH units. */
+  requireBothUnits: boolean;
   isActive: boolean;
 }
 
@@ -126,6 +131,8 @@ export const ItemsApi = {
     code: string;
     name: string;
     baseUnit: UnitOfMeasure;
+    secondaryUnit?: UnitOfMeasure | null;
+    requireBothUnits?: boolean;
     nameAr?: string;
     nameEn?: string;
     category?: string;
@@ -135,6 +142,9 @@ export const ItemsApi = {
     nameEn?: string;
     category?: string;
     baseUnit?: UnitOfMeasure;
+    secondaryUnit?: UnitOfMeasure | null;
+    clearSecondaryUnit?: boolean;
+    requireBothUnits?: boolean;
     isActive?: boolean;
   }) => api.put<Item>(`/items/${id}`, { id, ...body }).then((r) => r.data),
   exportExcel: (params?: { activeOnly?: boolean; search?: string }) => {
@@ -156,6 +166,8 @@ export interface ItemImportRowResult {
   nameEn: string;
   category: string | null;
   baseUnit: string;
+  secondaryUnit: string;
+  requireBothUnits: boolean;
   isValid: boolean;
   isExisting: boolean;
   action: "Create" | "Update" | "Skip" | string;
@@ -567,6 +579,14 @@ export interface ProductionOrder {
   expectedOutputKg: number | null;
   expectedOutputMeter: number | null;
   reprocessingOfProductionOrderId: string | null;
+  /** The raw issue (inventory OUT) that created this order through the canonical workflow; null for legacy orders. */
+  sourceIssueTransactionId: string | null;
+  /** Planning reference: the Formation Request this issue came from, when applicable. */
+  formationRequestId: string | null;
+  /** Planning reference: the formation basin this issue came from, when applicable. */
+  formationBasinId: string | null;
+  /** True once production has recorded a movement - the ordinary unused-raw cancel is blocked then. */
+  hasProductionStarted: boolean;
   rawAllocations: RawAllocationLine[];
   stageExecutions: StageExecution[];
 }
@@ -578,19 +598,35 @@ export const ProductionOrdersApi = {
     jobOrderType?: JobOrderType;
   }) => api.get<ProductionOrder[]>("/production-orders", { params }).then((r) => r.data),
   get: (id: string) => api.get<ProductionOrder>(`/production-orders/${id}`).then((r) => r.data),
-  create: (body: {
+  /**
+   * THE canonical workflow: issuing raw material CREATES the Job Order in one atomic step
+   * (inventory OUT + order + its allocation). There is no plain "create" endpoint any more -
+   * an order cannot exist without the issue that produced it.
+   *
+   * Leave formationRequestId/formationBasinId empty for a DIRECT issue (no fake request is
+   * created); supply them when the issue comes from a Formation Request / basin.
+   * `requestId` is the idempotency token: re-sending the same one returns the same order
+   * instead of posting a second issue.
+   */
+  issue: (body: {
     customerId: string;
     itemId: string;
+    rawMessageId: string;
     orderDate: string;
+    actualQuantityKg?: number;
+    actualQuantityMeter?: number;
     color?: string;
-    requestedQuantityKg?: number;
-    requestedQuantityMeter?: number;
     rawOrigin?: string;
     customerReference?: string;
     notes?: string;
     priority: ProductionPriority;
     jobOrderType?: JobOrderType;
-  }) => api.post<ProductionOrder>("/production-orders", body).then((r) => r.data),
+    formationRequestId?: string | null;
+    formationBasinId?: string | null;
+    requestId?: string | null;
+    overrideNegativeStock?: boolean;
+    overrideReason?: string;
+  }) => api.post<ProductionOrder>("/production-orders/issue", body).then((r) => r.data),
   /**
    * Edits an OPEN order's descriptive/scheduling fields. Customer, item and requested quantity are
    * deliberately absent: they are corrected by cancelling the order and re-creating it.
@@ -663,7 +699,11 @@ export const ProductionOrdersApi = {
   ) => api.post<ProductionOrder>(`/production-orders/${id}/resume`, body).then((r) => r.data),
   /**
    * Cancels the order and reverses whatever raw material it still holds as NEW compensating
-   * IN rows through the ledger. A completed order cannot be cancelled; the reason is mandatory.
+   * IN rows through the ledger. The reason is mandatory.
+   *
+   * Refused by the backend once production has started (a stage output, separates, loss, a
+   * closed/transferred stage, or the InProduction state): processed material is not unused
+   * raw material. A completed order cannot be cancelled either.
    */
   cancel: (id: string, reason: string) =>
     api.post<ProductionOrder>(`/production-orders/${id}/cancel`, { reason }).then((r) => r.data),

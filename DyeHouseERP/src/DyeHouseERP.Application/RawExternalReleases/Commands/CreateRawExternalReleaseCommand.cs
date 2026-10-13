@@ -94,6 +94,12 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, message.WarehouseId, cancellationToken, "to release raw material out of it");
 
+        // Spec sections 5-6: the release may only use the units configured on its item,
+        // and both measurements when the item requires them.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.ItemId, request.QuantityKg, request.QuantityMeter,
+            cancellationToken, "on this external release");
+
         // H6: releasing material to an external processor is an OUT from the same
         // raw lot the allocation path locks, so the two cannot oversubscribe it
         // concurrently.

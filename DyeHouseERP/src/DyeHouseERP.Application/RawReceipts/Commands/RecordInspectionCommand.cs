@@ -110,6 +110,15 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, snapshot.WarehouseId, cancellationToken, "to record a rejected quantity against it");
 
+        // Spec sections 5-6: a rejected quantity is a quantity of the line's item, so
+        // it may only use that item's configured units.
+        var rejectionLineItems = snapshot.Lines.ToDictionary(l => l.Id, l => l.ItemId);
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db,
+            rejections.Where(r => rejectionLineItems.ContainsKey(r.LineId))
+                .Select(r => (rejectionLineItems[r.LineId], r.RejectedQuantityKg, r.RejectedQuantityMeter)),
+            cancellationToken, "as a rejected quantity");
+
         // H6: a rejected quantity posts a correcting OUT row on the same raw
         // lot, so it takes the same lot locks the allocation/adjustment paths
         // use - a rejection and a concurrent allocation can no longer both

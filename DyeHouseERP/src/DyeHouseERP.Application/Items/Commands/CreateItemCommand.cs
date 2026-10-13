@@ -11,14 +11,18 @@ using Microsoft.EntityFrameworkCore;
 namespace DyeHouseERP.Application.Items.Commands;
 
 /// <summary>
-/// Creates an item (spec section 6). Code is manually entered and must be
-/// unique; BaseUnit is KG or Meter and can never be converted automatically.
-/// NameAr/NameEn are the bilingual pair shown across the UI; Name is the
-/// canonical fallback used by documents and reports.
+/// Creates an item (spec sections 5-6). Code is manually entered and must be
+/// unique; BaseUnit is the required primary unit and SecondaryUnit the optional
+/// second one - both KG or Meter and never converted automatically. An item may
+/// use ONE unit or TWO DIFFERENT units; <see cref="RequireBothUnits"/> decides
+/// whether a movement must record both measurements. NameAr/NameEn are the
+/// bilingual pair shown across the UI; Name is the canonical fallback used by
+/// documents and reports.
 /// </summary>
 public record CreateItemCommand(
     string Code, string Name, UnitOfMeasure BaseUnit,
-    string? NameAr = null, string? NameEn = null, string? Category = null) : IRequest<ItemDto>;
+    string? NameAr = null, string? NameEn = null, string? Category = null,
+    UnitOfMeasure? SecondaryUnit = null, bool RequireBothUnits = false) : IRequest<ItemDto>;
 
 public class CreateItemCommandValidator : AbstractValidator<CreateItemCommand>
 {
@@ -33,6 +37,15 @@ public class CreateItemCommandValidator : AbstractValidator<CreateItemCommand>
         RuleFor(x => x.NameEn).MaximumLength(200);
         RuleFor(x => x.Category).MaximumLength(100);
         RuleFor(x => x.BaseUnit).IsInEnum();
+        RuleFor(x => x.SecondaryUnit).IsInEnum().When(x => x.SecondaryUnit.HasValue);
+        RuleFor(x => x.SecondaryUnit)
+            .NotEqual(x => x.BaseUnit)
+            .When(x => x.SecondaryUnit.HasValue)
+            .WithMessage("The secondary unit must be different from the base unit - KG and Meter are independent measurements.");
+        RuleFor(x => x.SecondaryUnit)
+            .NotNull()
+            .When(x => x.RequireBothUnits)
+            .WithMessage("Configure a secondary unit before requiring both units.");
     }
 }
 
@@ -55,7 +68,8 @@ public class CreateItemCommandHandler : IRequestHandler<CreateItemCommand, ItemD
             throw new DuplicateCodeException("Item", code);
 
         var item = new Item(code, request.Name, request.BaseUnit, _currentUser.UserName,
-            request.NameAr, request.NameEn, request.Category);
+            request.NameAr, request.NameEn, request.Category,
+            request.SecondaryUnit, request.RequireBothUnits);
 
         _db.Items.Add(item);
         await _db.SaveChangesAsync(cancellationToken);
@@ -72,18 +86,24 @@ public class CreateItemCommandHandler : IRequestHandler<CreateItemCommand, ItemD
         NameEn = item.NameEn,
         Category = item.Category,
         BaseUnit = item.BaseUnit,
+        SecondaryUnit = item.SecondaryUnit,
+        RequireBothUnits = item.RequireBothUnits,
         IsActive = item.IsActive
     };
 }
 
 /// <summary>
-/// Edits an item master record. The base unit may only be changed while the
-/// item has no inventory history at all - switching KG/Meter after stock was
-/// received would silently reinterpret every historical quantity (spec
-/// sections 6 and 53).
+/// Edits an item master record. The unit configuration (primary and/or secondary
+/// unit) may only be changed while the item has no inventory history at all -
+/// switching KG/Meter or adding/removing a secondary unit after stock was received
+/// would silently reinterpret every historical quantity (spec sections 5-6 and 53).
+/// Turning <see cref="UpdateItemCommand.RequireBothUnits"/> on or off is safe with
+/// history: it only changes the requirement for NEW movements, never the meaning of
+/// what was already posted.
 /// </summary>
 public record UpdateItemCommand(
-    Guid Id, string? NameAr, string? NameEn, string? Category, UnitOfMeasure? BaseUnit, bool? IsActive)
+    Guid Id, string? NameAr, string? NameEn, string? Category, UnitOfMeasure? BaseUnit, bool? IsActive,
+    UnitOfMeasure? SecondaryUnit = null, bool ClearSecondaryUnit = false, bool? RequireBothUnits = null)
     : IRequest<ItemDto>;
 
 public class UpdateItemCommandValidator : AbstractValidator<UpdateItemCommand>
@@ -95,6 +115,12 @@ public class UpdateItemCommandValidator : AbstractValidator<UpdateItemCommand>
         RuleFor(x => x.NameEn).MaximumLength(200);
         RuleFor(x => x.Category).MaximumLength(100);
         RuleFor(x => x.BaseUnit).IsInEnum().When(x => x.BaseUnit.HasValue);
+        RuleFor(x => x.SecondaryUnit).IsInEnum().When(x => x.SecondaryUnit.HasValue);
+
+        RuleFor(x => x.SecondaryUnit)
+            .NotEqual(x => x.BaseUnit)
+            .When(x => x.SecondaryUnit.HasValue && x.BaseUnit.HasValue)
+            .WithMessage("The secondary unit must be different from the base unit - KG and Meter are independent measurements.");
     }
 }
 
@@ -118,16 +144,36 @@ public class UpdateItemCommandHandler : IRequestHandler<UpdateItemCommand, ItemD
 
         item.SetCategory(request.Category);
 
-        if (request.BaseUnit.HasValue && request.BaseUnit.Value != item.BaseUnit)
+        // Work out the intended unit configuration and whether it changes at all.
+        var newBaseUnit = request.BaseUnit ?? item.BaseUnit;
+
+        UnitOfMeasure? newSecondaryUnit;
+        if (request.ClearSecondaryUnit)
+            newSecondaryUnit = null;
+        else
+            newSecondaryUnit = request.SecondaryUnit ?? item.SecondaryUnit;
+
+        var unitConfigurationChanged =
+            newBaseUnit != item.BaseUnit || newSecondaryUnit != item.SecondaryUnit;
+
+        if (unitConfigurationChanged)
         {
             var hasHistory = await _db.InventoryTransactions.AsNoTracking()
                 .AnyAsync(t => t.ItemId == item.Id, cancellationToken);
             if (hasHistory)
                 throw new DomainException(
-                    $"The base unit of item '{item.Code}' cannot be changed: inventory transactions already exist for it. " +
-                    "Create a new item instead - historical quantities must never be silently reinterpreted.");
+                    $"The unit configuration of item '{item.Code}' cannot be changed: inventory transactions already " +
+                    "exist for it. Create a new item instead - historical quantities must never be silently reinterpreted.");
 
-            item.ChangeBaseUnit(request.BaseUnit.Value, _currentUser.UserName);
+            item.ConfigureUnits(newBaseUnit, newSecondaryUnit, request.RequireBothUnits ?? item.RequireBothUnits,
+                _currentUser.UserName);
+        }
+        else if (request.RequireBothUnits.HasValue)
+        {
+            // Same units, only the per-item "require both" setting changes - safe with
+            // history because it never reinterprets an already-posted quantity.
+            item.ConfigureUnits(item.BaseUnit, item.SecondaryUnit,
+                request.RequireBothUnits.Value, _currentUser.UserName);
         }
 
         if (request.IsActive.HasValue)

@@ -1,6 +1,7 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
+using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -70,6 +71,16 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             OrderDate = order.OrderDate,
             Status = order.Status,
             ReprocessingOfProductionOrderId = order.ReprocessingOfProductionOrderId,
+            SourceIssueTransactionId = order.SourceIssueTransactionId,
+            FormationRequestId = order.FormationRequestId,
+            FormationBasinId = order.FormationBasinId,
+            // Derived from the stage executions loaded below, never from a stored flag.
+            HasProductionStarted = order.Status == ProductionOrderStatus.InProduction
+                || stageExecutions.Any(s => s.OutputKg != null || s.OutputMeter != null
+                    || s.SeparatesKg != null || s.SeparatesMeter != null
+                    || s.LossKg != null || s.LossMeter != null
+                    || s.Status == StageExecutionStatus.Completed || s.Status == StageExecutionStatus.Skipped
+                    || s.CompletedAtUtc != null),
             RawAllocations = allocations.Select(a => new RawAllocationDto
             {
                 Id = a.Id,

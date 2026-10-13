@@ -12,8 +12,13 @@ namespace DyeHouseERP.Application.Items.Commands;
 /// requires: Download template -&gt; Upload -&gt; Preview -&gt; Validate -&gt; Show errors
 /// -&gt; Confirm -&gt; Create items -&gt; Import result.
 ///
-/// Expected columns (case-insensitive): Code, NameAr, NameEn, Category, BaseUnit.
+/// Expected columns (case-insensitive): Code, NameAr, NameEn, Category, BaseUnit,
+/// SecondaryUnit, RequireBothUnits.
 ///   - BaseUnit must be exactly KG or Meter (no conversion, no "Top/توب").
+///   - SecondaryUnit is optional; when present it must be a valid unit DIFFERENT
+///     from BaseUnit. The secondary unit is structured data, never a note.
+///   - RequireBothUnits accepts Yes/No/true/false/1/0/نعم/لا and may only be true
+///     when a SecondaryUnit is configured.
 ///   - Duplicate codes inside the file are rejected.
 ///   - Existing item codes are NEVER overwritten automatically: they are
 ///     reported as existing, and are only updated by the execute step when the
@@ -87,12 +92,15 @@ public class ExecuteItemImportCommandHandler : IRequestHandler<ExecuteItemImport
             }
 
             var unit = Enum.Parse<UnitOfMeasure>(row.BaseUnit, ignoreCase: true);
+            var secondaryUnit = string.IsNullOrWhiteSpace(row.SecondaryUnit)
+                ? (UnitOfMeasure?)null
+                : Enum.Parse<UnitOfMeasure>(row.SecondaryUnit, ignoreCase: true);
             var existing = existingItems.FirstOrDefault(i => string.Equals(i.Code, row.Code, StringComparison.OrdinalIgnoreCase));
 
             if (existing is null)
             {
                 _db.Items.Add(new Item(row.Code, row.Name, unit, _currentUser.UserName,
-                    row.NameAr, row.NameEn, row.Category));
+                    row.NameAr, row.NameEn, row.Category, secondaryUnit, row.RequireBothUnits));
                 row.Action = "Create";
                 created++;
                 continue;
@@ -111,8 +119,17 @@ public class ExecuteItemImportCommandHandler : IRequestHandler<ExecuteItemImport
             existing.SetNames(row.NameAr, row.NameEn);
             existing.SetCategory(row.Category);
             row.Action = "Update";
+
+            // The unit configuration is never changed by an import: it may only be
+            // changed on the item itself (under an explicit no-history check), so
+            // historical quantities are never silently reinterpreted. Only the
+            // per-item "require both" setting is safe to update from a file.
             if (existing.BaseUnit != unit)
                 row.Errors.Add($"Base unit was left unchanged ({existing.BaseUnit}); change it on the item itself so historical quantities are never reinterpreted.");
+            if (existing.SecondaryUnit != secondaryUnit)
+                row.Errors.Add($"Secondary unit was left unchanged ({(existing.SecondaryUnit?.ToString() ?? "none")}); change it on the item itself so historical quantities are never reinterpreted.");
+            if (row.RequireBothUnits != existing.RequireBothUnits)
+                existing.ConfigureUnits(existing.BaseUnit, existing.SecondaryUnit, row.RequireBothUnits, _currentUser.UserName);
             updated++;
         }
 
@@ -155,6 +172,8 @@ internal static class ItemImportValidator
             var nameEn = Header(raw, headers, "NameEn", "Name English", "الاسم بالإنجليزية", "Name");
             var category = Header(raw, headers, "Category", "التصنيف");
             var baseUnit = Header(raw, headers, "BaseUnit", "Base Unit", "Unit", "وحدة القياس");
+            var secondaryUnit = Header(raw, headers, "SecondaryUnit", "Secondary Unit", "الوحدة الثانوية", "الوحدة الثانية");
+            var requireBothRaw = Header(raw, headers, "RequireBothUnits", "Require Both Units", "BothUnits", "يتطلب الوحدتين");
 
             var result = new ItemImportRowResult
             {
@@ -164,8 +183,12 @@ internal static class ItemImportValidator
                 NameEn = nameEn ?? string.Empty,
                 Name = nameEn ?? nameAr ?? string.Empty,
                 Category = category,
-                BaseUnit = baseUnit ?? string.Empty
+                BaseUnit = baseUnit ?? string.Empty,
+                SecondaryUnit = secondaryUnit ?? string.Empty
             };
+
+            var parsedRequireBoth = ParseYesNo(requireBothRaw);
+            result.RequireBothUnits = parsedRequireBoth;
 
             if (string.IsNullOrWhiteSpace(code))
                 result.Errors.Add("Code is required.");
@@ -173,8 +196,24 @@ internal static class ItemImportValidator
                 result.Errors.Add("At least one item name is required (NameAr or NameEn).");
             if (string.IsNullOrWhiteSpace(baseUnit))
                 result.Errors.Add("BaseUnit is required (KG or Meter).");
-            else if (!Enum.TryParse<UnitOfMeasure>(baseUnit, ignoreCase: true, out _))
+            else if (!Enum.TryParse<UnitOfMeasure>(baseUnit, ignoreCase: true, out var parsedBase))
                 result.Errors.Add($"BaseUnit '{baseUnit}' is not valid - it must be KG or Meter. KG and Meter are never converted into each other.");
+
+            UnitOfMeasure? parsedSecondary = null;
+            if (!string.IsNullOrWhiteSpace(secondaryUnit))
+            {
+                if (!Enum.TryParse<UnitOfMeasure>(secondaryUnit, ignoreCase: true, out var secondary))
+                    result.Errors.Add($"SecondaryUnit '{secondaryUnit}' is not valid - it must be KG or Meter, or left blank for a single-unit item.");
+                else
+                {
+                    parsedSecondary = secondary;
+                    if (Enum.TryParse<UnitOfMeasure>(baseUnit, ignoreCase: true, out var b) && secondary == b)
+                        result.Errors.Add($"SecondaryUnit cannot be the same as BaseUnit ('{secondary}') - KG and Meter are independent measurements.");
+                }
+            }
+
+            if (parsedRequireBoth && parsedSecondary is null)
+                result.Errors.Add("RequireBothUnits is set but no SecondaryUnit is configured. Configure the secondary unit or clear the flag.");
 
             if (!string.IsNullOrWhiteSpace(code))
             {
@@ -200,6 +239,17 @@ internal static class ItemImportValidator
         return results;
     }
 
+    internal static bool ParseYesNo(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var v = value.Trim();
+        return v.Equals("yes", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("y", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("نعم", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string? Header(Dictionary<string, string?> row, List<string> headers, params string[] candidates)
     {
         foreach (var candidate in candidates)
@@ -216,11 +266,13 @@ internal static class ItemImportValidator
 /// <summary>Column headers of the item import template (spec section 7 step 1: "Download template").</summary>
 public static class ItemImportTemplate
 {
-    public static readonly string[] Headers = { "Code", "NameAr", "NameEn", "Category", "BaseUnit" };
+    public static readonly string[] Headers =
+        { "Code", "NameAr", "NameEn", "Category", "BaseUnit", "SecondaryUnit", "RequireBothUnits" };
 
     public static List<object?[]> SampleRows() => new()
     {
-        new object?[] { "ITM-001", "قطن 100", "Cotton 100", "Fabric", "KG" },
-        new object?[] { "ITM-002", "قماش سادة", "Plain Fabric", "Fabric", "Meter" }
+        new object?[] { "ITM-001", "قطن 100", "Cotton 100", "Fabric", "KG", "", "No" },
+        new object?[] { "ITM-002", "قماش سادة", "Plain Fabric", "Fabric", "Meter", "", "No" },
+        new object?[] { "ITM-003", "قماش خام", "Raw Fabric", "Fabric", "KG", "Meter", "Yes" }
     };
 }

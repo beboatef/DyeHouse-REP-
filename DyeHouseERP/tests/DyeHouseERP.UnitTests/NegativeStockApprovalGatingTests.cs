@@ -79,6 +79,7 @@ public class NegativeStockApprovalGatingTests
         public required Customer From { get; init; }
         public required Customer To { get; init; }
         public required Item Item { get; init; }
+        public required Item OtherItem { get; init; }
         public required Warehouse Warehouse { get; init; }
         public required RawMessage Message { get; init; }
         public required ProductionOrder Order { get; init; }
@@ -91,11 +92,15 @@ public class NegativeStockApprovalGatingTests
     {
         var from = new Customer("C-1", "Sender", "seed");
         var to = new Customer("C-2", "Receiver", "seed");
-        var item = new Item("IT-1", "Item", UnitOfMeasure.KG, "seed");
+        // The item uses both units (KG primary, Meter secondary) so a KG or a Meter movement
+        // is genuinely allowed for it; OtherItem exists so a test can prove that changing the
+        // approved ITEM invalidates the approval without also failing an unrelated item check.
+        var item = new Item("IT-1", "Item", UnitOfMeasure.KG, "seed", secondaryUnit: UnitOfMeasure.Meter);
+        var otherItem = new Item("IT-2", "Other Item", UnitOfMeasure.KG, "seed", secondaryUnit: UnitOfMeasure.Meter);
         var warehouse = new Warehouse("RAW", "Raw Material", WarehouseKind.RawMaterial, "seed");
 
         db.Customers.AddRange(from, to);
-        db.Items.Add(item);
+        db.Items.AddRange(item, otherItem);
         db.Warehouses.Add(warehouse);
 
         var message = new RawMessage("RMSG-1", DateTime.UtcNow, from.Id, warehouse.Id, "seed", "seed");
@@ -111,7 +116,7 @@ public class NegativeStockApprovalGatingTests
 
         db.SaveChanges();
 
-        return new Fixture { From = from, To = to, Item = item, Warehouse = warehouse, Message = message, Order = order };
+        return new Fixture { From = from, To = to, Item = item, OtherItem = otherItem, Warehouse = warehouse, Message = message, Order = order };
     }
 
     private static void SeedUsers(ApplicationDbContext db, params (string Username, string Roles, bool Active)[] users)
@@ -319,7 +324,7 @@ public class NegativeStockApprovalGatingTests
         {
             "quantity" => Transfer(f, f.From.Id, f.To.Id, 400m, over: true, reason: "approved for the original facts", approvalId: submitted.Id),
             "unit" => Transfer(f, f.From.Id, f.To.Id, null, meter: 150m, over: true, reason: "approved for the original facts", approvalId: submitted.Id),
-            "item" => Transfer(f, f.From.Id, f.To.Id, 150m, over: true, reason: "approved for the original facts", approvalId: submitted.Id, item: Guid.NewGuid()),
+            "item" => Transfer(f, f.From.Id, f.To.Id, 150m, over: true, reason: "approved for the original facts", approvalId: submitted.Id, item: f.OtherItem.Id),
             "receiving-account" => Transfer(f, f.From.Id, Guid.NewGuid(), 150m, over: true, reason: "approved for the original facts", approvalId: submitted.Id),
             _ => Transfer(f, Guid.NewGuid(), f.To.Id, 150m, over: true, reason: "approved for the original facts", approvalId: submitted.Id)
         };
@@ -547,7 +552,7 @@ public class NegativeStockApprovalGatingTests
         var executed = changed switch
         {
             "quantity" => Adjustment(f, 400m, over: true, overrideReason: "approved for the original facts", approvalId: submitted.Id),
-            "item" => Adjustment(f, 150m, over: true, overrideReason: "approved for the original facts", approvalId: submitted.Id, itemId: Guid.NewGuid()),
+            "item" => Adjustment(f, 150m, over: true, overrideReason: "approved for the original facts", approvalId: submitted.Id, itemId: f.OtherItem.Id),
             _ => Adjustment(f, 150m, over: true, overrideReason: "approved for the original facts", approvalId: submitted.Id, customerId: Guid.NewGuid())
         };
 

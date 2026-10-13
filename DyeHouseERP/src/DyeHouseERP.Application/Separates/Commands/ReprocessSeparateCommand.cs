@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -41,6 +42,12 @@ public class ReprocessSeparateCommandHandler : IRequestHandler<ReprocessSeparate
     {
         var separate = await _db.Separates.FirstOrDefaultAsync(s => s.Id == request.SeparateId, cancellationToken)
             ?? throw new NotFoundException("Separate", request.SeparateId);
+
+        // Spec sections 5-6: the reprocessing order's requested quantity may only use the
+        // item's configured units, and both when the item requires both.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, separate.ItemId, separate.QuantityKg, separate.QuantityMeter,
+            cancellationToken, "on this reprocessing order");
 
         var orderNumber = await _numberGenerator.NextAsync(DocumentType.ProductionOrder, cancellationToken: cancellationToken);
 

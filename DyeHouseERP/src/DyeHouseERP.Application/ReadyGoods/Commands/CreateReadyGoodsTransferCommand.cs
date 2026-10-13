@@ -85,6 +85,12 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
         if (warehouse.Kind != WarehouseKind.ReadyGoods)
             throw new DomainException("Ready goods transfers must target a Ready Goods warehouse.");
 
+        // Spec sections 5-6: the transferred quantity may only use the units configured
+        // on the order's item, and both when the item requires both.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, order.ItemId, request.QuantityKg, request.QuantityMeter,
+            cancellationToken, "on this ready-goods transfer");
+
         // H6/R2: the "already transferred" check and the IN posting run under the
         // ready-lot lock, keyed on the same (item, production order) shape the
         // delivery path uses, so two concurrent requests for the same production

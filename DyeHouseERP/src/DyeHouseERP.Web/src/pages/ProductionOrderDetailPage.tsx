@@ -135,7 +135,13 @@ export default function ProductionOrderDetailPage() {
 
   if (isLoading || !order) return <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>;
 
-  const canCancel = order.status !== "Completed" && order.status !== "Cancelled";
+  // The ordinary cancellation ("unused raw material return") only covers cases A and B:
+  // a draft with no issue, or an issued order that no stage has consumed yet. Once any stage
+  // movement is recorded, the BACKEND refuses it (spec section 9, case C) - so the UI must not
+  // offer the action that would fail; it explains the situation instead.
+  const productionStarted = order.hasProductionStarted;
+  const canCancel = !productionStarted && order.status !== "Completed" && order.status !== "Cancelled";
+  const cancelBlockedByProduction = productionStarted && order.status !== "Cancelled";
   // Descriptive/scheduling edits are allowed while the order is open; the identity (customer/item),
   // the requested quantity, posted ledger rows, recorded stage output and approved costs never change here.
   const canEdit = order.status !== "Completed" && order.status !== "Cancelled";
@@ -196,6 +202,12 @@ export default function ProductionOrderDetailPage() {
               </div>
             </div>
           )}
+        </Card>
+      )}
+
+      {cancelBlockedByProduction && (
+        <Card className="p-4 mb-6">
+          <p className="text-2xs text-ink-subtle">{t("po.cancelBlockedStarted")}</p>
         </Card>
       )}
 

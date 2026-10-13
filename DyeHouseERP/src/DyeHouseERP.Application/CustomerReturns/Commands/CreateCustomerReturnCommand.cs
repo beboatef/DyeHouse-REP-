@@ -149,6 +149,12 @@ public class CreateCustomerReturnCommandHandler : IRequestHandler<CreateCustomer
                     $"Lot '{message.MessageNumber}' belongs to another customer and cannot receive this return.");
         }
 
+        // Spec sections 5-6: a return line may only carry the units configured on its
+        // item, and both measurements when the item requires them.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, request.Lines.Select(l => (l.ItemId, l.QuantityKg, l.QuantityMeter)),
+            cancellationToken, "on this customer return");
+
         var returnNumber = await _numberGenerator.NextAsync(DocumentType.CustomerReturn, cancellationToken: cancellationToken);
         var customerReturn = new CustomerReturn(
             returnNumber, request.ReturnDate, request.CustomerId, _currentUser.UserName, request.Reason, request.Notes);

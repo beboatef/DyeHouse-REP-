@@ -35,9 +35,22 @@ export default function ItemsPage() {
     nameAr: "",
     nameEn: "",
     category: "",
-    baseUnit: "KG" as UnitOfMeasure
+    baseUnit: "KG" as UnitOfMeasure,
+    // "" means "single unit" - the item uses only its base unit.
+    secondaryUnit: "" as UnitOfMeasure | "",
+    requireBothUnits: false
   });
   const [error, setError] = useState<string | null>(null);
+
+  // Inline edit of ONE item. The unit configuration can only be changed while the item has
+  // no inventory history at all - the backend refuses otherwise (never reinterpret a posted
+  // quantity), and shows that refusal here.
+  const [editing, setEditing] = useState<{
+    id: string; code: string; nameAr: string; nameEn: string; category: string;
+    baseUnit: UnitOfMeasure; secondaryUnit: UnitOfMeasure | "";
+    requireBothUnits: boolean; isActive: boolean;
+  } | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ItemImportPreview | null>(null);
@@ -57,16 +70,42 @@ export default function ItemsPage() {
         nameAr: form.nameAr || undefined,
         nameEn: form.nameEn || undefined,
         category: form.category || undefined,
-        baseUnit: form.baseUnit
+        baseUnit: form.baseUnit,
+        secondaryUnit: form.secondaryUnit || null,
+        requireBothUnits: form.requireBothUnits
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["items"] });
       setShowForm(false);
-      setForm({ code: "", nameAr: "", nameEn: "", category: "", baseUnit: "KG" });
+      setForm({ code: "", nameAr: "", nameEn: "", category: "", baseUnit: "KG", secondaryUnit: "", requireBothUnits: false });
       setError(null);
     },
     onError: (err: any) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!editing) throw new Error("no item selected");
+      return ItemsApi.update(editing.id, {
+        nameAr: editing.nameAr || undefined,
+        nameEn: editing.nameEn || undefined,
+        category: editing.category || undefined,
+        baseUnit: editing.baseUnit,
+        secondaryUnit: editing.secondaryUnit || null,
+        // Explicit: a blank secondary unit must be distinguishable from "leave it as it is".
+        clearSecondaryUnit: !editing.secondaryUnit,
+        requireBothUnits: editing.requireBothUnits,
+        isActive: editing.isActive
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["items"] });
+      setEditing(null);
+      setEditError(null);
+    },
+    onError: (err: any) =>
+      setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const previewMutation = useMutation({
@@ -106,10 +145,100 @@ export default function ItemsPage() {
         }
       />
 
+      {editing && (
+        <Card className="p-5 mb-6">
+          <h3 className="text-sm font-bold text-slate-800">
+            {t("items.editTitle")}: <span className="ltr-nums">{editing.code}</span>
+          </h3>
+          <p className="text-2xs text-slate-500 mt-1">{t("items.editHint")}</p>
+          <form
+            className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end mt-3"
+            onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }}
+          >
+            <div>
+              <label className="field-label">{t("common.nameAr")}</label>
+              <Input value={editing.nameAr} onChange={(e) => setEditing({ ...editing, nameAr: e.target.value })} />
+            </div>
+            <div>
+              <label className="field-label">{t("common.nameEn")}</label>
+              <Input value={editing.nameEn} onChange={(e) => setEditing({ ...editing, nameEn: e.target.value })} />
+            </div>
+            <div>
+              <label className="field-label">{t("common.category")}</label>
+              <Input value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} />
+            </div>
+            <div>
+              <label className="field-label">{t("common.baseUnit")}</label>
+              <Select
+                value={editing.baseUnit}
+                onChange={(e) => {
+                  const baseUnit = e.target.value as UnitOfMeasure;
+                  setEditing({
+                    ...editing,
+                    baseUnit,
+                    secondaryUnit: editing.secondaryUnit === baseUnit ? "" : editing.secondaryUnit,
+                    requireBothUnits: editing.secondaryUnit === baseUnit ? false : editing.requireBothUnits
+                  });
+                }}
+              >
+                <option value="KG">{t("common.kg")} (KG)</option>
+                <option value="Meter">{t("common.meter")} (Meter)</option>
+              </Select>
+            </div>
+            <div>
+              <label className="field-label">{t("items.secondaryUnit")}</label>
+              <Select
+                value={editing.secondaryUnit}
+                onChange={(e) => {
+                  const secondaryUnit = e.target.value as UnitOfMeasure | "";
+                  setEditing({
+                    ...editing,
+                    secondaryUnit,
+                    requireBothUnits: secondaryUnit ? editing.requireBothUnits : false
+                  });
+                }}
+              >
+                <option value="">{t("items.noSecondaryUnit")}</option>
+                {editing.baseUnit !== "KG" && <option value="KG">{t("common.kg")} (KG)</option>}
+                {editing.baseUnit !== "Meter" && <option value="Meter">{t("common.meter")} (Meter)</option>}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={editing.requireBothUnits}
+                  disabled={!editing.secondaryUnit}
+                  onChange={(e) => setEditing({ ...editing, requireBothUnits: e.target.checked })}
+                />
+                <span>{t("items.requireBothUnits")}</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={editing.isActive}
+                  onChange={(e) => setEditing({ ...editing, isActive: e.target.checked })}
+                />
+                <span>{t("common.active")}</span>
+              </label>
+            </div>
+            <div className="sm:col-span-3 lg:col-span-6 flex flex-wrap items-center gap-3">
+              <Button type="submit" disabled={updateMutation.isPending || (editing.requireBothUnits && !editing.secondaryUnit)}>
+                {updateMutation.isPending ? t("common.saving") : t("common.save")}
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => { setEditing(null); setEditError(null); }}>
+                {t("common.cancel")}
+              </Button>
+              {editError && <span className="form-error">{editError}</span>}
+            </div>
+          </form>
+        </Card>
+      )}
+
       {showForm && (
         <Card className="p-5 mb-6">
           <form
-            className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-end"
+            className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end"
             onSubmit={(e) => {
               e.preventDefault();
               createMutation.mutate();
@@ -137,13 +266,62 @@ export default function ItemsPage() {
             </div>
             <div>
               <label className="field-label">{t("common.baseUnit")}</label>
-              <Select value={form.baseUnit} onChange={(e) => setForm({ ...form, baseUnit: e.target.value as UnitOfMeasure })}>
+              <Select
+                value={form.baseUnit}
+                onChange={(e) => {
+                  const baseUnit = e.target.value as UnitOfMeasure;
+                  setForm({
+                    ...form,
+                    baseUnit,
+                    // A secondary unit can never equal the base unit - clear it if it now would.
+                    secondaryUnit: form.secondaryUnit === baseUnit ? "" : form.secondaryUnit,
+                    requireBothUnits: form.secondaryUnit === baseUnit ? false : form.requireBothUnits
+                  });
+                }}
+              >
                 <option value="KG">{t("common.kg")} (KG)</option>
                 <option value="Meter">{t("common.meter")} (Meter)</option>
               </Select>
             </div>
-            <div className="sm:col-span-5 flex items-center gap-3">
-              <Button type="submit" disabled={createMutation.isPending || !form.code || (!form.nameAr && !form.nameEn)}>
+            <div>
+              <label className="field-label">{t("items.secondaryUnit")}</label>
+              <Select
+                value={form.secondaryUnit}
+                onChange={(e) => {
+                  const secondaryUnit = e.target.value as UnitOfMeasure | "";
+                  setForm({
+                    ...form,
+                    secondaryUnit,
+                    requireBothUnits: secondaryUnit ? form.requireBothUnits : false
+                  });
+                }}
+              >
+                <option value="">{t("items.noSecondaryUnit")}</option>
+                {form.baseUnit !== "KG" && <option value="KG">{t("common.kg")} (KG)</option>}
+                {form.baseUnit !== "Meter" && <option value="Meter">{t("common.meter")} (Meter)</option>}
+              </Select>
+            </div>
+            <div className="flex flex-col justify-end">
+              <label className="flex items-center gap-2 text-sm text-gray-700 h-[38px]">
+                <input
+                  type="checkbox"
+                  checked={form.requireBothUnits}
+                  disabled={!form.secondaryUnit}
+                  onChange={(e) => setForm({ ...form, requireBothUnits: e.target.checked })}
+                />
+                <span>{t("items.requireBothUnits")}</span>
+              </label>
+            </div>
+            <div className="sm:col-span-3 lg:col-span-6 flex flex-wrap items-center gap-3">
+              <Button
+                type="submit"
+                disabled={
+                  createMutation.isPending ||
+                  !form.code ||
+                  (!form.nameAr && !form.nameEn) ||
+                  (form.requireBothUnits && !form.secondaryUnit)
+                }
+              >
                 {createMutation.isPending ? t("common.saving") : t("common.save")}
               </Button>
               <span className="text-2xs text-slate-400">{t("items.baseUnitHint")}</span>
@@ -207,6 +385,7 @@ export default function ItemsPage() {
                     <th>{t("common.nameEn")}</th>
                     <th>{t("common.category")}</th>
                     <th>{t("common.baseUnit")}</th>
+                    <th>{t("items.secondaryUnit")}</th>
                     <th>{t("common.status")}</th>
                   </tr>
                 </thead>
@@ -219,6 +398,7 @@ export default function ItemsPage() {
                       <td>{row.nameEn}</td>
                       <td>{row.category ?? "—"}</td>
                       <td className="ltr-nums">{row.baseUnit}</td>
+                      <td className="ltr-nums">{row.secondaryUnit || "—"}{row.requireBothUnits ? " •" : ""}</td>
                       <td>
                         {row.isValid ? (
                           <Badge tone={row.action === "Update" ? "yellow" : "green"}>{row.action}</Badge>
@@ -284,15 +464,17 @@ export default function ItemsPage() {
               <th>{t("common.nameEn")}</th>
               <th>{t("common.category")}</th>
               <th>{t("common.baseUnit")}</th>
+              <th>{t("items.secondaryUnit")}</th>
               <th>{t("common.status")}</th>
+              <th>{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
             )}
             {!isLoading && items?.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
             )}
             {items?.map((item) => (
               <tr key={item.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
@@ -304,7 +486,36 @@ export default function ItemsPage() {
                   <Badge tone="blue">{item.baseUnit === "KG" ? t("common.kg") : t("common.meter")}</Badge>
                 </td>
                 <td>
+                  {item.secondaryUnit ? (
+                    <span className="flex items-center gap-1">
+                      <Badge tone="blue">
+                        {item.secondaryUnit === "KG" ? t("common.kg") : t("common.meter")}
+                      </Badge>
+                      {item.requireBothUnits && <Badge tone="yellow">{t("items.bothRequired")}</Badge>}
+                    </span>
+                  ) : (
+                    <span className="text-ink-muted">—</span>
+                  )}
+                </td>
+                <td>
                   <Badge tone={item.isActive ? "green" : "gray"}>{item.isActive ? t("common.active") : t("common.inactive")}</Badge>
+                </td>
+                <td>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditError(null);
+                      setEditing({
+                        id: item.id, code: item.code,
+                        nameAr: item.nameAr, nameEn: item.nameEn, category: item.category ?? "",
+                        baseUnit: item.baseUnit, secondaryUnit: item.secondaryUnit ?? "",
+                        requireBothUnits: item.requireBothUnits, isActive: item.isActive
+                      });
+                    }}
+                  >
+                    {t("common.edit")}
+                  </Button>
                 </td>
               </tr>
             ))}

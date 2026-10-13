@@ -57,10 +57,13 @@ public class ItemsController : ControllerBase
         [FromServices] IReportExportService export)
     {
         var items = await _mediator.Send(new GetItemsQuery(activeOnly, search));
-        var headers = new List<string> { "Code", "NameAr", "NameEn", "Category", "BaseUnit", "Active" };
+        var headers = new List<string>
+            { "Code", "NameAr", "NameEn", "Category", "BaseUnit", "SecondaryUnit", "RequireBothUnits", "Active" };
         var rows = items.Select(i => new object?[]
         {
-            i.Code, i.NameAr, i.NameEn, i.Category, i.BaseUnit.ToString(), i.IsActive ? "Yes" : "No"
+            i.Code, i.NameAr, i.NameEn, i.Category, i.BaseUnit.ToString(),
+            i.SecondaryUnit?.ToString() ?? string.Empty, i.RequireBothUnits ? "Yes" : "No",
+            i.IsActive ? "Yes" : "No"
         }).ToList();
 
         var bytes = export.GenerateExcel("Items", headers, rows);
@@ -75,10 +78,13 @@ public class ItemsController : ControllerBase
         [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
     {
         var items = await _mediator.Send(new GetItemsQuery(activeOnly, search));
-        var headers = new List<string> { "Code", "NameAr", "NameEn", "Category", "BaseUnit", "Active" };
+        var headers = new List<string>
+            { "Code", "NameAr", "NameEn", "Category", "BaseUnit", "SecondaryUnit", "RequireBothUnits", "Active" };
         var rows = items.Select(i => new object?[]
         {
-            i.Code, i.NameAr, i.NameEn, i.Category, i.BaseUnit.ToString(), i.IsActive ? "Yes" : "No"
+            i.Code, i.NameAr, i.NameEn, i.Category, i.BaseUnit.ToString(),
+            i.SecondaryUnit?.ToString() ?? string.Empty, i.RequireBothUnits ? "Yes" : "No",
+            i.IsActive ? "Yes" : "No"
         }).ToList();
 
         return ExportFileHelper.ToFile(export, format, "Item List", "DyeHouse ERP", headers, rows, "items", "Items");

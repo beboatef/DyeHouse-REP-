@@ -12,8 +12,11 @@ import { useI18n } from "@/i18n";
  * Shows the frozen specification snapshot of every group/cell, the controlled
  * status workflow (submit / approve / reject / cancel / delete) and the
  * traceability chain Customer -> Raw Material Message -> Formation Request.
- * A Formation Request is an independent document: it never creates or links to
- * a Job Order, and no Job Order references it.
+ * It stays PLANNING-ONLY: creating, editing, approving, cancelling or deleting it
+ * never touches inventory and never creates a Job Order. A Job Order may reference
+ * the request and basin it was issued from, but the reference is one way and
+ * informational - the request keeps its own planned quantities, and the order's
+ * quantities come from the ACTUAL issue.
  */
 
 const statusTone: Record<FormationRequestStatus, "gray" | "yellow" | "blue" | "green" | "red"> = {
@@ -146,6 +149,16 @@ export default function FormationRequestDetailPage() {
             <Button variant="secondary" onClick={() => FormationRequestsApi.downloadPdf(request.id, request.requestNumber)}>
               {t("common.pdf")}
             </Button>
+            {/* The request stays planning-only: this only CARRIES its references to the issue
+                screen, where the ACTUAL quantities are entered and the Job Order is created.
+                It never issues or creates anything by itself. */}
+            {!["Cancelled", "Rejected", "Completed"].includes(request.status) && (
+              <Link
+                to={`/production-orders?customerId=${request.customerId}&itemId=${request.itemId}&formationRequestId=${request.id}`}
+              >
+                <Button variant="secondary">{t("fr.issueRawOrder")}</Button>
+              </Link>
+            )}
             {request.status === "Approved" && (
               <Button variant="secondary" onClick={() => startProductionMutation.mutate()} disabled={startProductionMutation.isPending}>
                 {t("fr.startProduction")}

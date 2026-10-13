@@ -54,6 +54,7 @@ public static class ApprovalRequestKinds
         ApprovalRequestType.CustomerTransfer => Permissions.RawTransfer,
         ApprovalRequestType.RawExternalRelease => Permissions.RawExternalRelease,
         ApprovalRequestType.StockAdjustment => Permissions.InventoryAdjust,
+        ApprovalRequestType.RawIssue => Permissions.RawConsume,
         _ => throw new DomainException($"Unknown approval request type '{type}'.")
     };
 
@@ -64,6 +65,7 @@ public static class ApprovalRequestKinds
         ApprovalRequestType.CustomerTransfer => "/customer-transfers",
         ApprovalRequestType.RawExternalRelease => "/external-releases",
         ApprovalRequestType.StockAdjustment => "/stock-adjustments",
+        ApprovalRequestType.RawIssue => "/production-orders",
         _ => "/approvals"
     };
 
@@ -223,6 +225,19 @@ public class SubmitApprovalRequestCommandHandler : IRequestHandler<SubmitApprova
                 normalized = cmd with { ApprovalRequestId = null };
                 break;
             }
+            case ApprovalRequestType.RawIssue:
+            {
+                // The canonical issue has no order yet, so a negative-stock issue is bound
+                // to the customer's raw lot it draws from.
+                var cmd = ApprovalPayload.Deserialize<IssueRawMaterialCommand>(request.PayloadJson)
+                    .AsApprovalOverride(reason, Guid.NewGuid());
+                documentId = cmd.RawMessageId;
+                if (!new IssueRawMaterialCommandValidator().Validate(cmd).IsValid)
+                    throw new DomainException("The raw issue stored on this request is not valid.");
+                documentNumber = await MessageNumberAsync(documentId, cancellationToken);
+                normalized = cmd with { ApprovalRequestId = null };
+                break;
+            }
             default:
                 throw new DomainException($"Unknown approval request type '{request.Type}'.");
         }
@@ -310,6 +325,10 @@ public class ApproveApprovalRequestCommandHandler : IRequestHandler<ApproveAppro
                 break;
             case ApprovalRequestType.StockAdjustment:
                 await _sender.Send(ApprovalPayload.Deserialize<CreateStockAdjustmentCommand>(approval.PayloadJson)
+                    with { ApprovalRequestId = approval.Id }, cancellationToken);
+                break;
+            case ApprovalRequestType.RawIssue:
+                await _sender.Send(ApprovalPayload.Deserialize<IssueRawMaterialCommand>(approval.PayloadJson)
                     with { ApprovalRequestId = approval.Id }, cancellationToken);
                 break;
             default:

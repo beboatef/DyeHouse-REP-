@@ -49,6 +49,8 @@ public class GetItemsQueryHandler : IRequestHandler<GetItemsQuery, List<ItemDto>
                 NameEn = i.NameEn,
                 Category = i.Category,
                 BaseUnit = i.BaseUnit,
+                SecondaryUnit = i.SecondaryUnit,
+                RequireBothUnits = i.RequireBothUnits,
                 IsActive = i.IsActive
             })
             .ToListAsync(cancellationToken);

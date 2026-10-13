@@ -70,6 +70,13 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, request.WarehouseId, cancellationToken, "to receive raw material into it");
 
+        // Spec section 5: each line may only use the units its item is configured for,
+        // and when the item requires both units, BOTH measurements must be recorded.
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db,
+            request.Lines.Select(l => (l.ItemId, l.QuantityKg, l.QuantityMeter)),
+            cancellationToken, "on this raw receipt");
+
         // Section 6: the message number is ALWAYS system-generated via the
         // concurrency-safe sequence engine - never typed by the user.
         var messageNumber = await _numberGenerator.NextAsync(DocumentType.RawReceiptMessage, cancellationToken: cancellationToken);
