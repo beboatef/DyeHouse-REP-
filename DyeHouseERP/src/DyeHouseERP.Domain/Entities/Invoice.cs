@@ -50,14 +50,23 @@ public class Invoice : AuditableEntity
         CreatedAtUtc = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Adds a billable line. <paramref name="unit"/> is the unit the SERVICE is priced in
+    /// (spec section 34's price list is per stage+unit): it may differ from the unit the
+    /// production floor recorded, so the caller bills the APPROVED quantity in THAT unit -
+    /// never a converted figure (see the billing guard in the create/append handlers).
+    /// <paramref name="costEntryId"/> links a cost entry that is explicitly flagged
+    /// chargeable to the customer, so exactly one invoice line may ever bill it.
+    /// </summary>
     public InvoiceLine AddLine(Guid? productionOrderId, Guid itemId, string? color,
-        decimal quantity, decimal processingPrice, string? notes)
+        decimal quantity, decimal processingPrice, UnitOfMeasure unit, string? notes = null,
+        Guid? costEntryId = null)
     {
         if (Status != InvoiceStatus.Draft) throw new DocumentLockedException("Invoice", InvoiceNumber);
         if (quantity <= 0) throw new DomainException("Invoice line quantity must be greater than zero.");
         if (processingPrice < 0) throw new DomainException("Processing price cannot be negative.");
 
-        var line = new InvoiceLine(Id, productionOrderId, itemId, color, quantity, processingPrice, notes);
+        var line = new InvoiceLine(Id, productionOrderId, itemId, color, quantity, processingPrice, unit, notes, costEntryId);
         _lines.Add(line);
         return line;
     }
@@ -88,15 +97,15 @@ public class Invoice : AuditableEntity
     }
 
     /// <summary>Edits one line of a Draft invoice in place, keeping its Id so any reference to it stays valid.</summary>
-    public InvoiceLine UpdateLine(Guid lineId, decimal quantity, decimal processingPrice, string? color, string? notes,
-        string modifiedBy)
+    public InvoiceLine UpdateLine(Guid lineId, decimal quantity, decimal processingPrice, UnitOfMeasure unit,
+        string? color, string? notes, string modifiedBy)
     {
         EnsureDraft();
         if (quantity <= 0) throw new DomainException("Invoice line quantity must be greater than zero.");
         if (processingPrice < 0) throw new DomainException("Processing price cannot be negative.");
 
         var line = FindLine(lineId);
-        line.Update(quantity, processingPrice, color, notes);
+        line.Update(quantity, processingPrice, unit, color, notes);
         ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
         return line;
@@ -155,13 +164,30 @@ public class InvoiceLine : BaseEntity
     public string? Color { get; private set; }
     public decimal Quantity { get; private set; }
     public decimal ProcessingPrice { get; private set; }
+
+    /// <summary>
+    /// The unit this service is billed in, taken from the service's own price
+    /// (spec section 34: a price is per stage+unit) - NOT from whatever unit the
+    /// production floor happened to record. This is what lets a job be measured in
+    /// KG on the floor and billed per Meter: the quantity is the approved Meter
+    /// quantity, and the system never converts one unit into the other.
+    /// </summary>
+    public UnitOfMeasure Unit { get; private set; } = UnitOfMeasure.KG;
+
+    /// <summary>
+    /// Set when this line bills a <see cref="CostEntry"/> that was explicitly flagged
+    /// chargeable to the customer (reprocessing/separate costs are never auto-added).
+    /// A unique, filtered index makes the same cost entry billable by exactly one line.
+    /// </summary>
+    public Guid? CostEntryId { get; private set; }
+
     public decimal Value => Quantity * ProcessingPrice;
     public string? Notes { get; private set; }
 
     private InvoiceLine() { } // EF Core
 
     internal InvoiceLine(Guid invoiceId, Guid? productionOrderId, Guid itemId, string? color,
-        decimal quantity, decimal processingPrice, string? notes)
+        decimal quantity, decimal processingPrice, UnitOfMeasure unit, string? notes, Guid? costEntryId = null)
     {
         InvoiceId = invoiceId;
         ProductionOrderId = productionOrderId;
@@ -169,13 +195,16 @@ public class InvoiceLine : BaseEntity
         Color = color;
         Quantity = quantity;
         ProcessingPrice = processingPrice;
+        Unit = unit;
         Notes = notes;
+        CostEntryId = costEntryId;
     }
 
-    internal void Update(decimal quantity, decimal processingPrice, string? color, string? notes)
+    internal void Update(decimal quantity, decimal processingPrice, UnitOfMeasure unit, string? color, string? notes)
     {
         Quantity = quantity;
         ProcessingPrice = processingPrice;
+        Unit = unit;
         Color = color;
         Notes = notes;
     }

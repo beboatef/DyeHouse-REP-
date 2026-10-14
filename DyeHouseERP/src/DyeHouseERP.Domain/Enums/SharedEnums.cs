@@ -85,7 +85,46 @@ public enum DocumentType
     CustomerReturn = 26,
 
     // ---- Release of unused raw material when a Job Order is paused (spec section 19) ----
-    ProductionOrderPause = 27
+    ProductionOrderPause = 27,
+
+    // ---- Moving ready goods back into raw-material stock (rework / reclassification) ----
+    // Its own type because the movement is its own document: it is never a side effect of a
+    // delivery and it is never implied by anything else that happens in the Ready Goods module.
+    ReadyGoodsRawReturn = 28
+}
+
+/// <summary>
+/// Who carries the cost of a Job Order (spec section 20's cost responsibility).
+///
+/// This is stored, never inferred: an ordinary Job Order is worked for the customer
+/// and the customer carries its cost (the factory bills the processing), while a Job
+/// Order raised on a returned/reworked batch may genuinely be on the FACTORY's own
+/// account - a quality claim the factory absorbs. Treating either as a guess would
+/// silently move money, so an order created from a customer return must state it
+/// explicitly and there is no default for that workflow.
+/// </summary>
+public enum CostBearer
+{
+    /// <summary>على حساب العميل - the customer carries the cost; the work is billable.</summary>
+    Customer = 1,
+
+    /// <summary>على حساب الشركة - the factory absorbs the cost; the work is not billable.</summary>
+    Company = 2
+}
+
+/// <summary>
+/// Whose material a customer return actually is (spec sections 32-33). Recorded on the
+/// return so the record says not only WHAT came back and from whom, but whether the
+/// factory owns it: the factory's own material coming back must never be treated as
+/// customer-owned stock, and vice versa.
+/// </summary>
+public enum ReturnOwnership
+{
+    /// <summary>مادة العميل - the customer's own material coming back (the ordinary case).</summary>
+    CustomerOwned = 1,
+
+    /// <summary>مادة الشركة - factory-owned material coming back (e.g. our own stock sent out and rejected).</summary>
+    CompanyOwned = 2
 }
 
 /// <summary>
@@ -188,7 +227,12 @@ public enum StageExecutionStatus
     Pending = 1,
     InProgress = 2,
     Completed = 3,
-    Skipped = 4     // only allowed if the stage definition has AllowSkip = true
+    // Phase 4: the legacy start/complete/skip workflow was deleted with its endpoint and its
+    // AllowSkip column, so NO code path can move a stage execution here - an order simply never
+    // runs an operation and moves on to whichever operation the operator picks next. The value is
+    // kept (and never renumbered) so any historical row that carries it still reads back, and the
+    // few places that mention it are defensive guards, not an active workflow.
+    Skipped = 4
 }
 
 /// <summary>Why raw material is leaving the factory outside of normal internal production (spec section 14).</summary>

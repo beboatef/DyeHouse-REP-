@@ -31,6 +31,21 @@ public class CustomerReturn : AuditableEntity
     public string? Reason { get; private set; }
     public string? Notes { get; private set; }
 
+    /// <summary>
+    /// The document the goods are coming back against - an invoice number, a delivery (إذن تسليم)
+    /// number, or the customer's own reference (spec section 32's "reference document"). Free text on
+    /// purpose: the goods may come back against a document this system did not issue. Recorded only -
+    /// it never drives a financial effect (a return changes no invoice and creates no credit note).
+    /// </summary>
+    public string? ReferenceDocument { get; private set; }
+
+    /// <summary>
+    /// Whose material came back (spec section 32's "ownership"). The ordinary case is the customer's
+    /// own material, which is why that is the default; factory-owned material coming back is recorded
+    /// explicitly so it can never be counted as customer stock.
+    /// </summary>
+    public ReturnOwnership Ownership { get; private set; } = ReturnOwnership.CustomerOwned;
+
     // ---- Cancellation / correction audit (spec sections 32-33 + 49) ----
     // A return entered by mistake (wrong lot, wrong quantity, wrong customer) is corrected by
     // CANCELLING it: the document and its IN ledger rows stay readable, and the stock it restored
@@ -55,7 +70,8 @@ public class CustomerReturn : AuditableEntity
 
     public CustomerReturn(
         string returnNumber, DateTime returnDate, Guid customerId, string createdBy,
-        string? reason = null, string? notes = null)
+        string? reason = null, string? notes = null,
+        string? referenceDocument = null, ReturnOwnership ownership = ReturnOwnership.CustomerOwned)
     {
         if (string.IsNullOrWhiteSpace(returnNumber))
             throw new ArgumentException("Customer return number is required.", nameof(returnNumber));
@@ -66,6 +82,8 @@ public class CustomerReturn : AuditableEntity
         CustomerId = customerId;
         Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        ReferenceDocument = string.IsNullOrWhiteSpace(referenceDocument) ? null : referenceDocument.Trim();
+        Ownership = ownership;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
     }

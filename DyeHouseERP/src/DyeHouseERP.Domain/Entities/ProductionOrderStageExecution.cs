@@ -29,6 +29,15 @@ public class ProductionOrderStageExecution : BaseEntity
     public decimal? SeparatesMeter { get; private set; }
 
     /// <summary>
+    /// Second-grade / second-quality material produced by this operation (spec section 20).
+    ///
+    /// A quantity of its OWN: it is neither the output nor the waste, and it is never derived
+    /// from either. KG and Meter are independent and are never converted into one another.
+    /// </summary>
+    public decimal? SecondGradeKg { get; private set; }
+    public decimal? SecondGradeMeter { get; private set; }
+
+    /// <summary>
     /// The IMMUTABLE weight this stage started from (spec section 15).
     /// For the first stage it is the Job Order's actual weight; for every later
     /// stage it is the previous stage's final output. It is written once when the
@@ -136,17 +145,28 @@ public class ProductionOrderStageExecution : BaseEntity
     }
 
     /// <summary>
-    /// Closes the stage by recording its final output and deriving the loss from
-    /// the immutable baseline (spec sections 14-15). Loss = baseline - output;
-    /// loss % = loss / baseline x 100. KG and Meter are handled independently -
-    /// they are never converted into one another.
+    /// Closes the operation by recording what it actually consumed and produced, and deriving
+    /// the waste from the immutable baseline (spec sections 13-15). Waste = baseline - output;
+    /// waste % = waste / baseline x 100. KG and Meter are handled independently - they are never
+    /// subtracted from, or converted into, one another, so no figure is ever invented.
+    ///
+    /// This is the ONE way an operation is closed: it is called by the transfer transaction, which
+    /// simultaneously activates the next operation the user chose. The legacy "complete a stage"
+    /// path was deleted in Phase 4.
     ///
     /// A completed stage is LOCKED: this throws once the stage is Completed, so
     /// an ordinary re-entry cannot rewrite a finished stage's figures.
     /// </summary>
+    /// <param name="inputKg">The operation's actual input. Recorded, never inferred from the order's requested quantity.</param>
+    /// <param name="secondGradeKg">Second-grade material produced by this operation - its own quantity, not output and not waste.</param>
+    /// <param name="machineId">The machine this operation ran on (validated by the caller for suitability and availability).</param>
+    /// <param name="productionShiftId">The execution shift this operation ran on.</param>
     public void CloseWithOutput(
         decimal? outputKg, decimal? outputMeter, decimal? separatesKg, decimal? separatesMeter,
-        string? notes, string completedBy)
+        string? notes, string completedBy,
+        decimal? inputKg = null, decimal? inputMeter = null,
+        decimal? secondGradeKg = null, decimal? secondGradeMeter = null,
+        Guid? machineId = null, Guid? productionShiftId = null)
     {
         if (Status == StageExecutionStatus.Completed)
             throw new DomainException(
@@ -156,12 +176,19 @@ public class ProductionOrderStageExecution : BaseEntity
             throw new DomainException("Enter the final output quantity for this stage.");
 
         EnsureDrawingNumber();
-        if (outputKg is < 0 || outputMeter is < 0 || separatesKg is < 0 || separatesMeter is < 0)
+        if (outputKg is < 0 || outputMeter is < 0 || separatesKg is < 0 || separatesMeter is < 0 ||
+            inputKg is < 0 || inputMeter is < 0 || secondGradeKg is < 0 || secondGradeMeter is < 0)
             throw new DomainException("Stage quantities cannot be negative.");
+        InputKg = inputKg;
+        InputMeter = inputMeter;
         OutputKg = outputKg;
         OutputMeter = outputMeter;
         SeparatesKg = separatesKg;
         SeparatesMeter = separatesMeter;
+        SecondGradeKg = secondGradeKg;
+        SecondGradeMeter = secondGradeMeter;
+        MachineId = machineId ?? MachineId;
+        ProductionShiftId = productionShiftId ?? ProductionShiftId;
         Notes = notes;
         Operator = completedBy;
 
@@ -230,56 +257,9 @@ public class ProductionOrderStageExecution : BaseEntity
                 $"Cumulative transfers can never exceed a stage's output: this stage produced {OutputMeter} Meter, {alreadyTransferredMeter} Meter has already been transferred and {transferMeter} Meter more was requested.");
     }
 
-    public void Start(string operatorName)
-    {
-        if (Status != StageExecutionStatus.Pending)
-            throw new DomainException($"Stage is already {Status} and cannot be started again.");
-
-        EnsureDrawingNumber();
-        Status = StageExecutionStatus.InProgress;
-        Operator = operatorName;
-        StartedAtUtc = DateTime.UtcNow;
-    }
-
-    /// <summary>
-    /// Records the stage's recorded quantities and marks it complete. Whether
-    /// input/output are required is enforced by the caller against the
-    /// matching ProductionStageDefinition (RequiresInputQuantity /
-    /// RequiresOutputQuantity) - the entity itself stays agnostic about
-    /// which stage type it is.
-    /// </summary>
-    public void Complete(
-        decimal? inputKg, decimal? inputMeter, decimal? outputKg, decimal? outputMeter,
-        decimal? lossKg, decimal? lossMeter, decimal? separatesKg, decimal? separatesMeter,
-        string? notes)
-    {
-        if (Status == StageExecutionStatus.Completed)
-            throw new DomainException("Stage is already completed.");
-
-        EnsureDrawingNumber();
-        if (inputKg is < 0 || inputMeter is < 0 || outputKg is < 0 || outputMeter is < 0 ||
-            separatesKg is < 0 || separatesMeter is < 0)
-            throw new DomainException("Stage quantities cannot be negative.");
-        InputKg = inputKg; InputMeter = inputMeter;
-        OutputKg = outputKg; OutputMeter = outputMeter;
-        LossKg = lossKg; LossMeter = lossMeter;
-        SeparatesKg = separatesKg; SeparatesMeter = separatesMeter;
-        Notes = notes;
-
-        Status = StageExecutionStatus.Completed;
-        CompletedAtUtc = DateTime.UtcNow;
-    }
-
-    public void Skip(bool stageAllowsSkip, string reason, string modifiedBy)
-    {
-        if (!stageAllowsSkip)
-            throw new DomainException("This stage is not configured to allow being skipped.");
-
-        if (Status is StageExecutionStatus.Completed or StageExecutionStatus.Skipped)
-            throw new DomainException("A closed stage cannot be skipped.");
-        if (StartedAtUtc.HasValue) EnsureDrawingNumber();
-        Status = StageExecutionStatus.Skipped;
-        Notes = string.IsNullOrWhiteSpace(Notes) ? $"[Skipped by {modifiedBy}] {reason}" : $"{Notes}\n[Skipped by {modifiedBy}] {reason}";
-        CompletedAtUtc = DateTime.UtcNow;
-    }
+    // Phase 4: Start(...), Complete(...) and Skip(...) were DELETED together with their endpoints.
+    // An operation can only be closed through CloseWithOutput above, which the transfer transaction
+    // calls at the same moment it activates the operation the user chose next. There is therefore no
+    // domain route any more that advances or closes an operation outside that single transaction, and
+    // no route at all that marks one Skipped.
 }

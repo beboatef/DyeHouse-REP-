@@ -11,15 +11,30 @@ namespace DyeHouseERP.Domain.Entities;
 /// traceable to who was paid, from which account, when, by whom, and - where
 /// applicable - to the endorsed check it was settled with (spec sections 39-40).
 ///
-/// Posting writes exactly two things: an OUT TreasuryTransaction for the cash/bank
-/// movement and a Credit SupplierLedgerEntry for the payable reduction.
+/// A payment is settled in ONE of two ways, and the two never mix:
+///
+///   * **Cash / bank transfer** - a real OUT TreasuryTransaction for the money that
+///     left the account, plus a Credit SupplierLedgerEntry for the payable reduction.
+///     A treasury account is mandatory.
+///
+///   * **An endorsed customer check** (spec section 39) - the SAME physical instrument
+///     was handed to the supplier, so nothing ever passed through our cash/bank account.
+///     No TreasuryTransaction is written (that would be a fictitious outflow) and the
+///     account is therefore NOT required; the payable reduction is the Credit
+///     SupplierLedgerEntry, and the customer's own account is credited by the settlement
+///     workflow. The link to the instrument is <see cref="CheckId"/>/<see cref="CheckNumber"/>.
 /// </summary>
 public class SupplierPayment : AuditableEntity
 {
     public string PaymentNumber { get; private set; } = string.Empty; // system-generated, e.g. "SPAY-2026-000007"
     public DateTime PaymentDate { get; private set; }
     public Guid SupplierId { get; private set; }
-    public Guid TreasuryAccountId { get; private set; }
+
+    /// <summary>
+    /// The cash/bank account the money left. Null exactly when this payment was settled by
+    /// an endorsed customer check - that settlement moves no money through our accounts.
+    /// </summary>
+    public Guid? TreasuryAccountId { get; private set; }
     public decimal Amount { get; private set; }
     public string Currency { get; private set; } = "EGP";
 
@@ -47,16 +62,22 @@ public class SupplierPayment : AuditableEntity
 
     private SupplierPayment() { } // EF Core
 
-    public SupplierPayment(string paymentNumber, DateTime paymentDate, Guid supplierId, Guid treasuryAccountId,
+    public SupplierPayment(string paymentNumber, DateTime paymentDate, Guid supplierId, Guid? treasuryAccountId,
         decimal amount, string createdBy, string? paymentMethod = null, Guid? checkId = null,
         string? checkNumber = null, Guid? supplierInvoiceId = null, string? description = null, string currency = "EGP")
     {
         if (string.IsNullOrWhiteSpace(paymentNumber))
             throw new ArgumentException("Payment number is required.", nameof(paymentNumber));
         if (supplierId == Guid.Empty) throw new ArgumentException("Supplier is required.", nameof(supplierId));
-        if (treasuryAccountId == Guid.Empty)
-            throw new DomainException("A treasury/bank account is required for a supplier payment.");
         if (amount <= 0) throw new DomainException("A supplier payment amount must be greater than zero.");
+
+        // An account is required for a CASH payment - and only for a cash payment. A payment settled
+        // by an endorsed check moves no money through our accounts (spec section 39), so demanding an
+        // account there would push the caller into naming an account the money never touched.
+        if (treasuryAccountId == Guid.Empty) treasuryAccountId = null;
+        if (treasuryAccountId is null && checkId is null)
+            throw new DomainException(
+                "A treasury/bank account is required for a supplier payment that is not settled by an endorsed check.");
 
         PaymentNumber = paymentNumber;
         PaymentDate = paymentDate;

@@ -27,6 +27,16 @@ public class RawMessage : AuditableEntity
 
     public RawMessageStatus Status { get; private set; } = RawMessageStatus.Open;
 
+    /// <summary>
+    /// The client-supplied idempotency token of the receiving confirmation, when one was sent
+    /// (spec section 5). A retried or double-submitted confirmation carrying the same token
+    /// returns the receipt that was already posted instead of posting a SECOND IN movement for
+    /// the same physical delivery; a unique filtered index backs the check up at the database
+    /// level. Null for receipts created before this token existed (and for any caller that
+    /// sends no token).
+    /// </summary>
+    public Guid? ReceiveRequestId { get; private set; }
+
     // ---- Cancellation / correction audit (spec sections 10-11 + 49) ----
     // A receipt entered against the wrong customer, item or warehouse is corrected by
     // CANCELLING it, not by editing or deleting it: the document stays readable, its
@@ -45,7 +55,7 @@ public class RawMessage : AuditableEntity
     private RawMessage() { } // EF Core
 
     public RawMessage(string messageNumber, DateTime receiptDate, Guid customerId, Guid warehouseId,
-        string receivingUser, string createdBy, string? notes = null)
+        string receivingUser, string createdBy, string? notes = null, Guid? receiveRequestId = null)
     {
         if (string.IsNullOrWhiteSpace(messageNumber))
             throw new ArgumentException("Message number is required.", nameof(messageNumber));
@@ -56,12 +66,13 @@ public class RawMessage : AuditableEntity
         WarehouseId = warehouseId;
         ReceivingUser = receivingUser;
         Notes = notes;
+        ReceiveRequestId = receiveRequestId;
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
     public RawMessageLine AddLine(Guid itemId, decimal? quantityKg, decimal? quantityMeter,
-        int? pieceCount, string? notes)
+        int? pieceCount, string? notes, string? color = null)
     {
         if (IsLocked)
             throw new DocumentLockedException("Raw Receipt Message", MessageNumber);
@@ -72,7 +83,7 @@ public class RawMessage : AuditableEntity
         if (quantityKg is <= 0 || quantityMeter is <= 0)
             throw new DomainException("Quantities must be greater than zero.");
 
-        var line = new RawMessageLine(Id, itemId, quantityKg, quantityMeter, pieceCount, notes);
+        var line = new RawMessageLine(Id, itemId, quantityKg, quantityMeter, pieceCount, notes, color);
         _lines.Add(line);
         return line;
     }
@@ -166,6 +177,15 @@ public class RawMessageLine : BaseEntity
     public string? Notes { get; private set; }
 
     /// <summary>
+    /// The colour/shade this line's material was received in, where the article is
+    /// colour-specific (spec section 8's "colour where applicable"). Optional by design:
+    /// a plain article is received with no colour at all, and nothing downstream is
+    /// derived from this field - it is descriptive traceability data on the receipt,
+    /// alongside the item and the customer who owns the material.
+    /// </summary>
+    public string? Color { get; private set; }
+
+    /// <summary>
     /// Quantity rejected at receiving inspection (spec section 8 "Rejected quantity
     /// if applicable"). Optional - a line with no rejection has both null. Kept as
     /// real data so rejected material remains traceable to the customer's receipt.
@@ -180,7 +200,7 @@ public class RawMessageLine : BaseEntity
     private RawMessageLine() { } // EF Core
 
     internal RawMessageLine(Guid rawMessageId, Guid itemId, decimal? quantityKg, decimal? quantityMeter,
-        int? pieceCount, string? notes)
+        int? pieceCount, string? notes, string? color = null)
     {
         RawMessageId = rawMessageId;
         ItemId = itemId;
@@ -188,6 +208,7 @@ public class RawMessageLine : BaseEntity
         QuantityMeter = quantityMeter;
         PieceCount = pieceCount;
         Notes = notes;
+        Color = string.IsNullOrWhiteSpace(color) ? null : color.Trim();
     }
 
     /// <summary>

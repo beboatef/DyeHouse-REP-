@@ -99,6 +99,22 @@ public class ProductionOrder : AuditableEntity
     public Guid? IssueRequestId { get; private set; }
 
     /// <summary>The planning Formation Request this order was issued from, when applicable (planning-only reference).</summary>
+    /// <summary>
+    /// The customer return this order was raised from, when it was (spec sections 32-33). Null for
+    /// an ordinary order. Stored rather than derived: the return is what explains WHY a rework
+    /// order exists, and "which return" must survive even after the return is cancelled.
+    /// </summary>
+    public Guid? CustomerReturnId { get; private set; }
+
+    /// <summary>
+    /// Who carries this order's cost - the customer or the factory (spec section 20's cost
+    /// responsibility). An ordinary order is worked for the customer, so it defaults to
+    /// <see cref="CostBearer.Customer"/>; an order raised from a customer RETURN must state it
+    /// explicitly, because the same physical rework can legitimately be a quality claim the
+    /// factory absorbs (see the return's account choice in the issue command).
+    /// </summary>
+    public CostBearer CostBearer { get; private set; } = CostBearer.Customer;
+
     public Guid? FormationRequestId { get; private set; }
 
     /// <summary>The formation basin this order was issued from, when applicable (planning-only reference).</summary>
@@ -127,7 +143,11 @@ public class ProductionOrder : AuditableEntity
     /// the issue handler, before the order is persisted.
     /// </summary>
     public void LinkIssue(
-        Guid issueTransactionId, Guid? issueRequestId, Guid? formationRequestId, Guid? formationBasinId)
+        Guid issueTransactionId, Guid? issueRequestId, Guid? formationRequestId, Guid? formationBasinId,
+        // Set only for an order raised from a customer return (spec sections 32-33); the "why" of a
+        // rework order and the cost-responsibility decision both hang off the ORDER, not the return.
+        Guid? customerReturnId = null,
+        CostBearer? costBearer = null)
     {
         if (issueTransactionId == Guid.Empty)
             throw new ArgumentException("The issue transaction id is required.", nameof(issueTransactionId));
@@ -136,6 +156,23 @@ public class ProductionOrder : AuditableEntity
         IssueRequestId = issueRequestId;
         FormationRequestId = formationRequestId;
         FormationBasinId = formationBasinId;
+        CustomerReturnId = customerReturnId;
+        if (costBearer.HasValue) SetCostBearer(costBearer.Value);
+    }
+
+    /// <summary>
+    /// Records who carries this order's cost. Set from the return workflow at the moment the order is
+    /// created (there is no sensible default for a rework), and correctable ONLY while the order is
+    /// still open - once it is completed or cancelled its history is frozen, exactly like every other
+    /// post-production figure here. Never bills anything by itself: the flag is the stored decision
+    /// every cost/profitability view reads, so the same job is never costed to the wrong party.
+    /// </summary>
+    public void SetCostBearer(CostBearer costBearer)
+    {
+        if (Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
+            throw new DocumentLockedException("Production Order", OrderNumber);
+
+        CostBearer = costBearer;
     }
 
     private readonly List<ProductionOrderStageExecution> _stageExecutions = new();
@@ -312,6 +349,67 @@ public class ProductionOrder : AuditableEntity
     /// </summary>
     public void EnsureRawAllocationComplete() =>
         EnsureRawAllocationComplete(AllocatedQuantityKg, AllocatedQuantityMeter);
+
+    /// <summary>
+    /// The order's ORIGINAL raw quantity - fixed for the life of the order and never overwritten
+    /// (spec section 31). It is the quantity the order actually started from (the formation stage's
+    /// immutable baseline), so it is the one denominator every partial-delivery statement uses:
+    /// no delivery ever rewrites it.
+    /// </summary>
+    public decimal OriginalRawQuantityKg => RequestedQuantityKg ?? 0m;
+    public decimal OriginalRawQuantityMeter => RequestedQuantityMeter ?? 0m;
+
+    /// <summary>
+    /// Guards the original-raw accounting across PARTIAL deliveries (spec section 31):
+    /// remaining original raw = original PO quantity - the original raw already settled by earlier
+    /// deliveries, and a delivery may never settle more than that. KG and Meter are checked
+    /// INDEPENDENTLY - they are never converted into one another, so a Meter delivery can never
+    /// stand in for an outstanding KG balance (or the reverse).
+    /// </summary>
+    /// <param name="alreadyDeliveredOriginalRawKg">Original raw KG settled by the order's earlier (non-cancelled) deliveries.</param>
+    /// <param name="alreadyDeliveredOriginalRawMeter">Original raw Meter settled by those deliveries.</param>
+    public void EnsureOriginalRawWithinLimit(
+        decimal alreadyDeliveredOriginalRawKg, decimal alreadyDeliveredOriginalRawMeter,
+        decimal? requestedOriginalRawKg, decimal? requestedOriginalRawMeter)
+    {
+        const decimal tolerance = 0.001m;
+
+        var originalKg = OriginalRawQuantityKg;
+        var originalMeter = OriginalRawQuantityMeter;
+
+        // A unit the order never recorded cannot be settled by a later delivery: there is no
+        // balance to measure it against, so it is refused rather than silently accepted.
+        if (requestedOriginalRawKg is > 0 && RequestedQuantityKg is null)
+            throw new DomainException(
+                $"Job Order {OrderNumber} recorded no original raw KG quantity, so original raw KG cannot be settled against it.");
+        if (requestedOriginalRawMeter is > 0 && RequestedQuantityMeter is null)
+            throw new DomainException(
+                $"Job Order {OrderNumber} recorded no original raw Meter quantity, so original raw Meter cannot be settled against it.");
+
+        if (requestedOriginalRawKg is > 0 && alreadyDeliveredOriginalRawKg + requestedOriginalRawKg.Value > originalKg + tolerance)
+            throw new DomainException(
+                $"Delivery exceeds the original raw quantity of Job Order {OrderNumber}: it started from {originalKg} KG, " +
+                $"{alreadyDeliveredOriginalRawKg} KG has already been settled by earlier deliveries and {requestedOriginalRawKg} KG " +
+                "more was requested. The original quantity is fixed and is never overwritten.");
+
+        if (requestedOriginalRawMeter is > 0 && alreadyDeliveredOriginalRawMeter + requestedOriginalRawMeter.Value > originalMeter + tolerance)
+            throw new DomainException(
+                $"Delivery exceeds the original raw quantity of Job Order {OrderNumber}: it started from {originalMeter} Meter, " +
+                $"{alreadyDeliveredOriginalRawMeter} Meter has already been settled by earlier deliveries and {requestedOriginalRawMeter} Meter " +
+                "more was requested. The original quantity is fixed and is never overwritten.");
+    }
+
+    /// <summary>
+    /// Remaining original raw = Original PO quantity - original raw settled by deliveries (spec section
+    /// 31), clamped at zero and never negative, computed per unit with no unit conversion.
+    /// </summary>
+    public (decimal Kg, decimal Meter) RemainingOriginalRaw(
+        decimal alreadyDeliveredOriginalRawKg, decimal alreadyDeliveredOriginalRawMeter)
+    {
+        var kg = OriginalRawQuantityKg - alreadyDeliveredOriginalRawKg;
+        var meter = OriginalRawQuantityMeter - alreadyDeliveredOriginalRawMeter;
+        return (kg < 0m ? 0m : kg, meter < 0m ? 0m : meter);
+    }
 
     public void MarkInProduction()
     {

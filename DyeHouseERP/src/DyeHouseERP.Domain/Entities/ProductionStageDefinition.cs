@@ -20,15 +20,12 @@ public class ProductionStageDefinition : AuditableEntity
     public bool RequiresInputQuantity { get; private set; }
     public bool RequiresOutputQuantity { get; private set; }
 
-    /// <summary>
-    /// The ONLY capability flag a stage carries, because it is the only one any workflow honours:
-    /// <c>SkipStageCommand</c> consults it before marking a stage Skipped. It was previously joined by
-    /// AllowRepeat/AllowRework/AllowReturn, which no code path ever read - the stage-admin screen
-    /// advertised behaviour that did not exist, so those three were removed rather than implemented
-    /// (D3). A stage that must run more than once is supported where the business needs it - a printing
-    /// stage, identified by <see cref="RequiresDrawingNumber"/> - through the ordinary transfer workflow.
-    /// </summary>
-    public bool AllowSkip { get; private set; }
+    // Phase 4: AllowSkip was REMOVED here. It was the last capability flag, read only by the legacy
+    // SkipStageCommand, which has been deleted together with its endpoint - nothing may mark an
+    // operation Skipped any more. A stage an order does not actually run simply gets no execution:
+    // the operator picks whatever operation they really go to next, which is the whole point of a
+    // user-chosen route. AllowRepeat/AllowRework/AllowReturn were removed earlier for the same reason
+    // (they advertised behaviour no code path honoured).
 
     /// <summary>
     /// Marks the stage that every new Job Order starts at - التشكيل.
@@ -65,7 +62,7 @@ public class ProductionStageDefinition : AuditableEntity
     public ProductionStageDefinition(
         string code, string name, int sequence, string createdBy,
         bool requiresInputQuantity = true, bool requiresOutputQuantity = true,
-        bool allowSkip = false, string? notes = null,
+        string? notes = null,
         bool isFormationStage = false, bool isReadyGoodsStage = false,
         bool requiresDrawingNumber = false)
     {
@@ -79,7 +76,6 @@ public class ProductionStageDefinition : AuditableEntity
         Sequence = sequence;
         RequiresInputQuantity = requiresInputQuantity;
         RequiresOutputQuantity = requiresOutputQuantity;
-        AllowSkip = allowSkip;
         IsFormationStage = isFormationStage;
         IsReadyGoodsStage = isReadyGoodsStage;
         RequiresDrawingNumber = requiresDrawingNumber;

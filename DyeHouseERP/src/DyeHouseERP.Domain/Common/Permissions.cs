@@ -46,6 +46,13 @@ public static class Permissions
     public const string ProductionExecuteStage = "production.execute_stage";
     public const string ProductionComplete = "production.complete";
     public const string ProductionReprocess = "production.reprocess";
+    /// <summary>
+    /// Formally declaring a Separate as waste/scrap rather than reprocessable material (spec section 22).
+    /// Its own right, decided in Phase 4 (Phase 1 §G.1 left the question open): writing off material is a
+    /// different decision from editing a Job Order, and the spec's own checklist names `production.scrap`,
+    /// so it is never implied by <see cref="ProductionEdit"/>.
+    /// </summary>
+    public const string ProductionScrap = "production.scrap";
     /// <summary>Resuming a paused Job Order (spec section 19) - a distinct right from ordinary stage work, because it re-issues raw material.</summary>
     public const string ProductionResume = "production.resume";
     /// <summary>Cancelling a material issue posted against a Job Order (spec section 27) - a reversal that puts chemicals back into stock, so it is its own right rather than part of ordinary stage work.</summary>
@@ -74,6 +81,15 @@ public static class Permissions
     /// moves stock back into Ready Goods and needs its own right.
     /// </summary>
     public const string ReadyEditPostApproval = "ready.edit_post_approval";
+
+    /// <summary>
+    /// Authorizes moving ready (finished) stock BACK into raw-material stock for rework or
+    /// reclassification (spec section 29). Deliberately NOT part of <see cref="ReadyTransfer"/> or
+    /// <see cref="ReadyDeliver"/>: recording production output and delivering it are daily work, whereas
+    /// undoing the split between finished and raw stock moves material across the whole stock model and
+    /// must be an explicit, permissioned decision of its own.
+    /// </summary>
+    public const string ReadyReturnToRaw = "ready.return_to_raw";
 
     public const string InvoicesView = "invoices.view";
     public const string InvoicesCreate = "invoices.create";
@@ -216,9 +232,9 @@ public static class Permissions
         CustomersView, CustomersCreate, CustomersEdit,
         ItemsView, ItemsCreate, ItemsEdit,
         RawReceive, RawInspect, RawReceiptCancel, RawConsume, RawReturn, RawReturnCancel, RawExternalRelease, RawTransfer,
-        ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, ProductionResume, ProductionIssueMaterialCancel, ProductionManageMachines, ProductionManageShifts,
+        ProductionView, ProductionCreate, ProductionEdit, ProductionExecuteStage, ProductionComplete, ProductionReprocess, ProductionScrap, ProductionResume, ProductionIssueMaterialCancel, ProductionManageMachines, ProductionManageShifts,
         InventoryView, InventoryEdit, InventoryDelete, InventoryAdjust, InventoryAllowNegativeStock, InventoryApproveNegativeStock,
-        ReadyView, ReadyTransfer, ReadyDeliver, ReadyEditPostApproval,
+        ReadyView, ReadyTransfer, ReadyDeliver, ReadyEditPostApproval, ReadyReturnToRaw,
         InvoicesView, InvoicesCreate, InvoicesEdit, InvoicesIssue, InvoicesCancel,
         TreasuryView, TreasuryCreate, TreasuryCancel,
         FormationView, FormationCreate, FormationEdit, FormationSubmit, FormationApprove,

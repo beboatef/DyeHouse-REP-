@@ -1,4 +1,5 @@
 using DyeHouseERP.Domain.Common;
+using DyeHouseERP.Domain.Exceptions;
 
 namespace DyeHouseERP.Domain.Entities;
 
@@ -23,6 +24,20 @@ public class Customer : AuditableEntity
     public string? Address { get; private set; }
     public string? ContactPerson { get; private set; }
     public string? TaxNumber { get; private set; }
+
+    /// <summary>
+    /// The customer this one is a SUB-customer of (spec section 7). Null for a top-level
+    /// customer. The relationship is explicit and stored (a real FK), never inferred from a
+    /// code prefix or a free-text note. A customer can never be its own parent, and the chain
+    /// can never form a cycle - both are enforced (self here, cycles in the command handler
+    /// which can see the whole tree).
+    /// </summary>
+    public Guid? ParentCustomerId { get; private set; }
+
+    public Customer? ParentCustomer { get; private set; }
+
+    /// <summary>Only populated for a sub-customer: its single direct parent.</summary>
+    public bool IsSubCustomer => ParentCustomerId.HasValue;
 
     private Customer() { } // EF Core
 
@@ -77,6 +92,20 @@ public class Customer : AuditableEntity
     }
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// Sets (or clears) this customer's direct parent. Guards the one rule the entity can
+    /// check on its own - a customer cannot be its own parent. Deeper cycle detection needs
+    /// the whole tree and lives in the command handler.
+    /// </summary>
+    public void SetParent(Guid? parentCustomerId, string modifiedBy)
+    {
+        if (parentCustomerId.HasValue && parentCustomerId.Value == Id)
+            throw new DomainException("A customer cannot be its own parent (sub-customer of itself).");
+
+        ParentCustomerId = parentCustomerId;
+        Touch(modifiedBy);
+    }
 
     public void Activate(string modifiedBy) { IsActive = true; Touch(modifiedBy); }
     public void Deactivate(string modifiedBy) { IsActive = false; Touch(modifiedBy); }
