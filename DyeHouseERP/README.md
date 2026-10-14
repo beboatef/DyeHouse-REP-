@@ -156,7 +156,7 @@ DYEHOUSE_TEST_CONNECTION="Server=localhost,1433;Database=DyeHouseERP_Integration
 
 ## Known operational notes
 
-- **PDF Arabic shaping**: QuestPDF renders Arabic text but needs an Arabic-capable font on the host. On bare Linux containers, register one (e.g. Noto Naskh Arabic) via `QuestPDF.Drawing.FontManager.RegisterFont` at startup; Excel export is unaffected.
+- **PDF Arabic shaping**: handled in-code. `ReportExportService` embeds **Noto Naskh Arabic** (`src/DyeHouseERP.Infrastructure/Fonts/NotoNaskhArabic-Regular.ttf`, SIL OFL 1.1) as an assembly resource and registers it with QuestPDF in its static constructor, then sets it as the document font — so Arabic renders correctly on any host, with no system font required and no startup configuration. The OFL licence text ships alongside it. Excel export is unaffected.
 - **Backups / database maintenance** are SQL Server-side responsibilities; the application ships none.
 - List queries that hydrate full DTOs per row are simple and correct, not tuned for very large datasets (noted inline where it matters most).
 - No hardware barcode-scanner integration by design; QR codes on print documents encode `/scan/:type/:id` quick-view URLs that any phone camera or keyboard-wedge reader can open.
