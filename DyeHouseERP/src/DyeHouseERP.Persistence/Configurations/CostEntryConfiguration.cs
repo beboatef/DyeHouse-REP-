@@ -15,6 +15,12 @@ public class CostEntryConfiguration : IEntityTypeConfiguration<CostEntry>
         builder.Property(c => c.Description).HasMaxLength(500);
         builder.Property(c => c.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(c => c.ModifiedBy).HasMaxLength(100);
+
+        // Explicitly chargeable to the customer (spec sections 20 + 32). Defaults to false, so every
+        // existing cost entry stays company-borne and no invoice can pick it up until somebody
+        // deliberately flags it - reprocessing/separate costs are never auto-billed.
+        builder.Property(c => c.IsChargeableToCustomer).HasDefaultValue(false);
+
         builder.HasIndex(c => c.ProductionOrderId);
     }
 }

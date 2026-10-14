@@ -1,4 +1,5 @@
 using DyeHouseERP.Domain.Entities;
+using DyeHouseERP.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -34,6 +35,15 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
         // Closed line / open line (الخط المقفول / على المفتوح) is real, indexed data -
         // it is filtered, reported, costed and delivered against (spec section 16).
         builder.Property(o => o.JobOrderType).HasConversion<string>().HasMaxLength(20).IsRequired();
+
+        // Cost responsibility (spec section 20). Stored as its own column with the CUSTOMER as the
+        // database default: an ordinary Job Order - including every order that existed before the
+        // column did - is worked for the customer and is the customer's cost. An order raised from a
+        // customer return states its account explicitly, so no default is ever used for that workflow.
+        builder.Property(o => o.CostBearer).HasConversion<int>().HasDefaultValue(CostBearer.Customer);
+
+        // The customer return a Job Order was raised from, when it was (spec section 33).
+        builder.HasIndex(o => o.CustomerReturnId);
 
         // Job Order costing (spec section 34). Only the ESTIMATE and the
         // APPROVED figure are stored; the ACTUAL cost is always rolled up live
@@ -97,7 +107,10 @@ public class ProductionOrderStageExecutionConfiguration : IEntityTypeConfigurati
             nameof(ProductionOrderStageExecution.InputKg), nameof(ProductionOrderStageExecution.InputMeter),
             nameof(ProductionOrderStageExecution.OutputKg), nameof(ProductionOrderStageExecution.OutputMeter),
             nameof(ProductionOrderStageExecution.LossKg), nameof(ProductionOrderStageExecution.LossMeter),
-            nameof(ProductionOrderStageExecution.SeparatesKg), nameof(ProductionOrderStageExecution.SeparatesMeter)
+            nameof(ProductionOrderStageExecution.SeparatesKg), nameof(ProductionOrderStageExecution.SeparatesMeter),
+            // Second-grade material is its own quantity (spec section 20), stored with the same
+            // precision as every other fabric measurement - never converted into output or waste.
+            nameof(ProductionOrderStageExecution.SecondGradeKg), nameof(ProductionOrderStageExecution.SecondGradeMeter)
         })
         {
             builder.Property(qty).HasPrecision(18, 3);

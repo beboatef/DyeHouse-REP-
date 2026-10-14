@@ -1,4 +1,5 @@
 using DyeHouseERP.Domain.Entities;
+using DyeHouseERP.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -17,6 +18,15 @@ public class CustomerReturnConfiguration : IEntityTypeConfiguration<CustomerRetu
 
         builder.Property(r => r.Reason).HasMaxLength(500);
         builder.Property(r => r.Notes).HasMaxLength(2000);
+
+        // The document the goods come back against (spec section 32) and whose material they are.
+        // Both stored as real values - the reference is descriptive free text, ownership is an enum.
+        builder.Property(r => r.ReferenceDocument).HasMaxLength(100);
+
+        // Owner of the returned material (spec section 32). The database default is the customer's own
+        // material, which is what every row recorded before the column existed actually is.
+        builder.Property(r => r.Ownership).HasConversion<string>().HasMaxLength(20)
+            .HasDefaultValue(ReturnOwnership.CustomerOwned);
 
         builder.Property(r => r.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(r => r.ModifiedBy).HasMaxLength(100);

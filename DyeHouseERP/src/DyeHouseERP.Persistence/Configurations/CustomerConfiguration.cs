@@ -29,5 +29,18 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.ModifiedBy).HasMaxLength(100);
 
         builder.HasIndex(c => c.Code).IsUnique();
+
+        // Explicit primary -> sub-customer relationship (spec section 7). Self-referencing FK,
+        // Restrict so a parent with sub-customers cannot be hard-deleted out from under them.
+        builder.HasOne(c => c.ParentCustomer)
+            .WithMany()
+            .HasForeignKey(c => c.ParentCustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(c => c.ParentCustomerId);
+
+        // Data-level guard mirroring the domain rule: a customer is never its own parent.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "CK_Customers_ParentNotSelf",
+            "[ParentCustomerId] IS NULL OR [ParentCustomerId] <> [Id]"));
     }
 }

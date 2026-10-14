@@ -88,9 +88,6 @@ public static class ProductionStageSeeder
                     createdBy: "seed",
                     requiresInputQuantity: true,
                     requiresOutputQuantity: true,
-                    // No skipping: every stage the operator runs must keep its
-                    // baseline so the loss chain stays intact.
-                    allowSkip: false,
                     notes: null,
                     isFormationStage: name == "التشكيل",
                     isReadyGoodsStage: name == "الجاهز"));

@@ -38,6 +38,7 @@ public static class DocumentSequenceSeeder
         (DocumentType.SupplyIssue,              "SUP", 6, true,  false),
         (DocumentType.MaterialSale,             "MSL", 6, true,  false),
         (DocumentType.CustomerReturn,           "CRT", 6, true,  false),
+        (DocumentType.ReadyGoodsRawReturn,      "RGR", 6, true,  false),
         // DocumentType.ProductionOrderPause deliberately has NO sequence row: a
         // pause release is a compensating movement against the Job Order that
         // already has a number, so it reuses that number rather than minting one.

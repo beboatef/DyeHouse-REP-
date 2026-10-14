@@ -32,6 +32,15 @@ public class SqlAllocationLockService : IAllocationLockService
 
     private readonly ApplicationDbContext _context;
 
+    // F.7: the context MUST be injected. It was previously declared as a readonly field
+    // with no constructor, so DI built the service with a null context and every stock
+    // lock blew up with a NullReferenceException before it could even reach sp_getapplock
+    // - which meant the "concurrent postings serialize on the same lot" guarantee held
+    // only in unit tests (where a recording lock double is substituted). Same shape as
+    // SqlDocumentNumberGenerator: the scoped context's own connection carries the lock, so
+    // it spans the handler's validation read and its SaveChangesAsync.
+    public SqlAllocationLockService(ApplicationDbContext context) => _context = context;
+
     public async Task<IAsyncDisposable> AcquireAsync(StockLockKey key, CancellationToken cancellationToken = default)
     {
         var connection = await OpenConnectionAsync(cancellationToken);

@@ -37,9 +37,24 @@ public class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceLine>
         builder.ToTable("InvoiceLines");
         builder.HasKey(l => l.Id);
         builder.Property(l => l.Color).HasMaxLength(100);
+
+        // The unit the SERVICE is billed in (from the order's configured service price). Stored as
+        // real data, never inferred from the production unit - a job measured in KG can be billed
+        // per Meter, and the stored unit is what the statement and the printed invoice show.
+        builder.Property(l => l.Unit).HasConversion<string>().HasMaxLength(20).IsRequired();
+
         builder.Property(l => l.Quantity).HasPrecision(18, 3);
         builder.Property(l => l.ProcessingPrice).HasPrecision(18, 4);
         builder.Property(l => l.Notes).HasMaxLength(1000);
+
+        // Set when the line bills an explicitly chargeable cost entry.
+        builder.Property(l => l.CostEntryId);
+
+        // Database-level guard for "a cost is billed once": a cost entry may be referenced by at most
+        // ONE invoice line, regardless of which handler wrote it. Filtered because the ordinary line
+        // (no cost behind it) has NULL there.
+        builder.HasIndex(l => l.CostEntryId).IsUnique().HasFilter("[CostEntryId] IS NOT NULL");
+
         builder.Ignore(l => l.Value);
     }
 }

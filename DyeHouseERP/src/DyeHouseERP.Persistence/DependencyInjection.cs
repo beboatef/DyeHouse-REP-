@@ -35,6 +35,8 @@ public static class DependencyInjection
         services.AddScoped<IDocumentNumberGenerator, SqlDocumentNumberGenerator>();
         services.AddScoped<IAllocationLockService, SqlAllocationLockService>();
         services.AddScoped<IInventoryLedgerService, InventoryLedgerService>();
+        // Single authoritative company identity for every template/export (spec section 47).
+        services.AddScoped<ICompanyIdentityProvider, CompanyIdentityProvider>();
         services.AddScoped<IMaterialLedgerService, MaterialLedgerService>();
         services.AddScoped<IPeriodCloseService, PeriodCloseService>();
         // H5: live user-state lookup used by the JWT validation event so a

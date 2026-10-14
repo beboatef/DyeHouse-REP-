@@ -27,6 +27,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<FormationBasin> FormationBasins => Set<FormationBasin>();
     public DbSet<FormationSpecTemplate> FormationSpecTemplates => Set<FormationSpecTemplate>();
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<ItemUnitConversion> ItemUnitConversions => Set<ItemUnitConversion>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<RawMessage> RawMessages => Set<RawMessage>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
@@ -47,6 +48,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<MaterialIssue> MaterialIssues => Set<MaterialIssue>();
     public DbSet<MaterialPreparation> MaterialPreparations => Set<MaterialPreparation>();
     public DbSet<ReadyGoodsTransfer> ReadyGoodsTransfers => Set<ReadyGoodsTransfer>();
+    public DbSet<ReadyGoodsRawReturn> ReadyGoodsRawReturns => Set<ReadyGoodsRawReturn>();
     public DbSet<ReadyGoodsSource> ReadyGoodsSources => Set<ReadyGoodsSource>();
     public DbSet<Delivery> Deliveries => Set<Delivery>();
     public DbSet<DeliveryLine> DeliveryLines => Set<DeliveryLine>();

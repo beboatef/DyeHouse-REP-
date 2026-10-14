@@ -35,6 +35,12 @@ public class RawMessageConfiguration : IEntityTypeConfiguration<RawMessage>
         builder.HasIndex(m => m.CustomerId);
         builder.HasIndex(m => m.WarehouseId);
 
+        // Receiving idempotency (spec section 5): at most ONE receipt per client token.
+        // The index is filtered on non-null so every receipt created without a token
+        // (all historical rows) keeps its NULL and stays unaffected.
+        builder.HasIndex(m => m.ReceiveRequestId).IsUnique()
+            .HasFilter("[ReceiveRequestId] IS NOT NULL");
+
         builder.Metadata.FindNavigation(nameof(RawMessage.Lines))!
             .SetPropertyAccessMode(Microsoft.EntityFrameworkCore.PropertyAccessMode.Field);
 
@@ -57,6 +63,10 @@ public class RawMessageLineConfiguration : IEntityTypeConfiguration<RawMessageLi
         builder.Property(l => l.RejectedQuantityKg).HasPrecision(18, 3);
         builder.Property(l => l.RejectedQuantityMeter).HasPrecision(18, 3);
         builder.Property(l => l.Notes).HasMaxLength(1000);
+
+        // Optional colour of the material on this line (spec section 8). Nullable, and
+        // never part of the stock dimension - the ledger keys on (message, item, customer).
+        builder.Property(l => l.Color).HasMaxLength(100);
 
         builder.Ignore(l => l.AcceptedQuantityKg);
         builder.Ignore(l => l.AcceptedQuantityMeter);

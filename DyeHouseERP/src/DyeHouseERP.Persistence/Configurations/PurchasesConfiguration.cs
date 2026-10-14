@@ -205,8 +205,18 @@ public class SupplierPaymentConfiguration : IEntityTypeConfiguration<SupplierPay
         builder.Property(p => p.ModifiedBy).HasMaxLength(100);
 
         builder.HasIndex(p => p.SupplierId);
+
+        // Nullable now: a payment settled by an endorsed customer check has no account, because no
+        // money left one (spec section 39).
         builder.HasIndex(p => p.TreasuryAccountId);
-        builder.HasIndex(p => p.CheckId);
+
+        // A cheque settles at most ONE live payment - the database-level backstop for the duplicate
+        // settlement guard in the endorsement workflow (application lock + this index). Cancelled
+        // payments are excluded (TreasuryDocumentStatus.Cancelled = 2), so cancelling a settlement
+        // legitimately frees the instrument for reuse; NULL is the ordinary non-cheque payment.
+        builder.HasIndex(p => p.CheckId).IsUnique()
+            .HasFilter("[CheckId] IS NOT NULL AND [Status] <> 2");
+
         builder.HasIndex(p => p.SupplierInvoiceId);
         builder.HasIndex(p => p.PaymentDate);
 
