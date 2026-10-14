@@ -21,6 +21,10 @@ public static class DocumentSequenceSeeder
         (DocumentType.CustomerTransfer,         "TRF", 6, true,  false),
         (DocumentType.StockAdjustment,          "ADJ", 6, true,  false),
         (DocumentType.Delivery,                 "DEL", 6, true,  false),
+        // Sub-customer permits have their own sequence (spec section 31), independent of DEL: issuing
+        // one never consumes a primary number, and several sub-permits of one primary increment this
+        // counter alone. Seeded like every other type, so an admin can still change the prefix/padding.
+        (DocumentType.SubDelivery,              "SUB", 6, true,  false),
         (DocumentType.Invoice,                  "INV", 6, true,  false),
         (DocumentType.Receipt,                  "RCP", 6, true,  false),
         (DocumentType.Payment,                  "PAY", 6, true,  false),

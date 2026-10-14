@@ -90,7 +90,14 @@ public enum DocumentType
     // ---- Moving ready goods back into raw-material stock (rework / reclassification) ----
     // Its own type because the movement is its own document: it is never a side effect of a
     // delivery and it is never implied by anything else that happens in the Ready Goods module.
-    ReadyGoodsRawReturn = 28
+    ReadyGoodsRawReturn = 28,
+
+    // ---- Sub-customer delivery permits (spec section 31) ----
+    // A sub-customer permit draws from its OWN numbering sequence, so issuing one never consumes a
+    // number from the primary DEL sequence and several sub-permits of one primary permit cannot
+    // collide on the same counter. It posts no stock, so this type exists ONLY to key the numbering
+    // engine - it is never written as a ledger or treasury source document type.
+    SubDelivery = 29
 }
 
 /// <summary>

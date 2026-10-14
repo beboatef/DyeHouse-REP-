@@ -112,17 +112,27 @@ public class EditDeliveredDeliveryCommandHandler
                     "Adding or removing lines after approval is not allowed - only correcting existing ones.");
         }
 
-        var readyWarehouse = await _db.Warehouses.AsNoTracking()
-            .Where(w => w.Kind == WarehouseKind.ReadyGoods)
-            .OrderBy(w => w.Id)
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new DomainException("No Ready Goods warehouse is configured.");
+        // Spec section 31: only the PRIMARY permit owns the physical movement. A sub-customer permit
+        // is a linked document, so correcting one still records the corrected figures and the audit
+        // trail but posts no compensating row - drawing stock out (or putting it back) for a document
+        // that never moved any would move the same lot twice.
+        var postsStock = !delivery.IsSubCustomerPermit;
 
-        // A correction posts a NEW compensating row (an IN when the quantity goes down, an OUT
-        // when it goes up), so the ready warehouse must still be active. The original rows are
-        // never touched, and a retired warehouse keeps its whole history readable.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, readyWarehouse.Id, cancellationToken, "to post a delivery correction into it");
+        Warehouse? readyWarehouse = null;
+        if (postsStock)
+        {
+            readyWarehouse = await _db.Warehouses.AsNoTracking()
+                .Where(w => w.Kind == WarehouseKind.ReadyGoods)
+                .OrderBy(w => w.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new DomainException("No Ready Goods warehouse is configured.");
+
+            // A correction posts a NEW compensating row (an IN when the quantity goes down, an OUT
+            // when it goes up), so the ready warehouse must still be active. The original rows are
+            // never touched, and a retired warehouse keeps its whole history readable.
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, readyWarehouse.Id, cancellationToken, "to post a delivery correction into it");
+        }
 
         // Same lock key shape the delivery itself uses (R2), so a correction and a
         // second delivery of the same lot cannot interleave.
@@ -139,39 +149,42 @@ public class EditDeliveredDeliveryCommandHandler
             // over-committed - the H3 bug class, guarded here too.
             var netByLot = new Dictionary<(Guid ItemId, Guid OrderId), LotDelta>();
 
-            foreach (var requested in request.Lines)
+            if (postsStock)
             {
-                var line = linesById[requested.LineId];
-                var deltaKg = (requested.QuantityKg ?? 0) - (line.QuantityKg ?? 0);
-                var deltaMeter = (requested.QuantityMeter ?? 0) - (line.QuantityMeter ?? 0);
+                foreach (var requested in request.Lines)
+                {
+                    var line = linesById[requested.LineId];
+                    var deltaKg = (requested.QuantityKg ?? 0) - (line.QuantityKg ?? 0);
+                    var deltaMeter = (requested.QuantityMeter ?? 0) - (line.QuantityMeter ?? 0);
 
-                if (deltaKg == 0 && deltaMeter == 0) continue;
+                    if (deltaKg == 0 && deltaMeter == 0) continue;
 
-                var key = (line.ItemId, line.ProductionOrderId);
-                netByLot.TryGetValue(key, out var current);
-                netByLot[key] = new LotDelta(current?.Kg + deltaKg ?? deltaKg, current?.Meter + deltaMeter ?? deltaMeter);
-            }
+                    var key = (line.ItemId, line.ProductionOrderId);
+                    netByLot.TryGetValue(key, out var current);
+                    netByLot[key] = new LotDelta(current?.Kg + deltaKg ?? deltaKg, current?.Meter + deltaMeter ?? deltaMeter);
+                }
 
-            foreach (var net in netByLot)
-            {
-                // Only an INCREASE can be refused: returning stock to Ready Goods
-                // can never overdraw anything.
-                if (net.Value.Kg <= 0 && net.Value.Meter <= 0) continue;
+                foreach (var net in netByLot)
+                {
+                    // Only an INCREASE can be refused: returning stock to Ready Goods
+                    // can never overdraw anything.
+                    if (net.Value.Kg <= 0 && net.Value.Meter <= 0) continue;
 
-                var rows = await _db.InventoryTransactions.AsNoTracking()
-                    .Where(t => t.RawMessageId == null
-                             && t.ProductionOrderId == net.Key.OrderId
-                             && t.ItemId == net.Key.ItemId)
-                    .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
-                    .ToListAsync(cancellationToken);
+                    var rows = await _db.InventoryTransactions.AsNoTracking()
+                        .Where(t => t.RawMessageId == null
+                                 && t.ProductionOrderId == net.Key.OrderId
+                                 && t.ItemId == net.Key.ItemId)
+                        .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
+                        .ToListAsync(cancellationToken);
 
-                var availableKg = rows.Sum(r => (r.QuantityKg ?? 0) * (int)r.Direction);
-                var availableMeter = rows.Sum(r => (r.QuantityMeter ?? 0) * (int)r.Direction);
+                    var availableKg = rows.Sum(r => (r.QuantityKg ?? 0) * (int)r.Direction);
+                    var availableMeter = rows.Sum(r => (r.QuantityMeter ?? 0) * (int)r.Direction);
 
-                if (net.Value.Kg > availableKg)
-                    throw new NegativeStockException(availableKg, net.Value.Kg);
-                if (net.Value.Meter > availableMeter)
-                    throw new NegativeStockException(availableMeter, net.Value.Meter);
+                    if (net.Value.Kg > availableKg)
+                        throw new NegativeStockException(availableKg, net.Value.Kg);
+                    if (net.Value.Meter > availableMeter)
+                        throw new NegativeStockException(availableMeter, net.Value.Meter);
+                }
             }
 
             // A corrected original-raw figure is re-checked against the order's FIXED original quantity
@@ -179,7 +192,7 @@ public class EditDeliveredDeliveryCommandHandler
             // more original raw than the job started from. The line being corrected is excluded from
             // "already settled" because its own figure is what is being replaced.
             await EnsureCorrectedOriginalRawWithinLimitsAsync(
-                request, linesById, cancellationToken);
+                delivery.IsSubCustomerPermit, request, linesById, cancellationToken);
 
             // Apply the corrected figures and record each change in the audit log
             // BEFORE posting, so the log holds the real previous values.
@@ -189,7 +202,12 @@ public class EditDeliveredDeliveryCommandHandler
 
                 var deltaKg = (requested.QuantityKg ?? 0) - (line.QuantityKg ?? 0);
                 var deltaMeter = (requested.QuantityMeter ?? 0) - (line.QuantityMeter ?? 0);
-                if (deltaKg == 0 && deltaMeter == 0)
+
+                // The delivered quantity may be untouched while only the manually-entered original-raw
+                // figure changes: that still has to be recorded and audited, even though it posts no
+                // stock (the net movement below stays zero).
+                var originalRawChanged = requested.OriginalRawQuantityKg.HasValue || requested.OriginalRawQuantityMeter.HasValue;
+                if (deltaKg == 0 && deltaMeter == 0 && !originalRawChanged)
                     continue;
 
                 var before = JsonSerializer.Serialize(new
@@ -218,7 +236,8 @@ public class EditDeliveredDeliveryCommandHandler
             }
 
             // One compensating movement per affected lot, not one per line: the
-            // ledger only ever shows the net effect of this correction.
+            // ledger only ever shows the net effect of this correction. Empty for a sub-customer
+            // permit (see postsStock above), which posts no stock at all.
             foreach (var net in netByLot)
             {
                 if (net.Value.Kg == 0 && net.Value.Meter == 0) continue;
@@ -232,7 +251,7 @@ public class EditDeliveredDeliveryCommandHandler
 
                 _db.InventoryTransactions.Add(new InventoryTransaction(
                     DocumentType.Delivery, delivery.DeliveryNumber, delivery.Id, _clock.UtcNow,
-                    readyWarehouse.Id, delivery.CustomerId, net.Key.ItemId,
+                    readyWarehouse!.Id, delivery.CustomerId, net.Key.ItemId,
                     rawMessageId: null, productionOrderId: net.Key.OrderId,
                     quantityKg: Math.Abs(net.Value.Kg), quantityMeter: Math.Abs(net.Value.Meter),
                     direction: direction, createdBy: _currentUser.UserName));
@@ -253,9 +272,14 @@ public class EditDeliveredDeliveryCommandHandler
     /// judged within their own unit, by the domain rule that owns the calculation.
     /// </summary>
     private async Task EnsureCorrectedOriginalRawWithinLimitsAsync(
-        EditDeliveredDeliveryCommand request, IReadOnlyDictionary<Guid, DeliveryLine> linesById,
-        CancellationToken cancellationToken)
+        bool isSubCustomerPermit, EditDeliveredDeliveryCommand request,
+        IReadOnlyDictionary<Guid, DeliveryLine> linesById, CancellationToken cancellationToken)
     {
+        // A SUB-customer permit settles NO original raw of its own (spec section 31): it owns no physical
+        // movement, so its figures are a share of the PRIMARY permit's. Neither does correcting one run
+        // this check, nor may any sub-permit's line reduce what the primary permit settled.
+        if (isSubCustomerPermit) return;
+
         var corrections = request.Lines
             .Where(l => l.OriginalRawQuantityKg.HasValue || l.OriginalRawQuantityMeter.HasValue)
             .Select(l => new { Request = l, Line = linesById[l.LineId] })
@@ -270,9 +294,17 @@ public class EditDeliveredDeliveryCommandHandler
             .Where(d => d.Status == DeliveryStatus.Cancelled)
             .Select(d => d.Id).ToListAsync(cancellationToken);
 
+        // Only a permit that actually delivered stock settles the order's original raw: sub-customer
+        // permits are excluded from "already settled" so their figures are never counted a second time.
+        var subCustomerPermitIds = await _db.Deliveries.AsNoTracking()
+            .Where(d => d.PrimaryDeliveryId != null)
+            .Select(d => d.Id)
+            .ToListAsync(cancellationToken);
+
         var settled = await _db.DeliveryLines.AsNoTracking()
             .Where(l => orderIds.Contains(l.ProductionOrderId)
                      && !cancelledDeliveryIds.Contains(l.DeliveryId)
+                     && !subCustomerPermitIds.Contains(l.DeliveryId)
                      && !correctedLineIds.Contains(l.Id))
             .Select(l => new { l.ProductionOrderId, l.OriginalRawQuantityKg, l.OriginalRawQuantityMeter })
             .ToListAsync(cancellationToken);

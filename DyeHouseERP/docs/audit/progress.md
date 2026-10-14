@@ -236,8 +236,9 @@ Verification only — **no file was changed by this phase**.
 
 ## Phase 6 — web-surface closure (this session) — `Verified`
 
-`docs/audit/phase6-report.md` **does not exist** in the checkout (only `phase7/8/9` report on Phase 6), so the
-briefed UI items were checked directly against the source instead of a report. Phase 6's **web surface** was
+`docs/audit/phase6-report.md` **did not exist** when this section was written (only `phase7/8/9` reported on
+Phase 6), so the briefed UI items were checked directly against the source instead of a report. *(That report
+was added later, in the `7c68042` audit pass — see the audit section below.)* Phase 6's **web surface** was
 `جزئي` per `state-check.md §185`. Three gaps were found and closed; the backend needed only one field exposed.
 
 | Briefed item | Evidence before | Change | Evidence after |
@@ -327,6 +328,39 @@ needed — the change is a resource, not a model change); i18n **906/906**; perm
 proof of Arabic is the embedded-font + `/ToUnicode` inspection above, not a screenshot. The 500 KB+ font adds
 ~250 KB to the Infrastructure assembly. Excel export was already RTL and is unaffected.
 
+## Audit pass on `7c68042` — 3 findings confirmed & fixed, 1 documentation finding closed
+
+Branch `fix/audit-findings` (created from `main` @ `7c68042` **without** touching `main`).
+**No commit, no push, no force push, no branch deletion, and no migration applied.**
+
+Three of the four audited findings were **confirmed against the code** and fixed; finding 4 was documentation
+only. Each fixed finding has regression tests that were **run and observed to fail before the fix**, then
+re-run green afterwards.
+
+| Finding | Verdict | Cause (file) | Fix | Regression tests (before → after) |
+|---|---|---|---|---|
+| **1 — permission escalation (critical)** | **Confirmed** | `Application/Users/Commands/CreateUserCommand.cs`, `UpdateUserCommand.cs` (+ `DeactivateUserCommand.cs`, `ChangePasswordCommand.cs`) never checked the caller's own rights: a `users.manage`/`roles.manage` holder could grant `admin` (or any right they lacked), and could edit/disable/reset an administrator account | New `Application/Common/Services/UserAdministrationGuard.cs` enforces, server-side: you may only grant permissions you hold; only an administrator may grant/revoke `admin`; only an administrator may modify an administrator account. Existing self-lockout and last-active-admin rules unchanged | `UserPermissionEscalationTests` (**7 failed / 5 passed → 12 / 12 passed**) |
+| **2 — sub-customer permit double deduction (high)** | **Confirmed** | `Deliveries/Commands/DeliveryWorkflowCommands.cs` posted an OUT for **every** permit, including a sub-customer one, so confirming it deducted the same ready lot a second time; `CreateDeliveryCommand.cs` also refused a line that named the (correct) primary customer's Job Order; the correction path could draw stock out for a sub-permit too | A sub-customer permit now posts no movement in `MarkDeliveryDeliveredCommandHandler` (document state only) and none in `EditDeliveredDeliveryCommandHandler`; `CreateDeliveryCommand` validates a sub-customer permit's line against **its own customer OR the linked primary permit's customer**, and still refuses any third customer | `SubCustomerPermitDeliveryTests` (**5 failed / 4 passed → 9 / 9 passed**) |
+| **3 — selectable starting stage (high)** | **Confirmed** | `ProductionOrder.BuildStageRoute` always started at the formation stage, so reprocessing (`ReprocessSeparateCommand`) and return-raised orders could not begin at the operation the rework is actually at | `BuildStageRoute(…, Guid? startingStageId)` + optional `StartingStageId` through `ReprocessSeparateCommand`, `IssueRawMaterialCommand`, `CreateProductionOrderFromReturnCommand`, both controllers (`api/separates/{id}/reprocess`, `api/customer-returns/{id}/production-order`) and both pages. Validated against the **active** stages (unknown/deactivated refused); exactly one stage is still activated and the route stays dynamic; no new stock movement (the raw issue remains the single deduction) | `SelectableStartingStageTests` (**6 failed / 4 passed → 10 / 10 passed**). *One sub-case is reported as blocked, not invented: a starting stage that `RequiresDrawingNumber` is refused by the existing domain rule — where the drawing number would come from at reprocess time is an open business decision* |
+| **4 — audit documentation consistency** | **Confirmed (docs)** | `docs/audit/phase9-report.md` read as if it were the current status, and `docs/audit/phase6-report.md` did not exist | Phase 9 is now explicitly labelled a **historical** snapshot at `abb4426`, with a **Corrections** section for the three lines this audit disproved and a pointer to this log; `phase6-report.md` added with the Phase 6 scope, file/test evidence, the created-but-unapplied migration and the checks actually run | n/a (documentation) |
+
+**Audit base HEAD:** `7c68042` (`main`). `git ls-remote origin refs/heads/main` = `7c680424392afb3b99f4027132bb9d2d37e55f3d`.
+
+**Checks run in this pass (real output):** Release build **exit 0 — 0 errors / 5 warnings**; unit suite
+**865 / 865 passed** (was 834, **+31** new tests); `npm run build` **exit 0**; `npm run lint` **exit 0**
+(0 errors, 9 pre-existing advisories); i18n parity **909 / 909**; permission parity **118 / 118**;
+`hooks-check` clean; duplicate sweep **88 = 88**; wiring sweep unchanged (login + public settings only);
+`dotnet ef migrations has-pending-model-changes` → **"No changes have been made to the model since the last
+migration."** (no migration is needed by any fix — all three are logic/API changes).
+
+**Not Run (unchanged environment limits):** the SQL Server integration suite (`DYEHOUSE_TEST_CONNECTION`
+unset; `DyeHouseERP.IntegrationTests`) and any interactive browser pass — so the DB-level halves of these fixes
+(unique filtered indexes, `sp_getapplock` serialization, end-to-end HTTP authorization) are unverified here.
+
+**Not done by design:** no migration applied, no unrelated refactor, no change to the established business
+rules (ledger as source of truth, no duplicate raw deduction, independent KG/Meter units, dynamic route,
+existing permissions/audit trails).
+
 ## Next
 - Phase 4 — `Verified` (see `phase4-report.md`). The two Phase 4/5 items it could not close are environmental:
   the DB-backed integration suite (no SQL Server) and frontend lint.
@@ -344,3 +378,211 @@ proof of Arabic is the embedded-font + `/ToUnicode` inspection above, not a scre
   Phase 9 coverage gap (a direct "no double raw deduction on reprocessing" ledger test); and the PDF Arabic
   font (embedded in-code, no longer a deployment dependency). Nothing is committed or pushed, and no migration
   is applied.
+
+## Continuation pass on `fix/audit-findings` — findings 1–3 re-opened and closed (this session)
+
+Reviewed the actual code and tests rather than trusting the earlier report. No commit, no push, no force
+push, no branch deletion, **no migration applied**, and `main` untouched. This pass adds **8** unit tests
+(865 → **873**).
+
+| Item | What was actually still open | What was done | Tests |
+|---|---|---|---|
+| **1 — permissions (UI half)** | `UserAdministrationGuard` was already enforced server-side in all four user commands, but `UsersPage` still offered every permission to every delegated administrator, and offered edit / deactivate / reset controls even on an **administrator** account | `permissions.ts` gained `readSignedInActor()` (mirrors the guard: you may only grant what you hold, only an admin may grant `admin`, only an admin may touch an admin account). `UsersPage` filters the picker to the permissions the caller may grant, filters the account list and hides the account controls for admin accounts, and strips any non-grantable value from the request body. The server is unchanged and still the enforcement point - hiding a box is a convenience, never the control | No UI test harness exists; verified by `tsc -b` + `vite build` (exit 0) and `eslint .` (0 errors). `UserPermissionEscalationTests` 12/12 unchanged |
+| **2 — sub-customer permit** | **Confirmed defect:** a sub-permit line carrying an **original-raw** figure was summed into the order's "already settled" total in three places (`CreateDeliveryCommand`, `EditDeliveredDeliveryCommand`, `GetDeliveriesQueryHandler.ReadRemainingOriginalRawAsync`) even though a sub-permit moves no stock - so a document-only sub-permit shrank the primary permit's real remaining allowance. Also confirmed: `POST /api/deliveries/{id}/lines/corrections` silently dropped the manually-entered original-raw figures; a correction changing ONLY the original-raw figure was skipped by the quantity-delta guard; and a sub-permit could promise more than the primary permit delivered | Sub-permit lines are excluded from "settled" in all three places; the order-level original-raw check is skipped for a sub-permit (its figures are a share of the primary's, never a second settlement); new `EnsureSubPermitWithinPrimaryAsync` bounds a sub-permit cumulatively by the linked primary permit's own lines; the correction endpoint now carries the two original-raw fields into `EditDeliveredDeliveryCommand`; an original-raw-only correction is now recorded and audited (no stock movement) | `SubCustomerPermitDeliveryTests` **9 → 16** (+7): primary-alone completion, fully manual line entry, nonexistent primary, wrong-parent link, quantity-limit, the original-raw double-count proof, and an original-raw correction. The double-count test is **non-vacuous**: with the exclusion reverted it reads `0` instead of `200` |
+| **3 — starting stage / drawing number** | The selectable starting stage was already complete and tested. The one open point was the drawing number a Printing stage demands | **Business decision, not invented:** the number IS stored and linked - on the **original** order's own printing execution - but the project rule is that each print run names its OWN number and never borrows another order's (`TransferToNextStageCommand`, `ProductionOrderStageExecution.SetDrawingNumber`). Auto-carrying it into the reprocess/return order would break that rule, and making it optional would weaken the mandatory-drawing rule. The starting stage that requires a drawing number is therefore still refused, loudly, and the decision is left to the owner | `SelectableStartingStageTests` **10 → 11** (+1: the original order's drawing number is stored and is NOT borrowed by the new order) |
+
+**Manual entry (finding 2b), verified rather than re-implemented:** a sub-customer permit's details are
+entered by hand through the same `CreateDeliveryCommand` / `DeliveryLineInput` as any delivery line (colour,
+KG, Meter, piece count, raw origin, original-raw figures). Nothing on either page copies lines from the
+primary permit, and the ownership link (primary permit + stored parent customer) is validated server-side.
+
+**Checks run in this pass (real output, exit statuses preserved):**
+
+| Check | Result |
+|---|---|
+| `dotnet build DyeHouseERP.sln -c Release` | **exit 0 - 0 errors, 5 warnings** (the same pre-existing 5) |
+| `dotnet test tests/DyeHouseERP.UnitTests -c Release --no-build` | **Passed - 873 / 873** (was 865, +8) |
+| `npm run build` (`tsc -b && vite build`) | **exit 0** |
+| `npm run lint` (`eslint .`) | **exit 0** - 0 errors, 9 pre-existing advisories |
+| `node tools/i18n-parity-check.cjs` | **ar 909 / en 909, 0 failures** |
+| `node tools/permissions-parity-check.cjs` | **118 / 118, 0 failures** |
+| `node tools/hooks-check.js` | clean - no invalid hook call sites |
+| `dotnet ef migrations has-pending-model-changes --configuration Release --no-build` | **"No changes have been made to the model since the last migration."** (no migration needed - every change is logic/API/UI) |
+| `git diff --check` | clean (exit 0) |
+
+**Not Run (environment, unchanged):** the SQL Server integration suite (no `DYEHOUSE_TEST_CONNECTION`) and any
+interactive browser pass (no browser tooling here). The Debug configuration of the solution build also hit a
+host **out-of-memory** in Roslyn on the Persistence project; the Release build is clean and the model check was
+run against it, so this is a resource limit, not a code result.
+
+**Remaining limitation (unchanged, deliberate):** the API still answers the new authorization refusals with the
+middleware's generic 403 body, so a delegated user who bypasses the screen sees "You do not have permission to
+perform this action." rather than the guard's specific message. Fixing that would change the error envelope for
+every `UnauthorizedAccessException` in the app, which is outside this finding's scope; recorded as an option.
+
+**Follow-up found while wiring the manual entry:** the "ready stock" line picker on the deliveries screen was
+filtered to the permit's own customer, so the exact scenario the brief requires - a sub-permit naming the
+PRIMARY customer's Job Order - could not be selected from the screen even though the API accepts it. While a
+primary permit is chosen the picker now lists every ready lot (each labelled with its customer); the server
+still refuses any line that is not the sub-customer's own or the linked primary customer's. Re-verified after
+the change: `npm run build` exit 0, `npm run lint` exit 0 (0 errors, 9 pre-existing advisories). No `.cs` file
+changed after the 873/873 run, so the backend results above still hold.
+
+## Focused pass — multiple sub-customer permits + independent numbering (this session)
+
+Scope limited to two points: (1) confirm that several sub-customer permits can hang off ONE primary
+permit and that quantities/deductions stay correct, and (2) make the sub-permit number sequence
+independent of the primary permit sequence. Inspection first, then the smallest change that closes a
+proven gap. Branch `fix/audit-findings`, no commit, no push, **no migration applied**, `main` untouched.
+
+### Inspection result (before any edit)
+
+| Question | Verified behaviour | Evidence |
+|---|---|---|
+| Does the system already allow more than one sub-permit per primary? | **Yes.** Nothing caps the count. A sub-permit is defined purely by `Delivery.PrimaryDeliveryId`, and the create path validates the primary, the stored parent-customer link, and the ownership of every line - then the cumulative quantity bound below. | `Delivery.cs:29/40`; `CreateDeliveryCommand.cs` `ResolvePrimaryPermitAsync` + `EnsureSubPermitWithinPrimaryAsync:189` (sibling sub-permits are summed per (Job Order, Item)) |
+| Can a sub-permit be created with no primary? | **No** - an "independent sub-permit" is unrepresentable: without `PrimaryDeliveryId` the document is simply an ordinary permit, and a supplied-but-unknown id raises `NotFoundException`. | `ResolvePrimaryPermitAsync` |
+| Quantity over-run across several subs? | **Prevented**, cumulatively: a new sub-permit may only claim what the primary delivered minus what every non-cancelled sibling already claimed, per unit. | `EnsureSubPermitWithinPrimaryAsync:189-211` |
+| Duplicate stock deduction? | **Not possible**: a sub-permit posts no movement on create, on confirm (`DeliveryWorkflowCommands.cs:121`) and on correction (`EditDeliveredDeliveryCommand.cs:119`); only the primary permit writes the OUT rows. | those lines + `Delivery.IsSubCustomerPermit` |
+| Unique number per document? | **Enforced in EF Core**, not by convention: unique index on `Deliveries.DeliveryNumber`, plus a unique *filtered* index on `DeliverRequestId` that makes a retried confirmation idempotent. | `DeliveryConfiguration.cs:14-15, 34-36` |
+| Numbering engine | `SqlDocumentNumberGenerator`: `sp_getapplock` keyed by `(DocumentType, Year, WarehouseId)` + a counter row - never MAX+1. Sequence parameters are data (`DocumentSequenceDefinition`), seeded per type. | `SqlDocumentNumberGenerator.cs`, `DocumentSequence.cs`, `DocumentSequenceSeeder.cs` |
+
+### Gap found and fixed
+
+**Only one real defect existed - the numbering sequence.** `CreateDeliveryCommand` minted EVERY permit's
+number from `DocumentType.Delivery`, so a sub-permit consumed the primary `DEL` counter (and two sub-permits
+of one primary shared that same sequence). Multiple sub-permits, the cumulative quantity bound, the
+independent KG/Meter comparison and the no-double-deduction behaviour were already correct.
+
+- `SharedEnums.cs:100` - new `DocumentType.SubDelivery = 29`, used ONLY to key the numbering engine (a
+  sub-permit writes no ledger/treasury row, so it never appears as a source document type).
+- `DocumentSequenceSeeder.cs:27` - seeds `(SubDelivery, "SUB", 6, yearly, not warehouse-scoped)`, i.e. the
+  same configurable shape as `DEL`. **No migration is needed**: `DocumentType` is stored as a *string* in
+  both sequence tables (`DocumentSequenceConfiguration` `HasConversion<string>()`), so this is a seed row,
+  not a schema change - confirmed by `has-pending-model-changes` → "No changes…".
+- `CreateDeliveryCommand.cs:121-122` - the number is taken from `SubDelivery` when the permit is issued
+  against a primary one, and from `Delivery` otherwise. Same engine, different sequence key, so the
+  concurrency guarantee (`sp_getapplock`) is identical.
+
+### Tests added (`SubCustomerPermitDeliveryTests`, 16 → 22)
+
+Five handler-level tests:
+
+* Three sub-permits (400 + 350 + 250 Metre) against one 1000-Metre primary all succeed and a fourth is
+  refused; metre-only sub-permits never invent a KG figure; KG and Metre allowances are bounded independently.
+* A sub-permit draws from `SubDelivery` while the primary draws from `Delivery`, and two sub-permits never
+  share a number. **Non-vacuous**: with the old `DocumentType.Delivery` restored it fails with
+  `{Delivery, Delivery, Delivery}`.
+* The seeder produces an independent `SUB` definition (`SUB-2026-000041`).
+
+One **model-level** test (`Model_PinsPermitUniquenessAndTheIndependentSubSequence`), because a handler test
+sees only a stub generator and an in-memory provider that ignores unique indexes and locks. It pins, from
+the EF model: the unique index on `Deliveries.DeliveryNumber`; the *filtered* unique index on
+`DeliverRequestId` (idempotent retry, NULLs preserved); the optional, indexed, `Restrict` FK on
+`PrimaryDeliveryId`; the unique counter key `(DocumentType, Year, WarehouseId)` - the key the generator
+locks - which is why the `DEL` and `SUB` sequences can never share a counter; and that `DocumentType` is
+persisted as **text** in both sequence tables, which is the concrete reason this change needs no migration.
+It earned its keep immediately: it failed first because `IEntityType.Name` is the full CLR name, and the
+assertion - not the production code - was corrected.
+
+**Checks (real output):** Release build **0 errors** · unit suite **879 / 879** (was 873, +6) ·
+`has-pending-model-changes` → **"No changes…"** (no migration) · i18n **909/909** · permissions **118/118** ·
+`git diff --check` clean.
+
+**Concurrency, precisely:** the guarantee lives in `sp_getapplock` on `(DocumentType, Year, WarehouseId)`
+plus that unique counter key. The unit suite cannot exercise it - every handler test injects
+`FixedNumberGenerator`, and the in-memory provider ignores both locks and unique indexes. So it is verified
+by construction (generator SQL + pinned model metadata), **not** by a passing concurrent test; the
+SQL Server integration suite requires `DYEHOUSE_TEST_CONNECTION` and was not run.
+
+### Left untouched (deliberate)
+
+`ItemUnitRules` still requires BOTH measurements on every line of an item flagged **"require both units"**,
+for primary and sub-permits alike. A metre-only sub-permit therefore needs an item that uses both units
+without *requiring* both (the case the brief's example describes); exempting document-only sub-permits from
+that per-item setting is a unit-rule change, not confirmed by the brief, so it is reported, not made.
+
+**Not Run:** the SQL Server integration suite (no `DYEHOUSE_TEST_CONNECTION`) - so the `sp_getapplock`
+serialization and the unique indexes are verified by construction (migration SQL + EF configuration), not by
+a live database.
+
+---
+
+## Pass 3 - sub-permit recipient, item/colour source and printable column choice (spec section 31)
+
+**Supersedes** the "Left untouched (deliberate)" note above: the brief now explicitly authorises the
+`RequireBothUnits` exemption for sub-customer permits, so it is implemented (below) instead of parked.
+
+### Findings before the change (code, with lines)
+
+| Question | Evidence | Verdict |
+| --- | --- | --- |
+| Is the recipient chosen by hand? | `DeliveriesPage.tsx` recipient `Select` bound to `customerId`; `CreateDeliveryCommand.CustomerId` | **Already manual** - it was never inherited from the primary permit. The picker was not narrowed to the linked customer's sub-customers, so an invalid choice only failed server-side. |
+| Is the item taken from the primary permit? | `DeliveriesPage.tsx` (old) took `itemId` from the ready-goods balance row; `CreateDeliveryCommandHandler` never checked it against `PrimaryDeliveryId` | **Defect** - a sub-permit line could name an item the primary permit never carried. Item and colour were free input. |
+| Is the colour taken from the primary permit? | Old line 2 of `SubCustomerPermitDeliveryTests.SubCustomerPermit_CarriesTheFullyManuallyEnteredLineData` asserted `Color = "Green"` against a primary that recorded `"Red"` | **Defect** - the colour was invented by the sub-permit; one colour could become two spellings in the data. |
+| Roll count (`PieceCount`) | `DeliveryLine.PieceCount` + `DeliveryLineInput.PieceCount` existed, but the create form had no field and `createMutation` never sent it | **Gap** - the manual roll count could not be entered at all. |
+| Are KG / Metre / rolls forced together? | `AddLine` requires KG and/or Metre; `Validator` requires the same; the two are independent | **Correct** - nothing forced all three, and no conversion existed. |
+| Does `RequireBothUnits` block a sub-permit? | `ItemUnitGuard` applied `item.RequireBothUnits` to every line | **Defect for a document-only slice** - a sub-permit handing over one unit was refused for an item flagged "both". |
+| Print columns | `DeliveryPrintPage.tsx` had three fixed quantity columns | **Gap** - no way to print a metre-only document without an empty KG column. |
+| Several sub-permits, independent `SUB` numbering, no extra stock movement | previous pass, unchanged | **Still correct** - re-verified by the suite below. |
+
+### Changes made
+
+**Backend**
+
+* `CreateDeliveryCommand.cs:104,283` - `ResolveSubPermitLineSourcesAsync` resolves every sub-permit line's
+  item and colour from the primary permit **before** anything is created: the item must be one the primary
+  permit carried for that Job Order, the colour must be one it recorded for that item and is stored in the
+  primary's own spelling (`"red"` → `"Red"`), and a line naming a Job Order the primary never delivered
+  (the sub-customer's own job) must carry that Job Order's own item. An ordinary permit is untouched.
+* `CreateDeliveryCommand.cs:128` - `enforceRequireBothUnits: !request.PrimaryDeliveryId.HasValue`.
+* `ItemUnitRules.cs:61,73,96` and `ItemUnitGuard.cs:35,54` - the exemption parameter (default `true`, so
+  every movement-recording path is unchanged). Unit selection is still enforced and nothing is converted.
+
+**Frontend**
+
+* `DeliveriesPage.tsx:77-186,275-385` - the recipient picker narrows to the primary customer's
+  sub-customers and clears an invalid recipient; the line's source is the primary permit's own lines
+  (its items and colours) with the sub-customer's own lots kept in a second group; a colour chooser appears
+  when the primary recorded more than one; **KG, Metre and roll count are three separate manual inputs**;
+  and each primary line shows what is already distributed to other sub-permits and what remains - per unit,
+  never combined (e.g. `400 + 350 + 250 = 1000 م`).
+* `DeliveryPrintPage.tsx:31-121` - a print column chooser for KG / Metre / rolls. Print-only (no recorded
+  value is touched), the identifying columns always print, the choice is remembered per document format in
+  `localStorage` (the same mechanism as the language/theme switches) and a sub-customer permit keeps its own
+  key, so its format is independent of an ordinary permit's. The sub-permit print also names the primary
+  permit and its customer.
+* `i18n/index.tsx` - 18 new keys in **both** dictionaries.
+
+### Tests added (`SubCustomerPermitDeliveryTests`, 22 → 27)
+
+Item the primary never carried → refused · colour the primary never recorded → refused (and the refusal
+names the colours it does carry) · `"red"` is stored as the primary's `"Red"` · the sub-customer's own Job
+Order with someone else's item → refused · a sub-permit line may be **metre-only or KG-only** even when the
+item requires both units, while the same item on an ordinary permit still fails with `requires BOTH` (the
+rule was narrowed, not removed). The one existing test whose rule changed (the arbitrary colour) was
+corrected, not weakened.
+
+### Checks (real output)
+
+Release build **0 errors** (5 pre-existing warnings, all in test files not touched) · unit suite
+**884 / 884** (was 879, +5) · `has-pending-model-changes` → **"No changes have been made to the model…"**
+(**no migration** added and none applied) · i18n **927 / 927** · permissions **118 / 118** · duplicate
+sweep clean · `wiring-sweep.js` output unchanged (login + public settings only) · frontend `tsc -b &&
+vite build` **PASS** · `eslint` **0 errors** (9 pre-existing warnings) · `git diff --check` **clean**.
+
+### Observed but deliberately NOT changed
+
+`ItemUnitRules.EnsureValidQuantities` enforces only the **secondary** unit when `RequireBothUnits` is on
+(`ItemUnitRules.cs:96-105`: `secondaryProvided`), so a quantity in the secondary unit alone passes while the
+message says both must be supplied. That asymmetry is pre-existing and unrelated to the two points in this
+brief; changing it would alter unit rules for the whole system, so it is **recorded here, not fixed**. The
+test above therefore proves the exemption with the **KG-only** line (the case the exemption actually
+unblocks) and the ordinary-permit refusal with the **KG-only** line too.
+
+### Not run
+
+The SQL Server integration suite (no `DYEHOUSE_TEST_CONNECTION`) · the Puppeteer UI smoke tools
+(`tools/printing-ui-check.cjs`, `ui-smoke*.js`) - they require puppeteer at `/tmp/uitest` and a browser,
+neither of which exists in this workspace, and no browser automation is available here. The frontend
+evidence is the type-check, the production build and the lint run; **no browser/print interaction was
+verified**.

@@ -49,6 +49,10 @@ public record MarkDeliveryDeliveredCommand(Guid DeliveryId, Guid? RequestId = nu
 /// (RawMessageId = null, ProductionOrderId set) - the same ledger dimension
 /// ReadyGoodsTransfer posts INs into.
 ///
+/// A SUB-customer permit is the one exception: it owns no movement (the primary
+/// permit it is issued against already posted it), so confirming one only records
+/// the document's state.
+///
 /// H2/H3 concurrency hardening:
 /// - The whole validate-then-post window runs under the global stock lock
 ///   (H6) for every (order, item) the delivery touches, so two deliveries
@@ -108,6 +112,18 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
         // unchanged, and MarkDelivered's own state guard remains as a backstop.
         if (delivery.Status != DeliveryStatus.Prepared)
             throw new DomainException($"Delivery is {delivery.Status}, expected Prepared.");
+
+        // ---- Sub-customer permit (spec section 31) -----------------------------------
+        // The PRIMARY permit is the sole owner of the physical inventory movement. A sub-customer
+        // permit is a LINKED document: confirming it records the document's own state and posts
+        // nothing at all. Without this, confirming it would deduct the very same ready lot a second
+        // time - the primary permit's OUT rows are the only ones that may exist for that delivery.
+        if (delivery.IsSubCustomerPermit)
+        {
+            delivery.MarkDelivered(request.RequestId);
+            await _db.SaveChangesAsync(cancellationToken);
+            return await GetDeliveriesQueryHandler.LoadDtoAsync(_db, delivery.Id, cancellationToken);
+        }
 
         var lines = await _db.DeliveryLines.Where(l => l.DeliveryId == delivery.Id).ToListAsync(cancellationToken);
 

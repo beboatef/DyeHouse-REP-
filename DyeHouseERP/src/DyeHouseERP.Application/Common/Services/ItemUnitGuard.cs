@@ -25,10 +25,14 @@ public static class ItemUnitGuard
     /// Validates a (KG, Meter) quantity pair for one item. Throws
     /// <see cref="NotFoundException"/> when the item does not exist and a
     /// <c>DomainException</c> when the quantity is not valid for the item's units.
+    ///
+    /// <paramref name="enforceRequireBothUnits"/> is false only for a document that posts no
+    /// movement of its own (a sub-customer permit); see <see cref="ItemUnitRules.EnsureValidQuantities"/>.
     /// </summary>
     public static async Task EnsureValidQuantitiesAsync(
         IApplicationDbContext db, Guid itemId, decimal? quantityKg, decimal? quantityMeter,
-        CancellationToken cancellationToken, string? context = null, bool requireAnyQuantity = true)
+        CancellationToken cancellationToken, string? context = null, bool requireAnyQuantity = true,
+        bool enforceRequireBothUnits = true)
     {
         var item = await db.Items.AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken)
@@ -36,7 +40,7 @@ public static class ItemUnitGuard
 
         ItemUnitRules.EnsureValidQuantities(
             item.BaseUnit, item.SecondaryUnit, item.RequireBothUnits,
-            quantityKg, quantityMeter, item.Code, context, requireAnyQuantity);
+            quantityKg, quantityMeter, item.Code, context, requireAnyQuantity, enforceRequireBothUnits);
     }
 
     /// <summary>
@@ -46,7 +50,8 @@ public static class ItemUnitGuard
     /// </summary>
     public static async Task EnsureValidQuantitiesAsync(
         IApplicationDbContext db, IEnumerable<(Guid ItemId, decimal? Kg, decimal? Meter)> lines,
-        CancellationToken cancellationToken, string? context = null, bool requireAnyQuantity = true)
+        CancellationToken cancellationToken, string? context = null, bool requireAnyQuantity = true,
+        bool enforceRequireBothUnits = true)
     {
         var list = lines.ToList();
         if (list.Count == 0) return;
@@ -64,7 +69,7 @@ public static class ItemUnitGuard
 
             ItemUnitRules.EnsureValidQuantities(
                 item.BaseUnit, item.SecondaryUnit, item.RequireBothUnits,
-                line.Kg, line.Meter, item.Code, context, requireAnyQuantity);
+                line.Kg, line.Meter, item.Code, context, requireAnyQuantity, enforceRequireBothUnits);
         }
     }
 

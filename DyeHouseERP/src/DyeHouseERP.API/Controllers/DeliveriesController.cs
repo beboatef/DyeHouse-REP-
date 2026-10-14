@@ -156,7 +156,9 @@ public class DeliveriesController : ControllerBase
     [ProducesResponseType(typeof(DeliveryDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<DeliveryDto>> CorrectApprovedLines(Guid id, [FromBody] EditDeliveredDeliveryRequest request)
         => Ok(await _mediator.Send(new EditDeliveredDeliveryCommand(
-            id, request.Lines.Select(l => new DeliveryLineQuantity(l.LineId, l.QuantityKg, l.QuantityMeter)).ToList(),
+            id, request.Lines.Select(l => new DeliveryLineQuantity(
+                l.LineId, l.QuantityKg, l.QuantityMeter,
+                l.OriginalRawQuantityKg, l.OriginalRawQuantityMeter)).ToList(),
             request.Reason)));
 }
 
@@ -168,7 +170,13 @@ public record CancelDeliveryRequest(string Reason);
 /// </summary>
 public record MarkDeliveredRequest(Guid? RequestId);
 
-/// <summary>Request body for correcting an approved delivery's line quantities.</summary>
-public record EditDeliveredDeliveryLineRequest(Guid LineId, decimal? QuantityKg, decimal? QuantityMeter);
+/// <summary>
+/// Request body for correcting an approved delivery's line quantities. The two original-raw figures are
+/// the delivery's own manually-entered data (spec section 31), so a correction can change them too;
+/// omitted (null) leaves whatever the line already recorded.
+/// </summary>
+public record EditDeliveredDeliveryLineRequest(
+    Guid LineId, decimal? QuantityKg, decimal? QuantityMeter,
+    decimal? OriginalRawQuantityKg = null, decimal? OriginalRawQuantityMeter = null);
 
 public record EditDeliveredDeliveryRequest(IReadOnlyList<EditDeliveredDeliveryLineRequest> Lines, string Reason);

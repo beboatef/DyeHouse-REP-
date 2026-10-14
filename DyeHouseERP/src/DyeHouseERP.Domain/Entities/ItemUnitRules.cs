@@ -58,10 +58,19 @@ public static class ItemUnitRules
     /// True for every stock- or production-recording workflow. Kept explicit so a
     /// read/derived path can validate units without demanding a quantity.
     /// </param>
+    /// <param name="enforceRequireBothUnits">
+    /// True everywhere a MOVEMENT or a production figure is recorded: the item's "require
+    /// both units" setting is a posting rule and stays enforced. False only for a document that
+    /// owns no movement at all (a sub-customer permit, which is a slice of a permit that already
+    /// recorded both units): there the sub-customer may receive the one unit they asked for, and
+    /// a meter-only line must not be refused merely because the item's setting says "both".
+    /// Even then the unit-selection rules above still apply - a quantity in a unit the item does
+    /// not use is still refused, and nothing is ever converted.
+    /// </param>
     public static void EnsureValidQuantities(
         UnitOfMeasure baseUnit, UnitOfMeasure? secondaryUnit, bool requireBothUnits,
         decimal? quantityKg, decimal? quantityMeter, string itemCode,
-        string? context = null, bool requireAnyQuantity = true)
+        string? context = null, bool requireAnyQuantity = true, bool enforceRequireBothUnits = true)
     {
         var code = string.IsNullOrWhiteSpace(itemCode) ? "(unnamed)" : itemCode;
         var where = string.IsNullOrWhiteSpace(context) ? string.Empty : $" {context}";
@@ -84,7 +93,7 @@ public static class ItemUnitRules
             throw new DomainException(
                 $"A quantity is required for item '{code}' in its configured unit(s): {Describe(configured)}{where}.");
 
-        if (requireBothUnits && secondaryUnit.HasValue)
+        if (requireBothUnits && enforceRequireBothUnits && secondaryUnit.HasValue)
         {
             var secondaryProvided = secondaryUnit.Value == UnitOfMeasure.KG ? kgProvided : meterProvided;
             if (!secondaryProvided)

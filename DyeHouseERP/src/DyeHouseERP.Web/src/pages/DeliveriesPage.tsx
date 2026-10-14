@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomersApi, DeliveriesApi, ReadyGoodsApi } from "@/api/client";
@@ -13,13 +13,19 @@ const statusTone: Record<string, "gray" | "blue" | "green" | "red"> = { Draft: "
 // Each line carries its OWN actual quantities, entered by hand for this delivery - including the
 // original raw quantity it settles (spec section 31). Nothing here is derived from a previous
 // delivery: a partial delivery is its own record, with its own figures.
+//
+// `sourceKey` identifies the lot the line slices ("<jobOrderId>|<itemId>"). The ITEM is never chosen
+// on its own: it arrives with the source, and on a sub-customer permit the source and the colour both
+// come from the primary permit being sliced (spec section 31).
 type LineDraft = {
-  productionOrderId: string; itemId: string; color: string;
-  quantityKg: string; quantityMeter: string; originalRawQuantityKg: string; originalRawQuantityMeter: string;
+  sourceKey: string; productionOrderId: string; itemId: string; color: string;
+  quantityKg: string; quantityMeter: string; pieceCount: string;
+  originalRawQuantityKg: string; originalRawQuantityMeter: string;
 };
 const emptyLine = (): LineDraft => ({
-  productionOrderId: "", itemId: "", color: "",
-  quantityKg: "", quantityMeter: "", originalRawQuantityKg: "", originalRawQuantityMeter: ""
+  sourceKey: "", productionOrderId: "", itemId: "", color: "",
+  quantityKg: "", quantityMeter: "", pieceCount: "",
+  originalRawQuantityKg: "", originalRawQuantityMeter: ""
 });
 
 export default function DeliveriesPage() {
@@ -52,31 +58,148 @@ export default function DeliveriesPage() {
     deliverTokens[id] ?? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
 
   const { data: customers } = useQuery({ queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true }) });
+  // A sub-customer permit is issued AGAINST a primary permit and may name that primary customer's Job
+  // Order, so while one is being issued the picker lists every ready lot (shown with its customer) -
+  // the server still refuses any line that is not the sub-customer's own or the linked primary
+  // customer's. An ordinary permit keeps the strict per-customer list.
   const { data: readyBalance } = useQuery({
-    queryKey: ["ready-goods-balance", customerId], queryFn: () => ReadyGoodsApi.balance({ customerId }), enabled: !!customerId
+    queryKey: ["ready-goods-balance", primaryDeliveryId || customerId],
+    queryFn: () => ReadyGoodsApi.balance(primaryDeliveryId ? undefined : { customerId }),
+    enabled: !!customerId
   });
   const { data: deliveries, isLoading } = useQuery({ queryKey: ["deliveries"], queryFn: () => DeliveriesApi.list() });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["deliveries"] });
 
+  // The primary permit being sliced, when one was chosen. On a sub-customer permit the item and the
+  // colour are taken from THIS permit's own lines - they are never independent master data, so the
+  // screen never lets a line name goods the primary permit does not carry.
+  const primaryPermit = deliveries?.find((d) => d.id === primaryDeliveryId) ?? null;
+
+  // The recipient is chosen by hand on every permit. When one is issued as a sub-customer permit the
+  // list narrows to the sub-customers of the primary permit's customer (the stored parent link); the
+  // server re-checks that relationship and refuses anything else.
+  const recipientOptions = useMemo(() => {
+    const all = customers ?? [];
+    return primaryPermit ? all.filter((c) => c.parentCustomerId === primaryPermit.customerId) : all;
+  }, [customers, primaryPermit]);
+
+  // Switching to (or between) primary permits can leave a recipient that is no longer allowed.
+  useEffect(() => {
+    if (primaryPermit && customerId && !recipientOptions.some((c) => c.id === customerId)) setCustomerId("");
+  }, [primaryPermit, recipientOptions, customerId]);
+
+  /**
+   * Where a sub-permit line may be built from, keyed by "<jobOrderId>|<itemId>".
+   *
+   * Sub-customer permit: the primary permit's own lines first - that is what "the item comes from the
+   * primary permit" means - followed by the sub-customer's OWN lots, whose item is their job order's
+   * own item. An ordinary permit keeps the ready-goods lots of the chosen customer.
+   */
+  const sourceOptions = useMemo(() => {
+    const asOption = (productionOrderId: string, itemId: string, number: string, code: string, color: string | null | undefined, fromPrimary: boolean) => ({
+      key: `${productionOrderId}|${itemId}`,
+      productionOrderId, itemId,
+      label: `${number} - ${code}${color ? ` (${color})` : ""}`,
+      color: color ?? "", fromPrimary
+    });
+
+    if (!primaryPermit) {
+      return (readyBalance ?? []).map((b) =>
+        asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, false));
+    }
+
+    const fromPrimary = primaryPermit.lines.map((l) =>
+      asOption(l.productionOrderId, l.itemId, l.productionOrderNumber, l.itemCode, l.color, true));
+
+    const own = (readyBalance ?? [])
+      .filter((b) => b.customerId === customerId)
+      .map((b) => asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, false));
+
+    const seen = new Set(fromPrimary.map((o) => o.key));
+    return [...fromPrimary, ...own.filter((o) => !seen.has(o.key))];
+  }, [primaryPermit, readyBalance, customerId]);
+
+  /** The colours the primary permit recorded for one source line - the only ones it may be issued in. */
+  const primaryColorsFor = useMemo(() => {
+    const bySource = new Map<string, string[]>();
+    for (const line of primaryPermit?.lines ?? []) {
+      if (!line.color) continue;
+      const key = `${line.productionOrderId}|${line.itemId}`;
+      const colors = bySource.get(key) ?? [];
+      if (!colors.includes(line.color)) colors.push(line.color);
+      bySource.set(key, colors);
+    }
+    return bySource;
+  }, [primaryPermit]);
+
+  /**
+   * Per source line: what the primary permit delivered, and what sub-customer permits already claim of
+   * it. KG and Meter are tracked and shown SEPARATELY - never added together and never converted.
+   */
+  const primaryUsage = useMemo(() => {
+    const usage = new Map<string, { allowedKg: number; allowedMeter: number; claimedKg: number; claimedMeter: number; hasKg: boolean; hasMeter: boolean }>();
+    if (!primaryPermit) return usage;
+
+    for (const line of primaryPermit.lines) {
+      const key = `${line.productionOrderId}|${line.itemId}`;
+      const row = usage.get(key) ?? { allowedKg: 0, allowedMeter: 0, claimedKg: 0, claimedMeter: 0, hasKg: false, hasMeter: false };
+      row.allowedKg += line.quantityKg ?? 0;
+      row.allowedMeter += line.quantityMeter ?? 0;
+      row.hasKg = row.hasKg || line.quantityKg != null;
+      row.hasMeter = row.hasMeter || line.quantityMeter != null;
+      usage.set(key, row);
+    }
+
+    for (const delivery of deliveries ?? []) {
+      if (delivery.primaryDeliveryId !== primaryPermit.id || delivery.status === "Cancelled") continue;
+      for (const line of delivery.lines) {
+        const row = usage.get(`${line.productionOrderId}|${line.itemId}`);
+        if (!row) continue;
+        row.claimedKg += line.quantityKg ?? 0;
+        row.claimedMeter += line.quantityMeter ?? 0;
+      }
+    }
+
+    return usage;
+  }, [primaryPermit, deliveries]);
+
+  /**
+   * Picking a source sets the item (it travels with the source, never typed) and defaults the colour to
+   * the first one the primary permit recorded for it. KG, Meter and the roll count stay manual and
+   * independent - the example "400 + 350 + 250 = 1000 m" is entered by hand, never derived.
+   */
+  const selectSource = (idx: number, key: string) => {
+    const source = sourceOptions.find((o) => o.key === key);
+    if (!source) {
+      updateLine(idx, { sourceKey: "", productionOrderId: "", itemId: "", color: "" });
+      return;
+    }
+    updateLine(idx, {
+      sourceKey: key, productionOrderId: source.productionOrderId, itemId: source.itemId,
+      color: primaryPermit ? (primaryColorsFor.get(key)?.[0] ?? "") : source.color
+    });
+  };
+
   const createMutation = useMutation({
     mutationFn: () => DeliveriesApi.create({
       customerId, deliveryDate,
       primaryDeliveryId: primaryDeliveryId || null,
-      lines: lines.filter((l) => l.productionOrderId && (l.quantityKg || l.quantityMeter)).map((l) => {
-        const balanceRow = readyBalance?.find((b) => b.productionOrderId === l.productionOrderId);
-        return {
-          productionOrderId: l.productionOrderId, itemId: balanceRow?.itemId ?? "", color: balanceRow?.color ?? undefined,
-          quantityKg: l.quantityKg ? Number(l.quantityKg) : undefined, quantityMeter: l.quantityMeter ? Number(l.quantityMeter) : undefined,
-          // Manually entered per delivery - the original raw this partial delivery settles.
-          originalRawQuantityKg: l.originalRawQuantityKg ? Number(l.originalRawQuantityKg) : undefined,
-          originalRawQuantityMeter: l.originalRawQuantityMeter ? Number(l.originalRawQuantityMeter) : undefined
-        };
-      })
+      // A line needs its lot and at least one measured quantity (KG and/or Meter) - the roll count is
+      // an auxiliary figure the user may enter on its own, without forcing the other two.
+      lines: lines.filter((l) => l.productionOrderId && l.itemId && (l.quantityKg || l.quantityMeter)).map((l) => ({
+        productionOrderId: l.productionOrderId, itemId: l.itemId, color: l.color || undefined,
+        quantityKg: l.quantityKg ? Number(l.quantityKg) : undefined,
+        quantityMeter: l.quantityMeter ? Number(l.quantityMeter) : undefined,
+        // Manually entered per delivery: the roll count, and the original raw this delivery settles.
+        pieceCount: l.pieceCount ? Number(l.pieceCount) : undefined,
+        originalRawQuantityKg: l.originalRawQuantityKg ? Number(l.originalRawQuantityKg) : undefined,
+        originalRawQuantityMeter: l.originalRawQuantityMeter ? Number(l.originalRawQuantityMeter) : undefined
+      }))
     }),
     onSuccess: () => {
       invalidate();
-      setShowForm(false); setLines([emptyLine()]); setError(null); setPrimaryDeliveryId("");
+      setShowForm(false); setLines([emptyLine()]); setError(null); setPrimaryDeliveryId(""); setCustomerId("");
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? err?.response?.data?.detail ?? "حدث خطأ أثناء الحفظ")
   });
@@ -150,10 +273,13 @@ export default function DeliveriesPage() {
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="field-label">العميل</label>
+                <label className="field-label">{t("del.recipient")}</label>
+                {/* The recipient is picked by hand here - never inherited from the primary permit. */}
                 <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
-                  <option value="">اختر...</option>{customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
+                  <option value="">اختر...</option>
+                  {recipientOptions.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
+                <p className="kpi-footnote mt-1">{primaryPermit ? t("del.subPermitNeedsSubCustomer") : t("del.recipientHint")}</p>
               </div>
               <div>
                 <label className="field-label">تاريخ التسليم</label>
@@ -183,37 +309,78 @@ export default function DeliveriesPage() {
                 <label className="field-label">بنود التسليم (من الرصيد الجاهز)</label>
                 <Button type="button" variant="ghost" onClick={() => setLines((p) => [...p, emptyLine()])}>+ إضافة بند</Button>
               </div>
+              {primaryPermit && <p className="mb-2 text-2xs text-ink-subtle">{t("del.itemFromPrimary")}</p>}
               <div className="space-y-3">
-                {lines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-gray-50 rounded-lg p-3">
-                    <div className="sm:col-span-2">
-                      <label className="field-label">أمر التشغيل (الرصيد الجاهز)</label>
-                      <Select value={line.productionOrderId} onChange={(e) => updateLine(idx, { productionOrderId: e.target.value })} required disabled={!customerId}>
-                        <option value="">اختر...</option>
-                        {readyBalance?.map((b) => (
-                          <option key={b.productionOrderId} value={b.productionOrderId}>
-                            {b.productionOrderNumber} - {b.itemCode} {b.color ? `(${b.color})` : ""} - متاح {b.remainingKg || b.remainingMeter}
-                          </option>
-                        ))}
-                      </Select>
+                {lines.map((line, idx) => {
+                  const source = sourceOptions.find((o) => o.key === line.sourceKey);
+                  // On a sub-customer permit the colour may only be one the primary permit recorded for
+                  // this same item - hence a chooser over exactly those, and nothing else.
+                  const colorOptions = primaryColorsFor.get(line.sourceKey) ?? [];
+                  const primarySources = sourceOptions.filter((o) => o.fromPrimary);
+                  const ownSources = sourceOptions.filter((o) => !o.fromPrimary);
+                  // What the primary permit delivered for this line and what other sub-permits claim of it.
+                  const usage = source?.fromPrimary ? primaryUsage.get(line.sourceKey) : undefined;
+                  return (
+                  <div key={idx} className="rounded-lg bg-gray-50 p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                      <div className="sm:col-span-2">
+                        <label className="field-label">{primaryPermit ? t("del.sourceLine") : "أمر التشغيل (الرصيد الجاهز)"}</label>
+                        <Select value={line.sourceKey} onChange={(e) => selectSource(idx, e.target.value)} required disabled={!customerId}>
+                          <option value="">اختر...</option>
+                          {primarySources.length > 0 && (
+                            <optgroup label={t("del.primaryPermitSource")}>
+                              {primarySources.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                            </optgroup>
+                          )}
+                          {ownSources.length > 0 && (
+                            <optgroup label={primaryPermit ? t("del.ownStockSource") : "الرصيد الجاهز"}>
+                              {ownSources.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                            </optgroup>
+                          )}
+                        </Select>
+                      </div>
+                      {colorOptions.length > 1 && (
+                        <div>
+                          <label className="field-label">{t("del.color")}</label>
+                          <Select value={line.color} onChange={(e) => updateLine(idx, { color: e.target.value })}>
+                            {colorOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                          </Select>
+                        </div>
+                      )}
+                      {/* Roll count and both measurements are entered by hand and are independent: the
+                          user fills in what the document actually needs, not all three. */}
+                      <div>
+                        <label className="field-label">{t("del.pieceCount")}</label>
+                        <Input type="number" min="0" step="1" value={line.pieceCount}
+                          onChange={(e) => updateLine(idx, { pieceCount: e.target.value })} />
+                      </div>
+                      <div><label className="field-label">كمية (كجم)</label><Input type="number" step="0.001" min="0" value={line.quantityKg} onChange={(e) => updateLine(idx, { quantityKg: e.target.value })} /></div>
+                      <div><label className="field-label">كمية (متر)</label><Input type="number" step="0.001" min="0" value={line.quantityMeter} onChange={(e) => updateLine(idx, { quantityMeter: e.target.value })} /></div>
+                      {/* The original raw this delivery settles - entered by hand, per delivery, and
+                          checked against what the Job Order started from (its original quantity is
+                          never overwritten). Compatible units only: kg against kg, meter against meter. */}
+                      <div>
+                        <label className="field-label">خام أصلي مُسوَّى (كجم)</label>
+                        <Input type="number" step="0.001" min="0" value={line.originalRawQuantityKg}
+                          onChange={(e) => updateLine(idx, { originalRawQuantityKg: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="field-label">خام أصلي مُسوَّى (متر)</label>
+                        <Input type="number" step="0.001" min="0" value={line.originalRawQuantityMeter}
+                          onChange={(e) => updateLine(idx, { originalRawQuantityMeter: e.target.value })} />
+                      </div>
                     </div>
-                    <div><label className="field-label">كمية (كجم)</label><Input type="number" step="0.001" min="0" value={line.quantityKg} onChange={(e) => updateLine(idx, { quantityKg: e.target.value })} /></div>
-                    <div><label className="field-label">كمية (متر)</label><Input type="number" step="0.001" min="0" value={line.quantityMeter} onChange={(e) => updateLine(idx, { quantityMeter: e.target.value })} /></div>
-                    {/* The original raw this delivery settles - entered by hand, per delivery, and
-                        checked against what the Job Order started from (its original quantity is
-                        never overwritten). Compatible units only: kg against kg, meter against meter. */}
-                    <div>
-                      <label className="field-label">خام أصلي مُسوَّى (كجم)</label>
-                      <Input type="number" step="0.001" min="0" value={line.originalRawQuantityKg}
-                        onChange={(e) => updateLine(idx, { originalRawQuantityKg: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="field-label">خام أصلي مُسوَّى (متر)</label>
-                      <Input type="number" step="0.001" min="0" value={line.originalRawQuantityMeter}
-                        onChange={(e) => updateLine(idx, { originalRawQuantityMeter: e.target.value })} />
-                    </div>
+                    {/* Distributed and remaining per UNIT, never as one combined figure: KG is shown
+                        against KG and Meter against Meter, and no conversion is implied. */}
+                    {usage && (usage.hasKg || usage.hasMeter) && (
+                      <p className="kpi-footnote mt-2 ltr-nums">
+                        {usage.hasKg && `${t("del.distributedOfPrimary")}: ${usage.claimedKg} / ${usage.allowedKg} كجم — ${t("del.remainingOfPrimary")}: ${usage.allowedKg - usage.claimedKg} كجم `}
+                        {usage.hasMeter && `${t("del.distributedOfPrimary")}: ${usage.claimedMeter} / ${usage.allowedMeter} م — ${t("del.remainingOfPrimary")}: ${usage.allowedMeter - usage.claimedMeter} م`}
+                      </p>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

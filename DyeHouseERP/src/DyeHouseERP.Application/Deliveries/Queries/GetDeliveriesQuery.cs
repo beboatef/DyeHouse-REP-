@@ -112,8 +112,19 @@ public class GetDeliveriesQueryHandler : IRequestHandler<GetDeliveriesQuery, Lis
             .Select(d => d.Id)
             .ToListAsync(cancellationToken);
 
+        // A SUB-customer permit (spec section 31) owns no physical movement and settles NO original raw
+        // of its own: its figures describe a share of the PRIMARY permit's delivery. Counting them here
+        // would settle the same original raw twice and shrink the order's remaining quantity for real
+        // deliveries - so ONLY movements that actually delivered stock reduce what remains.
+        var subCustomerPermitIds = await db.Deliveries.AsNoTracking()
+            .Where(d => d.PrimaryDeliveryId != null)
+            .Select(d => d.Id)
+            .ToListAsync(cancellationToken);
+
         var settled = await db.DeliveryLines.AsNoTracking()
-            .Where(l => orderIds.Contains(l.ProductionOrderId) && !cancelledDeliveryIds.Contains(l.DeliveryId))
+            .Where(l => orderIds.Contains(l.ProductionOrderId)
+                     && !cancelledDeliveryIds.Contains(l.DeliveryId)
+                     && !subCustomerPermitIds.Contains(l.DeliveryId))
             .Select(l => new { l.ProductionOrderId, l.OriginalRawQuantityKg, l.OriginalRawQuantityMeter })
             .ToListAsync(cancellationToken);
 
