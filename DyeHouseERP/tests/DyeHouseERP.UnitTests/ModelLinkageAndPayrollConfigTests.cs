@@ -99,9 +99,10 @@ public class ModelLinkageAndPayrollConfigTests
         var model = Model();
         var stage = Entity(model, typeof(ProductionStageDefinition));
 
+        // Phase 4: AllowSkip is no longer part of the approved policy fields - the capability was
+        // removed from the entity, its configuration and its commands with the legacy skip workflow.
         foreach (var name in new[]
                  {
-                     nameof(ProductionStageDefinition.AllowSkip),
                      nameof(ProductionStageDefinition.RequiresInputQuantity),
                      nameof(ProductionStageDefinition.RequiresOutputQuantity),
                      nameof(ProductionStageDefinition.Notes)

@@ -102,7 +102,8 @@ public class WarehouseDeactivationTests
         await DeactivateAsync(db, warehouse.Id);
 
         var act = () => new CreateRawMessageCommandHandler(
-                db, User(), new FixedNumberGenerator(), new FixedClock(), new OpenPeriod(), new RecordingStockLock())
+                db, User(), new FixedNumberGenerator(), new FixedClock(), new OpenPeriod(), new RecordingStockLock(),
+                new DyeHouseERP.Persistence.Services.InventoryLedgerService(db))
             .Handle(new CreateRawMessageCommand(
                 DateTime.UtcNow, Guid.NewGuid(), warehouse.Id, null,
                 new List<RawMessageLineInput> { new() { ItemId = Guid.NewGuid(), QuantityKg = 10m } }),

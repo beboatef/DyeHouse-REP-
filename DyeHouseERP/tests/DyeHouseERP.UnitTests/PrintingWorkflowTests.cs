@@ -46,10 +46,6 @@ public class PrintingWorkflowTests
         var silent = () => stage.SetDrawingNumber("OTHER");
         silent.Should().Throw<DomainException>();
         stage.DrawingNumber.Should().Be("DR-123");
-
-        // ...and a skipped run's drawing is meaningless, so that stays refused too.
-        var skip = () => stage.Skip(true, "bypass", "operator");
-        skip.Should().Throw<DomainException>();
     }
 
     [Fact]
@@ -113,7 +109,7 @@ public class PrintingWorkflowTests
             .Returns((string title, string subtitle, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows) =>
             {
                 rows.SelectMany(r => r).Should().Contain("DR-123");
-                return new ReportExportService().GeneratePdf(title, subtitle, headers, rows);
+                return new ReportExportService(new TestCompanyIdentityProvider("شركة", "Test Co")).GeneratePdf(title, subtitle, headers, rows);
             });
         var pdf = (FileContentResult)await new DeliveriesController(sender.Object).GetDeliveryPdf(delivery.Id, exporter.Object);
         System.Text.Encoding.ASCII.GetString(pdf.FileContents, 0, 5).Should().Be("%PDF-");
@@ -121,16 +117,13 @@ public class PrintingWorkflowTests
     }
 
     [Fact]
-    public void Legacy_Completion_And_Start_Cannot_Bypass_Drawing_Gate()
+    public void A_Legacy_Pending_Execution_Cannot_Bypass_The_Drawing_Gate()
     {
-        // A persisted legacy pending execution cannot bypass the same domain gate.
+        // A persisted legacy pending execution cannot bypass the same domain gate. Phase 4: the legacy
+        // Start/Complete/Skip paths were deleted, so the CLOSING path is the only one left to check.
         var stage = (ProductionOrderStageExecution)Activator.CreateInstance(typeof(ProductionOrderStageExecution), nonPublic: true)!;
         typeof(ProductionOrderStageExecution).GetProperty(nameof(stage.RequiresDrawingNumber))!.SetValue(stage, true);
-        var start = () => stage.Start("operator");
-        var complete = () => stage.Complete(100m, null, 95m, null, 5m, null, null, null, null);
         var transfer = () => stage.CloseWithOutput(95m, null, null, null, null, "operator");
-        start.Should().Throw<DomainException>();
-        complete.Should().Throw<DomainException>();
         transfer.Should().Throw<DomainException>();
     }
 

@@ -82,8 +82,8 @@ public class ProductionOrderEditHandlerTests
         var orderId = await SeedOpenOrderAsync(db);
 
         var order = await db.ProductionOrders.Include(o => o.StageExecutions).SingleAsync(o => o.Id == orderId);
-        order.StageExecutions.Single().Skip(stageAllowsSkip: true, reason: "scrapped", modifiedBy: "operator");
-        order.CompleteWithReason("closed with no output");
+        order.StageExecutions.Single().CloseWithOutput(900m, null, null, null, null, "operator");
+        order.CompleteWithReason("job finished at the last operation");
         await db.SaveChangesAsync();
 
         var act = () => Handler(db).Handle(new UpdateProductionOrderCommand(

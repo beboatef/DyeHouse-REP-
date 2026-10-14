@@ -176,7 +176,7 @@ public class IssueRawMaterialWorkflowTests
     }
 
     [Fact]
-    public async Task Starting_Production_Does_Not_Deduct_The_Raw_Material_Again()
+    public async Task Advancing_The_Order_Does_Not_Deduct_The_Raw_Material_Again()
     {
         using var db = NewDb();
         var scene = Seed(db);
@@ -185,16 +185,22 @@ public class IssueRawMaterialWorkflowTests
             scene.Customer.Id, scene.Item.Id, scene.Message.Id, DateTime.UtcNow,
             ActualQuantityKg: 108m, ActualQuantityMeter: null), CancellationToken.None);
 
+        var nextStage = new ProductionStageDefinition("PS002", "الطباعة", 2, "seed");
+        db.ProductionStageDefinitions.Add(nextStage);
+        await db.SaveChangesAsync();
+
         var stageId = await db.ProductionOrderStageExecutions
             .Where(s => s.ProductionOrderId == dto.Id).Select(s => s.Id).SingleAsync();
 
-        // Starting the (already-active) formation stage must not post any further movement.
-        var act = () => new StartStageCommandHandler(db, new StubCurrentUser("operator"))
-            .Handle(new StartStageCommand(stageId), CancellationToken.None);
-        await act.Should().ThrowAsync<DomainException>();
+        // Phase 4: the operation is advanced and closed by the single TRANSFER transaction - the legacy
+        // start/complete/skip paths were deleted - so that is the production step that must not deduct.
+        await new TransferToNextStageCommandHandler(
+                db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator())
+            .Handle(new TransferToNextStageCommand(stageId, nextStage.Id, 108m, null, null, null, null),
+                CancellationToken.None);
 
         (await db.InventoryTransactions.CountAsync(t => t.ProductionOrderId == dto.Id))
-            .Should().Be(1, "the issue was the only deduction - starting production never deducts again");
+            .Should().Be(1, "the issue was the only deduction - advancing production never deducts again");
     }
 
     // ------------------------------------------------- idempotency / rollback

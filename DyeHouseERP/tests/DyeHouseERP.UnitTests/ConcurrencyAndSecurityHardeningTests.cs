@@ -255,7 +255,7 @@ public class CreateReceiptOwnershipTests
         var other = new Customer("C-OTHER", "Other", "seed");
         var account = new TreasuryAccount("BANK-1", "Main Bank", TreasuryAccountKind.Bank, "seed");
         var invoice = new Invoice("INV-1", DateTime.UtcNow, owner.Id, "seed");
-        invoice.AddLine(null, Guid.NewGuid(), null, 1m, 100m, null);
+        invoice.AddLine(null, Guid.NewGuid(), null, 1m, 100m, UnitOfMeasure.KG, null);
         invoice.Issue();
 
         using var db = NewDb();
@@ -336,7 +336,7 @@ public class CreateReceiptCustomerInferenceTests : IDisposable
         var customer = new Customer("C-1", "Customer", "seed");
         var account = new TreasuryAccount("BANK-1", "Main Bank", TreasuryAccountKind.Bank, "seed");
         var invoice = new Invoice("INV-1", DateTime.UtcNow, customer.Id, "seed");
-        invoice.AddLine(null, Guid.NewGuid(), null, 1m, 100m, null);
+        invoice.AddLine(null, Guid.NewGuid(), null, 1m, 100m, UnitOfMeasure.KG, null);
         invoice.Issue();
 
         using (var db = new Persistence.ApplicationDbContext(_options))

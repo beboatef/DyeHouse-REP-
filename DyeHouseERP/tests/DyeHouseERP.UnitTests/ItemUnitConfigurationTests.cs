@@ -247,7 +247,7 @@ public class ItemUnitConfigurationTests
 
         var act = () => new CreateRawMessageCommandHandler(
                 db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new FixedClock(),
-                new OpenPeriod(), new RecordingStockLock())
+                new OpenPeriod(), new RecordingStockLock(), new InventoryLedgerService(db))
             .Handle(new CreateRawMessageCommand(DateTime.UtcNow, customer.Id, warehouse.Id, null,
                 new List<RawMessageLineInput> { new() { ItemId = item.Id, QuantityMeter = 1800m } }),
                 CancellationToken.None);
@@ -266,7 +266,7 @@ public class ItemUnitConfigurationTests
 
         var act = () => new CreateRawMessageCommandHandler(
                 db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new FixedClock(),
-                new OpenPeriod(), new RecordingStockLock())
+                new OpenPeriod(), new RecordingStockLock(), new InventoryLedgerService(db))
             .Handle(new CreateRawMessageCommand(DateTime.UtcNow, customer.Id, warehouse.Id, null,
                 new List<RawMessageLineInput> { new() { ItemId = item.Id, QuantityKg = 500m } }),
                 CancellationToken.None);
@@ -283,7 +283,7 @@ public class ItemUnitConfigurationTests
 
         await new CreateRawMessageCommandHandler(
                 db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new FixedClock(),
-                new OpenPeriod(), new RecordingStockLock())
+                new OpenPeriod(), new RecordingStockLock(), new InventoryLedgerService(db))
             .Handle(new CreateRawMessageCommand(DateTime.UtcNow, customer.Id, warehouse.Id, null,
                 new List<RawMessageLineInput> { new() { ItemId = item.Id, QuantityKg = 500m, QuantityMeter = 1800m } }),
                 CancellationToken.None);

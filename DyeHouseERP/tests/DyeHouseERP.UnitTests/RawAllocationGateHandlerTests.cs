@@ -109,14 +109,9 @@ public class RawAllocationGateHandlerTests
 
     // ------------------------------------------------------------- handlers
 
-    private static StartStageCommandHandler StartHandler(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"));
-
-    private static CompleteStageCommandHandler CompleteStageHandler(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"));
-
-    private static SkipStageCommandHandler SkipHandler(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"));
+    // Phase 4: the legacy Start / Complete / Skip handlers were deleted, so their gate cases are gone
+    // with them. The gate itself is still covered on every surviving production path below (the transfer,
+    // the ready-goods transfer, the completion, the resume) and by RawAllocationGateTests at the domain level.
 
     private static UpdateStageOutputCommandHandler OutputHandler(ApplicationDbContext db) =>
         new(db, new StubCurrentUser("operator"), new FixedClock());
@@ -137,55 +132,6 @@ public class RawAllocationGateHandlerTests
 
     private static async Task<ProductionOrderStatus> StatusOf(ApplicationDbContext db, Guid orderId) =>
         (await db.ProductionOrders.AsNoTracking().SingleAsync(o => o.Id == orderId)).Status;
-
-    // =====================================================================
-    // Start
-    // =====================================================================
-
-    [Fact]
-    public async Task StartProduction_WithNoAllocation_IsRefused_AndChangesNothing()
-    {
-        using var db = NewDb();
-        var scene = SeedScene(db);
-        var order = CreateOrder(db, scene);
-        var stageId = order.StageExecutions.Single().Id;
-
-        var act = () => StartHandler(db).Handle(new StartStageCommand(stageId), CancellationToken.None);
-
-        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*not fully allocated*");
-
-        (await StatusOf(db, order.Id)).Should().Be(ProductionOrderStatus.Draft);
-        (await db.InventoryTransactions.CountAsync(t => t.ProductionOrderId == order.Id))
-            .Should().Be(0, "a refused start posts no stock movement");
-    }
-
-    [Fact]
-    public async Task StartProduction_AtFiftyPercent_IsRefused()
-    {
-        using var db = NewDb();
-        var scene = SeedScene(db);
-        var order = CreateOrder(db, scene, allocatedKg: 500m);
-
-        var act = () => StartHandler(db).Handle(new StartStageCommand(order.StageExecutions.Single().Id), CancellationToken.None);
-
-        (await act.Should().ThrowAsync<DomainException>())
-            .WithMessage("*500 of 1000 KG*", "the shortfall is reported precisely");
-        (await StatusOf(db, order.Id)).Should().Be(ProductionOrderStatus.RawAllocated);
-    }
-
-    [Fact]
-    public async Task StartProduction_AtFullAllocation_ClearsTheAllocationGate()
-    {
-        using var db = NewDb();
-        var scene = SeedScene(db);
-        var order = CreateOrder(db, scene, allocatedKg: 1000m);
-
-        var act = () => StartHandler(db).Handle(new StartStageCommand(order.StageExecutions.Single().Id), CancellationToken.None);
-
-        // The formation stage exists already running (spec section 12), so Start() reports
-        // THAT - what matters here is that the allocation gate no longer blocks the path.
-        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*already InProgress*");
-    }
 
     // =====================================================================
     // Transfer -> the ready-goods stage (the path that completes the order)
@@ -380,45 +326,8 @@ public class RawAllocationGateHandlerTests
     }
 
     // =====================================================================
-    // Complete stage / edit output / skip stage
+    // Edit the OPEN operation's output
     // =====================================================================
-
-    [Fact]
-    public async Task CompleteStage_BelowFullAllocation_IsRefused_AndRecordsNothing()
-    {
-        using var db = NewDb();
-        var scene = SeedScene(db);
-        var order = CreateOrder(db, scene, allocatedKg: 500m);
-        var stage = order.StageExecutions.Single();
-
-        var act = () => CompleteStageHandler(db).Handle(
-            new CompleteStageCommand(stage.Id, 500m, null, 450m, null, null, null, null, null, "done"),
-            CancellationToken.None);
-
-        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*not fully allocated*");
-
-        var reloaded = await db.ProductionOrderStageExecutions.AsNoTracking().SingleAsync(s => s.Id == stage.Id);
-        reloaded.Status.Should().Be(StageExecutionStatus.InProgress);
-        reloaded.OutputKg.Should().BeNull();
-        (await db.Separates.CountAsync()).Should().Be(0);
-    }
-
-    [Fact]
-    public async Task CompleteStage_AtFullAllocation_RecordsTheOutput()
-    {
-        using var db = NewDb();
-        var scene = SeedScene(db);
-        var order = CreateOrder(db, scene, allocatedKg: 1000m);
-        var stage = order.StageExecutions.Single();
-
-        await CompleteStageHandler(db).Handle(
-            new CompleteStageCommand(stage.Id, 1000m, null, 930m, null, null, null, null, null, "done"),
-            CancellationToken.None);
-
-        var reloaded = await db.ProductionOrderStageExecutions.AsNoTracking().SingleAsync(s => s.Id == stage.Id);
-        reloaded.Status.Should().Be(StageExecutionStatus.Completed);
-        reloaded.OutputKg.Should().Be(930m);
-    }
 
     [Fact]
     public async Task EditStageOutput_BelowFullAllocation_IsRefused()
@@ -449,56 +358,6 @@ public class RawAllocationGateHandlerTests
 
         (await db.ProductionOrderStageExecutions.AsNoTracking().SingleAsync(s => s.Id == stage.Id))
             .OutputKg.Should().Be(980m);
-    }
-
-    [Theory]
-    [InlineData(0.0)]
-    [InlineData(0.5)]
-    public async Task SkipStage_BelowFullAllocation_IsRefused(double fraction)
-    {
-        using var db = NewDb();
-        var scene = SeedScene(db);
-        var skipStageDefinition = new ProductionStageDefinition("PS-SKIP", "مرحلة قابلة للتجاوز", 9, "seed",
-            allowSkip: true, isFormationStage: true);
-        db.ProductionStageDefinitions.Add(skipStageDefinition);
-
-        var order = new ProductionOrder(
-            "PRD-2026-000009", scene.Customer.Id, scene.Item.Id, DateTime.UtcNow, "seed", requestedQuantityKg: 1000m);
-        db.ProductionOrders.Add(order);
-        order.BuildStageRoute(new[] { skipStageDefinition }, "seed");
-        if (fraction > 0)
-            db.RawAllocations.Add(order.AllocateRaw(scene.Message.Id, scene.Item.Id, 500m, null, "seed"));
-        await db.SaveChangesAsync();
-
-        var stage = order.StageExecutions.Single();
-        var act = () => SkipHandler(db).Handle(new SkipStageCommand(stage.Id, "not needed"), CancellationToken.None);
-
-        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*not fully allocated*");
-        (await db.ProductionOrderStageExecutions.AsNoTracking().SingleAsync(s => s.Id == stage.Id))
-            .Status.Should().Be(StageExecutionStatus.InProgress);
-    }
-
-    [Fact]
-    public async Task SkipStage_AtFullAllocation_IsAllowed()
-    {
-        using var db = NewDb();
-        var scene = SeedScene(db);
-        var skipStageDefinition = new ProductionStageDefinition("PS-SKIP", "مرحلة قابلة للتجاوز", 9, "seed",
-            allowSkip: true, isFormationStage: true);
-        db.ProductionStageDefinitions.Add(skipStageDefinition);
-
-        var order = new ProductionOrder(
-            "PRD-2026-000010", scene.Customer.Id, scene.Item.Id, DateTime.UtcNow, "seed", requestedQuantityKg: 1000m);
-        db.ProductionOrders.Add(order);
-        order.BuildStageRoute(new[] { skipStageDefinition }, "seed");
-        db.RawAllocations.Add(order.AllocateRaw(scene.Message.Id, scene.Item.Id, 1000m, null, "seed"));
-        await db.SaveChangesAsync();
-
-        var stage = order.StageExecutions.Single();
-        await SkipHandler(db).Handle(new SkipStageCommand(stage.Id, "not needed"), CancellationToken.None);
-
-        (await db.ProductionOrderStageExecutions.AsNoTracking().SingleAsync(s => s.Id == stage.Id))
-            .Status.Should().Be(StageExecutionStatus.Skipped);
     }
 
     // =====================================================================

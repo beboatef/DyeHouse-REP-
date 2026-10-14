@@ -258,7 +258,7 @@ public class AccountingPeriodClosureTests
     private static Invoice DraftInvoice(ApplicationDbContext db, DateTime invoiceDate)
     {
         var invoice = new Invoice("INV-2026-0001", invoiceDate, Guid.NewGuid(), "accountant", null, 50m, 20m, null);
-        invoice.AddLine(null, Guid.NewGuid(), "Navy", 10m, 100m, null);
+        invoice.AddLine(null, Guid.NewGuid(), "Navy", 10m, 100m, UnitOfMeasure.KG, null);
         db.Invoices.Add(invoice);
         db.SaveChanges();
         return invoice;

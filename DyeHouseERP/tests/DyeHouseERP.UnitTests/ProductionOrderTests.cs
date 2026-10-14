@@ -8,10 +8,12 @@ namespace DyeHouseERP.UnitTests;
 
 public class ProductionOrderTests
 {
+    // Phase 4: the `allowSkip` argument is gone - the capability itself was removed with the legacy
+    // SkipStageCommand, so no stage advertises it any more.
     private static ProductionStageDefinition Stage(
-        string code, int sequence, bool allowSkip = false,
+        string code, int sequence,
         bool isFormationStage = false, bool isReadyGoodsStage = false) =>
-        new(code, code, sequence, "tester", allowSkip: allowSkip,
+        new(code, code, sequence, "tester",
             isFormationStage: isFormationStage, isReadyGoodsStage: isReadyGoodsStage);
 
     private static ProductionOrder CreateOrder() =>
@@ -125,18 +127,12 @@ public class ProductionOrderStageExecutionTests
         .Also(o => o.BuildStageRoute(new[] { new ProductionStageDefinition("A", "A", 1, "tester", isFormationStage: true) }, "tester"))
         .StageExecutions.Single();
 
-    [Fact]
-    public void Skip_WhenStageDoesNotAllowSkip_Throws()
-    {
-        var execution = NewExecution();
-
-        var act = () => execution.Skip(stageAllowsSkip: false, reason: "test", modifiedBy: "tester");
-
-        act.Should().Throw<DomainException>();
-    }
+    // Phase 4: `Skip_WhenStageDoesNotAllowSkip_Throws` was deleted together with the capability it
+    // tested. There is no domain method any more that can mark an operation Skipped, so the only way
+    // an operation closes is the transfer transaction's CloseWithOutput, exercised below.
 
     [Fact]
-    public void FirstStage_IsAlreadyRunning_ThenCompletes()
+    public void FirstStage_IsAlreadyRunning_ThenCloses()
     {
         var execution = NewExecution();
 
@@ -144,8 +140,21 @@ public class ProductionOrderStageExecutionTests
         // there is no separate "start" step for it (spec section 12).
         execution.Status.Should().Be(StageExecutionStatus.InProgress);
 
-        execution.Complete(100m, null, 90m, null, 10m, null, null, null, null);
+        execution.CloseWithOutput(90m, null, null, null, null, "tester", inputKg: 100m);
         execution.Status.Should().Be(StageExecutionStatus.Completed);
+        execution.InputKg.Should().Be(100m, "the operation's ACTUAL input is recorded, never inferred");
+    }
+
+    [Fact]
+    public void A_Closed_Operation_Cannot_Be_Closed_Twice()
+    {
+        var execution = NewExecution();
+        execution.CloseWithOutput(90m, null, null, null, null, "tester", inputKg: 100m);
+
+        var act = () => execution.CloseWithOutput(80m, null, null, null, null, "tester");
+
+        act.Should().Throw<DomainException>();
+        execution.OutputKg.Should().Be(90m, "a refused re-entry changes nothing");
     }
 
     [Fact]
@@ -252,7 +261,7 @@ public class ProductionOrderEditTests
     private static ProductionOrder OpenOrder()
     {
         var formation = new ProductionStageDefinition("A", "Formation", 1, "tester",
-            allowSkip: true, isFormationStage: true);
+            isFormationStage: true);
         var order = new ProductionOrder("PRD-2026-000900", Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow, "tester",
             color: "Navy", requestedQuantityKg: 1000m, rawOrigin: "Lot A",
             customerReference: "CR-1", notes: "first note");
@@ -315,8 +324,8 @@ public class ProductionOrderEditTests
     public void TheLineType_StaysLockedOnACompletedOrder()
     {
         var order = OpenOrder();
-        order.StageExecutions.Single().Skip(stageAllowsSkip: true, reason: "scrapped", modifiedBy: "tester");
-        order.CompleteWithReason("closed with no output");
+        order.StageExecutions.Single().CloseWithOutput(900m, null, null, null, null, "tester");
+        order.CompleteWithReason("job finished at the last operation");
 
         var act = () => order.SetJobOrderType(JobOrderType.OpenLine, "planner");
 
@@ -327,8 +336,8 @@ public class ProductionOrderEditTests
     public void UpdateDetails_OnACompletedOrder_IsRefused()
     {
         var order = OpenOrder();
-        order.StageExecutions.Single().Skip(stageAllowsSkip: true, reason: "scrapped", modifiedBy: "tester");
-        order.CompleteWithReason("closed with no output");
+        order.StageExecutions.Single().CloseWithOutput(900m, null, null, null, null, "tester");
+        order.CompleteWithReason("job finished at the last operation");
 
         var act = () => order.UpdateDetails("Red", null, null, null, ProductionPriority.Low, DateTime.UtcNow, "planner");
 

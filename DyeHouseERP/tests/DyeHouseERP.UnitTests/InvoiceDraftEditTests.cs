@@ -18,8 +18,8 @@ public class InvoiceDraftEditTests
     private static Invoice NewInvoice()
     {
         var invoice = new Invoice("INV-1", DateTime.UtcNow, Guid.NewGuid(), "accountant");
-        invoice.AddLine(null, Guid.NewGuid(), "blue", 10m, 5m, null);
-        invoice.AddLine(null, Guid.NewGuid(), "red", 4m, 2.5m, null);
+        invoice.AddLine(null, Guid.NewGuid(), "blue", 10m, 5m, UnitOfMeasure.KG, null);
+        invoice.AddLine(null, Guid.NewGuid(), "red", 4m, 2.5m, UnitOfMeasure.KG, null);
         return invoice;
     }
 
@@ -45,8 +45,8 @@ public class InvoiceDraftEditTests
         var invoice = NewInvoice();
         var line = invoice.Lines.First();
 
-        invoice.UpdateLine(line.Id, quantity: 20m, processingPrice: 5m, color: "green", notes: "fixed",
-            modifiedBy: "accountant");
+        invoice.UpdateLine(line.Id, quantity: 20m, processingPrice: 5m, unit: UnitOfMeasure.KG,
+            color: "green", notes: "fixed", modifiedBy: "accountant");
 
         invoice.SubTotal.Should().Be(110m); // 20*5 + 4*2.5
         line.Color.Should().Be("green");
@@ -56,7 +56,7 @@ public class InvoiceDraftEditTests
     public void Line_CanBeAdded_AndRemoved_WhileDraft()
     {
         var invoice = NewInvoice();
-        var added = invoice.AddLine(null, Guid.NewGuid(), null, 1m, 3m, null);
+        var added = invoice.AddLine(null, Guid.NewGuid(), null, 1m, 3m, UnitOfMeasure.KG, null);
         invoice.Lines.Should().HaveCount(3);
 
         invoice.RemoveLine(added.Id, "accountant");
@@ -71,9 +71,9 @@ public class InvoiceDraftEditTests
         invoice.Issue();
 
         var header = () => invoice.UpdateHeader(DateTime.UtcNow, null, 0, 0, null, "accountant");
-        var line = () => invoice.UpdateLine(invoice.Lines.First().Id, 1m, 1m, null, null, "accountant");
+        var line = () => invoice.UpdateLine(invoice.Lines.First().Id, 1m, 1m, UnitOfMeasure.KG, null, null, "accountant");
         var remove = () => invoice.RemoveLine(invoice.Lines.First().Id, "accountant");
-        var add = () => invoice.AddLine(null, Guid.NewGuid(), null, 1m, 1m, null);
+        var add = () => invoice.AddLine(null, Guid.NewGuid(), null, 1m, 1m, UnitOfMeasure.KG, null);
 
         header.Should().Throw<DocumentLockedException>();
         line.Should().Throw<DocumentLockedException>();
@@ -85,7 +85,7 @@ public class InvoiceDraftEditTests
     public void UnknownLine_IsRefused_NotSilentlyIgnored()
     {
         var invoice = NewInvoice();
-        var act = () => invoice.UpdateLine(Guid.NewGuid(), 1m, 1m, null, null, "accountant");
+        var act = () => invoice.UpdateLine(Guid.NewGuid(), 1m, 1m, UnitOfMeasure.KG, null, null, "accountant");
         act.Should().Throw<DomainException>().WithMessage("*does not belong to invoice*");
     }
 
@@ -97,12 +97,16 @@ public class InvoiceDraftEditTests
             .IsValid.Should().BeFalse("a negative discount is refused at the boundary");
 
         new UpdateInvoiceLineCommandValidator()
-            .Validate(new UpdateInvoiceLineCommand(Guid.NewGuid(), Guid.NewGuid(), 0m, 5m, null, null))
+            .Validate(new UpdateInvoiceLineCommand(Guid.NewGuid(), Guid.NewGuid(), 0m, 5m, UnitOfMeasure.KG, null, null))
             .IsValid.Should().BeFalse("a zero quantity is refused at the boundary");
 
         new AddInvoiceLineCommandValidator()
-            .Validate(new AddInvoiceLineCommand(Guid.NewGuid(), null, Guid.Empty, null, 1m, 1m, null))
+            .Validate(new AddInvoiceLineCommand(Guid.NewGuid(), null, Guid.Empty, null, 1m, 1m, UnitOfMeasure.KG, null))
             .IsValid.Should().BeFalse("an empty item is refused at the boundary");
+
+        new AddInvoiceLineCommandValidator()
+            .Validate(new AddInvoiceLineCommand(Guid.NewGuid(), null, Guid.NewGuid(), null, 1m, 1m, (UnitOfMeasure)999, null))
+            .IsValid.Should().BeFalse("the billing unit must be a real unit - the billing unit follows the service price");
 
         new RemoveInvoiceLineCommandValidator()
             .Validate(new RemoveInvoiceLineCommand(Guid.NewGuid(), Guid.NewGuid()))

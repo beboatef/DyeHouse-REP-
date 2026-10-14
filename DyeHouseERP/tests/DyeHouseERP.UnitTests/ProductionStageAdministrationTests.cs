@@ -53,7 +53,7 @@ public class ProductionStageAdministrationTests
     private static Task<ProductionStageDefinitionDto> CreateStageAsync(ApplicationDbContext db,
         string code, string name, int sequence, bool formation = false, string? notes = null)
         => Creator(db).Handle(new CreateProductionStageDefinitionCommand(
-            code, name, sequence, true, true, false, notes, formation),
+            code, name, sequence, true, true, notes, formation),
             CancellationToken.None);
 
     private static async Task SeedStartingStagesAsync(ApplicationDbContext db)
@@ -307,17 +307,15 @@ public class ProductionStageAdministrationTests
         await FormationSetter(db).Handle(new SetFormationStageCommand(newStage.Id), CancellationToken.None);
 
         var orderId = await CreateOrderAsync(db);
-        var executionId = (await db.ProductionOrderStageExecutions.AsNoTracking()
-            .SingleAsync(e => e.ProductionOrderId == orderId)).Id;
+        var order = await db.ProductionOrders.SingleAsync(o => o.Id == orderId);
 
-        var startStage = new StartStageCommandHandler(db, new StubCurrentUser("tester"));
-
-        // H-1: production does not start on a stage that came from the ERP any more than on a seeded one.
-        Func<Task> withoutAllocation = () => startStage.Handle(new StartStageCommand(executionId), CancellationToken.None);
+        // H-1: the raw-allocation gate applies to an order that started at a stage configured in the
+        // ERP exactly as it does to a seeded one. Phase 4: the gate is checked on the surviving
+        // production paths (the transfer/completion transactions all call the same guard), so the
+        // guard itself is exercised here directly and through the transfer path elsewhere.
+        Func<Task> withoutAllocation = () => RawAllocationGuard.EnsureCompleteAsync(db, order, CancellationToken.None);
         (await withoutAllocation.Should().ThrowAsync<DomainException>())
             .WithMessage("*not fully allocated*");
-
-        var order = await db.ProductionOrders.SingleAsync(o => o.Id == orderId);
         db.RawAllocations.Add(order.AllocateRaw(
             Guid.NewGuid(), order.ItemId, order.RequestedQuantityKg, order.RequestedQuantityMeter, "tester"));
         await db.SaveChangesAsync();
