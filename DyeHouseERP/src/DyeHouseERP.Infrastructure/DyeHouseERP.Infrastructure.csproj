@@ -22,6 +22,17 @@
     <ProjectReference Include="..\DyeHouseERP.Application\DyeHouseERP.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Noto Naskh Arabic - an Arabic-capable font with Arabic shaping, embedded in the assembly so
+      PDF generation never depends on a font being installed on the host (a bare Linux container has
+      none, and Arabic would otherwise render as boxes). Licensed under the SIL Open Font License 1.1;
+      the licence text travels with the binary as an embedded resource.
+    -->
+    <EmbeddedResource Include="Fonts\NotoNaskhArabic-Regular.ttf" />
+    <EmbeddedResource Include="Fonts\NotoNaskhArabic-OFL.txt" />
+  </ItemGroup>
+
 <ItemGroup>
 <FrameworkReference Include="Microsoft.AspNetCore.App" />
 </ItemGroup>
