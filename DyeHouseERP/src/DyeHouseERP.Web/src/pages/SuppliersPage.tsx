@@ -54,7 +54,7 @@ export default function SuppliersPage() {
       setForm({ code: "", nameAr: "", nameEn: "", accountNumber: "", phone: "", address: "", contactPerson: "", taxNumber: "" });
       setError(null);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 

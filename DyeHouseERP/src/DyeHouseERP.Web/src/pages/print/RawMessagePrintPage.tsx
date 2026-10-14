@@ -21,6 +21,7 @@ export default function RawMessagePrintPage() {
       ]}
       columns={[
         { header: "الصنف", render: (l) => `${l.itemCode} - ${l.itemName}` },
+        { header: "اللون", render: (l) => l.color ?? "-" },
         { header: "كجم", render: (l) => l.quantityKg ?? "-", align: "end" },
         { header: "متر", render: (l) => l.quantityMeter ?? "-", align: "end" },
         { header: "قطع", render: (l) => l.pieceCount ?? "-", align: "end" }

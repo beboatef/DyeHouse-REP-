@@ -34,7 +34,7 @@ export default function WarehousesPage() {
     queryFn: () => WarehousesApi.list({ search: search.trim() || undefined })
   });
 
-  const apiError = (err: any) =>
+  const apiError = (err: ApiErrorLike) =>
     err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error");
 
   const createMutation = useMutation({
@@ -46,7 +46,7 @@ export default function WarehousesPage() {
       setName("");
       setError(null);
     },
-    onError: (err: any) => setError(apiError(err))
+    onError: (err: ApiErrorLike) => setError(apiError(err))
   });
 
   /**
@@ -63,7 +63,7 @@ export default function WarehousesPage() {
       setEditName("");
       setError(null);
     },
-    onError: (err: any) => setError(apiError(err))
+    onError: (err: ApiErrorLike) => setError(apiError(err))
   });
 
   /**
@@ -74,7 +74,7 @@ export default function WarehousesPage() {
   const activeMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => WarehousesApi.setActive(id, isActive),
     onSuccess: () => { invalidate(); setError(null); },
-    onError: (err: any) => setError(apiError(err))
+    onError: (err: ApiErrorLike) => setError(apiError(err))
   });
 
   /** A kind the catalogue does not know (data written by another client) falls back to its raw value. */

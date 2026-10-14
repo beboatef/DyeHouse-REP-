@@ -74,9 +74,9 @@ export default function ProductionOrderDetailPage() {
       setSelectedMessageId(""); setSelectedLineItemId(""); setAllocKg(""); setAllocMeter(""); setAllocError(null); setNegativeStockDetail(null);
       setApprovalRequested(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiErrorLike) => {
       if (err?.response?.data?.code === "NEGATIVE_STOCK") {
-        setNegativeStockDetail({ shortage: err.response.data.shortage, reason: "" });
+        setNegativeStockDetail({ shortage: err.response?.data?.shortage ?? 0, reason: "" });
       } else {
         setAllocError(err?.response?.data?.title ?? "حدث خطأ أثناء التخصيص");
       }
@@ -109,7 +109,7 @@ export default function ProductionOrderDetailPage() {
       invalidate();
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
     },
-    onError: (err: any) => setAllocError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
+    onError: (err: ApiErrorLike) => setAllocError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
   });
 
   const editMutation = useMutation({
@@ -124,13 +124,13 @@ export default function ProductionOrderDetailPage() {
         jobOrderType: editValues.jobOrderType
       }),
     onSuccess: () => { invalidate(); setEditOpen(false); setEditError(null); },
-    onError: (err: any) => setEditError(errorMessage(err, t("common.error")))
+    onError: (err: ApiErrorLike) => setEditError(errorMessage(err, t("common.error")))
   });
 
   const cancelMutation = useMutation({
     mutationFn: () => ProductionOrdersApi.cancel(id!, cancelReason.trim()),
     onSuccess: () => { invalidate(); setCancelOpen(false); setCancelReason(""); setCancelError(null); },
-    onError: (err: any) => setCancelError(errorMessage(err, t("common.error")))
+    onError: (err: ApiErrorLike) => setCancelError(errorMessage(err, t("common.error")))
   });
 
   if (isLoading || !order) return <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>;
@@ -271,6 +271,45 @@ export default function ProductionOrderDetailPage() {
         <p className="text-xs text-gray-500 mb-4">
           يتم اختيار الرسالة (المرسال) يدويًا من قبل المستخدم - لا يوجد اختيار تلقائي (لا FIFO). يمكن التخصيص من أكثر من رسالة.
         </p>
+
+        {/* Required / allocated / remaining / allocation status (spec section 13).
+            "Required" is the order's own requested quantity; completeness is the server's own
+            rule (the same one every production-start path runs), so the screen can never
+            promise a start the backend would refuse. */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
+            <div className="text-2xs text-gray-500">{t("po.alloc.required")}</div>
+            <div className="ltr-nums font-medium">
+              {order.requestedQuantityKg != null && `${order.requestedQuantityKg} ${t("common.kg")} `}
+              {order.requestedQuantityMeter != null && `${order.requestedQuantityMeter} ${t("common.meter")}`}
+            </div>
+          </div>
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
+            <div className="text-2xs text-gray-500">{t("po.alloc.allocated")}</div>
+            <div className="ltr-nums font-medium">
+              {(order.requestedQuantityKg != null || order.allocatedQuantityKg > 0) &&
+                `${order.allocatedQuantityKg} ${t("common.kg")} `}
+              {(order.requestedQuantityMeter != null || order.allocatedQuantityMeter > 0) &&
+                `${order.allocatedQuantityMeter} ${t("common.meter")}`}
+            </div>
+          </div>
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
+            <div className="text-2xs text-gray-500">{t("po.alloc.remaining")}</div>
+            <div className="ltr-nums font-medium">
+              {(order.requestedQuantityKg != null || order.allocatedQuantityKg > 0) &&
+                `${order.remainingToAllocateKg} ${t("common.kg")} `}
+              {(order.requestedQuantityMeter != null || order.allocatedQuantityMeter > 0) &&
+                `${order.remainingToAllocateMeter} ${t("common.meter")}`}
+            </div>
+          </div>
+          <div className="rounded-lg px-3 py-2" style={{ background: order.isRawAllocationComplete ? "#f0fdf4" : "#fffbeb" }}>
+            <div className="text-2xs text-gray-500">{t("po.alloc.status")}</div>
+            <div className={order.isRawAllocationComplete ? "text-sm font-medium text-green-800" : "text-sm font-medium text-amber-700"}>
+              {order.isRawAllocationComplete ? t("po.alloc.statusComplete") : t("po.alloc.statusIncomplete")}
+            </div>
+          </div>
+        </div>
+        <p className="text-2xs text-gray-400 mb-4">{t("po.alloc.note")}</p>
 
         {order.rawAllocations.length > 0 && (
           <table className="table mb-4">
@@ -443,8 +482,14 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   const [nextStageId, setNextStageId] = useState("");
   const [drawingNumber, setDrawingNumber] = useState("");
   const [drawingReason, setDrawingReason] = useState("");
+  const [inputKg, setInputKg] = useState("");
+  const [inputMeter, setInputMeter] = useState("");
   const [outputKg, setOutputKg] = useState("");
   const [outputMeter, setOutputMeter] = useState("");
+  const [separatesKg, setSeparatesKg] = useState("");
+  const [separatesMeter, setSeparatesMeter] = useState("");
+  const [secondGradeKg, setSecondGradeKg] = useState("");
+  const [secondGradeMeter, setSecondGradeMeter] = useState("");
   const [notes, setNotes] = useState("");
   const [flowError, setFlowError] = useState<string | null>(null);
 
@@ -477,16 +522,32 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
       ProductionOrdersApi.transferStage(current!.id, {
         nextStageDefinitionId: nextStageId,
         drawingNumber: drawingNumber.trim() || undefined,
+        // Everything below belongs to the operation being CLOSED: what it actually consumed,
+        // what it actually produced, its separates and its second-grade quantity. Each is
+        // optional here because a stage may legitimately record none of them - and the units
+        // are validated server-side against the item's own configuration, never converted.
+        inputKg: inputKg ? Number(inputKg) : undefined,
+        inputMeter: inputMeter ? Number(inputMeter) : undefined,
         outputKg: outputKg ? Number(outputKg) : undefined,
         outputMeter: outputMeter ? Number(outputMeter) : undefined,
+        separatesKg: separatesKg ? Number(separatesKg) : undefined,
+        separatesMeter: separatesMeter ? Number(separatesMeter) : undefined,
+        secondGradeKg: secondGradeKg ? Number(secondGradeKg) : undefined,
+        secondGradeMeter: secondGradeMeter ? Number(secondGradeMeter) : undefined,
         notes: notes.trim() || undefined
       }),
     onSuccess: () => {
       invalidate();
       setNextStageId("");
       setDrawingNumber("");
+      setInputKg("");
+      setInputMeter("");
       setOutputKg("");
       setOutputMeter("");
+      setSeparatesKg("");
+      setSeparatesMeter("");
+      setSecondGradeKg("");
+      setSecondGradeMeter("");
       setNotes("");
       setFlowError(null);
     },
@@ -778,6 +839,38 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
             </Field>
           </div>
 
+          {/*
+            The rest of what the CLOSED operation recorded. All of it is optional and none of it is
+            derived: the actual input is what the operator entered (never the order's requested
+            quantity), separates are reprocessable material tracked separately from waste, and second
+            grade is a quantity of its own. The server validates every field against the item's own
+            unit configuration and refuses a unit the item does not use - KG and Meter are never
+            converted into one another here.
+          */}
+          <p className="mt-4 mb-1 text-2xs text-ink-subtle">{t("stage.floorCaptureHint")}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
+            <Field label={t("stage.inputKg")}>
+              <Input type="number" min={0} step="0.01" value={inputKg} onChange={(e) => setInputKg(e.target.value)} />
+            </Field>
+            <Field label={t("stage.inputMeter")}>
+              <Input type="number" min={0} step="0.01" value={inputMeter} onChange={(e) => setInputMeter(e.target.value)} />
+            </Field>
+            <div />
+            <Field label={t("stage.separatesKg")}>
+              <Input type="number" min={0} step="0.01" value={separatesKg} onChange={(e) => setSeparatesKg(e.target.value)} />
+            </Field>
+            <Field label={t("stage.separatesMeter")}>
+              <Input type="number" min={0} step="0.01" value={separatesMeter} onChange={(e) => setSeparatesMeter(e.target.value)} />
+            </Field>
+            <div />
+            <Field label={t("stage.secondGradeKg")}>
+              <Input type="number" min={0} step="0.01" value={secondGradeKg} onChange={(e) => setSecondGradeKg(e.target.value)} />
+            </Field>
+            <Field label={t("stage.secondGradeMeter")}>
+              <Input type="number" min={0} step="0.01" value={secondGradeMeter} onChange={(e) => setSecondGradeMeter(e.target.value)} />
+            </Field>
+          </div>
+
           {nextIsReadyGoods && (
             <p className="mt-2 text-2xs text-success-ink">{t("stage.readyGoodsHint")}</p>
           )}
@@ -821,6 +914,9 @@ function CostPanel({
   const [category, setCategory] = useState<CostCategory>("Labor");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  // Explicit, off-by-default: a cost stays the factory's own unless somebody marks it
+  // chargeable to the customer (spec sections 20 + 32). Only then can an invoice bill it.
+  const [chargeable, setChargeable] = useState(false);
   const [estimate, setEstimate] = useState("");
   const [approvedCost, setApprovedCost] = useState("");
   const [costError, setCostError] = useState<string | null>(null);
@@ -834,11 +930,12 @@ function CostPanel({
 
   const addMutation = useMutation({
     mutationFn: () => CostAccountingApi.addEntry(productionOrderId, {
-      category, amount: Number(amount), entryDate: new Date().toISOString().slice(0, 10), description: description || undefined
+      category, amount: Number(amount), entryDate: new Date().toISOString().slice(0, 10),
+      description: description || undefined, isChargeableToCustomer: chargeable
     }),
     onSuccess: () => {
       refresh();
-      setShowForm(false); setAmount(""); setDescription("");
+      setShowForm(false); setAmount(""); setDescription(""); setChargeable(false);
     }
   });
 
@@ -849,13 +946,13 @@ function CostPanel({
       estimatedCost: estimate === "" ? null : Number(estimate)
     }),
     onSuccess: () => { refresh(); setCostError(null); },
-    onError: (err: any) => setCostError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setCostError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const approveCost = useMutation({
     mutationFn: () => CostingApi.approve(productionOrderId, { approvedCost: Number(approvedCost) }),
     onSuccess: () => { refresh(); setApprovedCost(""); setCostError(null); },
-    onError: (err: any) => setCostError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setCostError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   if (isLoading || !cost) return null;
@@ -950,7 +1047,7 @@ function CostPanel({
       {costError && <p className="form-error mb-3">{costError}</p>}
 
       {showForm && (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end mb-4 bg-gray-50 rounded-lg p-3">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end mb-4 bg-gray-50 rounded-lg p-3">
           <div>
             <label className="field-label">البند</label>
             <Select value={category} onChange={(e) => setCategory(e.target.value as CostCategory)}>
@@ -961,6 +1058,10 @@ function CostPanel({
           </div>
           <div><label className="field-label">المبلغ</label><Input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
           <div><label className="field-label">بيان</label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+          <label className="flex items-center gap-2 text-sm text-slate-600" title={t("cost.chargeableNote")}>
+            <input type="checkbox" checked={chargeable} onChange={(e) => setChargeable(e.target.checked)} />
+            {t("cost.chargeableToCustomer")}
+          </label>
           <Button onClick={() => addMutation.mutate()} disabled={!amount || addMutation.isPending}>حفظ</Button>
         </div>
       )}

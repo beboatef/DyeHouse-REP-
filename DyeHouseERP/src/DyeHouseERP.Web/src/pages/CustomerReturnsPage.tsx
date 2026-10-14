@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CustomerReturnsApi, CustomersApi, ItemsApi, RawMessagesApi, ProductionOrdersApi,
-  type CustomerReturn, type CustomerReturnLineInput
+  type CustomerReturn, type CustomerReturnLineInput, type CostBearer, type ReturnOwnership
 } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Field, Badge } from "@/components/ui";
 import { TableStateRow, errorMessage } from "@/components/ui";
@@ -46,8 +46,20 @@ export default function CustomerReturnsPage() {
   const [returnDate, setReturnDate] = useState(today());
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
+  // The document the goods come back against, and whose material they are (spec section 32).
+  const [referenceDocument, setReferenceDocument] = useState("");
+  const [ownership, setOwnership] = useState<ReturnOwnership>("CustomerOwned");
   const [lines, setLines] = useState<LineDraft[]>([{ ...emptyLine }]);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // ---- New Job Order from a return (spec section 33) ----
+  // The return is only REFERENCED: it is never converted, and no invoice, credit note or charge is
+  // touched. The account choice is mandatory and starts EMPTY on purpose - the screen must not
+  // pre-answer who pays for the rework.
+  const [orderFor, setOrderFor] = useState<string | null>(null);
+  const [orderLine, setOrderLine] = useState({ itemId: "", rawMessageId: "", quantityKg: "", quantityMeter: "", color: "", notes: "" });
+  const [orderCostBearer, setOrderCostBearer] = useState<CostBearer | "">("");
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const [filterCustomerId, setFilterCustomerId] = useState("");
   const [fromDate, setFromDate] = useState("");
@@ -110,6 +122,8 @@ export default function CustomerReturnsPage() {
         returnDate,
         reason: reason.trim() || null,
         notes: notes.trim() || null,
+        referenceDocument: referenceDocument.trim() || null,
+        ownership,
         lines: lines.map<CustomerReturnLineInput>((l) => ({
           itemId: l.itemId,
           rawMessageId: l.rawMessageId || null,
@@ -143,12 +157,43 @@ export default function CustomerReturnsPage() {
     onError: (err) => setCancelError(errorMessage(err, t("common.error")))
   });
 
+  /**
+   * Raises an independent Job Order from a return. Refused locally when the account is not chosen,
+   * mirroring the API's rule: there is deliberately no default assumption about who pays.
+   */
+  const orderMutation = useMutation({
+    mutationFn: (returnId: string) =>
+      CustomerReturnsApi.createProductionOrder(returnId, {
+        itemId: orderLine.itemId,
+        rawMessageId: orderLine.rawMessageId,
+        orderDate: today(),
+        actualQuantityKg: orderLine.quantityKg ? Number(orderLine.quantityKg) : null,
+        actualQuantityMeter: orderLine.quantityMeter ? Number(orderLine.quantityMeter) : null,
+        costBearer: orderCostBearer as CostBearer,
+        color: orderLine.color.trim() || null,
+        notes: orderLine.notes.trim() || null,
+        requestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : null
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customer-returns"] });
+      qc.invalidateQueries({ queryKey: ["production-orders"] });
+      qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      setOrderFor(null);
+      setOrderLine({ itemId: "", rawMessageId: "", quantityKg: "", quantityMeter: "", color: "", notes: "" });
+      setOrderCostBearer("");
+      setOrderError(null);
+    },
+    onError: (err) => setOrderError(errorMessage(err, t("common.error")))
+  });
+
   const resetForm = () => {
     setShowForm(false);
     setCustomerId("");
     setReturnDate(today());
     setReason("");
     setNotes("");
+    setReferenceDocument("");
+    setOwnership("CustomerOwned");
     setLines([{ ...emptyLine }]);
     setFormError(null);
   };
@@ -233,6 +278,21 @@ export default function CustomerReturnsPage() {
 
               <Field label={t("common.date")} required>
                 <Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} required />
+              </Field>
+
+              {/* The document the goods come back against - free text, since the goods may come back
+                  against a document this system never issued (an invoice number, a delivery permit,
+                  or the customer's own reference). Descriptive only: a return changes no invoice. */}
+              <Field label={t("returns.referenceDocument", "المستند المرجعي")}>
+                <Input value={referenceDocument} onChange={(e) => setReferenceDocument(e.target.value)}
+                  maxLength={100} placeholder={t("returns.referenceDocumentHint", "فاتورة / إذن تسليم / مرجع العميل")} />
+              </Field>
+
+              <Field label={t("returns.ownership", "ملكية المادة")}>
+                <Select value={ownership} onChange={(e) => setOwnership(e.target.value as ReturnOwnership)}>
+                  <option value="CustomerOwned">{t("returns.customerOwned", "مادة العميل")}</option>
+                  <option value="CompanyOwned">{t("returns.companyOwned", "مادة الشركة")}</option>
+                </Select>
               </Field>
 
               <Field label={t("common.reason")}>
@@ -411,7 +471,15 @@ export default function CustomerReturnsPage() {
                           {t("returns.lineCount")}: {ret.lines.length}
                         </div>
                       </td>
-                      <td className="text-ink-muted">{ret.reason ?? "—"}</td>
+                      <td className="text-ink-muted">
+                        {ret.reason ?? "—"}
+                        <div className="text-2xs text-ink-subtle">
+                          {ret.referenceDocument ? `${t("returns.referenceDocument", "المستند المرجعي")}: ${ret.referenceDocument} · ` : ""}
+                          {ret.ownership === "CompanyOwned"
+                            ? t("returns.companyOwned", "مادة الشركة")
+                            : t("returns.customerOwned", "مادة العميل")}
+                        </div>
+                      </td>
                       <td className="text-ink-muted">{ret.createdBy}</td>
                       <td className="text-end">
                         <span className="btn-link">
@@ -456,6 +524,23 @@ export default function CustomerReturnsPage() {
                             </table>
                           </div>
 
+                          {/* ---- Job Orders raised from this return ---- */}
+                          {ret.productionOrders.length > 0 && (
+                            <div className="mx-3 mb-2 rounded-lg border border-line bg-white px-4 py-2 text-sm">
+                              <span className="text-ink-subtle">{t("returns.raisedOrders", "أوامر تشغيل أُنشئت من هذا المرتجع")}: </span>
+                              {ret.productionOrders.map((o) => (
+                                <span key={o.productionOrderId} className="ltr-nums me-3">
+                                  {o.orderNumber}
+                                  <span className="text-2xs text-ink-subtle">
+                                    {o.costBearer === "Company"
+                                      ? ` (${t("returns.onCompanyAccount", "على حساب الشركة")})`
+                                      : ` (${t("returns.onCustomerAccount", "على حساب العميل")})`}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
                           {ret.isCancelled ? (
                             <div className="mx-3 mb-3 rounded-lg border border-red-200 bg-red-50/50 px-4 py-3 text-sm text-red-900">
                               <div className="font-semibold">{t("returns.cancel.title")}</div>
@@ -492,13 +577,106 @@ export default function CustomerReturnsPage() {
                               </div>
                             </div>
                           ) : (
-                            <div className="px-3 pb-3">
+                            <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
                               <Button
                                 variant="ghost"
                                 onClick={() => { setCancelFor(ret.id); setCancelReason(""); setCancelError(null); }}
                               >
                                 {t("returns.cancel")}
                               </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={() => {
+                                  setOrderFor(orderFor === ret.id ? null : ret.id);
+                                  setOrderLine({ itemId: "", rawMessageId: "", quantityKg: "", quantityMeter: "", color: "", notes: "" });
+                                  setOrderCostBearer("");
+                                  setOrderError(null);
+                                }}
+                              >
+                                {t("returns.newOrderFromReturn", "أمر تشغيل جديد من المرتجع")}
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Raising an independent Job Order from the returned material: the SAME
+                              canonical workflow (issuing the raw) creates the order and posts its real
+                              stock movement. The account choice is mandatory and starts empty. */}
+                          {!ret.isCancelled && orderFor === ret.id && (
+                            <div className="mx-3 mb-3 rounded-lg border border-line bg-surface-sunken p-4">
+                              <div className="text-sm font-semibold">{t("returns.newOrderFromReturn", "أمر تشغيل جديد من المرتجع")}</div>
+                              <p className="kpi-footnote mb-3">{t("returns.newOrderHint")}</p>
+
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                                <Field label={t("returns.lot", "رقم الرسالة (الخام)")} required>
+                                  <Select value={orderLine.rawMessageId}
+                                    onChange={(e) => setOrderLine((p) => ({ ...p, rawMessageId: e.target.value, itemId: "" }))}>
+                                    <option value="">{t("returns.selectLot")}</option>
+                                    {Array.from(new Map(ret.lines.map((l) => [l.rawMessageId, l.messageNumber])).entries())
+                                      .map(([lotId, number]) => <option key={lotId} value={lotId}>{number}</option>)}
+                                  </Select>
+                                </Field>
+
+                                <Field label={t("common.item")} required>
+                                  <Select value={orderLine.itemId}
+                                    onChange={(e) => setOrderLine((p) => ({ ...p, itemId: e.target.value }))}>
+                                    <option value="">{t("returns.selectItem")}</option>
+                                    {ret.lines
+                                      .filter((l) => !orderLine.rawMessageId || l.rawMessageId === orderLine.rawMessageId)
+                                      .map((l) => (
+                                        <option key={l.id} value={l.itemId}>{l.itemCode} — {l.itemName}</option>
+                                      ))}
+                                  </Select>
+                                </Field>
+
+                                <Field label={t("common.kg")}>
+                                  <Input type="number" min="0" step="any" value={orderLine.quantityKg}
+                                    onChange={(e) => setOrderLine((p) => ({ ...p, quantityKg: e.target.value, quantityMeter: "" }))} />
+                                </Field>
+                                <Field label={t("common.meter")}>
+                                  <Input type="number" min="0" step="any" value={orderLine.quantityMeter}
+                                    onChange={(e) => setOrderLine((p) => ({ ...p, quantityMeter: e.target.value, quantityKg: "" }))} />
+                                </Field>
+                                <Field label={t("returns.color", "اللون")}>
+                                  <Input value={orderLine.color} onChange={(e) => setOrderLine((p) => ({ ...p, color: e.target.value }))} />
+                                </Field>
+                              </div>
+
+                              {/* The account choice. No option is preselected: the user MUST say who
+                                  carries the cost of the rework, and the API refuses a missing choice. */}
+                              <div className="mt-3">
+                                <span className="field-label">{t("returns.costBearer", "تحمّل التكلفة")} *</span>
+                                <div className="mt-1 flex flex-wrap gap-4 text-sm">
+                                  <label className="flex items-center gap-2">
+                                    <input type="radio" name={`bearer-${ret.id}`} value="Customer"
+                                      checked={orderCostBearer === "Customer"}
+                                      onChange={() => setOrderCostBearer("Customer")} />
+                                    {t("returns.onCustomerAccount", "على حساب العميل")}
+                                  </label>
+                                  <label className="flex items-center gap-2">
+                                    <input type="radio" name={`bearer-${ret.id}`} value="Company"
+                                      checked={orderCostBearer === "Company"}
+                                      onChange={() => setOrderCostBearer("Company")} />
+                                    {t("returns.onCompanyAccount", "على حساب الشركة")}
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <Button
+                                  disabled={
+                                    orderMutation.isPending || !orderLine.itemId || !orderLine.rawMessageId ||
+                                    (!orderLine.quantityKg && !orderLine.quantityMeter) || orderCostBearer === ""
+                                  }
+                                  onClick={() => orderMutation.mutate(ret.id)}
+                                >
+                                  {orderMutation.isPending ? t("common.saving") : t("returns.createOrder", "إنشاء أمر التشغيل")}
+                                </Button>
+                                <Button variant="ghost" onClick={() => setOrderFor(null)}>{t("common.cancel")}</Button>
+                                {orderCostBearer === "" && (
+                                  <span className="text-2xs text-warning-ink">{t("returns.costBearerRequired")}</span>
+                                )}
+                                {orderError && <span className="form-error">{orderError}</span>}
+                              </div>
                             </div>
                           )}
                         </td>

@@ -288,7 +288,7 @@ export default function FormationRequestsPage() {
       setGroups([emptyGroup("KG")]);
       setHeader({ customerId: "", itemId: "", rawMessageId: "", requestDate: new Date().toISOString().slice(0, 10), notes: "" });
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 

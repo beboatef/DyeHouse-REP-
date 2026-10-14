@@ -70,6 +70,7 @@ export const Permissions: PermissionOption[] = [
   { value: "production.execute_stage", group: "الإنتاج", label: "تنفيذ مرحلة" },
   { value: "production.complete", group: "الإنتاج", label: "إكمال أمر التشغيل" },
   { value: "production.reprocess", group: "الإنتاج", label: "إعادة التشغيل" },
+  { value: "production.scrap", group: "الإنتاج", label: "إهدار المنفصلات (سكراب)" },
   { value: "production.resume", group: "الإنتاج", label: "استئناف أمر تشغيل موقوف" },
   { value: "production.issue_material_cancel", group: "الإنتاج", label: "إلغاء صرف مواد على أمر تشغيل" },
   { value: "production.manage_machines", group: "الإنتاج", label: "إدارة الماكينات" },
@@ -86,6 +87,9 @@ export const Permissions: PermissionOption[] = [
   { value: "ready.transfer", group: "المخزون الجاهز", label: "ترحيل للمخزون الجاهز" },
   { value: "ready.deliver", group: "المخزون الجاهز", label: "تسليم الجاهز" },
   { value: "ready.edit_post_approval", group: "المخزون الجاهز", label: "تعديل تسليم بعد الاعتماد" },
+  // Moving finished stock BACK into raw material stock is its own right: it undoes the split between
+  // finished and raw stock, so it is never implied by transferring or delivering (spec section 29).
+  { value: "ready.return_to_raw", group: "المخزون الجاهز", label: "إرجاع مخزون جاهز إلى الخام" },
 
   { value: "invoices.view", group: "الفواتير", label: "عرض الفواتير" },
   { value: "invoices.create", group: "الفواتير", label: "إنشاء فاتورة" },

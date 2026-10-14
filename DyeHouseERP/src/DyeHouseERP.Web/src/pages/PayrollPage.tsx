@@ -102,7 +102,7 @@ function DepartmentsTab() {
       setForm({ code: "", nameAr: "", nameEn: "", notes: "" });
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const toggleMutation = useMutation({
@@ -252,7 +252,7 @@ function EmployeesTab() {
       });
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const statusMutation = useMutation({
@@ -457,49 +457,49 @@ function RunsTab() {
       setNotes("");
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const calculateMutation = useMutation({
     mutationFn: (id: string) => PayrollApi.calculateRun(id),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const submitMutation = useMutation({
     mutationFn: (id: string) => PayrollApi.submitRun(id),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const returnMutation = useMutation({
     mutationFn: (vars: { id: string; notes: string }) => PayrollApi.returnRun(vars.id, vars.notes || undefined),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const reverseMutation = useMutation({
     mutationFn: (vars: { id: string; reason: string }) => PayrollApi.reverseRun(vars.id, vars.reason),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => PayrollApi.approveRun(id),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const postMutation = useMutation({
     mutationFn: (id: string) => PayrollApi.postRun(id),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const cancelMutation = useMutation({
     mutationFn: (vars: { id: string; reason: string }) => PayrollApi.cancelRun(vars.id, vars.reason),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const lineMutation = useMutation({
@@ -513,7 +513,7 @@ function RunsTab() {
       setEditLine(null);
       setEditValues({ allowances: "", deductions: "" });
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const removeLineMutation = useMutation({

@@ -41,7 +41,7 @@ export default function PeriodClosingPage() {
     },
     // Prefer the ProblemDetails body the API actually returns on HTTP 400
     // (detail when present, then title), not a generic fallback message.
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? err?.message ?? "حدث خطأ - تأكد أن حسابك يملك صلاحية settings.manage")
   });
 

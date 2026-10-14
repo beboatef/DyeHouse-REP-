@@ -188,7 +188,7 @@ function ReceiptsTab() {
       customerId: customerId || undefined, invoiceId: invoiceId || undefined
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["receipts"] }); qc.invalidateQueries({ queryKey: ["treasury-accounts"] }); setShowForm(false); setAmount(""); setError(null); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ")
   });
 
   return (
@@ -378,7 +378,7 @@ function CancelDocButton({ label, onConfirm, invalidate }: {
       setReason("");
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر الإلغاء")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر الإلغاء")
   });
 
   if (!open)

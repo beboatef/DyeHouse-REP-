@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Upload, Download, FileSpreadsheet, Loader2, CircleCheck } from "lucide-react";
 import { api } from "@/api/client";
-import { Button, Card } from "./ui";
+import { Button, Card, errorMessage } from "./ui";
 
 /**
  * One Excel-import wizard for every master-data list (spec section 38).
@@ -65,7 +65,7 @@ const upload = (url: string, file: File) => {
   form.append("file", file);
   return api
     .post(url, form, { headers: { "Content-Type": "multipart/form-data" } })
-    .then((response) => response.data as any);
+    .then((response) => response.data as unknown);
 };
 
 export default function ImportPanel({
@@ -111,8 +111,8 @@ export default function ImportPanel({
         setResult(data as ImportExecuteResult);
         onDone?.();
       }
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.response?.data?.title || "فشل الاستيراد.");
+    } catch (e) {
+      setError(errorMessage(e, "فشل الاستيراد."));
     } finally {
       setBusy(null);
     }

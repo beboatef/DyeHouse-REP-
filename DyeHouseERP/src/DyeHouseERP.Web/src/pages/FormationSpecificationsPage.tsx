@@ -80,7 +80,7 @@ export default function FormationSpecificationsPage() {
       qc.invalidateQueries({ queryKey: ["formation-specifications"] });
       reset();
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 

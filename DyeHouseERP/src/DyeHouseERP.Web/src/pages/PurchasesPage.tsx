@@ -177,20 +177,20 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
       setNotes("");
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const action = useMutation({
     mutationFn: (vars: { id: string; action: "submit" | "approve" }) =>
       vars.action === "submit" ? PurchasesApi.submitOrder(vars.id) : PurchasesApi.approveOrder(vars.id),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const cancelMutation = useMutation({
     mutationFn: (vars: { id: string; reason: string }) => PurchasesApi.cancelOrder(vars.id, vars.reason),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const removeLine = useMutation({
@@ -202,7 +202,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
     mutationFn: (vars: { orderId: string; lineId: string; newQuantity: number; reason: string }) =>
       PurchasesApi.correctOrderLineQuantity(vars.orderId, vars.lineId, { newQuantity: vars.newQuantity, reason: vars.reason }),
     onSuccess: () => { invalidate(); setCorrectingLine(null); setCorrectQty(""); setCorrectReason(""); setCorrectError(null); },
-    onError: (err: any) => setCorrectError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setCorrectError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const saveHeader = useMutation({
@@ -214,7 +214,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
       notes: editNotes || null
     }),
     onSuccess: () => { invalidate(); setEditError(null); },
-    onError: (err: any) => setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const saveLine = useMutation({
@@ -223,7 +223,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
         quantity: vars.quantity, unitPrice: vars.unitPrice
       }),
     onSuccess: () => { invalidate(); setEditError(null); },
-    onError: (err: any) => setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const startEdit = (order: PurchaseOrder) => {
@@ -644,7 +644,7 @@ function ReceiptsTab() {
       setNotes("");
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   // Picking an order line pre-fills the material, unit and remaining quantity so
@@ -922,19 +922,19 @@ function InvoicesTab() {
       setLines([{ materialId: "", description: "", quantity: "", unit: "KG", unitPrice: "" }]);
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const postMutation = useMutation({
     mutationFn: (id: string) => PurchasesApi.postInvoice(id),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const cancelMutation = useMutation({
     mutationFn: (vars: { id: string; reason: string }) => PurchasesApi.cancelInvoice(vars.id, vars.reason),
     onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   return (
@@ -1185,7 +1185,7 @@ function PaymentsTab() {
       setDescription("");
       setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   return (

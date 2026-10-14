@@ -32,6 +32,7 @@ import AuditLogPage from "@/pages/AuditLogPage";
 import SettingsPage from "@/pages/SettingsPage";
 import InvoicePrintPage from "@/pages/print/InvoicePrintPage";
 import DeliveryPrintPage from "@/pages/print/DeliveryPrintPage";
+import DeliveryStatementPrintPage from "@/pages/print/DeliveryStatementPrintPage";
 import ProductionOrderPrintPage from "@/pages/print/ProductionOrderPrintPage";
 import RawMessagePrintPage from "@/pages/print/RawMessagePrintPage";
 import ScanViewPage from "@/pages/scan/ScanViewPage";
@@ -103,6 +104,9 @@ export default function App() {
         {/* Full-page routes: no sidebar, so printing only includes the document itself */}
         <Route path="/print/invoice/:id" element={<InvoicePrintPage />} />
         <Route path="/print/delivery/:id" element={<DeliveryPrintPage />} />
+        {/* The delivery STATEMENT (بيان تسليم) - the production accounting per delivered line,
+            with configurable columns (spec section 31). */}
+        <Route path="/print/delivery-statement/:id" element={<DeliveryStatementPrintPage />} />
         <Route path="/print/production-order/:id" element={<ProductionOrderPrintPage />} />
         <Route path="/print/raw-message/:id" element={<RawMessagePrintPage />} />
         <Route path="/scan/:type/:id" element={<ScanViewPage />} />

@@ -79,7 +79,7 @@ export default function SuppliesPage() {
       setError(null);
       setExpanded(created.id);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -97,7 +97,7 @@ export default function SuppliesPage() {
       setUnitCost("");
       setError(null);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -109,7 +109,7 @@ export default function SuppliesPage() {
   const post = useMutation({
     mutationFn: (id: string) => SuppliesApi.post(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["supply-issues"] }),
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -119,7 +119,7 @@ export default function SuppliesPage() {
       return SuppliesApi.cancel(id, reason || "");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["supply-issues"] }),
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 

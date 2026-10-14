@@ -43,9 +43,9 @@ export default function CustomerTransfersPage() {
       setQtyKg(""); setQtyMeter(""); setReason(""); setNotes(""); setError(null); setNegativeStockDetail(null);
       setApprovalRequested(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiErrorLike) => {
       if (err?.response?.data?.code === "NEGATIVE_STOCK") {
-        setNegativeStockDetail({ shortage: err.response.data.shortage, reason: "" });
+        setNegativeStockDetail({ shortage: err.response?.data?.shortage ?? 0, reason: "" });
       } else {
         setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ");
       }
@@ -77,7 +77,7 @@ export default function CustomerTransfersPage() {
       setApprovalRequested(request.documentNumber);
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
   });
 
   return (

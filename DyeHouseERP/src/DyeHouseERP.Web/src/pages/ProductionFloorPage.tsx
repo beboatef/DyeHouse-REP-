@@ -67,7 +67,9 @@ export default function ProductionFloorPage() {
     refetchInterval: 30000
   });
 
-  const list = rows ?? [];
+  // `rows ?? []` allocates a fresh array on every render while the query has no data, which
+  // would defeat the memoised derivations below. Memoise it on the query result instead.
+  const list = useMemo(() => rows ?? [], [rows]);
 
   const stats = useMemo(() => {
     const running = list.filter((r) => r.currentStageStatus === "InProgress");

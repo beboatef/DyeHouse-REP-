@@ -157,7 +157,7 @@ function MaterialTransfersTab() {
   const createMutation = useMutation({
     mutationFn: () => MaterialTransfersApi.create({ materialId, fromWarehouseId, toWarehouseId, quantity: Number(quantity) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["material-transfers"] }); setShowForm(false); setQuantity(""); setError(null); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ")
   });
 
   return (
@@ -226,7 +226,7 @@ function MaterialIssuesTab() {
   const createMutation = useMutation({
     mutationFn: () => MaterialIssuesApi.create({ materialId, warehouseId, productionOrderId, quantity: Number(quantity), unitCost: unitCost ? Number(unitCost) : undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["material-issues"] }); setShowForm(false); setQuantity(""); setUnitCost(""); setError(null); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ")
   });
 
   // Reversal, not a delete: the API keeps the original OUT ledger row and posts a compensating IN row.
@@ -234,7 +234,7 @@ function MaterialIssuesTab() {
   const cancelMutation = useMutation({
     mutationFn: (id: string) => MaterialIssuesApi.cancel(id, window.prompt("سبب إلغاء صرف المواد") || ""),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["material-issues"] }); setError(null); },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "حدث خطأ")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "حدث خطأ")
   });
 
   return (
@@ -314,7 +314,7 @@ function MaterialPreparationsTab() {
       waterQuantity: Number(waterQuantity || 0), resultingQuantity: Number(resultingQuantity)
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["material-preparations"] }); setShowForm(false); setOriginalQuantity(""); setWaterQuantity(""); setResultingQuantity(""); setError(null); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ")
   });
 
   return (

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Customer, CustomersApi } from "@/api/client";
 import { CustomersExports } from "@/api/exports";
-import { PageHeader, Card, Button, Input, Badge, TableStateRow, TableWrap } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, TableStateRow, TableWrap } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import ImportPanel from "@/components/ImportPanel";
 import { useI18n } from "@/i18n";
@@ -22,9 +22,11 @@ type FormState = {
   address: string;
   contactPerson: string;
   taxNumber: string;
+  /** Direct parent customer id, or "" for a top-level customer. */
+  parentCustomerId: string;
 };
 
-const emptyForm: FormState = { code: "", name: "", phone: "", address: "", contactPerson: "", taxNumber: "" };
+const emptyForm: FormState = { code: "", name: "", phone: "", address: "", contactPerson: "", taxNumber: "", parentCustomerId: "" };
 
 export default function CustomersPage() {
   const { t } = useI18n();
@@ -49,35 +51,43 @@ export default function CustomersPage() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      editing
-        ? CustomersApi.update(editing.id, {
-            name: form.name,
-            phone: form.phone || null,
-            address: form.address || null,
-            contactPerson: form.contactPerson || null,
-            taxNumber: form.taxNumber || null
-          })
-        : CustomersApi.create({
+    mutationFn: async () => {
+      if (editing) {
+        const updated = await CustomersApi.update(editing.id, {
+          name: form.name,
+          phone: form.phone || null,
+          address: form.address || null,
+          contactPerson: form.contactPerson || null,
+          taxNumber: form.taxNumber || null
+        });
+        // The parent (sub-customer) relationship is saved through its own endpoint, which
+        // validates self-parenting and cycles - only call it when it actually changed.
+        const desired = form.parentCustomerId || null;
+        if ((editing.parentCustomerId ?? null) !== desired)
+          return CustomersApi.setParent(editing.id, desired);
+        return updated;
+      }
+      return CustomersApi.create({
             code: form.code,
             name: form.name,
             phone: form.phone || null,
             address: form.address || null,
             contactPerson: form.contactPerson || null,
             taxNumber: form.taxNumber || null
-          }),
+          });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customers"] });
       reset();
     },
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   // Deactivation, never deletion: customers own raw material and historical documents.
   const activeMutation = useMutation({
     mutationFn: (c: Customer) => CustomersApi.setActive(c.id, !c.isActive),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }),
-    onError: (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const startEdit = (c: Customer) => {
@@ -88,7 +98,8 @@ export default function CustomersPage() {
       phone: c.phone ?? "",
       address: c.address ?? "",
       contactPerson: c.contactPerson ?? "",
-      taxNumber: c.taxNumber ?? ""
+      taxNumber: c.taxNumber ?? "",
+      parentCustomerId: c.parentCustomerId ?? ""
     });
     setShowForm(true);
     setError(null);
@@ -177,6 +188,25 @@ export default function CustomersPage() {
                 maxLength={50}
               />
             </div>
+            {/* Sub-customer relationship (spec section 7): an explicit, stored parent. Only
+                meaningful while editing; a customer is never its own parent. */}
+            {editing && (
+              <div>
+                <label className="field-label">{t("cust.parent")}</label>
+                <Select
+                  value={form.parentCustomerId}
+                  onChange={(e) => setForm({ ...form, parentCustomerId: e.target.value })}
+                >
+                  <option value="">{t("cust.noParent")}</option>
+                  {customers
+                    ?.filter((x) => x.id !== editing.id)
+                    .map((x) => (
+                      <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
+                    ))}
+                </Select>
+                <p className="text-[10px] text-slate-400 mt-1">{t("cust.parentHint")}</p>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={saveMutation.isPending || !form.name}>
                 {saveMutation.isPending ? t("common.saving") : t("common.save")}
@@ -206,6 +236,7 @@ export default function CustomersPage() {
               <tr>
                 <th>{t("cust.code")}</th>
                 <th>{t("cust.name")}</th>
+                <th>{t("cust.parent")}</th>
                 <th>{t("cust.phone")}</th>
                 <th>{t("cust.contactPerson")}</th>
                 <th>{t("cust.taxNumber")}</th>
@@ -215,7 +246,7 @@ export default function CustomersPage() {
             </thead>
             <tbody>
               <TableStateRow
-                colSpan={7}
+                colSpan={8}
                 loading={isLoading}
                 isEmpty={customers?.length === 0}
                 loadingText={t("common.loading")}
@@ -225,6 +256,7 @@ export default function CustomersPage() {
                 <tr key={c.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${c.isActive ? "" : "opacity-60"}`}>
                   <td className="font-medium ltr-nums">{c.code}</td>
                   <td>{c.name}</td>
+                  <td className="ltr-nums">{c.parentCustomerCode ?? "—"}</td>
                   <td className="ltr-nums">{c.phone ?? "—"}</td>
                   <td>{c.contactPerson ?? "—"}</td>
                   <td className="ltr-nums">{c.taxNumber ?? "—"}</td>

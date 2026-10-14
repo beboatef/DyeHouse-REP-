@@ -46,7 +46,7 @@ export default function AttachmentsPanel({
       if (fileRef.current) fileRef.current.value = "";
       setError(null);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 

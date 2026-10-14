@@ -30,7 +30,7 @@ export default function SettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ - تأكد أن حسابك يملك صلاحية settings.manage")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ - تأكد أن حسابك يملك صلاحية settings.manage")
   });
 
   const onFileSelected = (file: File | undefined) => {

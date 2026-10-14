@@ -57,7 +57,7 @@ export default function FormationRequestDetailPage() {
     qc.invalidateQueries({ queryKey: ["formation-requests"] });
   };
 
-  const onError = (err: any) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"));
+  const onError = (err: ApiErrorLike) => setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"));
 
   const submitMutation = useMutation({ mutationFn: () => FormationRequestsApi.submit(id as string), onSuccess: refresh, onError });
   const approveMutation = useMutation({ mutationFn: () => FormationRequestsApi.approve(id as string), onSuccess: refresh, onError });

@@ -28,6 +28,13 @@ export default function StageRow({ stage }: { stage: StageExecution }) {
   const output = stage.outputKg != null ? `${stage.outputKg} كجم` : stage.outputMeter != null ? `${stage.outputMeter} متر` : null;
   const loss = stage.lossKg != null ? `${stage.lossKg} كجم` : stage.lossMeter != null ? `${stage.lossMeter} متر` : null;
   const lossPct = stage.lossPercentKg ?? stage.lossPercentMeter;
+  // Phase 4: the figures the operation recorded beyond its output - the ACTUAL input the operator
+  // entered, the separates (reprocessable material, explicitly not waste) and the second-grade
+  // quantity (its own figure, neither output nor waste). They are shown back here so the floor can
+  // read what it entered, and so the same figures the delivery statement reads are visible first.
+  const input = stage.inputKg != null ? `${stage.inputKg} كجم` : stage.inputMeter != null ? `${stage.inputMeter} متر` : null;
+  const separates = stage.separatesKg != null ? `${stage.separatesKg} كجم` : stage.separatesMeter != null ? `${stage.separatesMeter} متر` : null;
+  const secondGrade = stage.secondGradeKg != null ? `${stage.secondGradeKg} كجم` : stage.secondGradeMeter != null ? `${stage.secondGradeMeter} متر` : null;
 
   return (
     <div className="rounded-lg border border-line p-3">
@@ -44,10 +51,28 @@ export default function StageRow({ stage }: { stage: StageExecution }) {
           <span className="text-ink-subtle">{t("stage.baseline")}: </span>
           <span className="ltr-nums">{baseline}</span>
         </div>
+        {input && (
+          <div>
+            <span className="text-ink-subtle">{t("stage.inputKg")}: </span>
+            <span className="ltr-nums">{input}</span>
+          </div>
+        )}
         {output && (
           <div>
             <span className="text-ink-subtle">{t("stage.outputKg")}: </span>
             <span className="ltr-nums">{output}</span>
+          </div>
+        )}
+        {separates && (
+          <div>
+            <span className="text-ink-subtle">{t("stage.separatesKg")}: </span>
+            <span className="ltr-nums">{separates}</span>
+          </div>
+        )}
+        {secondGrade && (
+          <div>
+            <span className="text-ink-subtle">{t("stage.secondGradeKg")}: </span>
+            <span className="ltr-nums">{secondGrade}</span>
           </div>
         )}
         {loss && (

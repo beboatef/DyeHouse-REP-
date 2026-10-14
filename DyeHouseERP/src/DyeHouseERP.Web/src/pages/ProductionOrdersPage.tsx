@@ -124,12 +124,12 @@ export default function ProductionOrdersPage() {
       setNegativeStockDetail(null);
       setApprovalRequested(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiErrorLike) => {
       // A shortage is NOT overridden by the person doing the issue (requester ≠ approver):
       // the screen offers to send the exact same issue to the Approval Center instead, and a
       // DIFFERENT user with inventory.approve_negative_stock decides it there.
       if (err?.response?.data?.code === "NEGATIVE_STOCK") {
-        setNegativeStockDetail({ shortage: err.response.data.shortage, reason: "" });
+        setNegativeStockDetail({ shortage: err.response?.data?.shortage ?? 0, reason: "" });
         setError(null);
       } else {
         setNegativeStockDetail(null);
@@ -167,7 +167,7 @@ export default function ProductionOrdersPage() {
       setApprovalRequested(request.documentNumber);
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
   });
 
   const canSubmit =

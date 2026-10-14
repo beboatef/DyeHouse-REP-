@@ -10,8 +10,17 @@ import { DeliveriesExports } from "@/api/exports";
 const statusLabel: Record<string, string> = { Draft: "مسودة", Prepared: "مجهزة", Delivered: "تم التسليم", Cancelled: "ملغاة" };
 const statusTone: Record<string, "gray" | "blue" | "green" | "red"> = { Draft: "gray", Prepared: "blue", Delivered: "green", Cancelled: "red" };
 
-type LineDraft = { productionOrderId: string; itemId: string; color: string; quantityKg: string; quantityMeter: string };
-const emptyLine = (): LineDraft => ({ productionOrderId: "", itemId: "", color: "", quantityKg: "", quantityMeter: "" });
+// Each line carries its OWN actual quantities, entered by hand for this delivery - including the
+// original raw quantity it settles (spec section 31). Nothing here is derived from a previous
+// delivery: a partial delivery is its own record, with its own figures.
+type LineDraft = {
+  productionOrderId: string; itemId: string; color: string;
+  quantityKg: string; quantityMeter: string; originalRawQuantityKg: string; originalRawQuantityMeter: string;
+};
+const emptyLine = (): LineDraft => ({
+  productionOrderId: "", itemId: "", color: "",
+  quantityKg: "", quantityMeter: "", originalRawQuantityKg: "", originalRawQuantityMeter: ""
+});
 
 export default function DeliveriesPage() {
   const { t } = useI18n();
@@ -26,8 +35,21 @@ export default function DeliveriesPage() {
   // and the new quantity typed for each of its existing lines.
   const [correctingId, setCorrectingId] = useState<string | null>(null);
   const [correctQty, setCorrectQty] = useState<Record<string, string>>({});
+  // The original raw figures are hand-entered data too, so the correction editor can change them -
+  // they are re-checked against the order's fixed original quantity by the API.
+  const [correctOriginalRaw, setCorrectOriginalRaw] = useState<Record<string, string>>({});
   const [correctReason, setCorrectReason] = useState("");
   const [correctError, setCorrectError] = useState<string | null>(null);
+
+  // Sub-customer permit (spec section 31): when set, this permit is issued AGAINST another
+  // (primary) permit. It is a document link only - creating it moves no stock.
+  const [primaryDeliveryId, setPrimaryDeliveryId] = useState("");
+
+  // The idempotency token of the CURRENT delivery confirmation, minted per document. Submitting the
+  // same confirmation twice (a double click, a retried request) posts the deduction exactly once.
+  const [deliverTokens, setDeliverTokens] = useState<Record<string, string>>({});
+  const tokenFor = (id: string) =>
+    deliverTokens[id] ?? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
 
   const { data: customers } = useQuery({ queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true }) });
   const { data: readyBalance } = useQuery({
@@ -40,22 +62,40 @@ export default function DeliveriesPage() {
   const createMutation = useMutation({
     mutationFn: () => DeliveriesApi.create({
       customerId, deliveryDate,
+      primaryDeliveryId: primaryDeliveryId || null,
       lines: lines.filter((l) => l.productionOrderId && (l.quantityKg || l.quantityMeter)).map((l) => {
         const balanceRow = readyBalance?.find((b) => b.productionOrderId === l.productionOrderId);
         return {
           productionOrderId: l.productionOrderId, itemId: balanceRow?.itemId ?? "", color: balanceRow?.color ?? undefined,
-          quantityKg: l.quantityKg ? Number(l.quantityKg) : undefined, quantityMeter: l.quantityMeter ? Number(l.quantityMeter) : undefined
+          quantityKg: l.quantityKg ? Number(l.quantityKg) : undefined, quantityMeter: l.quantityMeter ? Number(l.quantityMeter) : undefined,
+          // Manually entered per delivery - the original raw this partial delivery settles.
+          originalRawQuantityKg: l.originalRawQuantityKg ? Number(l.originalRawQuantityKg) : undefined,
+          originalRawQuantityMeter: l.originalRawQuantityMeter ? Number(l.originalRawQuantityMeter) : undefined
         };
       })
     }),
-    onSuccess: () => { invalidate(); setShowForm(false); setLines([emptyLine()]); setError(null); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
+    onSuccess: () => {
+      invalidate();
+      setShowForm(false); setLines([emptyLine()]); setError(null); setPrimaryDeliveryId("");
+    },
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? err?.response?.data?.detail ?? "حدث خطأ أثناء الحفظ")
   });
 
   const prepareMutation = useMutation({ mutationFn: DeliveriesApi.prepare, onSuccess: invalidate });
+
+  /**
+   * Posts the delivery. The token is minted once per permit and reused on a retry, so a double click
+   * or a resent request can never deduct the same ready stock twice; the screen only rotates the token
+   * after a response comes back.
+   */
   const deliverMutation = useMutation({
-    mutationFn: DeliveriesApi.deliver, onSuccess: invalidate,
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر التسليم")
+    mutationFn: (id: string) => DeliveriesApi.deliver(id, tokenFor(id)),
+    onSuccess: (_data, id) => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
+      setDeliverTokens((prev) => ({ ...prev, [id]: crypto.randomUUID() }));
+    },
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? err?.response?.data?.detail ?? "تعذر التسليم")
   });
   const cancelMutation = useMutation({
     mutationFn: (vars: { id: string; reason: string }) => DeliveriesApi.cancel(vars.id, vars.reason), onSuccess: invalidate
@@ -76,12 +116,13 @@ export default function DeliveriesPage() {
       setCorrectReason("");
       setCorrectError(null);
     },
-    onError: (err: any) => setCorrectError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "تعذر حفظ التصحيح")
+    onError: (err: ApiErrorLike) => setCorrectError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "تعذر حفظ التصحيح")
   });
 
   const openCorrection = (id: string) => {
     setCorrectingId(id);
     setCorrectQty({});
+    setCorrectOriginalRaw({});
     setCorrectReason("");
     setCorrectError(null);
   };
@@ -118,6 +159,23 @@ export default function DeliveriesPage() {
                 <label className="field-label">تاريخ التسليم</label>
                 <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} required />
               </div>
+              {/* Sub-customer permit: linked to a primary permit, and the sub-customer must be a
+                  sub of that permit's customer. Issuing it moves no stock - the delivery itself is
+                  still the separate transaction below. */}
+              <div className="sm:col-span-2">
+                <label className="field-label">إذن أساسي (لإصدار إذن عميل فرعي)</label>
+                <Select value={primaryDeliveryId} onChange={(e) => setPrimaryDeliveryId(e.target.value)}>
+                  <option value="">— إذن عادي بدون إذن أساسي —</option>
+                  {deliveries?.filter((d) => d.status !== "Cancelled").map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.deliveryNumber} — {d.customerCode} {d.customerName}
+                    </option>
+                  ))}
+                </Select>
+                <p className="kpi-footnote mt-1">
+                  الإذن الفرعي يرتبط بالإذن الأساسي وعميله، ولا يُنشئ أي حركة مخزنية.
+                </p>
+              </div>
             </div>
 
             <div>
@@ -141,6 +199,19 @@ export default function DeliveriesPage() {
                     </div>
                     <div><label className="field-label">كمية (كجم)</label><Input type="number" step="0.001" min="0" value={line.quantityKg} onChange={(e) => updateLine(idx, { quantityKg: e.target.value })} /></div>
                     <div><label className="field-label">كمية (متر)</label><Input type="number" step="0.001" min="0" value={line.quantityMeter} onChange={(e) => updateLine(idx, { quantityMeter: e.target.value })} /></div>
+                    {/* The original raw this delivery settles - entered by hand, per delivery, and
+                        checked against what the Job Order started from (its original quantity is
+                        never overwritten). Compatible units only: kg against kg, meter against meter. */}
+                    <div>
+                      <label className="field-label">خام أصلي مُسوَّى (كجم)</label>
+                      <Input type="number" step="0.001" min="0" value={line.originalRawQuantityKg}
+                        onChange={(e) => updateLine(idx, { originalRawQuantityKg: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="field-label">خام أصلي مُسوَّى (متر)</label>
+                      <Input type="number" step="0.001" min="0" value={line.originalRawQuantityMeter}
+                        onChange={(e) => updateLine(idx, { originalRawQuantityMeter: e.target.value })} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -161,6 +232,14 @@ export default function DeliveriesPage() {
                 <span className="font-bold ltr-nums">{d.deliveryNumber}</span>
                 <span className="text-gray-400 mx-2">·</span>
                 <span className="text-sm text-gray-600">{d.customerCode} - {d.customerName}</span>
+                {/* The one cross-reference a sub-customer permit carries: the primary permit and
+                    its customer's code/name. Never the primary customer's full record. */}
+                {d.isSubCustomerPermit && d.primaryDeliveryNumber && (
+                  <span className="ms-2 text-2xs text-ink-subtle">
+                    إذن فرعي عن <span className="ltr-nums">{d.primaryDeliveryNumber}</span>
+                    {d.primaryCustomerCode ? ` — عميل أساسي ${d.primaryCustomerCode}` : ""}
+                  </span>
+                )}
               </div>
               <Badge tone={statusTone[d.status]}>{statusLabel[d.status]}</Badge>
             </div>
@@ -170,16 +249,37 @@ export default function DeliveriesPage() {
                 <thead>
                   <tr>
                     <th>{t("prod.jobOrder", "أمر التشغيل")}</th>
+                    <th>{t("statement.orderDate", "تاريخ الأمر الأصلي")}</th>
                     <th>{t("common.item", "الصنف")}</th>
                     <th>{t("common.quantity", "الكمية")}</th>
+                    <th>{t("statement.originalRaw", "الخام الأصلي المُسوَّى")}</th>
+                    <th>{t("statement.remaining", "المتبقي من الخام الأصلي")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {d.lines.map((l) => (
                     <tr key={l.id}>
                       <td className="ltr-nums">{l.productionOrderNumber}</td>
+                      {/* The ORIGINAL Job Order date, kept on later partial-delivery documents. */}
+                      <td className="ltr-nums text-ink-muted">
+                        {l.productionOrderDate ? new Date(l.productionOrderDate).toLocaleDateString("en-GB") : "—"}
+                      </td>
                       <td>{l.itemCode}{l.color ? ` (${l.color})` : ""}</td>
                       <td className="ltr-nums">{l.quantityKg != null && `${l.quantityKg} كجم `}{l.quantityMeter != null && `${l.quantityMeter} م`}</td>
+                      <td className="ltr-nums">
+                        {l.originalRawQuantityKg != null && `${l.originalRawQuantityKg} كجم `}
+                        {l.originalRawQuantityMeter != null && `${l.originalRawQuantityMeter} م`}
+                        {l.originalRawQuantityKg == null && l.originalRawQuantityMeter == null && "—"}
+                      </td>
+                      <td className="ltr-nums">
+                        {/* Remaining original raw = the order's FIXED original quantity minus what
+                            its deliveries have settled; kg and meter are independent figures. */}
+                        {l.originalOrderRawQuantityKg != null &&
+                          `${l.remainingOriginalRawKg} / ${l.originalOrderRawQuantityKg} كجم `}
+                        {l.originalOrderRawQuantityMeter != null &&
+                          `${l.remainingOriginalRawMeter} / ${l.originalOrderRawQuantityMeter} م`}
+                        {l.originalOrderRawQuantityKg == null && l.originalOrderRawQuantityMeter == null && "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -189,7 +289,9 @@ export default function DeliveriesPage() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {d.status === "Draft" && <Button variant="secondary" onClick={() => prepareMutation.mutate(d.id)}>تجهيز</Button>}
               <Link to={`/print/delivery/${d.id}`} target="_blank"><Button type="button" variant="ghost">معاينة قبل الطباعة</Button></Link>
+              <Link to={`/print/delivery-statement/${d.id}`} target="_blank"><Button type="button" variant="ghost">بيان التسليم</Button></Link>
               <Button variant="ghost" onClick={DeliveriesExports.documentPdf(d.id)}>تنزيل PDF</Button>
+              <Button variant="ghost" onClick={DeliveriesExports.statementPdf(d.id)}>تنزيل بيان التسليم PDF</Button>
               {d.status === "Prepared" && <Button variant="secondary" onClick={() => deliverMutation.mutate(d.id)}>تسليم</Button>}
               {d.status === "Delivered" && correctingId !== d.id && (
                 <Button variant="secondary" onClick={() => openCorrection(d.id)}>
@@ -223,6 +325,7 @@ export default function DeliveriesPage() {
                         <th>{t("common.item", "الصنف")}</th>
                         <th>{t("common.quantity", "الكمية المعتمدة")}</th>
                         <th>{t("del.newQuantity", "الكمية الصحيحة")}</th>
+                        <th>{t("statement.originalRaw", "الخام الأصلي المُسوَّى")}</th>
                         <th>{t("del.difference", "الفرق")}</th>
                       </tr>
                     </thead>
@@ -248,6 +351,20 @@ export default function DeliveriesPage() {
                                 className="max-w-[9rem]"
                                 value={typed ?? String(original)}
                                 onChange={(e) => setCorrectQty((p) => ({ ...p, [l.id]: e.target.value }))}
+                              />
+                            </td>
+                            <td>
+                              {/* Editable per workflow: blank keeps what the line already records. */}
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.001"
+                                className="max-w-[9rem]"
+                                placeholder={isKg
+                                  ? String(l.originalRawQuantityKg ?? "")
+                                  : String(l.originalRawQuantityMeter ?? "")}
+                                value={correctOriginalRaw[l.id] ?? ""}
+                                onChange={(e) => setCorrectOriginalRaw((p) => ({ ...p, [l.id]: e.target.value }))}
                               />
                             </td>
                             <td className="ltr-nums">
@@ -286,10 +403,14 @@ export default function DeliveriesPage() {
                           const isKg = l.quantityKg != null;
                           const original = Number(isKg ? l.quantityKg : l.quantityMeter);
                           const typed = correctQty[l.id];
+                          const rawTyped = correctOriginalRaw[l.id];
                           return {
                             lineId: l.id,
                             quantityKg: isKg ? (typed === undefined ? original : Number(typed)) : undefined,
-                            quantityMeter: isKg ? undefined : (typed === undefined ? original : Number(typed))
+                            quantityMeter: isKg ? undefined : (typed === undefined ? original : Number(typed)),
+                            // Only sent when the user actually typed one - omitted means "leave as is".
+                            originalRawQuantityKg: isKg && rawTyped ? Number(rawTyped) : undefined,
+                            originalRawQuantityMeter: !isKg && rawTyped ? Number(rawTyped) : undefined
                           };
                         })
                       })

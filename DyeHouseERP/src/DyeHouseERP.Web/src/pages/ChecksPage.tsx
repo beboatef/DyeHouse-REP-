@@ -54,8 +54,8 @@ export default function ChecksPage() {
     checkNumber: "", bankName: "", amount: "", issueDate: today(), dueDate: today(),
     issuer: "", supplierId: "", treasuryAccountId: "", notes: "", handOverNow: true
   });
-  const [actionState, setActionState] = useState<{ id: string | null; supplierId: string; accountId: string; reason: string }>({
-    id: null, supplierId: "", accountId: "", reason: ""
+  const [actionState, setActionState] = useState<{ id: string | null; supplierId: string; accountId: string; reason: string; settlementDate: string }>({
+    id: null, supplierId: "", accountId: "", reason: "", settlementDate: today()
   });
 
   const { data: checks, isLoading } = useQuery({
@@ -74,7 +74,7 @@ export default function ChecksPage() {
   const { data: suppliers } = useQuery({ queryKey: ["suppliers"], queryFn: () => SuppliersApi.list() });
   const { data: accounts } = useQuery({ queryKey: ["treasury-accounts"], queryFn: () => TreasuryAccountsApi.list() });
 
-  const onError = (err: any) =>
+  const onError = (err: ApiErrorLike) =>
     setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"));
 
   const refresh = () => {
@@ -129,12 +129,20 @@ export default function ChecksPage() {
   });
 
   const movementMutation = useMutation({
-    mutationFn: async (vars: { action: string; id: string }) => {
+    mutationFn: async (vars: { action: string; id: string; supplierId?: string }) => {
       switch (vars.action) {
         case "confirm":
           return ChecksApi.confirmReceipt(vars.id);
         case "endorse":
-          return ChecksApi.endorse(vars.id, { supplierId: actionState.supplierId, reason: actionState.reason || undefined });
+          return ChecksApi.endorse(vars.id, { supplierId: vars.supplierId ?? actionState.supplierId, reason: actionState.reason || undefined });
+        case "settle":
+          // The financial half of the endorsement (spec section 39): the supplier's payable and the
+          // customer's account both move and NO cash is posted. The server is the authority.
+          return ChecksApi.settleSupplier(vars.id, {
+            supplierId: (vars.supplierId ?? actionState.supplierId),
+            settlementDate: actionState.settlementDate || undefined,
+            reason: actionState.reason || undefined
+          });
         case "deposit":
           return ChecksApi.deposit(vars.id, { treasuryAccountId: actionState.accountId });
         case "clear":
@@ -151,14 +159,14 @@ export default function ChecksPage() {
     },
     onSuccess: () => {
       refresh();
-      setActionState({ id: null, supplierId: "", accountId: "", reason: "" });
+      setActionState({ id: null, supplierId: "", accountId: "", reason: "", settlementDate: today() });
       setError(null);
     },
     onError
   });
 
   const openActions = (id: string) =>
-    setActionState((prev) => ({ ...prev, id: prev.id === id ? null : id, supplierId: "", accountId: "", reason: "" }));
+    setActionState((prev) => ({ ...prev, id: prev.id === id ? null : id, supplierId: "", accountId: "", reason: "", settlementDate: today() }));
 
   return (
     <>
@@ -371,6 +379,20 @@ export default function ChecksPage() {
                     >
                       {t("checks.action.endorse")}
                     </Button>
+                    <Input
+                      type="date"
+                      title={t("checks.settlementDate")}
+                      value={actionState.settlementDate}
+                      onChange={(e) => setActionState({ ...actionState, settlementDate: e.target.value })}
+                      className="min-w-[10rem] max-w-full flex-1 sm:max-w-xs"
+                    />
+                    <Button
+                      variant="secondary"
+                      disabled={!actionState.supplierId}
+                      onClick={() => movementMutation.mutate({ action: "settle", id: check.id })}
+                    >
+                      {t("checks.action.settleSupplier")}
+                    </Button>
                     <Select
                       value={actionState.accountId}
                       onChange={(e) => setActionState({ ...actionState, accountId: e.target.value })}
@@ -386,6 +408,17 @@ export default function ChecksPage() {
                     >
                       {t("checks.action.deposit")}
                     </Button>
+                  </>
+                )}
+                {check.status === "Endorsed" && check.supplierId && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => movementMutation.mutate({ action: "settle", id: check.id, supplierId: check.supplierId ?? undefined })}
+                    >
+                      {t("checks.action.settleSupplier")}
+                    </Button>
+                    <span className="text-2xs text-slate-400">{t("checks.settleNote")}</span>
                   </>
                 )}
                 {(check.status === "Deposited" || check.status === "Endorsed") && (

@@ -85,7 +85,7 @@ export default function MaterialSalesPage() {
       setError(null);
       setExpanded(created.id);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -103,7 +103,7 @@ export default function MaterialSalesPage() {
       setUnitPrice("");
       setError(null);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -115,14 +115,14 @@ export default function MaterialSalesPage() {
   const post = useMutation({
     mutationFn: (id: string) => MaterialSalesApi.post(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["material-sales"] }),
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const cancel = useMutation({
     mutationFn: (id: string) => MaterialSalesApi.cancel(id, window.prompt(t("common.reason")) || ""),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["material-sales"] }),
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 

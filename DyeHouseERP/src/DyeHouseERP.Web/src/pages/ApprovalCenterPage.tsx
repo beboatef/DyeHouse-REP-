@@ -47,7 +47,7 @@ export default function ApprovalCenterPage() {
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
       qc.invalidateQueries({ queryKey: ["approval-center"] });
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? t("approvals.sod.actionFailed"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? t("approvals.sod.actionFailed"))
   });
 
   const rejectMutation = useMutation({
@@ -59,7 +59,7 @@ export default function ApprovalCenterPage() {
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
       qc.invalidateQueries({ queryKey: ["approval-center"] });
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? t("approvals.sod.actionFailed"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? t("approvals.sod.actionFailed"))
   });
 
   const money = (v: number) =>

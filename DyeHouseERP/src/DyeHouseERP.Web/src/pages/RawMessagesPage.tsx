@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomersApi, ItemsApi, RawMessagesApi, WarehousesApi } from "@/api/client";
@@ -8,10 +8,17 @@ import { ExportButtons } from "@/components/ExportButtons";
 import { RawMessagesExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
-type LineDraft = { itemId: string; quantityKg: string; quantityMeter: string; pieceCount: string; notes: string };
+type LineDraft = {
+  itemId: string;
+  quantityKg: string;
+  quantityMeter: string;
+  pieceCount: string;
+  color: string;
+  notes: string;
+};
 type RejectionDraft = { kg: string; meter: string };
 
-const emptyLine = (): LineDraft => ({ itemId: "", quantityKg: "", quantityMeter: "", pieceCount: "", notes: "" });
+const emptyLine = (): LineDraft => ({ itemId: "", quantityKg: "", quantityMeter: "", pieceCount: "", color: "", notes: "" });
 
 const inspectionTone: Record<string, "yellow" | "green" | "red"> = {
   PendingInspection: "yellow",
@@ -38,6 +45,11 @@ export default function RawMessagesPage() {
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [error, setError] = useState<string | null>(null);
+
+  // Idempotency token for the receiving confirmation (spec section 5): re-sending the SAME
+  // token returns the receipt that was already posted instead of writing the physical
+  // delivery into stock twice. A fresh token is minted after each successful post.
+  const requestId = useRef<string>(crypto.randomUUID());
 
   // Receiving inspection is recorded information, never a blocking approval step
   // (spec section 9) - so it lives in its own inline panel on each receipt.
@@ -67,8 +79,9 @@ export default function RawMessagesPage() {
       setLines([emptyLine()]);
       setNotes("");
       setError(null);
+      requestId.current = crypto.randomUUID();
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? t("common.error"))
   });
 
   const inspectionMutation = useMutation({
@@ -83,7 +96,7 @@ export default function RawMessagesPage() {
       setInspectionFor(null);
       setInspectionError(null);
     },
-    onError: (err: any) => setInspectionError(err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setInspectionError(err?.response?.data?.title ?? t("common.error"))
   });
 
   const cancelMutation = useMutation({
@@ -94,7 +107,7 @@ export default function RawMessagesPage() {
       setCancelReason("");
       setCancelError(null);
     },
-    onError: (err: any) => setCancelError(err?.response?.data?.title ?? t("common.error"))
+    onError: (err: ApiErrorLike) => setCancelError(err?.response?.data?.title ?? t("common.error"))
   });
 
   const openCancel = (message: RawMessage) => {
@@ -162,8 +175,10 @@ export default function RawMessagesPage() {
           quantityKg: l.quantityKg ? Number(l.quantityKg) : undefined,
           quantityMeter: l.quantityMeter ? Number(l.quantityMeter) : undefined,
           pieceCount: l.pieceCount ? Number(l.pieceCount) : undefined,
+          color: l.color.trim() || undefined,
           notes: l.notes || undefined
-        }))
+        })),
+      requestId: requestId.current
     });
   };
 
@@ -218,7 +233,7 @@ export default function RawMessagesPage() {
               </div>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-gray-50 rounded-lg p-3">
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-7 gap-3 items-end bg-gray-50 rounded-lg p-3">
                     <div className="sm:col-span-2">
                       <label className="field-label">{t("common.item")}</label>
                       <Select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })} required>
@@ -244,6 +259,12 @@ export default function RawMessagesPage() {
                       <label className="field-label">{t("raw.piecesHint")}</label>
                       <Input type="number" min="0" value={line.pieceCount}
                         onChange={(e) => updateLine(idx, { pieceCount: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="field-label">{t("raw.color")}</label>
+                      <Input maxLength={100} value={line.color}
+                        placeholder={t("raw.colorOptional")}
+                        onChange={(e) => updateLine(idx, { color: e.target.value })} />
                     </div>
                     <div className="flex gap-2">
                       <Input placeholder={t("common.notes")} value={line.notes} onChange={(e) => updateLine(idx, { notes: e.target.value })} />
@@ -313,6 +334,7 @@ export default function RawMessagesPage() {
               <thead>
                 <tr>
                   <th>{t("common.item")}</th>
+                  <th>{t("raw.color")}</th>
                   <th>{t("raw.receivedQty")}</th>
                   <th>{t("raw.rejectedQty")}</th>
                   <th>{t("raw.acceptedQty")}</th>
@@ -324,6 +346,7 @@ export default function RawMessagesPage() {
                 {m.lines.map((l) => (
                   <tr key={l.id} className="border-b border-gray-50 last:border-0">
                     <td>{l.itemCode} - {l.itemName}</td>
+                    <td dir="auto">{l.color ?? "-"}</td>
                     <td className="ltr-nums">
                       {l.quantityKg != null && `${l.quantityKg} ${t("common.kg")}`}
                       {l.quantityKg != null && l.quantityMeter != null && " / "}

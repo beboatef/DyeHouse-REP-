@@ -11,8 +11,7 @@ import { downloadFile } from "@/api/exports";
 import { Badge, Button, Card, Input, PageHeader, Select, errorMessage } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
-const TABS = ["config", "attendance", "leave", "overtime", "advances", "laborCost"] as const;
-type Tab = (typeof TABS)[number];
+type Tab = "config" | "attendance" | "leave" | "overtime" | "advances" | "laborCost";
 
 const toMinutes = (value: string) => {
   const [h, m] = value.split(":").map(Number);

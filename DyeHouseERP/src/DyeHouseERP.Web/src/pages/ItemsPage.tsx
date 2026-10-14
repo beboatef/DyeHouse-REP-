@@ -52,6 +52,15 @@ export default function ItemsPage() {
   } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Explicit, item-scoped unit conversion rules. Empty is the normal case: KG and Meter are
+  // never converted unless a rule is deliberately configured for a named operation.
+  const [convForm, setConvForm] = useState({
+    fromUnit: "Meter" as UnitOfMeasure,
+    toUnit: "KG" as UnitOfMeasure,
+    factor: "",
+    operation: ""
+  });
+
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ItemImportPreview | null>(null);
   const [result, setResult] = useState<ItemImportExecuteResult | null>(null);
@@ -80,7 +89,7 @@ export default function ItemsPage() {
       setForm({ code: "", nameAr: "", nameEn: "", category: "", baseUnit: "KG", secondaryUnit: "", requireBothUnits: false });
       setError(null);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -104,8 +113,36 @@ export default function ItemsPage() {
       setEditing(null);
       setEditError(null);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const { data: conversions } = useQuery({
+    queryKey: ["item-conversions", editing?.id],
+    queryFn: () => ItemsApi.conversions(editing!.id),
+    enabled: !!editing
+  });
+
+  const setConversionMutation = useMutation({
+    mutationFn: () =>
+      ItemsApi.setConversion(editing!.id, {
+        fromUnit: convForm.fromUnit,
+        toUnit: convForm.toUnit,
+        factor: Number(convForm.factor),
+        operation: convForm.operation
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["item-conversions"] });
+      setConvForm({ ...convForm, factor: "", operation: "" });
+      setEditError(null);
+    },
+    onError: (err: ApiErrorLike) =>
+      setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
+  });
+
+  const removeConversionMutation = useMutation({
+    mutationFn: (operation: string) => ItemsApi.removeConversion(editing!.id, operation),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["item-conversions"] })
   });
 
   const previewMutation = useMutation({
@@ -115,7 +152,7 @@ export default function ItemsPage() {
       setResult(null);
       setImportError(null);
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setImportError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -125,7 +162,7 @@ export default function ItemsPage() {
       setResult(data);
       qc.invalidateQueries({ queryKey: ["items"] });
     },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setImportError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
@@ -232,6 +269,93 @@ export default function ItemsPage() {
               {editError && <span className="form-error">{editError}</span>}
             </div>
           </form>
+
+          {/* Explicit, item-scoped conversion rules. Only available when the item uses two units;
+              empty is the normal case, because KG<->Meter is never converted automatically. */}
+          <div className="mt-5 border-t border-line pt-4">
+            <h4 className="text-xs font-bold text-slate-700">{t("items.conversionsTitle")}</h4>
+            <p className="text-2xs text-slate-500 mt-1">{t("items.conversionsHint")}</p>
+
+            {!editing.secondaryUnit ? (
+              <p className="text-2xs text-amber-600 mt-2">{t("items.conversionsNeedSecondary")}</p>
+            ) : (
+              <>
+                <div className="mt-2 max-w-2xl">
+                  <table className="table table-dense">
+                    <thead>
+                      <tr>
+                        <th>{t("items.operation")}</th>
+                        <th>{t("items.fromUnit")}</th>
+                        <th>{t("items.toUnit")}</th>
+                        <th>{t("items.factor")}</th>
+                        <th>{t("common.actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(!conversions || conversions.length === 0) && (
+                        <tr><td colSpan={5} className="text-center text-gray-400">{t("items.noConversions")}</td></tr>
+                      )}
+                      {conversions?.map((rule) => (
+                        <tr key={rule.id}>
+                          <td>{rule.operation}</td>
+                          <td className="ltr-nums">{rule.fromUnit}</td>
+                          <td className="ltr-nums">{rule.toUnit}</td>
+                          <td className="ltr-nums">{rule.factor}</td>
+                          <td>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={removeConversionMutation.isPending}
+                              onClick={() => removeConversionMutation.mutate(rule.operation)}
+                            >
+                              {t("common.delete")}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end mt-3">
+                  <div>
+                    <label className="field-label">{t("items.operation")}</label>
+                    <Input value={convForm.operation} onChange={(e) => setConvForm({ ...convForm, operation: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="field-label">{t("items.fromUnit")}</label>
+                    <Select value={convForm.fromUnit} onChange={(e) => setConvForm({ ...convForm, fromUnit: e.target.value as UnitOfMeasure })}>
+                      <option value="KG">KG</option>
+                      <option value="Meter">Meter</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="field-label">{t("items.toUnit")}</label>
+                    <Select value={convForm.toUnit} onChange={(e) => setConvForm({ ...convForm, toUnit: e.target.value as UnitOfMeasure })}>
+                      <option value="KG">KG</option>
+                      <option value="Meter">Meter</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="field-label">{t("items.factor")}</label>
+                    <Input type="number" step="0.000001" min="0" value={convForm.factor} onChange={(e) => setConvForm({ ...convForm, factor: e.target.value })} />
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={
+                      setConversionMutation.isPending ||
+                      !convForm.operation ||
+                      Number(convForm.factor) <= 0 ||
+                      convForm.fromUnit === convForm.toUnit
+                    }
+                    onClick={() => setConversionMutation.mutate()}
+                  >
+                    {t("items.addConversion")}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
         </Card>
       )}
 

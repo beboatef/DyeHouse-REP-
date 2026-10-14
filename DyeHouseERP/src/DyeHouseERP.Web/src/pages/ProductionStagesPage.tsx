@@ -7,23 +7,26 @@ import { useI18n } from "@/i18n";
 type Draft = {
   code: string; name: string; sequence: string;
   requiresInputQuantity: boolean; requiresOutputQuantity: boolean;
-  allowSkip: boolean; notes: string;
+  notes: string;
 };
 
 const emptyDraft = (): Draft => ({
   code: "", name: "", sequence: "",
   requiresInputQuantity: true, requiresOutputQuantity: true,
-  allowSkip: false, notes: ""
+  notes: ""
 });
 
-/** `key` is the domain field sent to the API; the label is an i18n key, translated where it renders. */
+/**
+ * The capability switches that actually exist. `key` is the domain field sent to the API; the label
+ * is an i18n key, translated both in the create form and in the list column.
+ *
+ * Phase 4 removed the last legacy capability (`allowSkip`): the skip workflow was deleted with its
+ * endpoint and its `AllowSkip` column, so the switch and its "skippable" badge were removed here too
+ * rather than left advertising behaviour no code path honours.
+ */
 const flags: { key: keyof Draft; labelKey: string }[] = [
   { key: "requiresInputQuantity", labelKey: "stg.flag.requiresInputQuantity" },
-  { key: "requiresOutputQuantity", labelKey: "stg.flag.requiresOutputQuantity" },
-  // Only allowSkip is a real capability: SkipStageCommand reads it. The three inert
-  // switches (repeat / rework / return) were removed rather than left advertising
-  // behaviour no workflow implements (D3).
-  { key: "allowSkip", labelKey: "stg.flag.allowSkip" }
+  { key: "requiresOutputQuantity", labelKey: "stg.flag.requiresOutputQuantity" }
 ];
 
 type EditDraft = { name: string; sequence: string; notes: string };
@@ -44,7 +47,7 @@ export default function ProductionStagesPage() {
   /** Every write funnels through here so one invalidation covers list, create, edit and toggle. */
   const invalidate = () => qc.invalidateQueries({ queryKey: ["production-stages"] });
 
-  const apiError = (err: any) =>
+  const apiError = (err: ApiErrorLike) =>
     err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error");
 
   /**
@@ -56,7 +59,7 @@ export default function ProductionStagesPage() {
     mutationFn: ({ id, kind }: { id: string; kind: "formation" | "readyGoods" }) =>
       kind === "formation" ? ProductionStagesApi.setFormationStage(id) : ProductionStagesApi.setReadyGoodsStage(id),
     onSuccess: () => { invalidate(); setError(null); },
-    onError: (err: any) => setError(apiError(err))
+    onError: (err: ApiErrorLike) => setError(apiError(err))
   });
 
   const { data: stages, isLoading, isError } = useQuery({
@@ -69,7 +72,7 @@ export default function ProductionStagesPage() {
       ProductionStagesApi.create({
         code: draft.code, name: draft.name, sequence: Number(draft.sequence),
         requiresInputQuantity: draft.requiresInputQuantity, requiresOutputQuantity: draft.requiresOutputQuantity,
-        allowSkip: draft.allowSkip, notes: draft.notes || undefined
+        notes: draft.notes || undefined
       }),
     onSuccess: () => {
       invalidate();
@@ -77,7 +80,7 @@ export default function ProductionStagesPage() {
       setDraft(emptyDraft());
       setError(null);
     },
-    onError: (err: any) => setError(apiError(err))
+    onError: (err: ApiErrorLike) => setError(apiError(err))
   });
 
   const updateMutation = useMutation({
@@ -93,7 +96,7 @@ export default function ProductionStagesPage() {
       setEditDraft({ name: "", sequence: "", notes: "" });
       setError(null);
     },
-    onError: (err: any) => setError(apiError(err))
+    onError: (err: ApiErrorLike) => setError(apiError(err))
   });
 
   /**
@@ -105,7 +108,7 @@ export default function ProductionStagesPage() {
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
       ProductionStagesApi.setActive(id, isActive),
     onSuccess: () => { invalidate(); setError(null); },
-    onError: (err: any) => setError(apiError(err))
+    onError: (err: ApiErrorLike) => setError(apiError(err))
   });
 
   const startEdit = (id: string, name: string, sequence: number, notes: string | null) => {
@@ -243,7 +246,8 @@ export default function ProductionStagesPage() {
                   )}
                 </td>
                 <td className="space-x-1 space-x-reverse">
-                  {s.allowSkip && <Badge tone="blue">{t("stg.badgeSkip")}</Badge>}
+                  {s.requiresInputQuantity && <Badge tone="blue">{t("stg.flag.requiresInputQuantity")}</Badge>}
+                  {s.requiresOutputQuantity && <Badge tone="blue">{t("stg.flag.requiresOutputQuantity")}</Badge>}
                 </td>
                 <td>
                   <Badge tone={s.isActive ? "green" : "gray"}>

@@ -125,7 +125,9 @@ export const ReadyGoodsExports = {
 
 export const DeliveriesExports = {
   ...both("/deliveries/export", "deliveries"),
-  documentPdf: (id: string) => () => downloadFile(`/deliveries/${id}/pdf`, "delivery.pdf")
+  documentPdf: (id: string) => () => downloadFile(`/deliveries/${id}/pdf`, "delivery.pdf"),
+  /** The delivery statement (بيان تسليم) with the production accounting per line. */
+  statementPdf: (id: string) => () => downloadFile(`/deliveries/${id}/statement/pdf`, "delivery-statement.pdf")
 };
 
 export const InvoicesExports = {

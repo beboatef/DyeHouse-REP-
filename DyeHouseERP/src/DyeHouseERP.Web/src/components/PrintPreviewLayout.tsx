@@ -4,9 +4,9 @@ import { SettingsApi } from "@/api/client";
 import { QRCodeSVG } from "qrcode.react";
 import { Printer, ArrowRight } from "lucide-react";
 
-export interface PrintColumn {
+export interface PrintColumn<T> {
   header: string;
-  render: (row: any) => React.ReactNode;
+  render: (row: T) => React.ReactNode;
   align?: "start" | "end";
 }
 
@@ -18,14 +18,14 @@ export interface PrintColumn {
 /// The toolbar (back/print buttons, sidebar-free full page) is hidden via
 /// @media print so only the document itself prints.
 /// </summary>
-export default function PrintPreviewLayout({
+export default function PrintPreviewLayout<T>({
   title, documentNumber, subtitleLines, columns, rows, totals, qrValue, notes
 }: {
   title: string;
   documentNumber: string;
   subtitleLines: { label: string; value: string }[];
-  columns: PrintColumn[];
-  rows: any[];
+  columns: PrintColumn<T>[];
+  rows: T[];
   totals?: { label: string; value: string }[];
   qrValue?: string;
   notes?: string | null;

@@ -2,19 +2,24 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomersApi, CustomerStatementApi, InvoicesApi, ItemsApi } from "@/api/client";
-import type { Invoice, Item } from "@/api/client";
+import type { Invoice, Item, UnitOfMeasure } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { InvoicesExports, StatementsExports } from "@/api/exports";
+import { useI18n } from "@/i18n";
+
+/** The two billing units a service line can be priced in. A line is billed in one unit only, never converted. */
+const BILLING_UNITS: UnitOfMeasure[] = ["KG", "Meter"];
 
 const statusLabel: Record<string, string> = { Draft: "مسودة", Issued: "معتمدة", PartiallyPaid: "مدفوعة جزئيًا", Paid: "مدفوعة", Cancelled: "ملغاة" };
 const statusTone: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> = { Draft: "gray", Issued: "blue", PartiallyPaid: "yellow", Paid: "green", Cancelled: "red" };
 
-type LineDraft = { itemId: string; color: string; quantity: string; processingPrice: string };
-const emptyLine = (): LineDraft => ({ itemId: "", color: "", quantity: "", processingPrice: "" });
+type LineDraft = { itemId: string; color: string; unit: UnitOfMeasure; quantity: string; processingPrice: string };
+const emptyLine = (): LineDraft => ({ itemId: "", color: "", unit: "KG", quantity: "", processingPrice: "" });
 
 export default function InvoicesPage() {
   const qc = useQueryClient();
+  const { t } = useI18n();
   const [tab, setTab] = useState<"invoices" | "statement">("invoices");
   const [showForm, setShowForm] = useState(false);
   const [customerId, setCustomerId] = useState("");
@@ -39,11 +44,12 @@ export default function InvoicesPage() {
     mutationFn: () => InvoicesApi.create({
       customerId, invoiceDate, discount: Number(discount || 0), tax: Number(tax || 0),
       lines: lines.filter((l) => l.itemId && l.quantity).map((l) => ({
-        itemId: l.itemId, color: l.color || undefined, quantity: Number(l.quantity), processingPrice: Number(l.processingPrice || 0)
+        itemId: l.itemId, color: l.color || undefined, unit: l.unit,
+        quantity: Number(l.quantity), processingPrice: Number(l.processingPrice || 0)
       }))
     }),
     onSuccess: () => { invalidate(); setShowForm(false); setLines([emptyLine()]); setError(null); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
   });
 
   const issueMutation = useMutation({ mutationFn: InvoicesApi.issue, onSuccess: invalidate });
@@ -96,7 +102,7 @@ export default function InvoicesPage() {
                   </div>
                   <div className="space-y-3">
                     {lines.map((line, idx) => (
-                      <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-gray-50 rounded-lg p-3">
+                      <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end bg-gray-50 rounded-lg p-3">
                         <div>
                           <label className="field-label">الصنف</label>
                           <Select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })} required>
@@ -104,6 +110,12 @@ export default function InvoicesPage() {
                           </Select>
                         </div>
                         <div><label className="field-label">اللون</label><Input value={line.color} onChange={(e) => updateLine(idx, { color: e.target.value })} /></div>
+                        <div>
+                          <label className="field-label">{t("common.unit")}</label>
+                          <Select value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value as UnitOfMeasure })} required>
+                            {BILLING_UNITS.map((u) => <option key={u} value={u}>{t(`unit.${u === "KG" ? "kg" : "meter"}`)}</option>)}
+                          </Select>
+                        </div>
                         <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={line.quantity} onChange={(e) => updateLine(idx, { quantity: e.target.value })} required /></div>
                         <div><label className="field-label">سعر التشغيل للوحدة</label><Input type="number" step="0.01" min="0" value={line.processingPrice} onChange={(e) => updateLine(idx, { processingPrice: e.target.value })} required /></div>
                       </div>
@@ -220,6 +232,7 @@ export default function InvoicesPage() {
 function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
   invoice: Invoice; items: Item[]; onDone: () => void; onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [invoiceDate, setInvoiceDate] = useState(invoice.invoiceDate.slice(0, 10));
   const [discount, setDiscount] = useState(String(invoice.discount));
   const [tax, setTax] = useState(String(invoice.tax));
@@ -228,12 +241,12 @@ function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
 
   // Per-line edit buffer, keyed by line id. Lines are saved individually so an edit is never
   // silently applied to a line the user did not touch.
-  const [lineEdits, setLineEdits] = useState<Record<string, { quantity: string; processingPrice: string; color: string }>>(
+  const [lineEdits, setLineEdits] = useState<Record<string, { quantity: string; processingPrice: string; color: string; unit: UnitOfMeasure }>>(
     () => Object.fromEntries(invoice.lines.map((l) => [l.id, {
-      quantity: String(l.quantity), processingPrice: String(l.processingPrice), color: l.color ?? ""
+      quantity: String(l.quantity), processingPrice: String(l.processingPrice), color: l.color ?? "", unit: l.unit
     }]))
   );
-  const [newLine, setNewLine] = useState({ itemId: "", quantity: "", processingPrice: "", color: "" });
+  const [newLine, setNewLine] = useState({ itemId: "", quantity: "", processingPrice: "", color: "", unit: "KG" as UnitOfMeasure });
 
   const after = (msg?: string) => { onDone(); setError(msg ?? null); };
 
@@ -244,32 +257,32 @@ function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
       deliveryId: invoice.deliveryId ?? undefined
     }),
     onSuccess: () => after(),
-    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر حفظ بيانات الفاتورة")
+    onError: (e: ApiErrorLike) => setError(e?.response?.data?.title ?? "تعذر حفظ بيانات الفاتورة")
   });
 
   const lineMutation = useMutation({
-    mutationFn: (vars: { lineId: string; quantity: number; processingPrice: number; color?: string }) =>
-      InvoicesApi.updateLine(invoice.id, vars.lineId, { quantity: vars.quantity, processingPrice: vars.processingPrice, color: vars.color }),
+    mutationFn: (vars: { lineId: string; quantity: number; processingPrice: number; unit: UnitOfMeasure; color?: string }) =>
+      InvoicesApi.updateLine(invoice.id, vars.lineId, { quantity: vars.quantity, processingPrice: vars.processingPrice, unit: vars.unit, color: vars.color }),
     onSuccess: () => after(),
-    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر حفظ البند")
+    onError: (e: ApiErrorLike) => setError(e?.response?.data?.title ?? "تعذر حفظ البند")
   });
 
   const removeLineMutation = useMutation({
     mutationFn: (lineId: string) => InvoicesApi.removeLine(invoice.id, lineId),
     onSuccess: () => after(),
-    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر حذف البند")
+    onError: (e: ApiErrorLike) => setError(e?.response?.data?.title ?? "تعذر حذف البند")
   });
 
   const addLineMutation = useMutation({
     mutationFn: () => InvoicesApi.addLine(invoice.id, {
       itemId: newLine.itemId, quantity: Number(newLine.quantity), processingPrice: Number(newLine.processingPrice || 0),
-      color: newLine.color || undefined
+      unit: newLine.unit, color: newLine.color || undefined
     }),
-    onSuccess: () => { onDone(); setNewLine({ itemId: "", quantity: "", processingPrice: "", color: "" }); },
-    onError: (e: any) => setError(e?.response?.data?.title ?? "تعذر إضافة البند")
+    onSuccess: () => { onDone(); setNewLine({ itemId: "", quantity: "", processingPrice: "", color: "", unit: "KG" }); },
+    onError: (e: ApiErrorLike) => setError(e?.response?.data?.title ?? "تعذر إضافة البند")
   });
 
-  const patch = (lineId: string, p: Partial<{ quantity: string; processingPrice: string; color: string }>) =>
+  const patch = (lineId: string, p: Partial<{ quantity: string; processingPrice: string; color: string; unit: UnitOfMeasure }>) =>
     setLineEdits((prev) => ({ ...prev, [lineId]: { ...prev[lineId], ...p } }));
 
   return (
@@ -287,16 +300,22 @@ function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
       <div className="space-y-2">
         <div className="text-sm font-medium text-gray-700">بنود الفاتورة</div>
         {invoice.lines.map((l) => {
-          const edit = lineEdits[l.id] ?? { quantity: String(l.quantity), processingPrice: String(l.processingPrice), color: l.color ?? "" };
+          const edit = lineEdits[l.id] ?? { quantity: String(l.quantity), processingPrice: String(l.processingPrice), color: l.color ?? "", unit: l.unit };
           return (
-            <div key={l.id} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end bg-gray-50 rounded-lg p-3">
+            <div key={l.id} className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end bg-gray-50 rounded-lg p-3">
               <div className="text-sm"><div className="field-label">الصنف</div>{l.itemCode}</div>
               <div><label className="field-label">اللون</label><Input value={edit.color} onChange={(e) => patch(l.id, { color: e.target.value })} /></div>
+              <div>
+                <label className="field-label">{t("common.unit")}</label>
+                <Select value={edit.unit} onChange={(e) => patch(l.id, { unit: e.target.value as UnitOfMeasure })}>
+                  {BILLING_UNITS.map((u) => <option key={u} value={u}>{t(`unit.${u === "KG" ? "kg" : "meter"}`)}</option>)}
+                </Select>
+              </div>
               <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={edit.quantity} onChange={(e) => patch(l.id, { quantity: e.target.value })} /></div>
               <div><label className="field-label">السعر</label><Input type="number" step="0.01" min="0" value={edit.processingPrice} onChange={(e) => patch(l.id, { processingPrice: e.target.value })} /></div>
               <div className="flex gap-1">
                 <Button variant="secondary" disabled={lineMutation.isPending} onClick={() => lineMutation.mutate({
-                  lineId: l.id, quantity: Number(edit.quantity), processingPrice: Number(edit.processingPrice || 0), color: edit.color || undefined
+                  lineId: l.id, quantity: Number(edit.quantity), processingPrice: Number(edit.processingPrice || 0), unit: edit.unit, color: edit.color || undefined
                 })}>حفظ</Button>
                 <Button variant="ghost" disabled={removeLineMutation.isPending} onClick={() => removeLineMutation.mutate(l.id)}>حذف</Button>
               </div>
@@ -313,6 +332,12 @@ function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
           </Select>
         </div>
         <div><label className="field-label">اللون</label><Input value={newLine.color} onChange={(e) => setNewLine((p) => ({ ...p, color: e.target.value }))} /></div>
+        <div>
+          <label className="field-label">{t("common.unit")}</label>
+          <Select value={newLine.unit} onChange={(e) => setNewLine((p) => ({ ...p, unit: e.target.value as UnitOfMeasure }))}>
+            {BILLING_UNITS.map((u) => <option key={u} value={u}>{t(`unit.${u === "KG" ? "kg" : "meter"}`)}</option>)}
+          </Select>
+        </div>
         <div><label className="field-label">الكمية</label><Input type="number" step="0.001" min="0" value={newLine.quantity} onChange={(e) => setNewLine((p) => ({ ...p, quantity: e.target.value }))} /></div>
         <div><label className="field-label">السعر</label><Input type="number" step="0.01" min="0" value={newLine.processingPrice} onChange={(e) => setNewLine((p) => ({ ...p, processingPrice: e.target.value }))} /></div>
         <Button variant="secondary" disabled={!newLine.itemId || !newLine.quantity || addLineMutation.isPending} onClick={() => addLineMutation.mutate()}>إضافة</Button>

@@ -60,7 +60,7 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
       notes: retNotes || undefined
     }),
     onSuccess: () => { invalidate(); reset(); setRetKg(""); setRetMeter(""); setRetNotes(""); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر تسجيل العودة")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر تسجيل العودة")
   });
 
   const detailsMutation = useMutation({
@@ -71,13 +71,13 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
       expectedReturnDate: expected ? new Date(expected).toISOString() : undefined
     }),
     onSuccess: () => { invalidate(); reset(); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر تحديث بيانات التشغيل الخارجي")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر تحديث بيانات التشغيل الخارجي")
   });
 
   const cancelMutation = useMutation({
     mutationFn: () => RawExternalReleasesApi.cancel(release.id, cancelReason),
     onSuccess: () => { invalidate(); reset(); setCancelReason(""); },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر الإلغاء")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر الإلغاء")
   });
 
   if (release.reason !== "ExternalProcessing") return <span className="text-gray-300">—</span>;
@@ -190,9 +190,9 @@ export default function RawExternalReleasesPage() {
       setExpectedReturnDate(""); setNotes(""); setError(null); setNegativeStockDetail(null);
       setApprovalRequested(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiErrorLike) => {
       if (err?.response?.data?.code === "NEGATIVE_STOCK") {
-        setNegativeStockDetail({ shortage: err.response.data.shortage, reason: "" });
+        setNegativeStockDetail({ shortage: err.response?.data?.shortage ?? 0, reason: "" });
       } else {
         setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ");
       }
@@ -227,7 +227,7 @@ export default function RawExternalReleasesPage() {
       setApprovalRequested(request.documentNumber);
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
   });
 
   const isExternal = reason === "ExternalProcessing";

@@ -96,13 +96,13 @@ export default function UsersPage() {
       invalidate();
       setShowForm(false); setUsername(""); setPassword(""); setDisplayName(""); setRoles([]); setError(null);
     },
-    onError: (err: any) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ - تأكد أن حسابك يملك صلاحية admin")
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ - تأكد أن حسابك يملك صلاحية admin")
   });
 
   const updateMutation = useMutation({
     mutationFn: (userId: string) => UsersApi.update(userId, { displayName: editName, roles: editRoles }),
     onSuccess: () => { invalidate(); setEditing(null); setEditError(null); },
-    onError: (err: any) =>
+    onError: (err: ApiErrorLike) =>
       setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "تعذر حفظ الصلاحيات")
   });
 

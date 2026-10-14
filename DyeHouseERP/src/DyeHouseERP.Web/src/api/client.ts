@@ -36,6 +36,11 @@ export interface Customer {
   address: string | null;
   contactPerson: string | null;
   taxNumber: string | null;
+  /** The customer this one is a sub-customer of, or null for a top-level customer. */
+  parentCustomerId: string | null;
+  parentCustomerCode: string | null;
+  parentCustomerName: string | null;
+  isSubCustomer: boolean;
 }
 
 export interface Item {
@@ -54,6 +59,21 @@ export interface Item {
   isActive: boolean;
 }
 
+/**
+ * An explicit, item-scoped unit conversion rule (1 fromUnit = factor toUnit), valid only for
+ * the named operation. There is no global KG<->Meter conversion; this is the only kind that exists.
+ */
+export interface ItemUnitConversion {
+  id: string;
+  itemId: string;
+  fromUnit: UnitOfMeasure;
+  toUnit: UnitOfMeasure;
+  factor: number;
+  operation: string;
+  isActive: boolean;
+  notes: string | null;
+}
+
 export interface Warehouse {
   id: string;
   code: string;
@@ -70,6 +90,8 @@ export interface RawMessageLine {
   quantityKg: number | null;
   quantityMeter: number | null;
   pieceCount: number | null;
+  /** Colour/shade this line's material was received in, where applicable - optional, descriptive only. */
+  color: string | null;
   notes: string | null;
   /** Rejected at receiving inspection, if any (spec sections 8-9). Inspection is recorded info, never an approval gate. */
   rejectedQuantityKg: number | null;
@@ -121,7 +143,10 @@ export const CustomersApi = {
     api.put<Customer>(`/customers/${id}`, { id, ...body }).then((r) => r.data),
   /** Deactivation, never deletion. */
   setActive: (id: string, isActive: boolean) =>
-    api.post<Customer>(`/customers/${id}/active`, { isActive }).then((r) => r.data)
+    api.post<Customer>(`/customers/${id}/active`, { isActive }).then((r) => r.data),
+  /** Sets (or clears, with null) this customer's direct parent. Refuses self-parenting and cycles. */
+  setParent: (id: string, parentCustomerId: string | null) =>
+    api.post<Customer>(`/customers/${id}/parent`, { parentCustomerId }).then((r) => r.data)
 };
 
 export const ItemsApi = {
@@ -153,7 +178,21 @@ export const ItemsApi = {
     if (params?.search) query.set("search", params.search);
     return downloadFile(`/items/export/excel?${query.toString()}`, "items.xlsx");
   },
-  downloadTemplate: () => downloadFile("/items/import/template", "items-import-template.xlsx")
+  downloadTemplate: () => downloadFile("/items/import/template", "items-import-template.xlsx"),
+  /** The explicit conversion rules configured for one item (empty is the normal case). */
+  conversions: (id: string, params?: { operation?: string }) =>
+    api.get<ItemUnitConversion[]>(`/items/${id}/conversions`, { params }).then((r) => r.data),
+  /** Creates or replaces the ONE rule for an (item + operation) pair. */
+  setConversion: (id: string, body: {
+    fromUnit: UnitOfMeasure;
+    toUnit: UnitOfMeasure;
+    factor: number;
+    operation: string;
+    notes?: string | null;
+    isActive?: boolean;
+  }) => api.post<ItemUnitConversion>(`/items/${id}/conversions`, body).then((r) => r.data),
+  removeConversion: (id: string, operation: string) =>
+    api.delete(`/items/${id}/conversions/${encodeURIComponent(operation)}`).then((r) => r.data)
 };
 
 // ---------------- Items Excel import (spec section 7) ----------------
@@ -307,7 +346,28 @@ export interface CustomerReturn {
   cancellationReason: string | null;
   cancelledBy: string | null;
   cancelledAtUtc: string | null;
+  /** The document the goods came back against (spec section 32), when one was stated. */
+  referenceDocument: string | null;
+  /** Whose material came back: the customer's own (the ordinary case) or the factory's. */
+  ownership: ReturnOwnership;
   lines: CustomerReturnLine[];
+  /**
+   * Job Orders raised FROM this return (spec section 33). Read-only traceability: the return is
+   * never converted, so this is a reference list and not a state of the return.
+   */
+  productionOrders: CustomerReturnOrder[];
+}
+
+/** Who carries the cost of a Job Order (spec section 20). */
+export type CostBearer = "Customer" | "Company";
+
+/** Owner of the material in a customer return (spec section 32). */
+export type ReturnOwnership = "CustomerOwned" | "CompanyOwned";
+
+/** One Job Order raised from a return - its number, its account and its status. */
+export interface CustomerReturnOrder {
+  productionOrderId: string; orderNumber: string; costBearer: CostBearer;
+  status: ProductionOrderStatus;
 }
 
 /**
@@ -329,7 +389,31 @@ export interface CustomerReturnInput {
   returnDate: string;
   reason?: string | null;
   notes?: string | null;
+  /** The invoice/delivery number the goods come back against, or the customer's own reference. */
+  referenceDocument?: string | null;
+  /** Defaults to the customer's own material on the API as well. */
+  ownership?: ReturnOwnership;
   lines: CustomerReturnLineInput[];
+}
+
+/**
+ * Raises a NEW, INDEPENDENT Job Order from a return (spec section 33).
+ *
+ * `costBearer` is MANDATORY here and has no default: the same rework can legitimately be charged to
+ * the customer (على حساب العميل) or absorbed by the factory (على حساب الشركة), and the API refuses the
+ * request when the account is missing rather than assuming one.
+ */
+export interface CreateOrderFromReturnInput {
+  itemId: string;
+  rawMessageId: string;
+  orderDate: string;
+  actualQuantityKg?: number | null;
+  actualQuantityMeter?: number | null;
+  costBearer: CostBearer;
+  color?: string | null;
+  notes?: string | null;
+  /** Idempotency token: a retried confirmation raises no second order and no second issue. */
+  requestId?: string | null;
 }
 
 export const CustomerReturnsApi = {
@@ -345,7 +429,15 @@ export const CustomerReturnsApi = {
    * Requires the raw.return_cancel permission; refused while the material has already been used.
    */
   cancel: (id: string, reason: string) =>
-    api.post<CustomerReturn>(`/customer-returns/${id}/cancel`, { reason }).then((r) => r.data)
+    api.post<CustomerReturn>(`/customer-returns/${id}/cancel`, { reason }).then((r) => r.data),
+
+  /**
+   * Raises an INDEPENDENT Job Order from this return by issuing the returned material through the
+   * canonical issue workflow - real stock and production transactions, never a bookkeeping-only
+   * conversion. The return is only referenced: no invoice, credit note or charge is touched.
+   */
+  createProductionOrder: (id: string, body: CreateOrderFromReturnInput) =>
+    api.post<ProductionOrder>(`/customer-returns/${id}/production-order`, body).then((r) => r.data)
 };
 
 // ---------------- Price lists (spec sections 34 + 36) ----------------
@@ -435,12 +527,17 @@ export const RawMessagesApi = {
   list: (params?: { customerId?: string; itemId?: string; onlyWithBalance?: boolean }) =>
     api.get<RawMessage[]>("/raw-messages", { params }).then((r) => r.data),
   get: (id: string) => api.get<RawMessage>(`/raw-messages/${id}`).then((r) => r.data),
+  /**
+   * Posts a receipt. `requestId` is the idempotency token: re-sending the same one returns the
+   * receipt that was already posted instead of writing the physical delivery into stock twice.
+   */
   create: (body: {
     receiptDate: string;
     customerId: string;
     warehouseId: string;
     notes?: string;
-    lines: { itemId: string; quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string }[];
+    lines: { itemId: string; quantityKg?: number; quantityMeter?: number; pieceCount?: number; color?: string; notes?: string }[];
+    requestId?: string | null;
   }) => api.post<RawMessage>("/raw-messages", body).then((r) => r.data),
   recordInspection: (
     id: string,
@@ -471,8 +568,6 @@ export interface ProductionStageDefinition {
   isActive: boolean;
   requiresInputQuantity: boolean;
   requiresOutputQuantity: boolean;
-  /** The only capability flag a workflow honours: SkipStageCommand reads it. */
-  allowSkip: boolean;
   /** Exactly one stage has this: التشكيل, where every Job Order starts. */
   isFormationStage: boolean;
   /** Exactly one stage has this: الجاهز, the final stage that moves output to Ready Goods. */
@@ -493,7 +588,6 @@ export const ProductionStagesApi = {
     sequence: number;
     requiresInputQuantity: boolean;
     requiresOutputQuantity: boolean;
-    allowSkip: boolean;
     notes?: string;
   }) => api.post<ProductionStageDefinition>("/production-stages", body).then((r) => r.data),
   /** Renames / re-sequences / re-notes a stage. The two route markers keep their own endpoints. */
@@ -548,11 +642,13 @@ export interface StageExecution {
   lossPercentMeter: number | null;
   separatesKg: number | null;
   separatesMeter: number | null;
+  /** Second-grade material produced by this operation - its own quantity, neither output nor waste. */
+  secondGradeKg: number | null;
+  secondGradeMeter: number | null;
   operator: string | null;
   notes: string | null;
   startedAtUtc: string | null;
   completedAtUtc: string | null;
-  allowSkip: boolean;
 }
 
 export interface ProductionOrder {
@@ -587,6 +683,14 @@ export interface ProductionOrder {
   formationBasinId: string | null;
   /** True once production has recorded a movement - the ordinary unused-raw cancel is blocked then. */
   hasProductionStarted: boolean;
+  /** Total allocated to this order, summed over its allocation rows. "Required" is requestedQuantityKg/Meter. */
+  allocatedQuantityKg: number;
+  allocatedQuantityMeter: number;
+  /** Still to allocate per unit (never negative). 0 for a unit the order never requested. */
+  remainingToAllocateKg: number;
+  remainingToAllocateMeter: number;
+  /** The SAME rule the server enforces before production may start - 100% of the requested quantity allocated. */
+  isRawAllocationComplete: boolean;
   rawAllocations: RawAllocationLine[];
   stageExecutions: StageExecution[];
 }
@@ -670,8 +774,15 @@ export const ProductionOrdersApi = {
     body: {
       nextStageDefinitionId: string;
       drawingNumber?: string;
+      // What the operation ACTUALLY consumed - recorded as entered, never inferred from the
+      // order's requested quantity.
+      inputKg?: number; inputMeter?: number;
       outputKg?: number; outputMeter?: number;
-      separatesKg?: number; separatesMeter?: number; notes?: string;
+      // Reprocessable material split off by this operation (it is not output and it is not waste),
+      // and second-grade material, which is a quantity of its own.
+      separatesKg?: number; separatesMeter?: number;
+      secondGradeKg?: number; secondGradeMeter?: number;
+      notes?: string;
     }
   ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/transfer`, body).then((r) => r.data),
   updateDrawing: (id: string, drawingNumber: string, reason: string) =>
@@ -954,11 +1065,35 @@ export const MaterialPreparationsApi = {
 export interface ReadyGoodsTransfer {
   id: string; transferNumber: string; transferDate: string;
   productionOrderId: string; productionOrderNumber: string;
-  customerId: string; customerCode: string; itemId: string; itemCode: string; color: string | null;
+  customerId: string; customerCode: string; customerName: string;
+  itemId: string; itemCode: string; itemName: string; color: string | null;
   quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null;
+  /** Where the output was physically received (spec section 29). */
+  warehouseId: string; warehouseName: string;
+  /** Still available on this transfer's lot, live from the ledger. */
+  availableQuantityKg: number; availableQuantityMeter: number;
   /** Traceability (spec section 23): the stage whose output this transfer moved. */
   stageExecutionId: string | null; stageSequence: number | null; stageName: string | null;
   stageOutputKg: number | null; stageOutputMeter: number | null;
+}
+
+/**
+ * One authorized movement of ready goods BACK into raw material stock (spec section 29).
+ *
+ * It is the only way stock leaves Ready Goods for the raw side: nothing in the system does it
+ * implicitly, so every movement carries its own permission, a mandatory reason and an audit entry.
+ */
+export interface ReadyGoodsRawReturn {
+  id: string; movementNumber: string; movementDate: string;
+  productionOrderId: string; productionOrderNumber: string;
+  customerId: string; customerCode: string;
+  itemId: string; itemCode: string;
+  sourceWarehouseId: string; sourceWarehouseName: string;
+  destinationRawMessageId: string; destinationMessageNumber: string;
+  destinationWarehouseId: string; destinationWarehouseName: string;
+  quantityKg: number | null; quantityMeter: number | null;
+  reason: string; notes: string | null;
+  createdBy: string; createdAtUtc: string;
 }
 
 export interface ReadyGoodsBalance {
@@ -978,7 +1113,21 @@ export const ReadyGoodsApi = {
   createTransfer: (body: {
     productionOrderId: string; warehouseId: string; stageExecutionId: string;
     quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string;
-  }) => api.post<ReadyGoodsTransfer>("/ready-goods/transfers", body).then((r) => r.data)
+  }) => api.post<ReadyGoodsTransfer>("/ready-goods/transfers", body).then((r) => r.data),
+
+  /** The register of ready-goods-to-raw movements. */
+  rawReturns: (params?: { customerId?: string }) =>
+    api.get<ReadyGoodsRawReturn[]>("/ready-goods/raw-returns", { params }).then((r) => r.data),
+
+  /**
+   * Moves ready stock back into raw material stock for rework/reclassification. Requires its own
+   * permission, a mandatory reason, and a real destination raw lot - and it can never overdraw the
+   * ready balance.
+   */
+  returnToRaw: (body: {
+    productionOrderId: string; itemId: string; rawMessageId: string;
+    quantityKg?: number; quantityMeter?: number; reason: string; notes?: string;
+  }) => api.post<ReadyGoodsRawReturn>("/ready-goods/raw-returns", body).then((r) => r.data)
 };
 
 // ---------------- Deliveries ----------------
@@ -987,14 +1136,56 @@ export type DeliveryStatus = "Draft" | "Prepared" | "Delivered" | "Cancelled";
 
 export interface DeliveryLine {
   drawingNumbers: string[];
-  id: string; productionOrderId: string; productionOrderNumber: string; itemId: string; itemCode: string;
+  id: string; productionOrderId: string; productionOrderNumber: string; itemId: string; itemCode: string; itemName: string;
   color: string | null; quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null; rawOrigin: string | null;
+  /** The ORIGINAL Job Order date, preserved on every later partial-delivery document. */
+  productionOrderDate: string | null;
+  /** Original raw this line settles - manually entered, never derived. */
+  originalRawQuantityKg: number | null; originalRawQuantityMeter: number | null;
+  /** The order's fixed original raw quantity, and what its deliveries have not settled yet. */
+  originalOrderRawQuantityKg: number | null; originalOrderRawQuantityMeter: number | null;
+  remainingOriginalRawKg: number; remainingOriginalRawMeter: number;
 }
 
 export interface Delivery {
   id: string; deliveryNumber: string; deliveryDate: string;
   customerId: string; customerCode: string; customerName: string;
   status: DeliveryStatus; notes: string | null; lines: DeliveryLine[];
+  /** Set when this permit was issued for a sub-customer against a primary permit. */
+  isSubCustomerPermit: boolean;
+  primaryDeliveryId: string | null; primaryDeliveryNumber: string | null;
+  primaryCustomerId: string | null; primaryCustomerCode: string | null; primaryCustomerName: string | null;
+}
+
+/**
+ * One row of the printable DELIVERY STATEMENT (بيان تسليم, spec section 31): the production
+ * accounting behind a delivered line - what the job started from, what came out, and the difference.
+ *
+ * Units stay independent: a figure is null when that unit was never recorded, and the calculated
+ * waste is computed within a unit only.
+ */
+export interface DeliveryStatementRow {
+  productionOrderId: string; productionOrderNumber: string; productionOrderDate: string | null;
+  itemId: string; itemCode: string; itemName: string; color: string | null;
+  originalRawQuantityKg: number | null; originalRawQuantityMeter: number | null;
+  deliveredOriginalRawQuantityKg: number | null; deliveredOriginalRawQuantityMeter: number | null;
+  remainingOriginalRawKg: number; remainingOriginalRawMeter: number;
+  readyGoodsQuantityKg: number | null; readyGoodsQuantityMeter: number | null;
+  baleCount: number | null;
+  scrapsKg: number | null; scrapsMeter: number | null;
+  secondGradeKg: number | null; secondGradeMeter: number | null;
+  calculatedWasteKg: number | null; calculatedWasteMeter: number | null;
+  drawingNumbers: string[];
+  lineNotes: string | null;
+}
+
+export interface DeliveryStatement {
+  deliveryId: string; deliveryNumber: string; deliveryDate: string; status: DeliveryStatus;
+  notes: string | null;
+  customerId: string; customerCode: string; customerName: string;
+  /** The primary permit this sub-customer permit was issued against, when it is one. */
+  primaryDeliveryNumber: string | null; primaryCustomerCode: string | null; primaryCustomerName: string | null;
+  rows: DeliveryStatementRow[];
 }
 
 export const DeliveriesApi = {
@@ -1002,10 +1193,25 @@ export const DeliveriesApi = {
   get: (id: string) => api.get<Delivery>(`/deliveries/${id}`).then((r) => r.data),
   create: (body: {
     customerId: string; deliveryDate: string; notes?: string;
-    lines: { productionOrderId: string; itemId: string; color?: string; quantityKg?: number; quantityMeter?: number; pieceCount?: number; rawOrigin?: string }[];
+    /** Set to issue this as a SUB-CUSTOMER permit against a primary permit. */
+    primaryDeliveryId?: string | null;
+    lines: {
+      productionOrderId: string; itemId: string; color?: string; quantityKg?: number; quantityMeter?: number;
+      pieceCount?: number; rawOrigin?: string;
+      originalRawQuantityKg?: number; originalRawQuantityMeter?: number;
+    }[];
   }) => api.post<Delivery>("/deliveries", body).then((r) => r.data),
   prepare: (id: string) => api.post<Delivery>(`/deliveries/${id}/prepare`).then((r) => r.data),
-  deliver: (id: string) => api.post<Delivery>(`/deliveries/${id}/deliver`).then((r) => r.data),
+  /**
+   * Posts the physical delivery (deducts Ready Goods exactly once). The optional `requestId` makes a
+   * retried confirmation idempotent: the same token answers with the delivery that already posted
+   * instead of trying to deduct a second time.
+   */
+  deliver: (id: string, requestId?: string) =>
+    api.post<Delivery>(`/deliveries/${id}/deliver`, { requestId: requestId ?? null }).then((r) => r.data),
+
+  /** The delivery statement (بيان تسليم) of one permit. Read-only: printing it moves no stock. */
+  statement: (id: string) => api.get<DeliveryStatement>(`/deliveries/${id}/statement`).then((r) => r.data),
   cancel: (id: string, reason: string) => api.post<Delivery>(`/deliveries/${id}/cancel`, { reason }).then((r) => r.data),
   /**
    * Corrects an ALREADY APPROVED delivery (spec section 30). Only the quantities
@@ -1015,7 +1221,13 @@ export const DeliveriesApi = {
    */
   correctApprovedLines: (
     id: string,
-    body: { reason: string; lines: { lineId: string; quantityKg?: number; quantityMeter?: number }[] }
+    body: {
+      reason: string;
+      lines: {
+        lineId: string; quantityKg?: number; quantityMeter?: number;
+        originalRawQuantityKg?: number; originalRawQuantityMeter?: number;
+      }[];
+    }
   ) => api.post<Delivery>(`/deliveries/${id}/lines/corrections`, body).then((r) => r.data)
 };
 
@@ -1025,7 +1237,12 @@ export type InvoiceStatus = "Draft" | "Issued" | "PartiallyPaid" | "Paid" | "Can
 
 export interface InvoiceLine {
   id: string; productionOrderId: string | null; productionOrderNumber: string | null;
-  itemId: string; itemCode: string; color: string | null; quantity: number; processingPrice: number; value: number;
+  itemId: string; itemCode: string; color: string | null;
+  /** The unit this line is BILLED in - taken from the order's configured service price, never converted. */
+  unit: UnitOfMeasure;
+  quantity: number; processingPrice: number; value: number;
+  /** Set when the line bills an explicitly chargeable cost entry. */
+  costEntryId: string | null;
 }
 
 export interface Invoice {
@@ -1041,7 +1258,7 @@ export const InvoicesApi = {
   get: (id: string) => api.get<Invoice>(`/invoices/${id}`).then((r) => r.data),
   create: (body: {
     customerId: string; invoiceDate: string; deliveryId?: string; discount: number; tax: number; notes?: string;
-    lines: { productionOrderId?: string; itemId: string; color?: string; quantity: number; processingPrice: number }[];
+    lines: { productionOrderId?: string; itemId: string; color?: string; unit: UnitOfMeasure; quantity: number; processingPrice: number; costEntryId?: string }[];
   }) => api.post<Invoice>("/invoices", body).then((r) => r.data),
   issue: (id: string) => api.post<Invoice>(`/invoices/${id}/issue`).then((r) => r.data),
   cancel: (id: string, reason: string) => api.post<Invoice>(`/invoices/${id}/cancel`, { reason }).then((r) => r.data),
@@ -1049,10 +1266,10 @@ export const InvoicesApi = {
   update: (id: string, body: { invoiceDate: string; deliveryId?: string; discount: number; tax: number; notes?: string }) =>
     api.put<Invoice>(`/invoices/${id}`, body).then((r) => r.data),
   /** Draft-only: append a line. */
-  addLine: (id: string, body: { productionOrderId?: string; itemId: string; color?: string; quantity: number; processingPrice: number; notes?: string }) =>
+  addLine: (id: string, body: { productionOrderId?: string; itemId: string; color?: string; unit: UnitOfMeasure; quantity: number; processingPrice: number; notes?: string; costEntryId?: string }) =>
     api.post<Invoice>(`/invoices/${id}/lines`, body).then((r) => r.data),
   /** Draft-only: edit a line in place (its Id is preserved). */
-  updateLine: (id: string, lineId: string, body: { quantity: number; processingPrice: number; color?: string; notes?: string }) =>
+  updateLine: (id: string, lineId: string, body: { quantity: number; processingPrice: number; unit: UnitOfMeasure; color?: string; notes?: string }) =>
     api.put<Invoice>(`/invoices/${id}/lines/${lineId}`, body).then((r) => r.data),
   /** Draft-only: remove a line. */
   removeLine: (id: string, lineId: string) =>
@@ -1443,7 +1660,7 @@ const downloadBlob = async (url: string, params: Record<string, unknown>, fileNa
 
 export const CostAccountingApi = {
   get: (productionOrderId: string) => api.get<ProductionOrderCost>(`/production-orders/${productionOrderId}/cost`).then((r) => r.data),
-  addEntry: (productionOrderId: string, body: { category: CostCategory; amount: number; entryDate: string; description?: string }) =>
+  addEntry: (productionOrderId: string, body: { category: CostCategory; amount: number; entryDate: string; description?: string; isChargeableToCustomer?: boolean }) =>
     api.post(`/production-orders/${productionOrderId}/cost/entries`, body),
   /** Estimated cost - advisory, revisable while the order is open (spec section 34). */
   setEstimate: (productionOrderId: string, body: { estimatedCost: number | null; costingNotes?: string }) =>
@@ -2090,6 +2307,14 @@ export const ChecksApi = {
     api.post<Check>(`/checks/${id}/confirm-receipt`, { movementDate }).then((r) => r.data),
   endorse: (id: string, body: { supplierId: string; movementDate?: string; reason?: string }) =>
     api.post<Check>(`/checks/${id}/endorse`, body).then((r) => r.data),
+  /**
+   * Endorses an incoming customer check to a supplier AND settles that supplier's payable with it
+   * (spec section 39). The financial half of the endorsement: the supplier's payable and the
+   * customer's own account both move, and - because the instrument never passed through one of our
+   * accounts - NO cash/bank movement is posted.
+   */
+  settleSupplier: (id: string, body: { supplierId: string; settlementDate?: string; supplierInvoiceId?: string; reason?: string; paymentMethod?: string }) =>
+    api.post<SupplierPayment>(`/checks/${id}/settle-supplier`, body).then((r) => r.data),
   deposit: (id: string, body: { treasuryAccountId: string; movementDate?: string; notes?: string }) =>
     api.post<Check>(`/checks/${id}/deposit`, body).then((r) => r.data),
   clear: (id: string, body?: { movementDate?: string; notes?: string; treasuryAccountId?: string }) =>
