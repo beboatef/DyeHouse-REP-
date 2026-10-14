@@ -56,6 +56,16 @@ public class CustomersController : ControllerBase
     public async Task<ActionResult<CustomerDto>> SetActive(Guid id, [FromBody] SetCustomerActiveRequest request)
         => Ok(await _mediator.Send(new SetCustomerActiveCommand(id, request.IsActive)));
 
+    /// <summary>
+    /// Sets (or clears, with a null parent) this customer's direct parent - making it a
+    /// sub-customer of another customer (spec section 7). Refuses self-parenting and any
+    /// assignment that would create a cycle.
+    /// </summary>
+    [HttpPost("{id:guid}/parent")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CustomersEdit)]
+    public async Task<ActionResult<CustomerDto>> SetParent(Guid id, [FromBody] SetCustomerParentRequest request)
+        => Ok(await _mediator.Send(new SetCustomerParentCommand(id, request.ParentCustomerId)));
+
     /// <summary>Excel export of the current customer list (spec section 37) - respects the same activeOnly/search filters as GET.</summary>
     [HttpGet("export/excel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
@@ -87,7 +97,7 @@ public class CustomersController : ControllerBase
             .Select(c => new object?[] { c.Code, c.Name, c.Phone, c.Address, c.ContactPerson, c.TaxNumber, c.IsActive ? "Yes" : "No" })
             .ToList();
 
-        return Common.ExportFileHelper.ToFile(export, format, "Customer List", "DyeHouse ERP",
+        return Common.ExportFileHelper.ToFile(export, format, "Customer List", null,
             headers, rows, "customers", "Customers");
     }
 
@@ -136,3 +146,6 @@ public class CustomersController : ControllerBase
 }
 
 public record SetCustomerActiveRequest(bool IsActive);
+
+/// <summary>Body for assigning a sub-customer's parent; a null parent clears the relationship.</summary>
+public record SetCustomerParentRequest(Guid? ParentCustomerId);

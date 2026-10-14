@@ -2,6 +2,7 @@ using DyeHouseERP.Application.Checks.Commands;
 using DyeHouseERP.Application.Checks.DTOs;
 using DyeHouseERP.Application.Checks.Queries;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Purchases.Commands;
 using DyeHouseERP.API.Authorization;
 using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
@@ -75,6 +76,19 @@ public class ChecksController : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksEndorse)]
     public async Task<ActionResult<CheckDto>> Endorse(Guid id, [FromBody] EndorseCheckRequest request)
         => Ok(await _mediator.Send(new EndorseCheckToSupplierCommand(id, request.SupplierId, request.MovementDate ?? DateTime.UtcNow, request.Reason)));
+
+    /// <summary>
+    /// Endorses an incoming customer check to a supplier AND settles that supplier's payable with it
+    /// (spec section 39). This is the financial half of the endorsement: the supplier's payable and the
+    /// customer's own account both move, and - because the instrument never passed through one of our
+    /// accounts - NO cash/bank movement is posted.
+    /// </summary>
+    [HttpPost("{id:guid}/settle-supplier")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksEndorse)]
+    public async Task<ActionResult<SupplierPaymentDto>> SettleSupplier(Guid id, [FromBody] SettleSupplierRequest request)
+        => Ok(await _mediator.Send(new SettleSupplierPayableWithEndorsedCheckCommand(
+            id, request.SupplierId, request.SettlementDate ?? DateTime.UtcNow,
+            request.SupplierInvoiceId, request.Reason, request.PaymentMethod)));
 
     [HttpPost("{id:guid}/deposit")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksDeposit)]
@@ -181,5 +195,9 @@ public class ChecksController : ControllerBase
 public record ReasonRequest(string Reason, DateTime? MovementDate = null);
 public record MovementDateRequest(DateTime? MovementDate = null);
 public record EndorseCheckRequest(Guid SupplierId, DateTime? MovementDate = null, string? Reason = null);
+
+public record SettleSupplierRequest(
+    Guid SupplierId, DateTime? SettlementDate = null, Guid? SupplierInvoiceId = null,
+    string? Reason = null, string? PaymentMethod = null);
 public record DepositCheckRequest(Guid TreasuryAccountId, DateTime? MovementDate = null, string? Notes = null);
 public record ClearCheckRequest(DateTime? MovementDate = null, string? Notes = null, Guid? TreasuryAccountId = null);

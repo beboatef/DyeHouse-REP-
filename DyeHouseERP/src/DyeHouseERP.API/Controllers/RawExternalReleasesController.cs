@@ -52,7 +52,7 @@ public class RawExternalReleasesController : ControllerBase
             r.ReturnedQuantityKg, r.ReturnedQuantityMeter, r.Status.ToString()
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Raw Material Releases", "DyeHouse ERP", headers, rows, "raw-external-releases", "Releases");
+        return ExportFileHelper.ToFile(export, format, "Raw Material Releases", null, headers, rows, "raw-external-releases", "Releases");
     }
 
     [HttpPost]

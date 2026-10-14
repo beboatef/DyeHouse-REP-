@@ -56,7 +56,7 @@ public class SuppliesController : ControllerBase
             $"{l.MaterialCode} - {l.MaterialName}", l.Quantity, l.Unit.ToString(), l.UnitCost, l.TotalCost, i.Status.ToString()
         })).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Operating Supplies Issues", "DyeHouse ERP", headers, rows, "supply-issues", "SupplyIssues");
+        return ExportFileHelper.ToFile(export, format, "Operating Supplies Issues", null, headers, rows, "supply-issues", "SupplyIssues");
     }
 
     /// <summary>One supply issue as a printable voucher (spec section 39).</summary>

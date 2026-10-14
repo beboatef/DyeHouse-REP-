@@ -52,7 +52,7 @@ public class InvoicesController : ControllerBase
             i.Lines.Count, i.SubTotal, i.Discount, i.Tax, i.Total, i.Status.ToString()
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Customer Invoices", "DyeHouse ERP",
+        return ExportFileHelper.ToFile(export, format, "Customer Invoices", null,
             headers, rows, "invoices", "Invoices");
     }
 
@@ -62,12 +62,12 @@ public class InvoicesController : ControllerBase
     {
         var invoice = await _mediator.Send(new GetInvoiceByIdQuery(id));
 
-        var headers = new List<string> { "Item", "Color", "Quantity", "Price", "Value" };
-        var rows = invoice.Lines.Select(l => new object?[] { l.ItemCode, l.Color, l.Quantity, l.ProcessingPrice, l.Value }).ToList();
-        rows.Add(new object?[] { "", "", "", "Subtotal", invoice.SubTotal });
-        rows.Add(new object?[] { "", "", "", "Discount", invoice.Discount });
-        rows.Add(new object?[] { "", "", "", "Tax", invoice.Tax });
-        rows.Add(new object?[] { "", "", "", "Total", invoice.Total });
+        var headers = new List<string> { "Item", "Color", "Unit", "Quantity", "Price", "Value" };
+        var rows = invoice.Lines.Select(l => new object?[] { l.ItemCode, l.Color, l.Unit.ToString(), l.Quantity, l.ProcessingPrice, l.Value }).ToList();
+        rows.Add(new object?[] { "Subtotal", "", "", "", "", invoice.SubTotal });
+        rows.Add(new object?[] { "Discount", "", "", "", "", invoice.Discount });
+        rows.Add(new object?[] { "Tax", "", "", "", "", invoice.Tax });
+        rows.Add(new object?[] { "Total", "", "", "", "", invoice.Total });
 
         var subtitle = $"{invoice.CustomerCode} - {invoice.CustomerName}  |  {invoice.InvoiceDate:yyyy-MM-dd}  |  {invoice.Status}";
         var bytes = export.GeneratePdf($"فاتورة رقم {invoice.InvoiceNumber}", subtitle, headers, rows);
@@ -97,13 +97,13 @@ public class InvoicesController : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
     public async Task<ActionResult<InvoiceDto>> AddLine(Guid id, [FromBody] AddInvoiceLineRequest request)
         => Ok(await _mediator.Send(new AddInvoiceLineCommand(id, request.ProductionOrderId, request.ItemId,
-            request.Color, request.Quantity, request.ProcessingPrice, request.Notes)));
+            request.Color, request.Quantity, request.ProcessingPrice, request.Unit, request.Notes, request.CostEntryId)));
 
     [HttpPut("{id:guid}/lines/{lineId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
     public async Task<ActionResult<InvoiceDto>> UpdateLine(Guid id, Guid lineId, [FromBody] UpdateInvoiceLineRequest request)
         => Ok(await _mediator.Send(new UpdateInvoiceLineCommand(id, lineId, request.Quantity,
-            request.ProcessingPrice, request.Color, request.Notes)));
+            request.ProcessingPrice, request.Unit, request.Color, request.Notes)));
 
     [HttpDelete("{id:guid}/lines/{lineId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
@@ -123,8 +123,8 @@ public class InvoicesController : ControllerBase
 public record CancelInvoiceRequest(string Reason);
 
 public record UpdateInvoiceRequest(DateTime InvoiceDate, Guid? DeliveryId, decimal Discount, decimal Tax, string? Notes);
-public record AddInvoiceLineRequest(Guid? ProductionOrderId, Guid ItemId, string? Color, decimal Quantity, decimal ProcessingPrice, string? Notes);
-public record UpdateInvoiceLineRequest(decimal Quantity, decimal ProcessingPrice, string? Color, string? Notes);
+public record AddInvoiceLineRequest(Guid? ProductionOrderId, Guid ItemId, string? Color, decimal Quantity, decimal ProcessingPrice, UnitOfMeasure Unit, string? Notes, Guid? CostEntryId = null);
+public record UpdateInvoiceLineRequest(decimal Quantity, decimal ProcessingPrice, UnitOfMeasure Unit, string? Color, string? Notes);
 
 [ApiController]
 [Route("api/customers/{customerId:guid}/statement")]

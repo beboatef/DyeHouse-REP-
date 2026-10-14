@@ -9,6 +9,7 @@ using DyeHouseERP.Domain.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace DyeHouseERP.API.Controllers;
 
@@ -46,7 +47,7 @@ public class DeliveriesController : ControllerBase
             l.RawOrigin, d.Status.ToString()
         })).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Deliveries", "DyeHouse ERP", headers, rows, "deliveries", "Deliveries");
+        return ExportFileHelper.ToFile(export, format, "Deliveries", null, headers, rows, "deliveries", "Deliveries");
     }
 
     [HttpGet("{id:guid}/pdf")]
@@ -78,9 +79,65 @@ public class DeliveriesController : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
     public async Task<ActionResult<DeliveryDto>> Prepare(Guid id) => Ok(await _mediator.Send(new MarkDeliveryPreparedCommand(id)));
 
+    /// <summary>
+    /// Posts the physical delivery: validates the ready balance and deducts it exactly once (spec
+    /// section 31). An optional <c>requestId</c> token makes a retried/double-submitted confirmation
+    /// idempotent - the same token answers with the delivery that already posted and writes nothing.
+    /// </summary>
     [HttpPost("{id:guid}/deliver")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
-    public async Task<ActionResult<DeliveryDto>> Deliver(Guid id) => Ok(await _mediator.Send(new MarkDeliveryDeliveredCommand(id)));
+    public async Task<ActionResult<DeliveryDto>> Deliver(Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] MarkDeliveredRequest? request = null)
+        => Ok(await _mediator.Send(new MarkDeliveryDeliveredCommand(id, request?.RequestId)));
+
+    /// <summary>
+    /// The DELIVERY STATEMENT (بيان تسليم) of one permit (spec section 31): per line, the original raw
+    /// quantity the job started from, what this delivery settles of it, what remains, the ready-goods
+    /// quantities, bale count, scraps/separates, second grade, calculated waste (per unit, never mixed)
+    /// and the drawing number when the order passed Printing. Read-only - printing it moves no stock.
+    /// </summary>
+    [HttpGet("{id:guid}/statement")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
+    [ProducesResponseType(typeof(DeliveryStatementDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<DeliveryStatementDto>> GetStatement(Guid id)
+        => Ok(await _mediator.Send(new GetDeliveryStatementQuery(id)));
+
+    /// <summary>
+    /// The delivery statement as a PDF, rendered with the FACTORY's own identity (spec section 29's
+    /// factory settings): the printed document carries the company name and logo, and a factory that has
+    /// not uploaded a logo still prints - only the identity block is narrower.
+    /// </summary>
+    [HttpGet("{id:guid}/statement/pdf")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
+    public async Task<IActionResult> GetStatementPdf(Guid id,
+        [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export)
+    {
+        var statement = await _mediator.Send(new GetDeliveryStatementQuery(id));
+
+        var headers = new[]
+        {
+            "Job order", "Date", "Item", "Color", "Original raw KG", "Original raw M",
+            "Settled KG", "Settled M", "Remaining KG", "Remaining M", "Ready KG", "Ready M",
+            "Bales", "Scraps KG", "Scraps M", "2nd grade KG", "2nd grade M", "Waste KG", "Waste M",
+            "Drawing no.", "Notes"
+        };
+
+        var rows = statement.Rows.Select(r => new object?[]
+        {
+            r.ProductionOrderNumber, r.ProductionOrderDate?.ToString("yyyy-MM-dd"), r.ItemCode, r.Color,
+            r.OriginalRawQuantityKg, r.OriginalRawQuantityMeter,
+            r.DeliveredOriginalRawQuantityKg, r.DeliveredOriginalRawQuantityMeter,
+            r.RemainingOriginalRawKg, r.RemainingOriginalRawMeter,
+            r.ReadyGoodsQuantityKg, r.ReadyGoodsQuantityMeter, r.BaleCount,
+            r.ScrapsKg, r.ScrapsMeter, r.SecondGradeKg, r.SecondGradeMeter,
+            r.CalculatedWasteKg, r.CalculatedWasteMeter,
+            string.Join(", ", r.DrawingNumbers), r.LineNotes
+        }).ToList();
+
+        var subtitle = $"{statement.CustomerCode} - {statement.CustomerName}  |  {statement.DeliveryDate:yyyy-MM-dd}  |  {statement.Status}";
+        var bytes = export.GeneratePdf($"بيان تسليم رقم {statement.DeliveryNumber}", subtitle, headers, rows);
+        return File(bytes, "application/pdf", $"delivery-statement-{statement.DeliveryNumber}.pdf");
+    }
 
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
@@ -104,6 +161,12 @@ public class DeliveriesController : ControllerBase
 }
 
 public record CancelDeliveryRequest(string Reason);
+
+/// <summary>
+/// Body of the deliver confirmation. Only the optional idempotency token travels here - the quantities
+/// are the permit's own, already recorded, and are never re-sent by a client.
+/// </summary>
+public record MarkDeliveredRequest(Guid? RequestId);
 
 /// <summary>Request body for correcting an approved delivery's line quantities.</summary>
 public record EditDeliveredDeliveryLineRequest(Guid LineId, decimal? QuantityKg, decimal? QuantityMeter);

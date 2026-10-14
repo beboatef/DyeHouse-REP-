@@ -185,7 +185,7 @@ public class FormationRequestsController : ControllerBase
             r.Groups.Count, r.TotalQuantity, r.Unit.ToString(), r.Status.ToString()
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Customer Formation Requests", "DyeHouse ERP",
+        return ExportFileHelper.ToFile(export, format, "Customer Formation Requests", null,
             headers, rows, "formation-requests", "FormationRequests");
     }
 

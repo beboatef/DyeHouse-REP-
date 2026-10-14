@@ -50,7 +50,7 @@ public class MaterialsController : ControllerBase
             m.CurrentBalance, m.IsActive ? "Yes" : "No"
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Materials & Chemicals", "DyeHouse ERP", headers, rows, "materials", "Materials");
+        return ExportFileHelper.ToFile(export, format, "Materials & Chemicals", null, headers, rows, "materials", "Materials");
     }
 
     /// <summary>Step 1 of the import workflow: the template with the exact expected columns.</summary>
@@ -117,7 +117,7 @@ public class MaterialTransfersController : ControllerBase
             t.FromWarehouseName, t.ToWarehouseName, t.Quantity
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Material Transfers", "DyeHouse ERP", headers, rows, "material-transfers", "Transfers");
+        return ExportFileHelper.ToFile(export, format, "Material Transfers", null, headers, rows, "material-transfers", "Transfers");
     }
 }
 
@@ -167,7 +167,7 @@ public class MaterialIssuesController : ControllerBase
             i.ProductionOrderNumber, i.Quantity, i.UnitCost, i.TotalCost
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Material Issues", "DyeHouse ERP", headers, rows, "material-issues", "Issues");
+        return ExportFileHelper.ToFile(export, format, "Material Issues", null, headers, rows, "material-issues", "Issues");
     }
 }
 
@@ -204,7 +204,7 @@ public class MaterialPreparationsController : ControllerBase
             p.OriginalQuantity, p.WaterQuantity, p.ResultingQuantity, p.Concentration, p.Cost
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Material Preparation", "DyeHouse ERP", headers, rows, "material-preparations", "Preparations");
+        return ExportFileHelper.ToFile(export, format, "Material Preparation", null, headers, rows, "material-preparations", "Preparations");
     }
 }
 

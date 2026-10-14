@@ -44,18 +44,18 @@ public class RawMessagesController : ControllerBase
     {
         var messages = await _mediator.Send(new GetRawMessagesQuery(customerId, itemId, onlyWithBalance));
 
-        var headers = new[] { "Message", "Date", "Customer", "Warehouse", "Item", "Received KG", "Received M", "Remaining KG", "Remaining M", "Inspection", "Status" };
+        var headers = new[] { "Message", "Date", "Customer", "Warehouse", "Item", "Color / اللون", "Received KG", "Received M", "Remaining KG", "Remaining M", "Inspection", "Status" };
         var rows = messages
             .SelectMany(m => m.Lines.Select(l => new object?[]
             {
                 m.MessageNumber, m.ReceiptDate.ToString("yyyy-MM-dd"), $"{m.CustomerCode} - {m.CustomerName}",
-                m.WarehouseName, $"{l.ItemCode} - {l.ItemName}", l.QuantityKg, l.QuantityMeter,
+                m.WarehouseName, $"{l.ItemCode} - {l.ItemName}", l.Color, l.QuantityKg, l.QuantityMeter,
                 l.RemainingKg, l.RemainingMeter, m.InspectionStatus.ToString(), m.Status.ToString()
             }))
             .ToList();
 
         var title = onlyWithBalance ? "Warehouse Balances (raw material)" : "Raw Receipt Messages";
-        return ExportFileHelper.ToFile(export, format, title, "DyeHouse ERP", headers, rows, onlyWithBalance ? "warehouse-balances" : "raw-messages", "Receipts");
+        return ExportFileHelper.ToFile(export, format, title, null, headers, rows, onlyWithBalance ? "warehouse-balances" : "raw-messages", "Receipts");
     }
 
     /// <summary>Single-message lookup - feeds the print-preview screen and the QR scan view (spec sections 39-40).</summary>
@@ -109,10 +109,10 @@ public class RawMessagesController : ControllerBase
     {
         var message = await _mediator.Send(new GetRawMessageByIdQuery(id));
 
-        var headers = new List<string> { "Item", "Qty KG", "Qty Meter", "Remaining KG", "Remaining Meter", "Pieces" };
+        var headers = new List<string> { "Item", "Color / اللون", "Qty KG", "Qty Meter", "Remaining KG", "Remaining Meter", "Pieces" };
         var rows = message.Lines.Select(l => new object?[]
         {
-            $"{l.ItemCode} - {l.ItemName}", l.QuantityKg, l.QuantityMeter, l.RemainingKg, l.RemainingMeter, l.PieceCount
+            $"{l.ItemCode} - {l.ItemName}", l.Color, l.QuantityKg, l.QuantityMeter, l.RemainingKg, l.RemainingMeter, l.PieceCount
         }).ToList();
 
         var subtitle = $"{message.CustomerCode} - {message.CustomerName}  |  {message.WarehouseName}  |  {message.ReceiptDate:yyyy-MM-dd}  |  {message.InspectionStatus}";

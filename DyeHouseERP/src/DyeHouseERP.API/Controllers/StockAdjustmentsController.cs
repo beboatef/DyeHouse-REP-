@@ -36,7 +36,7 @@ public class StockAdjustmentsController : ControllerBase
             a.QuantityAfterKg, a.QuantityAfterMeter, a.Reason, a.ApprovedBy
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Stock Adjustments", "DyeHouse ERP", headers, rows, "stock-adjustments", "Adjustments");
+        return ExportFileHelper.ToFile(export, format, "Stock Adjustments", null, headers, rows, "stock-adjustments", "Adjustments");
     }
 
     /// <summary>List stock adjustments, newest first.</summary>

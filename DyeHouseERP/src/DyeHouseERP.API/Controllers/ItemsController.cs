@@ -5,6 +5,7 @@ using DyeHouseERP.Application.Items.Queries;
 using DyeHouseERP.API.Authorization;
 using DyeHouseERP.API.Common;
 using DyeHouseERP.Domain.Common;
+using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -49,6 +50,39 @@ public class ItemsController : ControllerBase
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>
+    /// The explicit, item-scoped unit conversion rules (spec sections 5-6). Empty is the
+    /// normal answer: KG and Meter are never converted unless a rule is configured here.
+    /// </summary>
+    [HttpGet("{id:guid}/conversions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsView)]
+    [ProducesResponseType(typeof(List<ItemUnitConversionDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ItemUnitConversionDto>>> GetConversions(
+        Guid id, [FromQuery] string? operation)
+        => Ok(await _mediator.Send(new GetItemUnitConversionsQuery(id, operation)));
+
+    /// <summary>
+    /// Creates or replaces the ONE conversion rule for an (item + operation) pair. The only
+    /// place a KG&lt;-&gt;Meter conversion can be introduced - opt-in, per item, per operation.
+    /// </summary>
+    [HttpPost("{id:guid}/conversions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsEdit)]
+    [ProducesResponseType(typeof(ItemUnitConversionDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ItemUnitConversionDto>> SetConversion(
+        Guid id, [FromBody] SetItemUnitConversionRequest request)
+        => Ok(await _mediator.Send(new SetItemUnitConversionCommand(
+            id, request.FromUnit, request.ToUnit, request.Factor, request.Operation,
+            request.Notes, request.IsActive)));
+
+    /// <summary>Removes the explicit conversion rule for an (item + operation) pair.</summary>
+    [HttpDelete("{id:guid}/conversions/{operation}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsEdit)]
+    public async Task<IActionResult> RemoveConversion(Guid id, string operation)
+    {
+        await _mediator.Send(new RemoveItemUnitConversionCommand(id, operation));
+        return NoContent();
+    }
+
     /// <summary>Excel export of the current item list (spec section 7) - same filters as GET.</summary>
     [HttpGet("export/excel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
@@ -87,7 +121,7 @@ public class ItemsController : ControllerBase
             i.IsActive ? "Yes" : "No"
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Item List", "DyeHouse ERP", headers, rows, "items", "Items");
+        return ExportFileHelper.ToFile(export, format, "Item List", null, headers, rows, "items", "Items");
     }
 
     /// <summary>Step 1 of the import workflow (spec section 7): the empty template with the exact expected columns.</summary>
@@ -146,3 +180,8 @@ public class ItemsController : ControllerBase
         return Ok(await _mediator.Send(new PreviewItemImportCommand(stream.ToArray(), true)));
     }
 }
+
+/// <summary>Body for an explicit item-scoped unit conversion rule (see <see cref="SetItemUnitConversionCommand"/>).</summary>
+public record SetItemUnitConversionRequest(
+    UnitOfMeasure FromUnit, UnitOfMeasure ToUnit, decimal Factor, string Operation,
+    string? Notes = null, bool IsActive = true);

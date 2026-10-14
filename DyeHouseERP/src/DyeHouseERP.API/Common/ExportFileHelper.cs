@@ -14,11 +14,11 @@ public static class ExportFileHelper
 {
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-    public static IActionResult ToFile(IReportExportService export, string format, string title, string subtitle,
+    public static IActionResult ToFile(IReportExportService export, string format, string title, string? subtitle,
         IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows, string fileStem)
         => ToFile(export, format, title, subtitle, headers, rows, fileStem, null);
 
-    public static IActionResult ToFile(IReportExportService export, string format, string title, string subtitle,
+    public static IActionResult ToFile(IReportExportService export, string format, string title, string? subtitle,
         IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows, string fileStem, string? excelSheetName)
     {
         if (string.Equals(format, "pdf", StringComparison.OrdinalIgnoreCase))
@@ -30,7 +30,7 @@ public static class ExportFileHelper
     }
 
     /// <summary>Renders the same rows as a single-document PDF (a voucher/invoice, not a list).</summary>
-    public static IActionResult ToPdf(IReportExportService export, string title, string subtitle,
+    public static IActionResult ToPdf(IReportExportService export, string title, string? subtitle,
         IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows, string fileStem)
         => new FileContentResult(export.GeneratePdf(title, subtitle, headers, rows), "application/pdf")
         { FileDownloadName = $"{fileStem}.pdf" };

@@ -348,7 +348,7 @@ public class PurchasesController : ControllerBase
             o.Status.ToString(), o.Lines.Count, o.TotalValue
         }).ToList();
 
-        return ExportFile(export, format, "Purchase Orders", "DyeHouse ERP", headers, rows, "purchase-orders");
+        return ExportFile(export, format, "Purchase Orders", null, headers, rows, "purchase-orders");
     }
 
     /// <summary>Goods receipts as Excel/PDF.</summary>
@@ -367,7 +367,7 @@ public class PurchasesController : ControllerBase
             r.SupplierDocumentNumber, r.Lines.Count, r.TotalValue
         }).ToList();
 
-        return ExportFile(export, format, "Purchase Receipts", "DyeHouse ERP", headers, rows, "purchase-receipts");
+        return ExportFile(export, format, "Purchase Receipts", null, headers, rows, "purchase-receipts");
     }
 
     /// <summary>Supplier invoices as Excel/PDF - the supplier-payables working paper.</summary>
@@ -386,7 +386,7 @@ public class PurchasesController : ControllerBase
             i.DueDate.ToString("yyyy-MM-dd"), i.SupplierName, i.Status.ToString(), i.Total
         }).ToList();
 
-        return ExportFile(export, format, "Supplier Invoices", "DyeHouse ERP", headers, rows, "supplier-invoices");
+        return ExportFile(export, format, "Supplier Invoices", null, headers, rows, "supplier-invoices");
     }
 
     /// <summary>Supplier outstanding balances as Excel/PDF (spec sections 41 + 48).</summary>
@@ -404,7 +404,7 @@ public class PurchasesController : ControllerBase
             b.SupplierCode, b.SupplierName, b.TotalInvoiced, b.TotalPaid, b.Outstanding, b.OverdueAmount
         }).ToList();
 
-        return ExportFile(export, format, "Supplier Balances", "DyeHouse ERP", headers, rows, "supplier-balances");
+        return ExportFile(export, format, "Supplier Balances", null, headers, rows, "supplier-balances");
     }
 
     /// <summary>Supplier payments as Excel/PDF - the cash-paid-out working paper (spec section 35).</summary>
@@ -423,11 +423,11 @@ public class PurchasesController : ControllerBase
             p.TreasuryAccountName, p.PaymentMethod, p.Amount, p.Currency
         }).ToList();
 
-        return ExportFile(export, format, "Supplier Payments", "DyeHouse ERP", headers, rows, "supplier-payments");
+        return ExportFile(export, format, "Supplier Payments", null, headers, rows, "supplier-payments");
     }
 
     private static IActionResult ExportFile(IReportExportService export, string format, string title,
-        string subtitle, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows, string fileStem)
+        string? subtitle, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows, string fileStem)
     {
         if (string.Equals(format, "pdf", StringComparison.OrdinalIgnoreCase))
             return new FileContentResult(export.GeneratePdf(title, subtitle, headers, rows), "application/pdf")

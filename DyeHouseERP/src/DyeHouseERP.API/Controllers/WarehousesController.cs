@@ -87,7 +87,7 @@ public class WarehousesController : ControllerBase
         var headers = new[] { "Code", "Name", "Kind", "Active" };
         var rows = warehouses.Select(w => new object?[] { w.Code, w.Name, w.Kind.ToString(), w.IsActive ? "Yes" : "No" }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Warehouses", "DyeHouse ERP", headers, rows, "warehouses", "Warehouses");
+        return ExportFileHelper.ToFile(export, format, "Warehouses", null, headers, rows, "warehouses", "Warehouses");
     }
 
     /// <summary>Step 1 of the warehouse import workflow: the template with the exact expected columns.</summary>

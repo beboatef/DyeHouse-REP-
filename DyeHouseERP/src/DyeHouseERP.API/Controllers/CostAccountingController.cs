@@ -29,7 +29,7 @@ public class CostAccountingController : ControllerBase
     [HttpPost("entries")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
     public async Task<ActionResult<CostEntryDto>> AddEntry(Guid productionOrderId, [FromBody] AddCostEntryRequest request)
-        => Ok(await _mediator.Send(new CreateCostEntryCommand(productionOrderId, request.Category, request.Amount, request.EntryDate, request.Description)));
+        => Ok(await _mediator.Send(new CreateCostEntryCommand(productionOrderId, request.Category, request.Amount, request.EntryDate, request.Description, request.IsChargeableToCustomer)));
 
     /// <summary>Sets/updates the ESTIMATED cost of the Job Order (spec section 34).</summary>
     [HttpPut("estimate")]
@@ -94,7 +94,7 @@ public class CostAccountingController : ControllerBase
         };
 
         if (string.Equals(format, "pdf", StringComparison.OrdinalIgnoreCase))
-            return File(export.GeneratePdf($"Job Order Costing - {cost.ProductionOrderNumber}", "DyeHouse ERP", headers, rows),
+            return File(export.GeneratePdf($"Job Order Costing - {cost.ProductionOrderNumber}", null, headers, rows),
                 "application/pdf", $"costing-{cost.ProductionOrderNumber}.pdf");
 
         return File(export.GenerateExcel("Costing", headers, rows),
@@ -102,7 +102,7 @@ public class CostAccountingController : ControllerBase
     }
 }
 
-public record AddCostEntryRequest(Domain.Enums.CostCategory Category, decimal Amount, DateTime EntryDate, string? Description);
+public record AddCostEntryRequest(Domain.Enums.CostCategory Category, decimal Amount, DateTime EntryDate, string? Description, bool IsChargeableToCustomer = false);
 public record SetEstimateRequest(decimal? EstimatedCost, string? CostingNotes);
 public record ApproveCostRequest(decimal ApprovedCost, string? CostingNotes);
 

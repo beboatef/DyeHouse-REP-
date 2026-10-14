@@ -36,7 +36,7 @@ public class CustomerTransfersController : ControllerBase
             t.MessageNumber, $"{t.ItemCode} - {t.ItemName}", t.QuantityKg, t.QuantityMeter, t.Reason, t.CreatedBy
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Customer Transfers", "DyeHouse ERP", headers, rows, "customer-transfers", "Transfers");
+        return ExportFileHelper.ToFile(export, format, "Customer Transfers", null, headers, rows, "customer-transfers", "Transfers");
     }
 
     /// <summary>List customer-to-customer transfers, newest first.</summary>

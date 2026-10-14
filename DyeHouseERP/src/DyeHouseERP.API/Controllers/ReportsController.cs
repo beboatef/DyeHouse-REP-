@@ -124,7 +124,7 @@ public class ReportsController : ControllerBase
             r.ProductionOrderNumber, r.RemainingKg, r.RemainingMeter
         }));
 
-        return ExportFileHelper.ToFile(_export, format, "Warehouse Balances", "DyeHouse ERP", headers, rows, "warehouse-balances", "Balances");
+        return ExportFileHelper.ToFile(_export, format, "Warehouse Balances", null, headers, rows, "warehouse-balances", "Balances");
     }
 
     /// <summary>Negative Stock / Balance Override Report (spec section 17).</summary>

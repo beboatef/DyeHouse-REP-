@@ -38,7 +38,7 @@ public class ReadyGoodsController : ControllerBase
             $"{t.CustomerCode}", $"{t.ItemCode}", t.Color, t.QuantityKg, t.QuantityMeter, t.PieceCount
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Ready Goods Transfers", "DyeHouse ERP", headers, rows, "ready-goods-transfers", "Transfers");
+        return ExportFileHelper.ToFile(export, format, "Ready Goods Transfers", null, headers, rows, "ready-goods-transfers", "Transfers");
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public class ReadyGoodsController : ControllerBase
             b.Color, b.RemainingKg, b.RemainingMeter
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Ready Goods Balance", "DyeHouse ERP", headers, rows, "ready-goods-balance", "Balance");
+        return ExportFileHelper.ToFile(export, format, "Ready Goods Balance", null, headers, rows, "ready-goods-balance", "Balance");
     }
 
     [HttpGet("balance")]
@@ -73,6 +73,31 @@ public class ReadyGoodsController : ControllerBase
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetTransfers), new { }, result);
+    }
+
+    /// <summary>
+    /// The register of ready-goods-to-raw movements (spec section 29) - every authorized, reasoned move
+    /// of finished stock back into raw material stock.
+    /// </summary>
+    [HttpGet("raw-returns")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
+    [ProducesResponseType(typeof(List<ReadyGoodsRawReturnDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ReadyGoodsRawReturnDto>>> GetRawReturns([FromQuery] Guid? customerId)
+        => Ok(await _mediator.Send(new GetReadyGoodsRawReturnsQuery(customerId)));
+
+    /// <summary>
+    /// Moves ready goods BACK into raw material stock for rework or reclassification (spec section 29).
+    /// It is the only way stock leaves Ready Goods for the raw side - nothing does it implicitly - so it
+    /// carries its own permission, a mandatory reason and an audit entry, and it posts its two ledger
+    /// rows (out of Ready Goods, into the raw lot) exactly once.
+    /// </summary>
+    [HttpPost("raw-returns")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyReturnToRaw)]
+    [ProducesResponseType(typeof(ReadyGoodsRawReturnDto), StatusCodes.Status201Created)]
+    public async Task<ActionResult<ReadyGoodsRawReturnDto>> ReturnToRaw([FromBody] ReturnReadyGoodsToRawStockCommand command)
+    {
+        var result = await _mediator.Send(command);
+        return CreatedAtAction(nameof(GetRawReturns), new { }, result);
     }
     [HttpPut("transfers/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryEdit)]

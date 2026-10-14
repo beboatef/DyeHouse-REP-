@@ -63,7 +63,7 @@ public class SuppliersController : ControllerBase
             s.Code, s.NameAr, s.NameEn, s.AccountNumber, s.Phone, s.ContactPerson, s.TaxNumber, s.IsActive ? "Yes" : "No"
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Suppliers", "DyeHouse ERP", headers, rows, "suppliers", "Suppliers");
+        return ExportFileHelper.ToFile(export, format, "Suppliers", null, headers, rows, "suppliers", "Suppliers");
     }
 
     /// <summary>Step 1 of the import workflow: the template with the exact expected columns.</summary>

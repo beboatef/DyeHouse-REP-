@@ -33,7 +33,9 @@ public class SeparatesController : ControllerBase
         => Ok(await _mediator.Send(new ReprocessSeparateCommand(id, request.OrderDate, request.Notes)));
 
     [HttpPost("{id:guid}/scrap")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
+    // Its own right (decided in Phase 4, Phase 1 §G.1): writing material off as waste must never be
+    // implied by the ability to edit a Job Order.
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionScrap)]
     [ProducesResponseType(typeof(SeparateDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<SeparateDto>> Scrap(Guid id, [FromBody] ScrapSeparateRequest request)
         => Ok(await _mediator.Send(new ScrapSeparateCommand(id, request.Reason)));

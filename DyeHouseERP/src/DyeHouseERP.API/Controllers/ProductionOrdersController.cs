@@ -62,7 +62,7 @@ public class ProductionOrdersController : ControllerBase
             };
         }).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Job Orders", "DyeHouse ERP", headers, rows, "job-orders", "JobOrders");
+        return ExportFileHelper.ToFile(export, format, "Job Orders", null, headers, rows, "job-orders", "JobOrders");
     }
 
     [HttpGet("{id:guid}/pdf")]
@@ -133,29 +133,11 @@ public class ProductionOrdersController : ControllerBase
         return Ok(result);
     }
 
-    [HttpPost("stage-executions/{stageExecutionId:guid}/start")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
-    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ProductionOrderDto>> StartStage(Guid stageExecutionId)
-        => Ok(await _mediator.Send(new StartStageCommand(stageExecutionId)));
-
-    [HttpPost("stage-executions/{stageExecutionId:guid}/complete")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
-    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ProductionOrderDto>> CompleteStage(Guid stageExecutionId, [FromBody] CompleteStageRequest request)
-    {
-        var result = await _mediator.Send(new CompleteStageCommand(
-            stageExecutionId, request.InputKg, request.InputMeter, request.OutputKg, request.OutputMeter,
-            request.LossKg, request.LossMeter, request.SeparatesKg, request.SeparatesMeter,
-            request.Notes));
-        return Ok(result);
-    }
-
-    [HttpPost("stage-executions/{stageExecutionId:guid}/skip")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
-    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ProductionOrderDto>> SkipStage(Guid stageExecutionId, [FromBody] SkipStageRequest request)
-        => Ok(await _mediator.Send(new SkipStageCommand(stageExecutionId, request.Reason)));
+    // The legacy stage endpoints (POST stage-executions/{id}/start, /complete and /skip) were DELETED in
+    // Phase 4: they could advance or close a stage outside the single official production transaction,
+    // which is the transfer below (choose the next operation = close this one + activate that one).
+    // Nothing on the server can mark a stage skipped any more, so the stage definition no longer carries
+    // an AllowSkip capability either. See docs/audit/phase4-report.md, section C.1.
 
     [HttpPost("{id:guid}/complete")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionComplete)]
@@ -196,7 +178,10 @@ public class ProductionOrdersController : ControllerBase
     public async Task<ActionResult<ProductionOrderDto>> TransferStage(Guid stageExecutionId, [FromBody] TransferStageRequest request)
         => Ok(await _mediator.Send(new TransferToNextStageCommand(
             stageExecutionId, request.NextStageDefinitionId,
-            request.OutputKg, request.OutputMeter, request.SeparatesKg, request.SeparatesMeter, request.Notes, request.DrawingNumber)));
+            request.OutputKg, request.OutputMeter, request.SeparatesKg, request.SeparatesMeter, request.Notes, request.DrawingNumber,
+            request.InputKg, request.InputMeter,
+            request.SecondGradeKg, request.SecondGradeMeter,
+            request.MachineId, request.ProductionShiftId)));
 
     /// <summary>
     /// Edits the OPEN stage's output weight (spec section 16). No approval needed,
@@ -235,10 +220,23 @@ public class ProductionOrdersController : ControllerBase
             request.OverrideNegativeStock, request.OverrideReason)));
 }
 
+/// <summary>
+/// Closes the operation currently in progress and activates the one the user chose - the ONLY production
+/// transaction (spec sections 13-17). Every recorded fact belongs to the operation being CLOSED: what it
+/// actually consumed, what it actually produced, its waste (derived from the immutable baseline, never
+/// typed in and never converted between units), its separates, its second-grade quantity, the machine and
+/// shift it ran on, and its notes.
+/// </summary>
 public record TransferStageRequest(
     Guid NextStageDefinitionId,
     decimal? OutputKg, decimal? OutputMeter,
-    decimal? SeparatesKg, decimal? SeparatesMeter, string? Notes, string? DrawingNumber = null);
+    decimal? SeparatesKg, decimal? SeparatesMeter, string? Notes, string? DrawingNumber = null,
+    // The operation's ACTUAL input - recorded, never inferred from the order's requested quantity.
+    decimal? InputKg = null, decimal? InputMeter = null,
+    // Second-grade material is its own quantity: it is neither the output nor the waste.
+    decimal? SecondGradeKg = null, decimal? SecondGradeMeter = null,
+    // Where the operation ran. Validated for suitability (linked to this stage) and availability (active).
+    Guid? MachineId = null, Guid? ProductionShiftId = null);
 
 public record UpdateStageDrawingRequest(string DrawingNumber, string Reason);
 
@@ -273,9 +271,3 @@ public record AllocateRawRequest(
     Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,
     bool OverrideNegativeStock, string? OverrideReason);
 
-public record CompleteStageRequest(
-    decimal? InputKg, decimal? InputMeter, decimal? OutputKg, decimal? OutputMeter,
-    decimal? LossKg, decimal? LossMeter, decimal? SeparatesKg, decimal? SeparatesMeter,
-    string? Notes);
-
-public record SkipStageRequest(string Reason);

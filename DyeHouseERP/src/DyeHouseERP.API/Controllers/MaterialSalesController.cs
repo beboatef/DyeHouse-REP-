@@ -58,7 +58,7 @@ public class MaterialSalesController : ControllerBase
             s.Total, s.Status.ToString()
         })).ToList();
 
-        return ExportFileHelper.ToFile(export, format, "Material Sales", "DyeHouse ERP", headers, rows, "material-sales", "MaterialSales");
+        return ExportFileHelper.ToFile(export, format, "Material Sales", null, headers, rows, "material-sales", "MaterialSales");
     }
 
     /// <summary>One material sale as a printable invoice-style document (spec section 39).</summary>
