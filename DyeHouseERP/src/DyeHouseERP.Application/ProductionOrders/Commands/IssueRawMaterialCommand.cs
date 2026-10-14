@@ -66,7 +66,12 @@ public record IssueRawMaterialCommand(
     // Who carries the cost of the order this issue creates (spec section 20). MANDATORY whenever
     // CustomerReturnId is set: rework of a returned batch can legitimately be a quality claim the
     // factory absorbs or a charge the customer carries, and the two must never be guessed.
-    CostBearer? CostBearer = null) : IRequest<ProductionOrderDto>, IApprovalBoundOperation
+    CostBearer? CostBearer = null,
+    // Optional starting stage for the order this issue creates (spec section 33): a job raised from
+    // a customer RETURN may begin where the rework begins instead of at التشكيل. It must name an
+    // existing, ACTIVE stage; empty keeps the ordinary formation start. The issue itself - and so
+    // the single raw deduction - is completely unaffected: one OUT row either way.
+    Guid? StartingStageId = null) : IRequest<ProductionOrderDto>, IApprovalBoundOperation
 {
     public ApprovalRequestType ApprovalType => ApprovalRequestType.RawIssue;
 
@@ -210,6 +215,14 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
             .OrderBy(s => s.Sequence)
             .ToListAsync(cancellationToken);
 
+        // A requested starting stage must be one of the ACTIVE stages; the domain lookup below
+        // refuses an unknown or deactivated id, so a stale screen selection cannot become a route.
+        if (request.StartingStageId.HasValue)
+            _ = activeStages.FirstOrDefault(s => s.Id == request.StartingStageId.Value)
+                ?? throw new DomainException(
+                    "The selected starting stage is not one of the active production stages. Choose an existing, " +
+                    "active stage (or leave it empty to start at the formation stage).");
+
         if (!activeStages.Any(s => s.IsFormationStage))
             throw new DomainException(
                 "No active production stage is marked as the formation stage (IsFormationStage). Configure one before issuing raw material.");
@@ -242,7 +255,7 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
                 priority: request.Priority,
                 jobOrderType: request.JobOrderType);
 
-            order.BuildStageRoute(activeStages, _currentUser.UserName);
+            order.BuildStageRoute(activeStages, _currentUser.UserName, request.StartingStageId);
 
             // The issue IS the raw allocation: creating the matching allocation row here
             // means the existing 100%-allocation rule is satisfied by the act of issuing,

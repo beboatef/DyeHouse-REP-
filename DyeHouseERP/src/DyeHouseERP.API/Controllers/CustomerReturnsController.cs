@@ -70,7 +70,7 @@ public class CustomerReturnsController : ControllerBase
         var command = new CreateProductionOrderFromReturnCommand(
             id, request.ItemId, request.RawMessageId, request.OrderDate,
             request.ActualQuantityKg, request.ActualQuantityMeter, request.CostBearer,
-            request.Color, request.Notes, request.RequestId);
+            request.Color, request.Notes, request.RequestId, request.StartingStageId);
 
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id }, result);
@@ -108,4 +108,6 @@ public record CreateOrderFromReturnRequest(
     DyeHouseERP.Domain.Enums.CostBearer? CostBearer,
     string? Color = null,
     string? Notes = null,
-    Guid? RequestId = null);
+    Guid? RequestId = null,
+    /// <summary>Optional starting stage: returned material may be reworked from the operation it failed at (spec section 33). Must be an existing, active stage.</summary>
+    Guid? StartingStageId = null);

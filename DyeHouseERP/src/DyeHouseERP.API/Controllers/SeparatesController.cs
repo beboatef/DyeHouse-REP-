@@ -26,11 +26,17 @@ public class SeparatesController : ControllerBase
     public async Task<ActionResult<List<SeparateDto>>> Get([FromQuery] SeparateStatus? status)
         => Ok(await _mediator.Send(new GetSeparatesQuery(status)));
 
+    /// <summary>
+    /// Creates the reprocessing Job Order (spec section 23). <c>startingStageId</c> is optional:
+    /// reprocessed material is already past formation, so the job may start at an existing, ACTIVE
+    /// stage other than التشكيل. Omitting it keeps the ordinary formation start, and no start moves
+    /// stock - the raw issue is still the one and only deduction.
+    /// </summary>
     [HttpPost("{id:guid}/reprocess")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionReprocess)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductionOrderDto>> Reprocess(Guid id, [FromBody] ReprocessSeparateRequest request)
-        => Ok(await _mediator.Send(new ReprocessSeparateCommand(id, request.OrderDate, request.Notes)));
+        => Ok(await _mediator.Send(new ReprocessSeparateCommand(id, request.OrderDate, request.Notes, request.StartingStageId)));
 
     [HttpPost("{id:guid}/scrap")]
     // Its own right (decided in Phase 4, Phase 1 §G.1): writing material off as waste must never be
@@ -41,5 +47,5 @@ public class SeparatesController : ControllerBase
         => Ok(await _mediator.Send(new ScrapSeparateCommand(id, request.Reason)));
 }
 
-public record ReprocessSeparateRequest(DateTime OrderDate, string? Notes);
+public record ReprocessSeparateRequest(DateTime OrderDate, string? Notes, Guid? StartingStageId = null);
 public record ScrapSeparateRequest(string Reason);

@@ -2,23 +2,31 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UsersApi, type User } from "@/api/client";
 import { PageHeader, Card, Button, Input, Badge, Select } from "@/components/ui";
-import { PermissionGroups, Permissions } from "@/permissions";
+import { PermissionGroups, Permissions, readSignedInActor } from "@/permissions";
 
 /**
  * Users and permissions (spec section 41).
  *
  * One flat permission list per login, exactly as the backend stores it
  * (User.Roles) - no Role table is introduced here. What changed is that the
- * picker now exposes every permission the API actually checks (grouped by
- * module) and that an existing login's set can be edited, instead of only
- * being set once at creation.
+ * picker exposes every permission the API actually checks (grouped by module)
+ * and that an existing login's set can be edited, instead of only being set
+ * once at creation.
+ *
+ * The picker only offers what the CALLER is allowed to hand out: a delegated
+ * administrator (users.manage/roles.manage without admin) never sees a
+ * permission their own account does not hold, and never sees the admin
+ * catch-all. This mirrors UserAdministrationGuard in the API - which stays the
+ * enforcement point, so hiding a box is only a convenience, never the control.
  */
 function PermissionPicker({
   selected,
-  onToggle
+  onToggle,
+  canGrant
 }: {
   selected: string[];
   onToggle: (value: string) => void;
+  canGrant: (value: string) => boolean;
 }) {
   const [query, setQuery] = useState("");
 
@@ -26,10 +34,12 @@ function PermissionPicker({
     () =>
       PermissionGroups.map((group) => ({
         group,
-        items: Permissions.filter((p) => p.group === group)
+        items: Permissions.filter((p) => p.group === group && canGrant(p.value))
       })).filter((g) => g.items.length > 0),
-    []
+    [canGrant]
   );
+
+  const grantableCount = useMemo(() => Permissions.filter((p) => canGrant(p.value)).length, [canGrant]);
 
   const q = query.trim().toLowerCase();
   const filtered = groups.filter(
@@ -46,7 +56,7 @@ function PermissionPicker({
           onChange={(e) => setQuery(e.target.value)}
         />
         <span className="text-xs text-gray-500">
-          المحدد: <span className="ltr-nums font-semibold">{selected.length}</span> من {Permissions.length}
+          المحدد: <span className="ltr-nums font-semibold">{selected.length}</span> من {grantableCount}
         </span>
       </div>
 
@@ -67,12 +77,19 @@ function PermissionPicker({
         ))}
         {filtered.length === 0 && <p className="text-sm text-gray-400">لا توجد صلاحيات مطابقة</p>}
       </div>
+
+      <p className="text-xs text-gray-500">
+        تُعرض فقط الصلاحيات التي يملكها حسابك ويحق له منحها؛ ولا تُعرض صلاحية admin إلا لمدير نظام.
+        الحماية نفسها مطبَّقة على الخادم.
+      </p>
     </div>
   );
 }
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  // The caller's own rights decide what the screen may offer (the server re-checks regardless).
+  const actor = useMemo(() => readSignedInActor(), []);
   const [showForm, setShowForm] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -90,8 +107,11 @@ export default function UsersPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["users"] });
 
+  // Never send a permission the caller may not grant, even if a stale selection still holds one.
+  const grantableOnly = (list: string[]) => list.filter((r) => actor.canGrant(r));
+
   const createMutation = useMutation({
-    mutationFn: () => UsersApi.create({ username, password, displayName, roles }),
+    mutationFn: () => UsersApi.create({ username, password, displayName, roles: grantableOnly(roles) }),
     onSuccess: () => {
       invalidate();
       setShowForm(false); setUsername(""); setPassword(""); setDisplayName(""); setRoles([]); setError(null);
@@ -100,7 +120,7 @@ export default function UsersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (userId: string) => UsersApi.update(userId, { displayName: editName, roles: editRoles }),
+    mutationFn: (userId: string) => UsersApi.update(userId, { displayName: editName, roles: grantableOnly(editRoles) }),
     onSuccess: () => { invalidate(); setEditing(null); setEditError(null); },
     onError: (err: ApiErrorLike) =>
       setEditError(err?.response?.data?.detail ?? err?.response?.data?.title ?? "تعذر حفظ الصلاحيات")
@@ -126,13 +146,13 @@ export default function UsersPage() {
     <>
       <PageHeader
         title="المستخدمون"
-        subtitle="إدارة حسابات الدخول والصلاحيات - متاحة فقط لمن يملك دور admin"
+        subtitle="إدارة حسابات الدخول والصلاحيات - متاحة فقط لمن يملك صلاحية إدارة المستخدمين"
         action={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setShowForm(true)}>+ مستخدم جديد</Button>
             <Select className="w-44" value={editing ?? ""} onChange={(e) => { const u = users?.find((x) => x.id === e.target.value); if (u) startEdit(u); else setEditing(null); }}>
               <option value="">تعديل صلاحيات مستخدم...</option>
-              {users?.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+              {users?.filter((u) => actor.canManageAccount(u.roles)).map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
             </Select>
           </div>
         }
@@ -148,7 +168,7 @@ export default function UsersPage() {
             </div>
             <div>
               <label className="field-label">الأدوار / الصلاحيات</label>
-              <PermissionPicker selected={roles} onToggle={toggleRole} />
+              <PermissionPicker selected={roles} onToggle={toggleRole} canGrant={actor.canGrant} />
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={createMutation.isPending}>{createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}</Button>
@@ -173,7 +193,7 @@ export default function UsersPage() {
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
           </div>
-          <PermissionPicker selected={editRoles} onToggle={toggleEditRole} />
+          <PermissionPicker selected={editRoles} onToggle={toggleEditRole} canGrant={actor.canGrant} />
           <div className="flex gap-2 mt-4">
             <Button disabled={!editName || updateMutation.isPending} onClick={() => updateMutation.mutate(editing)}>
               {updateMutation.isPending ? "جارٍ الحفظ..." : "حفظ الصلاحيات"}
@@ -194,7 +214,11 @@ export default function UsersPage() {
           </tr></thead>
           <tbody>
             {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
-            {users?.map((u) => (
+            {users?.map((u) => {
+              // An administrator account may only be changed by an administrator - the same rule the
+              // API enforces - so its controls are simply not offered to a delegated administrator.
+              const canManage = actor.canManageAccount(u.roles);
+              return (
               <tr key={u.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 align-top">
                 <td className="font-medium ltr-nums">{u.username}</td>
                 <td>{u.displayName}</td>
@@ -206,6 +230,9 @@ export default function UsersPage() {
                 </td>
                 <td><Badge tone={u.isActive ? "green" : "gray"}>{u.isActive ? "نشط" : "معطل"}</Badge></td>
                 <td>
+                  {!canManage ? (
+                    <span className="text-xs text-gray-400">حساب مسؤول - يتطلب صلاحية admin</span>
+                  ) : (
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" onClick={() => startEdit(u)}>الصلاحيات</Button>
                     <Input
@@ -224,9 +251,11 @@ export default function UsersPage() {
                     </Button>
                     {u.isActive && <Button variant="ghost" onClick={() => deactivateMutation.mutate(u.id)}>تعطيل</Button>}
                   </div>
+                  )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </Card>

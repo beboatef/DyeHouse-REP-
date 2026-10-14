@@ -193,3 +193,45 @@ export const Permissions: PermissionOption[] = [
 /** Arabic group label for a permission value, falling back to the module prefix. */
 export const permissionGroupOf = (value: string): string =>
   Permissions.find((p) => p.value === value)?.group ?? value;
+
+/** The signed-in user's own rights, read from the session the login stored. */
+export interface SignedInActor {
+  readonly isAdmin: boolean;
+  readonly roles: string[];
+  /** True when this account is allowed to hand this permission to someone else. */
+  canGrant(value: string): boolean;
+  /** True when this account may edit/deactivate/reset the given account (administrators are protected). */
+  canManageAccount(accountRoles: readonly string[]): boolean;
+}
+
+const ADMIN = "admin";
+
+/**
+ * Reads the caller's own permissions so the UI can avoid OFFERING an action the server will refuse.
+ *
+ * This mirrors `UserAdministrationGuard` exactly: you may only grant a right you hold, only an
+ * administrator may grant "admin", and only an administrator may touch an administrator's account.
+ * It is deliberately an AID to the server, never a substitute: every write is still re-checked
+ * server-side against the authenticated claims, so a hand-crafted request cannot bypass this.
+ */
+export function readSignedInActor(): SignedInActor {
+  let roles: string[] = [];
+  try {
+    const stored = globalThis.localStorage?.getItem("dyehouse_user");
+    const parsed = stored ? (JSON.parse(stored) as { roles?: unknown }) : null;
+    if (Array.isArray(parsed?.roles)) roles = parsed.roles.map((r) => String(r));
+  } catch {
+    roles = [];
+  }
+
+  const lower = roles.map((r) => r.toLowerCase());
+  const isAdmin = lower.includes(ADMIN);
+
+  return {
+    isAdmin,
+    roles,
+    canGrant: (value: string) => isAdmin || (value.toLowerCase() !== ADMIN && lower.includes(value.toLowerCase())),
+    canManageAccount: (accountRoles: readonly string[]) =>
+      isAdmin || !accountRoles.some((r) => r.toLowerCase() === ADMIN)
+  };
+}

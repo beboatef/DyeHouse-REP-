@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SeparatesApi, SeparateStatus } from "@/api/client";
-import { PageHeader, Card, Button, Input, Badge } from "@/components/ui";
+import { SeparatesApi, SeparateStatus, ProductionStagesApi } from "@/api/client";
+import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { useI18n } from "@/i18n";
 
 const statusLabel: Record<SeparateStatus, string> = {
   PendingReprocessing: "بانتظار إعادة التشغيل",
@@ -15,12 +16,25 @@ const statusTone: Record<SeparateStatus, "yellow" | "blue" | "green" | "red" | "
 };
 
 export default function SeparatesPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { data: separates, isLoading } = useQuery({ queryKey: ["separates"], queryFn: () => SeparatesApi.list() });
   const [scrapReasonById, setScrapReasonById] = useState<Record<string, string>>({});
 
+  // The stage the reprocessing Job Order actually begins at. Only ACTIVE stages are offered; empty
+  // keeps the ordinary formation start. Reprocessed material is already past formation, so starting
+  // later is the normal case - and it never posts stock (the raw issue is the single deduction).
+  const [startStageById, setStartStageById] = useState<Record<string, string>>({});
+  const { data: stages } = useQuery({
+    queryKey: ["production-stages", "active"],
+    queryFn: () => ProductionStagesApi.list({ activeOnly: true })
+  });
+
   const reprocessMutation = useMutation({
-    mutationFn: (id: string) => SeparatesApi.reprocess(id, { orderDate: new Date().toISOString().slice(0, 10) }),
+    mutationFn: (id: string) => SeparatesApi.reprocess(id, {
+      orderDate: new Date().toISOString().slice(0, 10),
+      startingStageId: startStageById[id] || null
+    }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["separates"] })
   });
   const scrapMutation = useMutation({
@@ -59,6 +73,18 @@ export default function SeparatesPage() {
 
             {s.status === "PendingReprocessing" && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
+                {/* Optional starting stage for the new Job Order (spec section 23). */}
+                <Select
+                  aria-label={t("prod.startingStage", "مرحلة البداية")}
+                  value={startStageById[s.id] ?? ""}
+                  onChange={(e) => setStartStageById((p) => ({ ...p, [s.id]: e.target.value }))}
+                  className="min-w-[12rem] max-w-full"
+                >
+                  <option value="">{t("prod.startingStageDefault", "التشكيل (الافتراضي)")}</option>
+                  {(stages ?? []).map((st) => (
+                    <option key={st.id} value={st.id}>{st.code} - {st.name}</option>
+                  ))}
+                </Select>
                 <Button variant="secondary" onClick={() => reprocessMutation.mutate(s.id)}>إنشاء أمر إعادة تشغيل</Button>
                 <Input
                   placeholder="سبب الإتلاف..."

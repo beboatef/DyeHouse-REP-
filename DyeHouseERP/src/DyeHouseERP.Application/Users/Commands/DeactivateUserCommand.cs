@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Exceptions;
 using MediatR;
@@ -41,6 +42,10 @@ public class DeactivateUserCommandHandler : IRequestHandler<DeactivateUserComman
                 throw new DomainException(
                     "This is the only active administrator. Grant the admin permission to another user first.");
         }
+
+        // Server-side: disabling an administrator account is modifying one, so it is reserved to
+        // administrators (the last-active-admin rule above already ran and still wins on message).
+        UserAdministrationGuard.EnsureCanModifyAccount(_currentUser, user);
 
         user.Deactivate(_currentUser.UserName);
         await _db.SaveChangesAsync(cancellationToken);

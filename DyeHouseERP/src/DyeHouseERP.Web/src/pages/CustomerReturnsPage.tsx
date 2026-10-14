@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CustomerReturnsApi, CustomersApi, ItemsApi, RawMessagesApi, ProductionOrdersApi,
+  CustomerReturnsApi, CustomersApi, ItemsApi, RawMessagesApi, ProductionOrdersApi, ProductionStagesApi,
   type CustomerReturn, type CustomerReturnLineInput, type CostBearer, type ReturnOwnership
 } from "@/api/client";
 import { PageHeader, Card, Button, Input, Select, Field, Badge } from "@/components/ui";
@@ -59,6 +59,11 @@ export default function CustomerReturnsPage() {
   const [orderFor, setOrderFor] = useState<string | null>(null);
   const [orderLine, setOrderLine] = useState({ itemId: "", rawMessageId: "", quantityKg: "", quantityMeter: "", color: "", notes: "" });
   const [orderCostBearer, setOrderCostBearer] = useState<CostBearer | "">("");
+  // The stage the new Job Order actually begins at (spec section 33). Returned material is reworked
+  // from the operation it failed at, so starting later than formation is the normal case. Only
+  // ACTIVE stages are offered and empty keeps the formation start; the raw issue - the single stock
+  // deduction - is identical either way.
+  const [orderStartingStageId, setOrderStartingStageId] = useState("");
   const [orderError, setOrderError] = useState<string | null>(null);
 
   const [filterCustomerId, setFilterCustomerId] = useState("");
@@ -103,6 +108,11 @@ export default function CustomerReturnsPage() {
   const { data: orders } = useQuery({
     queryKey: ["production-orders", "for-returns"],
     queryFn: () => ProductionOrdersApi.list()
+  });
+
+  const { data: stages } = useQuery({
+    queryKey: ["production-stages", "active"],
+    queryFn: () => ProductionStagesApi.list({ activeOnly: true })
   });
 
   /** Lots and orders are narrowed to the return's customer - stock is customer-owned. */
@@ -172,7 +182,8 @@ export default function CustomerReturnsPage() {
         costBearer: orderCostBearer as CostBearer,
         color: orderLine.color.trim() || null,
         notes: orderLine.notes.trim() || null,
-        requestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : null
+        requestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : null,
+        startingStageId: orderStartingStageId || null
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customer-returns"] });
@@ -181,6 +192,7 @@ export default function CustomerReturnsPage() {
       setOrderFor(null);
       setOrderLine({ itemId: "", rawMessageId: "", quantityKg: "", quantityMeter: "", color: "", notes: "" });
       setOrderCostBearer("");
+      setOrderStartingStageId("");
       setOrderError(null);
     },
     onError: (err) => setOrderError(errorMessage(err, t("common.error")))
@@ -590,6 +602,7 @@ export default function CustomerReturnsPage() {
                                   setOrderFor(orderFor === ret.id ? null : ret.id);
                                   setOrderLine({ itemId: "", rawMessageId: "", quantityKg: "", quantityMeter: "", color: "", notes: "" });
                                   setOrderCostBearer("");
+                                  setOrderStartingStageId("");
                                   setOrderError(null);
                                 }}
                               >
@@ -639,7 +652,21 @@ export default function CustomerReturnsPage() {
                                 <Field label={t("returns.color", "اللون")}>
                                   <Input value={orderLine.color} onChange={(e) => setOrderLine((p) => ({ ...p, color: e.target.value }))} />
                                 </Field>
+
+                                {/* Where the rework actually starts (spec section 33). Optional: empty
+                                    keeps the ordinary formation start, and the API refuses a stage that
+                                    is not an existing, active one. */}
+                                <Field label={t("prod.startingStage", "مرحلة البداية")}>
+                                  <Select value={orderStartingStageId} onChange={(e) => setOrderStartingStageId(e.target.value)}>
+                                    <option value="">{t("prod.startingStageDefault", "التشكيل (الافتراضي)")}</option>
+                                    {(stages ?? []).map((st) => (
+                                      <option key={st.id} value={st.id}>{st.code} - {st.name}</option>
+                                    ))}
+                                  </Select>
+                                </Field>
                               </div>
+
+                              <p className="kpi-footnote mt-2">{t("prod.startingStageHint")}</p>
 
                               {/* The account choice. No option is preselected: the user MUST say who
                                   carries the cost of the rework, and the API refuses a missing choice. */}

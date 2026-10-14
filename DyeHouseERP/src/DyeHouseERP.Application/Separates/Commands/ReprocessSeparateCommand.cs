@@ -16,8 +16,16 @@ namespace DyeHouseERP.Application.Separates.Commands;
 /// section 23). The original order's history is NEVER edited or
 /// overwritten - genealogy is preserved purely through
 /// ProductionOrder.ReprocessingOfProductionOrderId pointing back to it.
+///
+/// <paramref name="StartingStageId"/> is optional and must name an EXISTING, ACTIVE stage:
+/// reprocessed material is already past formation (it came out of a later operation), so the
+/// job may legitimately start where the rework actually begins. Empty means the ordinary
+/// route start (التشكيل). Either way the order starts at exactly ONE stage and the rest of the
+/// route stays dynamic, and no inventory movement is posted by this command - the raw issue
+/// remains the single deduction.
 /// </summary>
-public record ReprocessSeparateCommand(Guid SeparateId, DateTime OrderDate, string? Notes) : IRequest<ProductionOrderDto>;
+public record ReprocessSeparateCommand(
+    Guid SeparateId, DateTime OrderDate, string? Notes, Guid? StartingStageId = null) : IRequest<ProductionOrderDto>;
 
 public class ReprocessSeparateCommandValidator : AbstractValidator<ReprocessSeparateCommand>
 {
@@ -56,9 +64,11 @@ public class ReprocessSeparateCommandHandler : IRequestHandler<ReprocessSeparate
             requestedQuantityKg: separate.QuantityKg, requestedQuantityMeter: separate.QuantityMeter,
             notes: request.Notes, reprocessingOfProductionOrderId: separate.OriginalProductionOrderId);
 
+        // Only ACTIVE stages are offered, so a stage that does not exist - or that has been
+        // deactivated - can never become the starting stage (the domain lookup refuses it).
         var activeStages = await _db.ProductionStageDefinitions.AsNoTracking()
             .Where(s => s.IsActive).OrderBy(s => s.Sequence).ToListAsync(cancellationToken);
-        newOrder.BuildStageRoute(activeStages, _currentUser.UserName);
+        newOrder.BuildStageRoute(activeStages, _currentUser.UserName, request.StartingStageId);
 
         _db.ProductionOrders.Add(newOrder);
 

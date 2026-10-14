@@ -211,27 +211,46 @@ public class ProductionOrder : AuditableEntity
     }
 
     /// <summary>
-    /// Starts the order at التشكيل and NOTHING ELSE (spec sections 12-13).
+    /// Starts the order at ONE stage and NOTHING ELSE (spec sections 12-13).
     ///
     /// The route is deliberately NOT pre-built from every active stage: doing so
     /// would force every basin through one fixed sequence, which is exactly what
     /// the factory does not do - different basins take different routes, and the
     /// next stage is chosen by the user at the moment of transfer. Only the
-    /// formation stage is created here, already activated with this order's
+    /// starting stage is created here, already activated with this order's
     /// ACTUAL weight as its baseline; every later stage is created by
     /// <see cref="ActivateNextStage"/> at transfer time.
+    ///
+    /// By default the starting stage is التشكيل, identified ONLY by the explicit
+    /// flag - never by Sequence order. <paramref name="startingStageId"/> lets the
+    /// two workflows that genuinely start elsewhere pick it explicitly: reprocessing a
+    /// Separate (spec section 23) and raising a Job Order from a customer return (spec
+    /// section 33), where the material is already past formation. It must name a stage
+    /// from <paramref name="stageDefinitions"/> - the caller passes the ACTIVE stages, so
+    /// an unknown or inactive stage is refused and the dynamic route configuration is
+    /// untouched. Selecting a later starting stage posts NO stock: the raw material was
+    /// issued once, by the issue that created the order.
     /// </summary>
-    public void BuildStageRoute(IEnumerable<ProductionStageDefinition> stageDefinitions, string startedBy)
+    public void BuildStageRoute(
+        IEnumerable<ProductionStageDefinition> stageDefinitions, string startedBy, Guid? startingStageId = null)
     {
         if (_stageExecutions.Count > 0)
             throw new DomainException("The stage route has already been built for this production order.");
 
-        // Identified ONLY by the explicit flag - never by Sequence order.
-        var formation = stageDefinitions.FirstOrDefault(s => s.IsFormationStage)
-            ?? throw new DomainException(
-                "No production stage is marked as the formation stage (IsFormationStage). Configure one before creating Job Orders.");
+        var stages = stageDefinitions as IReadOnlyCollection<ProductionStageDefinition> ?? stageDefinitions.ToList();
 
-        var first = new ProductionOrderStageExecution(Id, formation.Id, formation.Sequence, formation.RequiresDrawingNumber);
+        var firstDefinition = startingStageId.HasValue
+            ? stages.FirstOrDefault(s => s.Id == startingStageId.Value)
+              ?? throw new DomainException(
+                  "The selected starting stage is not one of the active production stages. Choose an existing, " +
+                  "active stage (or leave it empty to start at the formation stage).")
+            // Identified ONLY by the explicit flag - never by Sequence order.
+            : stages.FirstOrDefault(s => s.IsFormationStage)
+              ?? throw new DomainException(
+                  "No production stage is marked as the formation stage (IsFormationStage). Configure one before creating Job Orders.");
+
+        var first = new ProductionOrderStageExecution(
+            Id, firstDefinition.Id, firstDefinition.Sequence, firstDefinition.RequiresDrawingNumber);
 
         // First-stage baseline is the Job Order's actual weight (spec section 15).
         first.Activate(RequestedQuantityKg, RequestedQuantityMeter, startedBy);

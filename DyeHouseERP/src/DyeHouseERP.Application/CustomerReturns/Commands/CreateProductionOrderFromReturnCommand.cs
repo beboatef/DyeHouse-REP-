@@ -41,7 +41,12 @@ public record CreateProductionOrderFromReturnCommand(
     string? Notes = null,
     // Client idempotency token, forwarded to the issue workflow: a retried confirmation with the same
     // token returns the SAME order instead of raising a second job and a second stock issue.
-    Guid? RequestId = null) : IRequest<ProductionOrderDto>;
+    Guid? RequestId = null,
+    // Optional starting stage (spec section 33): returned material is reworked from the operation it
+    // failed at, so the new Job Order may start at an existing, ACTIVE stage other than التشكيل.
+    // Forwarded to the canonical issue workflow, which refuses an unknown/inactive stage and still
+    // posts exactly ONE raw deduction.
+    Guid? StartingStageId = null) : IRequest<ProductionOrderDto>;
 
 public class CreateProductionOrderFromReturnCommandValidator : AbstractValidator<CreateProductionOrderFromReturnCommand>
 {
@@ -94,7 +99,8 @@ public class CreateProductionOrderFromReturnCommandHandler
             Notes: request.Notes,
             RequestId: request.RequestId,
             CustomerReturnId: customerReturn.Id,
-            CostBearer: request.CostBearer!.Value);
+            CostBearer: request.CostBearer!.Value,
+            StartingStageId: request.StartingStageId);
 
         return await _mediator.Send(issue, cancellationToken);
     }

@@ -1,5 +1,31 @@
 # Phase 9 — Final Verification
 
+> ## ⚠️ HISTORICAL REPORT — superseded
+>
+> This is a **point-in-time snapshot**, recorded at HEAD `abb4426` with the phases 2–8 work still
+> **uncommitted** in the working tree (~180 dirty files). It is kept for the record and is **not** the
+> current status.
+>
+> - **Latest status: [`docs/audit/progress.md`](progress.md).**
+> - The phases 2–8 work described here as uncommitted was afterwards committed as `abb4426..7c68042` on
+>   `main`, on the repository owner's explicit instruction. §C.7's "No unauthorized Git operations" line
+>   therefore describes the state *at the time of writing*, not today's `HEAD`.
+> - A later audit pass (see **Corrections** below) **found two real defects** in lines this report marked
+>   `Pass`, and confirmed one coverage gap and one missing capability. Those rows are annotated here and the
+>   code was fixed on branch `fix/audit-findings` — the report is not silently rewritten, because its
+>   measured rows are what was true of `abb4426`.
+
+## Corrections (found after this report, at HEAD `7c68042`)
+
+| This report's line | What was actually true | Where it stands now |
+|---|---|---|
+| §B.7 "No privilege escalation — **Pass** (caveat)" | The caveat was a **real escalation path**: a holder of `users.manage`/`roles.manage` could grant `admin` (or any right they did not hold) to another account, and could modify/disable/reset an administrator account. The self-permission rule only stopped a user from editing *their own* set | **Fixed** — `UserAdministrationGuard` is enforced server-side in `CreateUserCommand`, `UpdateUserCommand`, `DeactivateUserCommand` and `ChangePasswordCommand`; regression tests in `tests/DyeHouseERP.UnitTests/UserPermissionEscalationTests.cs` (see `progress.md`) |
+| §C.5 "Sub-customer permits linked without movements — **Pass**" | Issuing one did post no stock — but **confirming** one (`MarkDelivered`) posted a *second* OUT for the same ready lot, i.e. the movement could be deducted twice | **Fixed** — a sub-customer permit posts no movement in `MarkDeliveryDeliveredCommandHandler` or in the post-approval correction path, and its lines may reference the primary customer's Job Order; tests in `SubCustomerPermitDeliveryTests.cs` (see `progress.md`) |
+| §C.4 "No double raw deduction … *No dedicated test exists*" (coverage gap) | Still true at `abb4426`; it was closed afterwards | **Closed** — a direct ledger test exists (`Phase4ProductionFloorTests`, section 6, recorded in `progress.md`), and the reprocessing/return starting-stage work added further ledger assertions |
+| §C.4 "Linked new Job Order — **Pass**" / reprocess + return routes | Both workflows always started at التشكيل; there was no way to say the rework begins at a later operation | **Extended** — an optional, validated **starting stage** (active stages only) now reaches `Reprocessing`, the issue workflow and the return workflow (see `progress.md`) |
+| §C.5 "Sub-customer permits linked without movements — **Pass**" (further) | A **sub-permit line's original-raw figure** was also summed into the order's "already settled" total in `CreateDeliveryCommand`, `EditDeliveredDeliveryCommand` and `ReadRemainingOriginalRawAsync`, so a document-only sub-permit shrank the primary permit's real remaining allowance and could block a later legitimate delivery; the correction endpoint also dropped the manually-entered original-raw figures, and a sub-permit could promise more than the primary permit delivered | **Fixed** — sub-permit lines are excluded from the settled arithmetic, a sub-permit is bounded by the linked primary permit's own lines, and the correction endpoint carries the original-raw fields; tests in `SubCustomerPermitDeliveryTests.cs` (see `progress.md`) |
+| §C.3 "Drawing number only when Printing — **Pass**" (reprocess/return) | Correct as written: a Printing stage still demands a drawing number, and a further print run names its OWN. A reprocess/return order that selects Printing as its **starting** stage is therefore refused, because the number is stored on the *original* order and the rule forbids borrowing another order's number | **Open business decision** (not a defect) — recorded for the owner: either supply a drawing number at order creation, or start the rework earlier and enter it at Printing. No rule was relaxed and no source was invented (see `progress.md`) |
+
 > **Mode:** verification and regression review ONLY. No feature work; no file was changed by this phase.
 > **No commit, no push, and no migration was applied.**
 
@@ -49,7 +75,7 @@ Migrations are **generated, never applied** (see §C).
 | 4 | PBKDF2-SHA256 | **Pass** | `PasswordHasher.cs:20` `Rfc2898DeriveBytes.Pbkdf2(…, HashAlgorithmName.SHA256, …)`, 100 000 iterations, per-password random salt |
 | 5 | Login throttling | **Pass** | `LoginThrottleMiddleware` + `LoginRateLimiter` (per (IP,username) and per-IP budgets, defaults 5/15m/15m/20); `LoginRateLimiterTests` (10) |
 | 6 | Token invalidation on password change / deactivation / permission change | **Pass** | `Program.cs` `OnTokenValidated` re-reads the live user via `IUserSessionValidator` every request: rejects missing account, inactive account, and any role-claim diff; `ConcurrencyAndSecurityHardeningTests.UserSessionValidatorTests`, `DeactivateUserSafetyTests` |
-| 7 | No privilege escalation | **Pass (caveat)** | `UpdateUserCommand` refuses a self permission change outright and refuses removing the last active admin; `UserSafetyJwtAndPaySupplierTests.DeactivateUserSafetyTests`, `UserRoleValidationTests`. Caveat recorded as an open question (§E): a holder of `users.manage`/`roles.manage` may grant `admin` to another account — a deliberate high-privilege capability, not a self-escalation path |
+| 7 | No privilege escalation | **Pass (caveat)** — *corrected: the caveat was a real escalation path; see Corrections* | `UpdateUserCommand` refuses a self permission change outright and refuses removing the last active admin; `UserSafetyJwtAndPaySupplierTests.DeactivateUserSafetyTests`, `UserRoleValidationTests`. Caveat recorded as an open question (§E): a holder of `users.manage`/`roles.manage` may grant `admin` to another account — a deliberate high-privilege capability, not a self-escalation path |
 | 8 | Last-admin protection | **Pass** | `UpdateUserCommand.cs:64-76` (only-active-admin demotion refused) |
 | 9 | Current password required for self-service change | **Not Applicable** | There is **no self-service password endpoint**. The only change-password route is `POST api/users/{id}/change-password` behind `users.manage` (admin-driven). Phase 1 recorded the same scope note. No feature was added (Phase 9 forbids it) |
 | 10 | Trusted proxies only | **Pass** | `Program.cs` honors `X-Forwarded-*` **only** for `ReverseProxy:KnownProxies`; default is loopback only; no `KnownNetworks`; `RequireHeaderSymmetry` |
@@ -101,7 +127,7 @@ Migrations are **generated, never applied** (see §C).
 | Requirement | Status | Evidence |
 |---|---|---|
 | Linked new Job Order | **Pass** | `ReprocessSeparateCommand` sets `ReprocessingOfProductionOrderId`; `Phase4FloorCaptureTests.ReprocessingASeparate_CreatesANewLinkedOrder_AndLeavesTheOriginalUntouched` |
-| No double raw deduction | **Pass** | Reprocessing creates the order **only** (no stock movement) and is raised on the separate's own quantity; raw is deducted once, on the order it is issued to; the original order's figures are asserted untouched. *No dedicated "double deduction" test exists — evidence is the command + the untouched-original assertion* |
+| No double raw deduction | **Pass** — *corrected: the "no dedicated test" gap was closed afterwards; see Corrections* | Reprocessing creates the order **only** (no stock movement) and is raised on the separate's own quantity; raw is deducted once, on the order it is issued to; the original order's figures are asserted untouched. *No dedicated "double deduction" test exists — evidence is the command + the untouched-original assertion* |
 | Actual costs recorded | **Pass** | `CostEntry` + `CreateCostEntryCommand`; `CostCategoryTests` (5), `CostApprovalOrderingTests` (4) |
 | Reprocessing/separate costs not auto-charged | **Pass** | `CostEntry.IsChargeableToCustomer` defaults false; `InvoiceBillingGuard`; `Phase6ChargeableCostTests` |
 | Responsibility explicit | **Pass** | `CreateProductionOrderFromReturnCommand` requires `CostBearer`; carried on the order/DTOs |
@@ -115,7 +141,7 @@ Migrations are **generated, never applied** (see §C).
 | Remaining correct | **Pass** | `GetDeliveriesQueryHandler.ReadRemainingOriginalRawAsync` (single source reused by guard + statement) |
 | Statement fields complete | **Pass** | `GetDeliveryStatementQuery` + `DeliveryStatementPrintPage`; `Phase5DeliveryStatementTests` |
 | Kg and meters independent | **Pass** | Per-unit columns, never summed (statement + `Phase8ExportTests`) |
-| Sub-customer permits linked without movements | **Pass** | `Delivery.PrimaryDeliveryId/PrimaryCustomerId`; Phase 5 sub-customer test |
+| Sub-customer permits linked without movements | **Pass** — *corrected: confirming one could post a second OUT; see Corrections* | `Delivery.PrimaryDeliveryId/PrimaryCustomerId`; Phase 5 sub-customer test |
 | Returns separate | **Pass** | `CustomerReturnCancellationTests` (7), `Phase5CustomerReturnTests` |
 | No auto invoice/credit-note | **Pass** | `Phase6CustomerReturnInvoiceIsolationTests` |
 | Customer/company choice enforced | **Pass** | `CostBearer` on a return-raised order (mandatory, mutually exclusive with an ordinary issue) |

@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Users.DTOs;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Exceptions;
@@ -75,6 +76,12 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, UserD
                 throw new DomainException(
                     "This is the only active administrator. Grant the admin permission to another user first.");
         }
+
+        // Server-side, after the two self-lockout rules above: an administrator account may only
+        // be modified by an administrator, and nobody can hand out a right they do not hold
+        // themselves (which is what makes "admin" unobtainable through roles.manage alone).
+        UserAdministrationGuard.EnsureCanModifyAccount(_currentUser, user);
+        UserAdministrationGuard.EnsureCanGrantPermissions(_currentUser, request.Roles);
 
         user.SetProfile(request.DisplayName, request.Roles, _currentUser.UserName);
 

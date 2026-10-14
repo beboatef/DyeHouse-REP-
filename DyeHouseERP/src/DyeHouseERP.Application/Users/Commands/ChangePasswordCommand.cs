@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,11 @@ public class ChangePasswordCommandHandler : IRequestHandler<ChangePasswordComman
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken)
             ?? throw new NotFoundException("User", request.UserId);
+
+        // Server-side: resetting a password is modifying the account, so an administrator account
+        // can only be reset by an administrator - otherwise users.manage would be a route to
+        // taking over an admin login instead of a way to help an ordinary user back in.
+        UserAdministrationGuard.EnsureCanModifyAccount(_currentUser, user);
 
         user.ChangePassword(_passwordHasher.Hash(request.NewPassword), _currentUser.UserName);
         await _db.SaveChangesAsync(cancellationToken);

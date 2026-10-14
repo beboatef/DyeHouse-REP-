@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Users.DTOs;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Entities;
@@ -50,6 +51,11 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, UserD
 
     public async Task<UserDto> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
+        // Server-side: the rights written onto the new login may never exceed the caller's own.
+        // A users.manage holder can therefore create ordinary logins, but cannot mint an
+        // administrator (or any other right they do not hold) through this endpoint.
+        UserAdministrationGuard.EnsureCanGrantPermissions(_currentUser, request.Roles);
+
         if (await _db.Users.AnyAsync(u => u.Username == request.Username, cancellationToken))
             throw new DuplicateCodeException("User", request.Username);
 

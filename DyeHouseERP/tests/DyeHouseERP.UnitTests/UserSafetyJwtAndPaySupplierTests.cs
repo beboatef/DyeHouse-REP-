@@ -36,8 +36,21 @@ public class DeactivateUserSafetyTests
 
     private Persistence.ApplicationDbContext NewDb() => new(_options);
 
-    private static ICurrentUserService AsUser(string username, Guid userId) =>
-        Mock.Of<ICurrentUserService>(u => u.UserName == username && u.UserId == userId);
+    private static ICurrentUserService AsUser(string username, Guid userId, params string[] permissions)
+    {
+        var mock = new Mock<ICurrentUserService>();
+        mock.SetupGet(u => u.UserName).Returns(username);
+        mock.SetupGet(u => u.UserId).Returns(userId);
+        // Mirrors CurrentUserService: a held permission OR the admin catch-all satisfies a check.
+        // Required by the administrator-account guard: deactivating an admin is reserved to admins.
+        mock.Setup(u => u.IsInRole(It.IsAny<string>()))
+            .Returns((string role) => permissions.Contains(role, StringComparer.OrdinalIgnoreCase));
+        mock.Setup(u => u.HasPermission(It.IsAny<string>()))
+            .Returns((string permission) =>
+                permissions.Contains(permission, StringComparer.OrdinalIgnoreCase)
+                || permissions.Contains(DyeHouseERP.Domain.Common.Permissions.Admin, StringComparer.OrdinalIgnoreCase));
+        return mock.Object;
+    }
 
     [Fact]
     public async Task User_Cannot_Deactivate_Themself()
@@ -92,7 +105,8 @@ public class DeactivateUserSafetyTests
             db.SaveChanges();
         }
 
-        var handler = new DeactivateUserCommandHandler(NewDb(), AsUser("admin-a", other.Id));
+        var handler = new DeactivateUserCommandHandler(NewDb(),
+            AsUser("admin-a", other.Id, DyeHouseERP.Domain.Common.Permissions.Admin));
         await handler.Handle(new DeactivateUserCommand(target.Id), CancellationToken.None);
 
         using var verify = NewDb();

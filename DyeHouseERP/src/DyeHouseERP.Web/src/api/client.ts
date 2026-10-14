@@ -414,6 +414,12 @@ export interface CreateOrderFromReturnInput {
   notes?: string | null;
   /** Idempotency token: a retried confirmation raises no second order and no second issue. */
   requestId?: string | null;
+  /**
+   * Optional starting stage: returned material is reworked from the operation it failed at, so the
+   * new Job Order may start at an existing, ACTIVE stage other than formation. Omit to start at
+   * formation. The raw issue (the single stock deduction) is unchanged either way.
+   */
+  startingStageId?: string | null;
 }
 
 export const CustomerReturnsApi = {
@@ -849,7 +855,12 @@ export interface Separate {
 
 export const SeparatesApi = {
   list: (params?: { status?: SeparateStatus }) => api.get<Separate[]>("/separates", { params }).then((r) => r.data),
-  reprocess: (id: string, body: { orderDate: string; notes?: string }) =>
+  /**
+   * Creates the reprocessing Job Order. `startingStageId` is optional: reprocessed material is
+   * already past formation, so the job may start at an existing, ACTIVE stage other than formation.
+   * It moves no stock - the raw issue stays the single deduction.
+   */
+  reprocess: (id: string, body: { orderDate: string; notes?: string; startingStageId?: string | null }) =>
     api.post<ProductionOrder>(`/separates/${id}/reprocess`, body).then((r) => r.data),
   scrap: (id: string, reason: string) => api.post<Separate>(`/separates/${id}/scrap`, { reason }).then((r) => r.data)
 };
