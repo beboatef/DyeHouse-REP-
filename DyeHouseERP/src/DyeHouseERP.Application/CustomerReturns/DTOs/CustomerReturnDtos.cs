@@ -1,3 +1,5 @@
+using DyeHouseERP.Domain.Enums;
+
 namespace DyeHouseERP.Application.CustomerReturns.DTOs;
 
 public class CustomerReturnLineDto
@@ -7,6 +9,11 @@ public class CustomerReturnLineDto
     /// <summary>The raw lot the returned quantity was added back to - always present.</summary>
     public Guid RawMessageId { get; set; }
     public string MessageNumber { get; set; } = string.Empty;
+
+    /// <summary>Where the returned material actually landed (spec section 32's destination): the lot's own warehouse, always a raw-material one.</summary>
+    public Guid WarehouseId { get; set; }
+    public string WarehouseCode { get; set; } = string.Empty;
+    public string WarehouseName { get; set; } = string.Empty;
 
     public Guid ItemId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
@@ -40,6 +47,12 @@ public class CustomerReturnDto
     public string? Reason { get; set; }
     public string? Notes { get; set; }
 
+    /// <summary>The document the goods came back against (spec section 32), when one was stated.</summary>
+    public string? ReferenceDocument { get; set; }
+
+    /// <summary>Whose material came back - the customer's or the factory's own (spec section 32).</summary>
+    public ReturnOwnership Ownership { get; set; }
+
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
 
@@ -51,4 +64,19 @@ public class CustomerReturnDto
     public DateTime? CancelledAtUtc { get; set; }
 
     public List<CustomerReturnLineDto> Lines { get; set; } = new();
+
+    /// <summary>
+    /// The Job Orders raised FROM this return, if any (spec section 33). Read-only traceability: the
+    /// return is never converted, so this is a reference list and not a state of the return.
+    /// </summary>
+    public List<CustomerReturnOrderDto> ProductionOrders { get; set; } = new();
+}
+
+/// <summary>One Job Order raised from a return - its number and who carries its cost.</summary>
+public class CustomerReturnOrderDto
+{
+    public Guid ProductionOrderId { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public CostBearer CostBearer { get; set; }
+    public ProductionOrderStatus Status { get; set; }
 }

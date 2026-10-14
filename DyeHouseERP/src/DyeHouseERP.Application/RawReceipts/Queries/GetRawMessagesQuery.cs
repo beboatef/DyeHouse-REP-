@@ -122,6 +122,7 @@ public class GetRawMessagesQueryHandler : IRequestHandler<GetRawMessagesQuery, L
                         QuantityKg = l.QuantityKg,
                         QuantityMeter = l.QuantityMeter,
                         PieceCount = l.PieceCount,
+                        Color = l.Color,
                         Notes = l.Notes,
                         RejectedQuantityKg = l.RejectedQuantityKg,
                         RejectedQuantityMeter = l.RejectedQuantityMeter,

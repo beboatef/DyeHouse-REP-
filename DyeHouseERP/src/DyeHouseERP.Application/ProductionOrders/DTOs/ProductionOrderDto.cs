@@ -23,8 +23,6 @@ public class StageExecutionDto
     public string StageName { get; set; } = string.Empty;
     public int Sequence { get; set; }
     public StageExecutionStatus Status { get; set; }
-    public decimal? InputKg { get; set; }
-    public decimal? InputMeter { get; set; }
     public decimal? OutputKg { get; set; }
     public decimal? OutputMeter { get; set; }
     public decimal? LossKg { get; set; }
@@ -35,7 +33,19 @@ public class StageExecutionDto
     public string? Notes { get; set; }
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
-    public bool AllowSkip { get; set; }
+    // Phase 4: AllowSkip is gone - the legacy skip workflow was deleted, so no stage advertises it.
+
+    /// <summary>The operation's ACTUAL input (spec section 20) - recorded, never inferred from the order's requested quantity.</summary>
+    public decimal? InputKg { get; set; }
+    public decimal? InputMeter { get; set; }
+
+    /// <summary>Second-grade material produced by this operation - its own quantity, neither output nor waste.</summary>
+    public decimal? SecondGradeKg { get; set; }
+    public decimal? SecondGradeMeter { get; set; }
+
+    /// <summary>The machine and the execution shift this operation actually ran on (historical references).</summary>
+    public Guid? MachineId { get; set; }
+    public Guid? ProductionShiftId { get; set; }
 }
 
 public class ProductionOrderDto
@@ -85,6 +95,37 @@ public class ProductionOrderDto
     /// </summary>
     public Guid? SourceIssueTransactionId { get; set; }
 
+    /// <summary>
+    /// The customer return this order was raised from, when it was (spec section 33). A reference, not
+    /// a relationship the return owns: the order stays independent.
+    /// </summary>
+    public Guid? CustomerReturnId { get; set; }
+    public string? CustomerReturnNumber { get; set; }
+
+    /// <summary>
+    /// Who carries this order's cost (spec section 20). Always stated: an ordinary order is worked for
+    /// the customer, and an order raised from a customer return carries the account the user chose.
+    /// </summary>
+    public CostBearer CostBearer { get; set; }
+
+    // =================================================================
+    // Original raw accounting across partial deliveries (spec section 31).
+    // The original quantity is FIXED for the life of the order and is never overwritten by a
+    // delivery; remaining is derived from a single domain rule, per unit, with no conversion.
+    // =================================================================
+
+    /// <summary>The order's ORIGINAL raw quantity - fixed, never overwritten.</summary>
+    public decimal OriginalRawQuantityKg { get; set; }
+    public decimal OriginalRawQuantityMeter { get; set; }
+
+    /// <summary>Original raw quantity settled by this order's non-cancelled deliveries so far.</summary>
+    public decimal DeliveredOriginalRawKg { get; set; }
+    public decimal DeliveredOriginalRawMeter { get; set; }
+
+    /// <summary>Original PO quantity minus what its deliveries have settled, never negative.</summary>
+    public decimal RemainingOriginalRawKg { get; set; }
+    public decimal RemainingOriginalRawMeter { get; set; }
+
     /// <summary>Planning reference: the Formation Request this issue came from, when applicable.</summary>
     public Guid? FormationRequestId { get; set; }
 
@@ -98,6 +139,37 @@ public class ProductionOrderDto
     /// refuses (spec section 9, case C).
     /// </summary>
     public bool HasProductionStarted { get; set; }
+
+    // =================================================================
+    // Raw-material allocation: required / allocated / remaining / status
+    // (spec section 13). "Required" is the order's own requested quantity
+    // (RequestedQuantityKg/Meter). KG and Meter are independent units and are
+    // never converted into one another, so each is reported and judged on its own.
+    // =================================================================
+
+    /// <summary>Total KG allocated to this order, summed over its allocation rows.</summary>
+    public decimal AllocatedQuantityKg { get; set; }
+
+    /// <summary>Total Meter allocated to this order (see <see cref="AllocatedQuantityKg"/>).</summary>
+    public decimal AllocatedQuantityMeter { get; set; }
+
+    /// <summary>
+    /// Still to allocate, per unit, never negative: the requested quantity minus what is
+    /// allocated. A unit the order never requested reports 0 - it imposes no requirement.
+    /// </summary>
+    public decimal RemainingToAllocateKg { get; set; }
+
+    /// <summary>Meter counterpart of <see cref="RemainingToAllocateKg"/>.</summary>
+    public decimal RemainingToAllocateMeter { get; set; }
+
+    /// <summary>
+    /// Whether the order is FULLY allocated (100%) - judged by the SAME domain rule the
+    /// backend enforces on every production-start/transition path
+    /// (ProductionOrder.IsRawAllocationComplete, via RawAllocationGuard), so what the screen
+    /// shows and what the server refuses can never disagree. Until this is true, production
+    /// cannot start and no stage may record output.
+    /// </summary>
+    public bool IsRawAllocationComplete { get; set; }
 
     public List<RawAllocationDto> RawAllocations { get; set; } = new();
     public List<StageExecutionDto> StageExecutions { get; set; } = new();

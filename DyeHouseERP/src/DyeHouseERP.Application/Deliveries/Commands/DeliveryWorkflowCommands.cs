@@ -34,7 +34,13 @@ public class MarkDeliveryPreparedCommandHandler : IRequestHandler<MarkDeliveryPr
 }
 
 // -------------------- Deliver --------------------
-public record MarkDeliveryDeliveredCommand(Guid DeliveryId) : IRequest<DeliveryDto>;
+/// <summary>
+/// Posts the physical delivery (the OUT rows that empty the ready lot). <paramref name="RequestId"/> is
+/// the optional client idempotency token: a double-submitted or retried confirmation carrying the SAME
+/// token returns the delivery that already posted instead of erroring out - and never posts a second
+/// deduction. The unique filtered index on the token is the database backstop for a true race.
+/// </summary>
+public record MarkDeliveryDeliveredCommand(Guid DeliveryId, Guid? RequestId = null) : IRequest<DeliveryDto>;
 
 /// <summary>
 /// Deducts ready stock (spec section 31: "validate ready balance, prevent
@@ -70,6 +76,22 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
 
     public async Task<DeliveryDto> Handle(MarkDeliveryDeliveredCommand request, CancellationToken cancellationToken)
     {
+        // ---- Idempotency (spec section 31) -----------------------------------
+        // A retry that carries the token of a confirmation which already posted answers with THAT
+        // document and writes nothing: the stock is deducted exactly once, however many times the
+        // confirmation is sent. Checked before the period guard so a retry still succeeds after the
+        // period closes, and before the state guard so a retry is not mistaken for a duplicate post.
+        if (request.RequestId.HasValue)
+        {
+            var alreadyPostedId = await _db.Deliveries.AsNoTracking()
+                .Where(d => d.DeliverRequestId == request.RequestId.Value)
+                .Select(d => (Guid?)d.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (alreadyPostedId.HasValue)
+                return await GetDeliveriesQueryHandler.LoadDtoAsync(_db, alreadyPostedId.Value, cancellationToken);
+        }
+
         // Spec section 43: delivering ready goods is the stock posting that empties the lot.
         // The clock is read ONCE so the guard and every ledger row below carry the same date.
         var postingDate = _clock.UtcNow;
@@ -150,7 +172,7 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
                     throw new NegativeStockException(availableMeter, requested.RequestedMeter);
             }
 
-            delivery.MarkDelivered();
+            delivery.MarkDelivered(request.RequestId);
 
             foreach (var line in lines)
             {

@@ -38,7 +38,14 @@ public record CreateCustomerReturnCommand(
     DateTime ReturnDate,
     string? Reason,
     string? Notes,
-    List<CustomerReturnLineInput> Lines) : IRequest<CustomerReturnDto>;
+    List<CustomerReturnLineInput> Lines,
+    // The document the goods come back against - invoice or delivery (إذن) number, or the customer's
+    // own reference (spec section 32). Free text: the goods may come back against a document this
+    // system never issued. Purely descriptive - a return changes no invoice and creates no credit note.
+    string? ReferenceDocument = null,
+    // Whose material came back (spec section 32). Defaults to the customer's own, which is the ordinary
+    // case, and is recorded explicitly so factory-owned material can never be counted as customer stock.
+    ReturnOwnership Ownership = ReturnOwnership.CustomerOwned) : IRequest<CustomerReturnDto>;
 
 public class CreateCustomerReturnCommandValidator : AbstractValidator<CreateCustomerReturnCommand>
 {
@@ -47,6 +54,8 @@ public class CreateCustomerReturnCommandValidator : AbstractValidator<CreateCust
         RuleFor(x => x.CustomerId).NotEmpty();
         RuleFor(x => x.Reason).MaximumLength(500);
         RuleFor(x => x.Notes).MaximumLength(2000);
+        RuleFor(x => x.ReferenceDocument).MaximumLength(100);
+        RuleFor(x => x.Ownership).IsInEnum();
 
         RuleFor(x => x.Lines).NotEmpty()
             .WithMessage("A customer return must contain at least one line.");
@@ -157,7 +166,8 @@ public class CreateCustomerReturnCommandHandler : IRequestHandler<CreateCustomer
 
         var returnNumber = await _numberGenerator.NextAsync(DocumentType.CustomerReturn, cancellationToken: cancellationToken);
         var customerReturn = new CustomerReturn(
-            returnNumber, request.ReturnDate, request.CustomerId, _currentUser.UserName, request.Reason, request.Notes);
+            returnNumber, request.ReturnDate, request.CustomerId, _currentUser.UserName, request.Reason, request.Notes,
+            request.ReferenceDocument, request.Ownership);
 
         // Lock every (warehouse, item, customer, lot) dimension being written, so a
         // concurrent allocation cannot read a stale balance while this posts.

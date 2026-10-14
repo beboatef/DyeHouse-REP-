@@ -50,6 +50,41 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             .Where(m => messageIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, cancellationToken);
 
+        // Required / allocated / remaining / allocation status (spec section 13). The sum is
+        // taken over the allocation ROWS that were just read back, and completeness is judged
+        // by the domain's own rule - the very same call RawAllocationGuard makes before it
+        // lets production start - so the figure shown here is the figure enforced.
+        var allocatedKg = allocations.Sum(a => a.QuantityKg ?? 0m);
+        var allocatedMeter = allocations.Sum(a => a.QuantityMeter ?? 0m);
+
+        // Original raw accounting across partial deliveries (spec section 31). The original quantity is
+        // the order's own fixed figure; what has been settled is summed from the lines of every
+        // NON-cancelled delivery of this order, and remaining comes from the domain rule that owns the
+        // calculation - so an order only ever reports what the backend would actually let a delivery do.
+        var cancelledDeliveryIds = await db.Deliveries.AsNoTracking()
+            .Where(d => d.Status == DeliveryStatus.Cancelled)
+            .Select(d => d.Id)
+            .ToListAsync(cancellationToken);
+
+        var deliveredLines = await db.DeliveryLines.AsNoTracking()
+            .Where(l => l.ProductionOrderId == orderId && !cancelledDeliveryIds.Contains(l.DeliveryId))
+            .Select(l => new { l.OriginalRawQuantityKg, l.OriginalRawQuantityMeter })
+            .ToListAsync(cancellationToken);
+
+        var deliveredOriginalRawKg = deliveredLines.Sum(l => l.OriginalRawQuantityKg ?? 0m);
+        var deliveredOriginalRawMeter = deliveredLines.Sum(l => l.OriginalRawQuantityMeter ?? 0m);
+        var (remainingOriginalRawKg, remainingOriginalRawMeter) =
+            order.RemainingOriginalRaw(deliveredOriginalRawKg, deliveredOriginalRawMeter);
+
+        string? customerReturnNumber = null;
+        if (order.CustomerReturnId.HasValue)
+        {
+            customerReturnNumber = await db.CustomerReturns.AsNoTracking()
+                .Where(r => r.Id == order.CustomerReturnId.Value)
+                .Select(r => r.ReturnNumber)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
         return new ProductionOrderDto
         {
             Id = order.Id,
@@ -74,7 +109,21 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
             SourceIssueTransactionId = order.SourceIssueTransactionId,
             FormationRequestId = order.FormationRequestId,
             FormationBasinId = order.FormationBasinId,
+            CustomerReturnId = order.CustomerReturnId,
+            CustomerReturnNumber = customerReturnNumber,
+            CostBearer = order.CostBearer,
+            OriginalRawQuantityKg = order.OriginalRawQuantityKg,
+            OriginalRawQuantityMeter = order.OriginalRawQuantityMeter,
+            DeliveredOriginalRawKg = deliveredOriginalRawKg,
+            DeliveredOriginalRawMeter = deliveredOriginalRawMeter,
+            RemainingOriginalRawKg = remainingOriginalRawKg,
+            RemainingOriginalRawMeter = remainingOriginalRawMeter,
             // Derived from the stage executions loaded below, never from a stored flag.
+            AllocatedQuantityKg = allocatedKg,
+            AllocatedQuantityMeter = allocatedMeter,
+            RemainingToAllocateKg = Math.Max(0m, (order.RequestedQuantityKg ?? 0m) - allocatedKg),
+            RemainingToAllocateMeter = Math.Max(0m, (order.RequestedQuantityMeter ?? 0m) - allocatedMeter),
+            IsRawAllocationComplete = order.IsRawAllocationComplete(allocatedKg, allocatedMeter),
             HasProductionStarted = order.Status == ProductionOrderStatus.InProduction
                 || stageExecutions.Any(s => s.OutputKg != null || s.OutputMeter != null
                     || s.SeparatesKg != null || s.SeparatesMeter != null
@@ -112,11 +161,14 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
                     LossMeter = s.LossMeter,
                     SeparatesKg = s.SeparatesKg,
                     SeparatesMeter = s.SeparatesMeter,
+                    SecondGradeKg = s.SecondGradeKg,
+                    SecondGradeMeter = s.SecondGradeMeter,
+                    MachineId = s.MachineId,
+                    ProductionShiftId = s.ProductionShiftId,
                     Operator = s.Operator,
                     Notes = s.Notes,
                     StartedAtUtc = s.StartedAtUtc,
-                    CompletedAtUtc = s.CompletedAtUtc,
-                    AllowSkip = def?.AllowSkip ?? false
+                    CompletedAtUtc = s.CompletedAtUtc
                 };
             }).ToList()
         };

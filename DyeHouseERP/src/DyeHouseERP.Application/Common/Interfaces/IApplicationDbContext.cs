@@ -20,6 +20,7 @@ public interface IApplicationDbContext
     DbSet<FormationBasin> FormationBasins { get; }
     DbSet<FormationSpecTemplate> FormationSpecTemplates { get; }
     DbSet<Item> Items { get; }
+    DbSet<ItemUnitConversion> ItemUnitConversions { get; }
     DbSet<Warehouse> Warehouses { get; }
     DbSet<RawMessage> RawMessages { get; }
     DbSet<InventoryTransaction> InventoryTransactions { get; }
@@ -41,6 +42,9 @@ public interface IApplicationDbContext
     DbSet<MaterialIssue> MaterialIssues { get; }
     DbSet<MaterialPreparation> MaterialPreparations { get; }
     DbSet<ReadyGoodsTransfer> ReadyGoodsTransfers { get; }
+
+    /// <summary>Movements that take ready goods BACK into raw-material stock - separate, authorized, reasoned documents (spec section 29).</summary>
+    DbSet<ReadyGoodsRawReturn> ReadyGoodsRawReturns { get; }
     DbSet<Delivery> Deliveries { get; }
     DbSet<DeliveryLine> DeliveryLines { get; }
     DbSet<Invoice> Invoices { get; }

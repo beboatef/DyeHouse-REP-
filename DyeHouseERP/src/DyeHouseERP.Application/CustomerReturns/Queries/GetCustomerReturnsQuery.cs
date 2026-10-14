@@ -2,6 +2,7 @@ using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.CustomerReturns.DTOs;
 using DyeHouseERP.Domain.Entities;
+using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -80,6 +81,26 @@ public class GetCustomerReturnsQueryHandler : IRequestHandler<GetCustomerReturns
         var orderIds = lines.Where(l => l.ProductionOrderId.HasValue).Select(l => l.ProductionOrderId!.Value).Distinct().ToList();
         var groupIds = lines.Where(l => l.FormationGroupId.HasValue).Select(l => l.FormationGroupId!.Value).Distinct().ToList();
 
+        // Job Orders raised FROM each return (spec section 33) - the return is referenced by the order,
+        // so it is resolved live here rather than stored back on the return.
+        var raisedOrders = await db.ProductionOrders.AsNoTracking()
+            .Where(o => o.CustomerReturnId != null && returnIds.Contains(o.CustomerReturnId.Value))
+            .Select(o => new { o.Id, o.OrderNumber, o.CostBearer, o.Status, ReturnId = o.CustomerReturnId!.Value })
+            .ToListAsync(cancellationToken);
+
+        // The warehouse each returned lot lives in - the destination the record has to show
+        // (spec section 32). Read from the lot, never typed on the return.
+        var messageWarehouseIds = await db.RawMessages.AsNoTracking()
+            .Where(m => messageIds.Contains(m.Id))
+            .Select(m => new { m.Id, m.WarehouseId })
+            .ToListAsync(cancellationToken);
+
+        var warehouseIds = messageWarehouseIds.Select(m => m.WarehouseId).Distinct().ToList();
+        var warehouseById = await db.Warehouses.AsNoTracking()
+            .Where(w => warehouseIds.Contains(w.Id))
+            .Select(w => new { w.Id, w.Code, w.Name })
+            .ToDictionaryAsync(w => w.Id, cancellationToken);
+
         var customers = await db.Customers.AsNoTracking()
             .Where(c => customerIds.Contains(c.Id))
             .Select(c => new { c.Id, c.Code, c.Name })
@@ -126,11 +147,17 @@ public class GetCustomerReturnsQueryHandler : IRequestHandler<GetCustomerReturns
                 if (l.FormationGroupId.HasValue && groups.TryGetValue(l.FormationGroupId.Value, out var group))
                     groupNumber = group.GroupNumber;
 
+                var warehouseId = messageWarehouseIds.FirstOrDefault(m => m.Id == l.RawMessageId)?.WarehouseId ?? Guid.Empty;
+                warehouseById.TryGetValue(warehouseId, out var warehouse);
+
                 lineDtos.Add(new CustomerReturnLineDto
                 {
                     Id = l.Id,
                     RawMessageId = l.RawMessageId,
                     MessageNumber = message?.MessageNumber ?? string.Empty,
+                    WarehouseId = warehouseId,
+                    WarehouseCode = warehouse?.Code ?? string.Empty,
+                    WarehouseName = warehouse?.Name ?? string.Empty,
                     ItemId = l.ItemId,
                     ItemCode = item?.Code ?? string.Empty,
                     ItemName = item?.Name ?? string.Empty,
@@ -160,7 +187,19 @@ public class GetCustomerReturnsQueryHandler : IRequestHandler<GetCustomerReturns
                 CancellationReason = r.CancellationReason,
                 CancelledBy = r.CancelledBy,
                 CancelledAtUtc = r.CancelledAtUtc,
-                Lines = lineDtos
+                ReferenceDocument = r.ReferenceDocument,
+                Ownership = r.Ownership,
+                Lines = lineDtos,
+                ProductionOrders = raisedOrders
+                    .Where(o => o.ReturnId == r.Id)
+                    .Select(o => new CustomerReturnOrderDto
+                    {
+                        ProductionOrderId = o.Id,
+                        OrderNumber = o.OrderNumber,
+                        CostBearer = o.CostBearer,
+                        Status = o.Status
+                    })
+                    .ToList()
             });
         }
 

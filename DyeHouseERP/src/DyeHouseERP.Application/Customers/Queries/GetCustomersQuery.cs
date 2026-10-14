@@ -37,7 +37,10 @@ public class GetCustomersQueryHandler : IRequestHandler<GetCustomersQuery, List<
                 Phone = c.Phone,
                 Address = c.Address,
                 ContactPerson = c.ContactPerson,
-                TaxNumber = c.TaxNumber
+                TaxNumber = c.TaxNumber,
+                ParentCustomerId = c.ParentCustomerId,
+                ParentCustomerCode = c.ParentCustomer != null ? c.ParentCustomer.Code : null,
+                ParentCustomerName = c.ParentCustomer != null ? c.ParentCustomer.Name : null
             })
             .ToListAsync(cancellationToken);
     }

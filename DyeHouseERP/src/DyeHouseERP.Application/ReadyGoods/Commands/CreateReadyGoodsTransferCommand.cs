@@ -173,9 +173,15 @@ foreach (var allocation in allocations)
         {
             Id = transfer.Id, TransferNumber = transfer.TransferNumber, TransferDate = transfer.TransferDate,
             ProductionOrderId = order.Id, ProductionOrderNumber = order.OrderNumber,
-            CustomerId = order.CustomerId, CustomerCode = customer?.Code ?? "",
-            ItemId = order.ItemId, ItemCode = item?.Code ?? "", Color = order.Color,
+            CustomerId = order.CustomerId, CustomerCode = customer?.Code ?? "", CustomerName = customer?.Name ?? "",
+            ItemId = order.ItemId, ItemCode = item?.Code ?? "", ItemName = item?.Name ?? "", Color = order.Color,
             QuantityKg = transfer.QuantityKg, QuantityMeter = transfer.QuantityMeter, PieceCount = transfer.PieceCount,
+            WarehouseId = request.WarehouseId, WarehouseName = warehouse.Name,
+            // The lot was created by this very movement inside this transaction, so nothing else has
+            // consumed any of it yet: the receipt reports the transferred quantity as available. The
+            // register re-reads the LIVE figure from the ledger on every subsequent load.
+            AvailableQuantityKg = request.QuantityKg ?? 0m,
+            AvailableQuantityMeter = request.QuantityMeter ?? 0m,
             StageExecutionId = stage.Id, StageSequence = stage.Sequence, StageName = stageDefinition?.Name,
             StageOutputKg = stage.OutputKg, StageOutputMeter = stage.OutputMeter,
             Status = transfer.Status.ToString()

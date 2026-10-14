@@ -83,7 +83,9 @@ public interface ITokenService
 /// </summary>
 public interface IReportExportService
 {
-    byte[] GeneratePdf(string title, string subtitle, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows);
+    // Subtitle is OPTIONAL context for the document (the company identity now comes from
+    // settings, never from a hard-coded caller literal), so null is the normal case.
+    byte[] GeneratePdf(string title, string? subtitle, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows);
     byte[] GenerateExcel(string sheetName, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows);
 }
 

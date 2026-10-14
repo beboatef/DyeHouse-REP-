@@ -35,6 +35,14 @@ public class UploadAttachmentCommandValidator : AbstractValidator<UploadAttachme
         RuleFor(x => x.Content).Must(c => c is null || c.Length <= MaxBytes)
             .WithMessage($"Attachments are limited to {MaxBytes / (1024 * 1024)} MB.");
         RuleFor(x => x.Description).MaximumLength(1000);
+
+        // F.8: only known-safe document/image kinds are accepted, and the declared type must
+        // agree. HTML/SVG/XML/script files are never stored, because a download is served from
+        // the API origin and the browser would otherwise execute them.
+        RuleFor(x => x)
+            .Must(x => AttachmentFileTypes.IsAllowed(x.FileName, x.ContentType))
+            .WithMessage("Unsupported file type. Attach a document or image (PDF, Word, Excel, CSV, " +
+                         "text, RTF, ODT/ODS, ZIP, PNG, JPEG, GIF, WEBP or BMP).");
     }
 }
 

@@ -10,9 +10,14 @@ public class InvoiceLineDto
     public Guid ItemId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string? Color { get; set; }
+    /// <summary>The unit the service is BILLED in, taken from the order's configured service price.</summary>
+    public UnitOfMeasure Unit { get; set; }
     public decimal Quantity { get; set; }
     public decimal ProcessingPrice { get; set; }
     public decimal Value { get; set; }
+
+    /// <summary>Set when this line bills an explicitly chargeable cost entry, so the link is visible.</summary>
+    public Guid? CostEntryId { get; set; }
 }
 
 public class InvoiceDto
@@ -39,9 +44,20 @@ public class InvoiceLineInput
     public Guid? ProductionOrderId { get; set; }
     public Guid ItemId { get; set; }
     public string? Color { get; set; }
+
+    /// <summary>
+    /// The unit this line is billed in. Defaults to KG for a caller that omits it, but the value the
+    /// guard checks is what the caller SENT: billing a job in Meter requires a Meter service price
+    /// and an approved Meter quantity, never a converted KG figure.
+    /// </summary>
+    public UnitOfMeasure Unit { get; set; } = UnitOfMeasure.KG;
+
     public decimal Quantity { get; set; }
     public decimal ProcessingPrice { get; set; }
     public string? Notes { get; set; }
+
+    /// <summary>A cost entry explicitly flagged chargeable to the customer, billed by this line.</summary>
+    public Guid? CostEntryId { get; set; }
 }
 
 public class CustomerStatementLineDto

@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Invoices.DTOs;
 using DyeHouseERP.Application.Invoices.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -23,6 +24,9 @@ public class CreateInvoiceCommandValidator : AbstractValidator<CreateInvoiceComm
             l.RuleFor(x => x.ItemId).NotEmpty();
             l.RuleFor(x => x.Quantity).GreaterThan(0);
             l.RuleFor(x => x.ProcessingPrice).GreaterThanOrEqualTo(0);
+            // The billing unit is mandatory and must be a real unit: a line is billed in the
+            // unit its SERVICE price is configured in, never in a unit the caller made up.
+            l.RuleFor(x => x.Unit).IsInEnum();
         });
     }
 }
@@ -40,13 +44,23 @@ public class CreateInvoiceCommandHandler : IRequestHandler<CreateInvoiceCommand,
 
     public async Task<InvoiceDto> Handle(CreateInvoiceCommand request, CancellationToken cancellationToken)
     {
+        // Every line is validated BEFORE the invoice row exists, so a refused line leaves
+        // nothing persisted: the billing unit must follow the order's configured service price,
+        // the quantity must be the approved quantity IN THAT UNIT (never a KG<->Meter conversion),
+        // and a billed cost must be explicitly chargeable and not already billed.
+        foreach (var line in request.Lines)
+            await InvoiceBillingGuard.EnsureBillableAsync(
+                _db, line.ProductionOrderId, line.ItemId, line.Unit, line.Quantity, line.CostEntryId,
+                excludeInvoiceLineId: null, cancellationToken);
+
         var invoiceNumber = await _numberGenerator.NextAsync(DocumentType.Invoice, cancellationToken: cancellationToken);
 
         var invoice = new Invoice(invoiceNumber, request.InvoiceDate, request.CustomerId, _currentUser.UserName,
             request.DeliveryId, request.Discount, request.Tax, request.Notes);
 
         foreach (var line in request.Lines)
-            invoice.AddLine(line.ProductionOrderId, line.ItemId, line.Color, line.Quantity, line.ProcessingPrice, line.Notes);
+            invoice.AddLine(line.ProductionOrderId, line.ItemId, line.Color, line.Quantity, line.ProcessingPrice,
+                line.Unit, line.Notes, line.CostEntryId);
 
         _db.Invoices.Add(invoice);
         await _db.SaveChangesAsync(cancellationToken);

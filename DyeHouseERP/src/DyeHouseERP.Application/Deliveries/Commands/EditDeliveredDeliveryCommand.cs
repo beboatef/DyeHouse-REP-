@@ -17,8 +17,14 @@ namespace DyeHouseERP.Application.Deliveries.Commands;
 // Post-approval correction (spec section 30)
 // ---------------------------------------------------------------------
 
-/// <summary>One corrected line: the quantities the delivery should now read.</summary>
-public record DeliveryLineQuantity(Guid LineId, decimal? QuantityKg, decimal? QuantityMeter);
+/// <summary>
+/// One corrected line: the quantities the delivery should now read. The two original-raw figures are
+/// optional and are the delivery's own manually-entered data (spec section 31), so a corrected
+/// delivery can correct them as well; omitted values leave whatever the line already recorded.
+/// </summary>
+public record DeliveryLineQuantity(
+    Guid LineId, decimal? QuantityKg, decimal? QuantityMeter,
+    decimal? OriginalRawQuantityKg = null, decimal? OriginalRawQuantityMeter = null);
 
 /// <summary>
 /// Corrects a delivery that has ALREADY been approved (Delivered).
@@ -52,6 +58,8 @@ public class EditDeliveredDeliveryCommandValidator : AbstractValidator<EditDeliv
             line.RuleFor(l => l.LineId).NotEmpty();
             line.RuleFor(l => l.QuantityKg).GreaterThanOrEqualTo(0).When(l => l.QuantityKg.HasValue);
             line.RuleFor(l => l.QuantityMeter).GreaterThanOrEqualTo(0).When(l => l.QuantityMeter.HasValue);
+            line.RuleFor(l => l.OriginalRawQuantityKg).GreaterThanOrEqualTo(0).When(l => l.OriginalRawQuantityKg.HasValue);
+            line.RuleFor(l => l.OriginalRawQuantityMeter).GreaterThanOrEqualTo(0).When(l => l.OriginalRawQuantityMeter.HasValue);
             // Same rule as AddLine: a line must always carry KG and/or Meter.
             line.RuleFor(l => l)
                 .Must(l => l.QuantityKg.HasValue || l.QuantityMeter.HasValue)
@@ -166,6 +174,13 @@ public class EditDeliveredDeliveryCommandHandler
                     throw new NegativeStockException(availableMeter, net.Value.Meter);
             }
 
+            // A corrected original-raw figure is re-checked against the order's FIXED original quantity
+            // (spec section 31) BEFORE anything is written: correction or not, no delivery may settle
+            // more original raw than the job started from. The line being corrected is excluded from
+            // "already settled" because its own figure is what is being replaced.
+            await EnsureCorrectedOriginalRawWithinLimitsAsync(
+                request, linesById, cancellationToken);
+
             // Apply the corrected figures and record each change in the audit log
             // BEFORE posting, so the log holds the real previous values.
             foreach (var requested in request.Lines)
@@ -174,16 +189,25 @@ public class EditDeliveredDeliveryCommandHandler
 
                 var deltaKg = (requested.QuantityKg ?? 0) - (line.QuantityKg ?? 0);
                 var deltaMeter = (requested.QuantityMeter ?? 0) - (line.QuantityMeter ?? 0);
-                if (deltaKg == 0 && deltaMeter == 0) continue;
+                if (deltaKg == 0 && deltaMeter == 0)
+                    continue;
 
-                var before = JsonSerializer.Serialize(new { line.QuantityKg, line.QuantityMeter });
+                var before = JsonSerializer.Serialize(new
+                {
+                    line.QuantityKg, line.QuantityMeter,
+                    line.OriginalRawQuantityKg, line.OriginalRawQuantityMeter
+                });
 
-                line.AdjustQuantitiesAfterApproval(requested.QuantityKg, requested.QuantityMeter);
+                line.AdjustQuantitiesAfterApproval(
+                    requested.QuantityKg, requested.QuantityMeter,
+                    requested.OriginalRawQuantityKg, requested.OriginalRawQuantityMeter);
 
                 var after = JsonSerializer.Serialize(new
                 {
                     line.QuantityKg,
                     line.QuantityMeter,
+                    line.OriginalRawQuantityKg,
+                    line.OriginalRawQuantityMeter,
                     DifferenceKg = deltaKg,
                     DifferenceMeter = deltaMeter
                 });
@@ -220,5 +244,54 @@ public class EditDeliveredDeliveryCommandHandler
         }
 
         return await GetDeliveriesQueryHandler.LoadDtoAsync(_db, delivery.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Re-checks the corrected original-raw figures against each affected order's fixed original
+    /// quantity. Everything every OTHER non-cancelled delivery settled counts against the limit; the
+    /// line being corrected does not, because its figure is the one being replaced. KG and Meter are
+    /// judged within their own unit, by the domain rule that owns the calculation.
+    /// </summary>
+    private async Task EnsureCorrectedOriginalRawWithinLimitsAsync(
+        EditDeliveredDeliveryCommand request, IReadOnlyDictionary<Guid, DeliveryLine> linesById,
+        CancellationToken cancellationToken)
+    {
+        var corrections = request.Lines
+            .Where(l => l.OriginalRawQuantityKg.HasValue || l.OriginalRawQuantityMeter.HasValue)
+            .Select(l => new { Request = l, Line = linesById[l.LineId] })
+            .ToList();
+
+        if (corrections.Count == 0) return;
+
+        var orderIds = corrections.Select(c => c.Line.ProductionOrderId).Distinct().ToList();
+        var correctedLineIds = corrections.Select(c => c.Line.Id).ToList();
+
+        var cancelledDeliveryIds = await _db.Deliveries.AsNoTracking()
+            .Where(d => d.Status == DeliveryStatus.Cancelled)
+            .Select(d => d.Id).ToListAsync(cancellationToken);
+
+        var settled = await _db.DeliveryLines.AsNoTracking()
+            .Where(l => orderIds.Contains(l.ProductionOrderId)
+                     && !cancelledDeliveryIds.Contains(l.DeliveryId)
+                     && !correctedLineIds.Contains(l.Id))
+            .Select(l => new { l.ProductionOrderId, l.OriginalRawQuantityKg, l.OriginalRawQuantityMeter })
+            .ToListAsync(cancellationToken);
+
+        foreach (var orderId in orderIds)
+        {
+            var order = await _db.ProductionOrders.AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken)
+                ?? throw new NotFoundException("ProductionOrder", orderId);
+
+            var alreadyKg = settled.Where(s => s.ProductionOrderId == orderId).Sum(s => s.OriginalRawQuantityKg ?? 0m);
+            var alreadyMeter = settled.Where(s => s.ProductionOrderId == orderId).Sum(s => s.OriginalRawQuantityMeter ?? 0m);
+
+            var requestedKg = corrections.Where(c => c.Line.ProductionOrderId == orderId)
+                .Sum(c => c.Request.OriginalRawQuantityKg ?? 0m);
+            var requestedMeter = corrections.Where(c => c.Line.ProductionOrderId == orderId)
+                .Sum(c => c.Request.OriginalRawQuantityMeter ?? 0m);
+
+            order.EnsureOriginalRawWithinLimit(alreadyKg, alreadyMeter, requestedKg, requestedMeter);
+        }
     }
 }

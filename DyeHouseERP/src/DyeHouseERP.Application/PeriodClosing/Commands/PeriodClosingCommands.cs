@@ -2,6 +2,7 @@ using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.PeriodClosing.DTOs;
 using DyeHouseERP.Domain.Entities;
+using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +36,25 @@ public class ClosePeriodCommandHandler : IRequestHandler<ClosePeriodCommand, Per
         // ranges are why the resource is global rather than per-period.
         await using (await _lockService.AcquireExclusiveAsync(IPeriodCloseService.PeriodLockResource, cancellationToken))
         {
+            // Validation BEFORE closing (spec section 43). The exclusive lock above serializes closes,
+            // so of two concurrent requests to close the same (or overlapping) range only the first
+            // commits - the second reads the first's committed row here and is refused. Without this,
+            // "close" would silently stack two closures over the same dates and there would be no
+            // single period to reopen.
+            var overlapping = await _db.PeriodCloses.AsNoTracking()
+                .Where(p => !p.IsReopened
+                            && p.PeriodStart <= request.PeriodEnd.Date
+                            && request.PeriodStart.Date <= p.PeriodEnd)
+                .ToListAsync(cancellationToken);
+
+            if (overlapping.Count > 0)
+            {
+                var alreadyClosed = overlapping[0];
+                throw new DomainException(
+                    $"The period {alreadyClosed.PeriodStart:yyyy-MM-dd} to {alreadyClosed.PeriodEnd:yyyy-MM-dd} is already " +
+                    "closed and overlaps the range being closed. Reopen that period first, or close a range that does not overlap it.");
+            }
+
             var period = new PeriodClose(request.PeriodStart, request.PeriodEnd, _currentUser.UserName, request.Notes);
             _db.PeriodCloses.Add(period);
             await _db.SaveChangesAsync(cancellationToken);

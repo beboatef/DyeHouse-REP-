@@ -53,7 +53,8 @@ public class GetInvoicesQueryHandler : IRequestHandler<GetInvoicesQuery, List<In
                 Id = l.Id, ProductionOrderId = l.ProductionOrderId,
                 ProductionOrderNumber = l.ProductionOrderId.HasValue ? orders.GetValueOrDefault(l.ProductionOrderId.Value)?.OrderNumber : null,
                 ItemId = l.ItemId, ItemCode = items.GetValueOrDefault(l.ItemId)?.Code ?? "", Color = l.Color,
-                Quantity = l.Quantity, ProcessingPrice = l.ProcessingPrice, Value = l.Quantity * l.ProcessingPrice
+                Unit = l.Unit, Quantity = l.Quantity, ProcessingPrice = l.ProcessingPrice,
+                Value = l.Quantity * l.ProcessingPrice, CostEntryId = l.CostEntryId
             }).ToList()
         };
     }

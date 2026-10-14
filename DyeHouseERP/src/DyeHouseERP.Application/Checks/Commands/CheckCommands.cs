@@ -251,31 +251,50 @@ public class ClearCheckCommandHandler : IRequestHandler<ClearCheckCommand, Check
         var movementDate = request.MovementDate ?? DateTime.UtcNow;
         await using var periodGuard = await _periodClose.BeginPostingAsync(movementDate, cancellationToken);
 
-        var accountId = request.TreasuryAccountId ?? entity.TreasuryAccountId
-            ?? throw new DomainException("The check must be deposited into a bank/treasury account before it can be cleared.");
+        // An incoming customer check that we endorsed onward to a supplier NEVER passes through our
+        // bank: the customer's bank pays the supplier directly, and its value was already recognised
+        // when the endorsement settled the supplier payable. Clearing it must therefore post NO
+        // treasury row - money "in" here would be a fictitious cash inflow (spec section 39).
+        var endorsedToSupplier = entity.Direction == CheckDirection.CustomerCheck
+            && entity.CurrentHolderType == CheckHolderType.Supplier;
 
-        var account = await _db.TreasuryAccounts.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken)
-            ?? throw new NotFoundException("Treasury Account", accountId);
+        if (endorsedToSupplier && request.TreasuryAccountId.HasValue)
+            throw new DomainException(
+                $"Check {entity.CheckNumber} was endorsed to a supplier, so it never passes through one of " +
+                "our cash/bank accounts. Clearing it posts no cash movement and takes no account.");
 
-        if (entity.TreasuryAccountId != account.Id)
+        TreasuryAccount? account = null;
+        if (!endorsedToSupplier)
         {
-            if (entity.Status is CheckStatus.Received or CheckStatus.InHand)
-                entity.Deposit(account.Id, account.Name, movementDate, _currentUser.UserName);
-            else
-                entity.SetDrawnOnAccount(account.Id);
+            var accountId = request.TreasuryAccountId ?? entity.TreasuryAccountId
+                ?? throw new DomainException("The check must be deposited into a bank/treasury account before it can be cleared.");
+
+            account = await _db.TreasuryAccounts.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken)
+                ?? throw new NotFoundException("Treasury Account", accountId);
+
+            if (entity.TreasuryAccountId != account.Id)
+            {
+                if (entity.Status is CheckStatus.Received or CheckStatus.InHand)
+                    entity.Deposit(account.Id, account.Name, movementDate, _currentUser.UserName);
+                else
+                    entity.SetDrawnOnAccount(account.Id);
+            }
         }
 
         entity.Clear(movementDate, _currentUser.UserName, request.Notes);
 
-        var direction = entity.Direction == CheckDirection.CustomerCheck ? TreasuryDirection.In : TreasuryDirection.Out;
-        var description = entity.Direction == CheckDirection.CustomerCheck
-            ? $"Cleared customer check {entity.CheckNumber} ({entity.BankName})"
-            : $"Cleared supplier check {entity.CheckNumber} ({entity.BankName})";
+        if (account is not null)
+        {
+            var direction = entity.Direction == CheckDirection.CustomerCheck ? TreasuryDirection.In : TreasuryDirection.Out;
+            var description = entity.Direction == CheckDirection.CustomerCheck
+                ? $"Cleared customer check {entity.CheckNumber} ({entity.BankName})"
+                : $"Cleared supplier check {entity.CheckNumber} ({entity.BankName})";
 
-        _db.TreasuryTransactions.Add(new TreasuryTransaction(
-            account.Id, movementDate, DocumentType.CheckRegister, entity.CheckNumber, entity.Id,
-            entity.Amount, direction, description, _currentUser.UserName));
+            _db.TreasuryTransactions.Add(new TreasuryTransaction(
+                account.Id, movementDate, DocumentType.CheckRegister, entity.CheckNumber, entity.Id,
+                entity.Amount, direction, description, _currentUser.UserName));
+        }
 
         // The movements this clear appended (the deposit, when it was still in hand, and the clearing itself)
         // are registered explicitly so SaveChangesAsync INSERTs them on this already-persisted check.

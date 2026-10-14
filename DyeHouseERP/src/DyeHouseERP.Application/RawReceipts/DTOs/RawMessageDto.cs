@@ -11,6 +11,10 @@ public class RawMessageLineDto
     public decimal? QuantityKg { get; set; }
     public decimal? QuantityMeter { get; set; }
     public int? PieceCount { get; set; }
+
+    /// <summary>The colour this line's material was received in, where applicable (spec section 8). Optional descriptive data, never a stock dimension.</summary>
+    public string? Color { get; set; }
+
     public string? Notes { get; set; }
 
     /// <summary>Rejected at receiving inspection, if any (spec sections 8-9). Inspection is recorded information, never an approval gate.</summary>
@@ -56,7 +60,13 @@ public class RawMessageLineInput
     public Guid ItemId { get; set; }
     public decimal? QuantityKg { get; set; }
     public decimal? QuantityMeter { get; set; }
+
+    /// <summary>Bale / roll count (auxiliary - spec section 8). Descriptive only, never an inventory unit.</summary>
     public int? PieceCount { get; set; }
+
+    /// <summary>Colour/shade of the material on this line, where applicable (spec section 8). Optional.</summary>
+    public string? Color { get; set; }
+
     public string? Notes { get; set; }
 }
 

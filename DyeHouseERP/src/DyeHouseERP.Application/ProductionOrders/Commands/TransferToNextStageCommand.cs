@@ -38,7 +38,15 @@ public record TransferToNextStageCommand(
     decimal? OutputMeter,
     decimal? SeparatesKg,
     decimal? SeparatesMeter,
-    string? Notes, string? DrawingNumber = null) : IRequest<ProductionOrderDto>;
+    string? Notes, string? DrawingNumber = null,
+    // The ACTUAL input the operation consumed. Recorded as entered - never inferred from the
+    // order's requested quantity and never derived from the output (spec section 20).
+    decimal? InputKg = null, decimal? InputMeter = null,
+    // Second-grade material: a quantity of its own - not output, not waste.
+    decimal? SecondGradeKg = null, decimal? SecondGradeMeter = null,
+    // Where the operation ran. Validated for SUITABILITY (the machine must be mapped to this stage)
+    // and AVAILABILITY (machine and shift must be active) before anything is written.
+    Guid? MachineId = null, Guid? ProductionShiftId = null) : IRequest<ProductionOrderDto>;
 
 public class TransferToNextStageCommandValidator : AbstractValidator<TransferToNextStageCommand>
 {
@@ -68,6 +76,47 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
     {
         _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose;
         _numberGenerator = numberGenerator;
+    }
+
+    /// <summary>
+    /// Validates the machine the operation says it ran on (spec section 20): the machine must be
+    /// MAPPED TO THE CLOSING OPERATION (suitability - a machine mapped to another stage cannot be
+    /// reported as having run this one) and it must still be ACTIVE (availability - a retired machine
+    /// cannot receive a new execution, while the history of the ones already recorded stays intact).
+    /// The shift must exist and be active. Neither is required: a stage may legitimately run without
+    /// either being recorded.
+    /// </summary>
+    private async Task EnsureMachineAndShiftAreUsableAsync(
+        TransferToNextStageCommand request, Guid stageDefinitionId, CancellationToken cancellationToken)
+    {
+        if (request.MachineId.HasValue)
+        {
+            var machine = await _db.Machines.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == request.MachineId.Value, cancellationToken)
+                ?? throw new NotFoundException("Machine", request.MachineId.Value);
+
+            if (!machine.IsActive)
+                throw new DomainException(
+                    $"Machine '{machine.Name}' is inactive and cannot be recorded as running an operation. ماكينة موقوفة لا يمكن تسجيل تشغيلها.");
+
+            var isMappedToStage = await _db.StageMachines.AsNoTracking()
+                .AnyAsync(l => l.MachineId == machine.Id && l.StageDefinitionId == stageDefinitionId, cancellationToken);
+            if (!isMappedToStage)
+                throw new DomainException(
+                    $"Machine '{machine.Name}' is not mapped to this operation, so it cannot be recorded as the machine it ran on. " +
+                    "الماكينة غير مرتبطة بهذه المرحلة.");
+        }
+
+        if (request.ProductionShiftId.HasValue)
+        {
+            var shift = await _db.ProductionShifts.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == request.ProductionShiftId.Value, cancellationToken)
+                ?? throw new NotFoundException("ProductionShift", request.ProductionShiftId.Value);
+
+            if (!shift.IsActive)
+                throw new DomainException(
+                    $"Production shift '{shift.Name}' is inactive and cannot be recorded. وردية موقوفة لا يمكن تسجيلها.");
+        }
     }
 
     public async Task<ProductionOrderDto> Handle(TransferToNextStageCommand request, CancellationToken cancellationToken)
@@ -125,6 +174,20 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             _db, order.ItemId, request.SeparatesKg, request.SeparatesMeter,
             cancellationToken, "as separates", requireAnyQuantity: false);
 
+        // The recorded input and second-grade quantity obey the SAME unit rules: an operation may only
+        // report the units its item is configured for. That is what keeps a waste figure from ever being
+        // computed between incompatible units - the KG waste is a KG subtraction and the Meter waste is a
+        // Meter subtraction, and neither is converted into the other (spec sections 20-21).
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, order.ItemId, request.InputKg, request.InputMeter,
+            cancellationToken, "as this operation's actual input", requireAnyQuantity: false);
+        await ItemUnitGuard.EnsureValidQuantitiesAsync(
+            _db, order.ItemId, request.SecondGradeKg, request.SecondGradeMeter,
+            cancellationToken, "as this operation's second-grade quantity", requireAnyQuantity: false);
+
+        // Machine suitability/availability and the execution shift.
+        await EnsureMachineAndShiftAreUsableAsync(request, stage.StageDefinitionId, cancellationToken);
+
         stage.EnsureDrawingNumber();
         var drawingNumber = request.DrawingNumber;
 
@@ -147,9 +210,27 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
         var previousOutputKg = stage.OutputKg;
         var previousOutputMeter = stage.OutputMeter;
 
-        // Steps 1-4: close, record output, derive loss and loss %, lock.
+        // Steps 1-4: close, record what the operation consumed and produced (input, output, separates,
+        // second-grade), derive the waste from the immutable baseline, and lock. The machine and shift
+        // this operation ran on are recorded on the SAME row, as historical references.
         stage.CloseWithOutput(request.OutputKg, request.OutputMeter,
-            request.SeparatesKg, request.SeparatesMeter, request.Notes, _currentUser.UserName);
+            request.SeparatesKg, request.SeparatesMeter, request.Notes, _currentUser.UserName,
+            inputKg: request.InputKg, inputMeter: request.InputMeter,
+            secondGradeKg: request.SecondGradeKg, secondGradeMeter: request.SecondGradeMeter,
+            machineId: request.MachineId, productionShiftId: request.ProductionShiftId);
+
+        // Spec sections 22-23: the separates quantity a closing operation records ENTERS the separates
+        // register here, in the same transaction. A Separate is the record the register, the reprocessing
+        // decision and the scrap decision all read from, so writing the figure on the stage row alone
+        // would leave recorded material untracked (and the register permanently empty). It is created
+        // ONLY when a quantity was actually recorded, and - exactly like a new stage execution or a raw
+        // allocation - it is Added explicitly, because EF change detection would otherwise treat the
+        // client-generated key as an existing row and try to UPDATE a row that was never inserted.
+        if (request.SeparatesKg is > 0 || request.SeparatesMeter is > 0)
+            _db.Separates.Add(new Separate(
+                order.Id, stage.Id, order.CustomerId, order.ItemId,
+                request.SeparatesKg, request.SeparatesMeter, _currentUser.UserName,
+                notes: request.Notes));
 
         // Audit: the figures the stage actually ended on and where they came
         // from, so a weight edited before transfer leaves a visible trail (spec 16).
@@ -159,11 +240,19 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             JsonSerializer.Serialize(new { outputKg = previousOutputKg, outputMeter = previousOutputMeter }),
             JsonSerializer.Serialize(new
             {
+                inputKg = request.InputKg,
+                inputMeter = request.InputMeter,
                 outputKg = request.OutputKg,
                 outputMeter = request.OutputMeter,
                 baselineKg = stage.BaselineKg,
                 lossKg = stage.LossKg,
                 lossPercentKg = stage.LossPercentKg,
+                separatesKg = request.SeparatesKg,
+                separatesMeter = request.SeparatesMeter,
+                secondGradeKg = request.SecondGradeKg,
+                secondGradeMeter = request.SecondGradeMeter,
+                machineId = request.MachineId,
+                productionShiftId = request.ProductionShiftId,
                 nextStage = nextStage.Name
             }),
             ipAddress: null,

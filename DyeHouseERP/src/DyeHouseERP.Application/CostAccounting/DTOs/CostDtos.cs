@@ -10,6 +10,9 @@ public class CostEntryDto
     public decimal Amount { get; set; }
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
+
+    /// <summary>True only when the cost was explicitly flagged chargeable to the customer - the precondition for billing it.</summary>
+    public bool IsChargeableToCustomer { get; set; }
 }
 
 /// <summary>Production Order cost rollup (spec section 34) - always computed live, never divides by zero.</summary>

@@ -145,6 +145,7 @@ internal static class CustomerMapper
         Phone = c.Phone,
         Address = c.Address,
         ContactPerson = c.ContactPerson,
-        TaxNumber = c.TaxNumber
+        TaxNumber = c.TaxNumber,
+        ParentCustomerId = c.ParentCustomerId
     };
 }

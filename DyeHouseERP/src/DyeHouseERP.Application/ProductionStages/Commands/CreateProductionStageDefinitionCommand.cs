@@ -8,10 +8,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.ProductionStages.Commands;
 
+/// <summary>
+/// Creates a configurable production stage. Phase 4: the AllowSkip capability is gone with the legacy
+/// skip workflow - a stage is not "skippable", an order simply never runs it and moves on to whichever
+/// operation the operator picks next.
+/// </summary>
 public record CreateProductionStageDefinitionCommand(
     string Code, string Name, int Sequence,
     bool RequiresInputQuantity, bool RequiresOutputQuantity,
-    bool AllowSkip, string? Notes, bool IsFormationStage = false) : IRequest<ProductionStageDefinitionDto>;
+    string? Notes, bool IsFormationStage = false) : IRequest<ProductionStageDefinitionDto>;
 
 public class CreateProductionStageDefinitionCommandValidator : AbstractValidator<CreateProductionStageDefinitionCommand>
 {
@@ -44,7 +49,7 @@ public class CreateProductionStageDefinitionCommandHandler
         var stage = new ProductionStageDefinition(
             request.Code, request.Name, request.Sequence, _currentUser.UserName,
             request.RequiresInputQuantity, request.RequiresOutputQuantity,
-            request.AllowSkip, request.Notes, request.IsFormationStage);
+            request.Notes, request.IsFormationStage);
 
         // At most one stage may be the formation stage (التشكيل), so creating a new
         // formation stage moves the flag rather than adding a second one.
@@ -67,7 +72,6 @@ public class CreateProductionStageDefinitionCommandHandler
         RequiresDrawingNumber = s.RequiresDrawingNumber,
         RequiresInputQuantity = s.RequiresInputQuantity,
         RequiresOutputQuantity = s.RequiresOutputQuantity,
-        AllowSkip = s.AllowSkip,
         IsFormationStage = s.IsFormationStage,
         IsReadyGoodsStage = s.IsReadyGoodsStage,
         Notes = s.Notes

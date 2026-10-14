@@ -57,7 +57,16 @@ public record IssueRawMaterialCommand(
     bool OverrideNegativeStock = false,
     string? OverrideReason = null,
     // Set only when the Approval Center dispatches this command after approving a request (spec section 24).
-    Guid? ApprovalRequestId = null) : IRequest<ProductionOrderDto>, IApprovalBoundOperation
+    Guid? ApprovalRequestId = null,
+    // Set when this issue raises the Job Order from a CUSTOMER RETURN of processed goods (spec sections
+    // 32-33). The return is a reference only - the Job Order, the OUT ledger row and its allocation are
+    // created exactly as they are for any other issue, so a return-based order is a real production
+    // order and not a special document type.
+    Guid? CustomerReturnId = null,
+    // Who carries the cost of the order this issue creates (spec section 20). MANDATORY whenever
+    // CustomerReturnId is set: rework of a returned batch can legitimately be a quality claim the
+    // factory absorbs or a charge the customer carries, and the two must never be guessed.
+    CostBearer? CostBearer = null) : IRequest<ProductionOrderDto>, IApprovalBoundOperation
 {
     public ApprovalRequestType ApprovalType => ApprovalRequestType.RawIssue;
 
@@ -67,7 +76,10 @@ public record IssueRawMaterialCommand(
     public string OperationSignature =>
         $"RawIssue|customer={CustomerId}|item={ItemId}|msg={RawMessageId}" +
         $"|kg={ApprovalBinding.Quantity(ActualQuantityKg)}|m={ApprovalBinding.Quantity(ActualQuantityMeter)}" +
-        $"|fr={FormationRequestId?.ToString() ?? "-"}|basin={FormationBasinId?.ToString() ?? "-"}";
+        $"|fr={FormationRequestId?.ToString() ?? "-"}|basin={FormationBasinId?.ToString() ?? "-"}" +
+        // The cost-responsibility decision is part of what an approval authorizes, so an approval
+        // raised for one account can never be spent on the other (spec section 24).
+        $"|return={CustomerReturnId?.ToString() ?? "-"}|bearer={(CostBearer.HasValue ? ((int)CostBearer.Value).ToString() : "-")}";
 
     /// <summary>
     /// Normalizes the command for a separation-of-duties request: always an override,
@@ -89,6 +101,20 @@ public class IssueRawMaterialCommandValidator : AbstractValidator<IssueRawMateri
         RuleFor(x => x.ItemId).NotEmpty().WithMessage("Choose the item being issued - a raw lot may carry several items.");
         RuleFor(x => x.RawMessageId).NotEmpty().WithMessage("Choose the raw material lot the material is issued from.");
         RuleFor(x => x.JobOrderType).IsInEnum();
+
+        // Spec sections 32-33: an order raised from a customer return must state who carries its cost.
+        // Deliberately a validation failure rather than a default - silently billing a courtesy rework
+        // to the customer (or absorbing work that should be charged) is exactly the mistake this rule
+        // exists to prevent.
+        RuleFor(x => x.CostBearer)
+            .NotNull()
+            .When(x => x.CustomerReturnId.HasValue)
+            .WithMessage("Choose who carries the cost of an order raised from a customer return: on the customer's account (على حساب العميل) or on the company's account (على حساب الشركة).");
+
+        RuleFor(x => x.CostBearer)
+            .Null()
+            .When(x => !x.CustomerReturnId.HasValue)
+            .WithMessage("The cost responsibility of an ordinary issue is the customer's; it can only be stated for an order raised from a customer return.");
         RuleFor(x => x)
             .Must(x => x.ActualQuantityKg is > 0 || x.ActualQuantityMeter is > 0)
             .WithMessage("Enter the ACTUAL issued quantity in KG and/or Meter - it becomes the Job Order's opening quantity and is never derived automatically.");
@@ -173,6 +199,9 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
         // ---- Optional planning references (Workflow 1) -----------------------
         await ValidateFormationReferenceAsync(request, cancellationToken);
 
+        // ---- Optional customer-return reference (spec sections 32-33) --------
+        await ValidateCustomerReturnAsync(request, cancellationToken);
+
         // The stage route is snapshotted at issue time; a missing formation stage is a
         // configuration error and must roll the whole issue back rather than create an
         // order that can never be worked.
@@ -227,9 +256,13 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
                 quantityKg: request.ActualQuantityKg, quantityMeter: request.ActualQuantityMeter,
                 direction: TransactionDirection.Out, createdBy: _currentUser.UserName);
 
-            // Link the one generated order to the one issue transaction (+ optional
-            // planning references), so the relationship is data, not a convention.
-            order.LinkIssue(issueRow.Id, request.RequestId, request.FormationRequestId, request.FormationBasinId);
+            // Link the one generated order to the one issue transaction (+ optional planning
+            // references and the optional customer return), so the relationship is data, not a
+            // convention. The cost bearer is recorded on the ORDER for the same reason: cost
+            // responsibility is a property of the job, not of the screen that raised it.
+            order.LinkIssue(
+                issueRow.Id, request.RequestId, request.FormationRequestId, request.FormationBasinId,
+                request.CustomerReturnId, request.CostBearer);
 
             _db.ProductionOrders.Add(order);
             _db.InventoryTransactions.Add(issueRow);
@@ -248,6 +281,8 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
                     actualQuantityMeter = request.ActualQuantityMeter,
                     formationRequestId = request.FormationRequestId,
                     formationBasinId = request.FormationBasinId,
+                    customerReturnId = request.CustomerReturnId,
+                    costBearer = request.CostBearer?.ToString(),
                     sourceIssueTransactionId = issueRow.Id
                 }),
                 ipAddress: null,
@@ -259,6 +294,29 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
 
             return await GetProductionOrderByIdQueryHandler.LoadDtoAsync(_db, order.Id, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Validates the optional customer-return reference (spec sections 32-33). The return must exist,
+    /// must not be cancelled, and must belong to the customer whose material is being issued: a return
+    /// is the justification for the rework, so pointing an issue at another customer's return would
+    /// make the traceability chain lie. Nothing here is required for an ordinary issue.
+    /// </summary>
+    private async Task ValidateCustomerReturnAsync(IssueRawMaterialCommand request, CancellationToken cancellationToken)
+    {
+        if (!request.CustomerReturnId.HasValue) return;
+
+        var customerReturn = await _db.CustomerReturns.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == request.CustomerReturnId.Value, cancellationToken)
+            ?? throw new NotFoundException("CustomerReturn", request.CustomerReturnId.Value);
+
+        if (customerReturn.IsCancelled)
+            throw new DomainException(
+                $"Customer return {customerReturn.ReturnNumber} is cancelled, so no Job Order can be raised from it.");
+
+        if (customerReturn.CustomerId != request.CustomerId)
+            throw new DomainException(
+                $"Customer return {customerReturn.ReturnNumber} belongs to a different customer than this issue.");
     }
 
     private async Task ValidateFormationReferenceAsync(IssueRawMaterialCommand request, CancellationToken cancellationToken)

@@ -231,8 +231,11 @@ public class SupplierPaymentDto
     public Guid SupplierId { get; set; }
     public string SupplierCode { get; set; } = string.Empty;
     public string SupplierName { get; set; } = string.Empty;
-    public Guid TreasuryAccountId { get; set; }
-    public string TreasuryAccountName { get; set; } = string.Empty;
+
+    /// <summary>Null exactly when the payment was settled by an endorsed customer check (no money left an account).</summary>
+    public Guid? TreasuryAccountId { get; set; }
+
+    public string? TreasuryAccountName { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "EGP";
     public string? PaymentMethod { get; set; }
@@ -253,7 +256,13 @@ public class SupplierPaymentDto
 public record PaySupplierCommand(
     DateTime PaymentDate,
     Guid SupplierId,
-    Guid TreasuryAccountId,
+
+    /// <summary>
+    /// The cash/bank account the money leaves. Required for a cash/bank-transfer payment; when the
+    /// payment is settled by a cheque it is optional, because a cheque settlement moves no money
+    /// through our accounts at the moment of payment (the cheque carries the value).
+    /// </summary>
+    Guid? TreasuryAccountId,
     decimal Amount,
     string? PaymentMethod = null,
     Guid? CheckId = null,
@@ -265,8 +274,12 @@ public class PaySupplierCommandValidator : AbstractValidator<PaySupplierCommand>
     public PaySupplierCommandValidator()
     {
         RuleFor(x => x.SupplierId).NotEmpty();
-        RuleFor(x => x.TreasuryAccountId).NotEmpty();
         RuleFor(x => x.Amount).GreaterThan(0);
+
+        // Cash needs an account; a cheque-settled payment does not, because no cash moves now.
+        RuleFor(x => x.TreasuryAccountId).NotEmpty()
+            .When(x => x.CheckId is null)
+            .WithMessage("A treasury/bank account is required for a supplier payment that is not settled by an endorsed check.");
     }
 }
 
@@ -285,12 +298,18 @@ public class PaySupplierCommandHandler : IRequestHandler<PaySupplierCommand, Sup
     {
         await using var periodGuard = await _periodClose.BeginPostingAsync(request.PaymentDate, cancellationToken);
         await PurchaseRules.EnsureSupplierExists(_db, request.SupplierId, cancellationToken);
-        await PurchaseRules.EnsureTreasuryAccountExists(_db, request.TreasuryAccountId, cancellationToken);
+
+        // Cash needs a real account; a cheque-settled payment has none, so it is only
+        // validated/read when it was actually supplied.
+        if (!request.CheckId.HasValue)
+            await PurchaseRules.EnsureTreasuryAccountExists(_db, request.TreasuryAccountId ?? Guid.Empty, cancellationToken);
 
         var supplier = await _db.Suppliers.AsNoTracking()
             .FirstAsync(s => s.Id == request.SupplierId, cancellationToken);
-        var account = await _db.TreasuryAccounts.AsNoTracking()
-            .FirstAsync(a => a.Id == request.TreasuryAccountId, cancellationToken);
+
+        var account = request.TreasuryAccountId is { } accountId && accountId != Guid.Empty
+            ? await _db.TreasuryAccounts.AsNoTracking().FirstAsync(a => a.Id == accountId, cancellationToken)
+            : null;
 
         string? checkNumber = null;
         if (request.CheckId.HasValue)
@@ -305,6 +324,16 @@ public class PaySupplierCommandHandler : IRequestHandler<PaySupplierCommand, Sup
             if (check.Status is CheckStatus.Cancelled or CheckStatus.Bounced or CheckStatus.Cleared)
                 throw new DomainException(
                     $"Check {check.CheckNumber} is {check.Status} and cannot be used for a supplier payment.");
+
+            // A customer's cheque handed onward to a supplier is settled through the endorsement
+            // workflow, which records the endorsement, credits BOTH accounts and posts no cash.
+            // Letting it through here would settle the same instrument a second time and post a
+            // fictitious outflow on top of it.
+            if (check.Direction == CheckDirection.CustomerCheck)
+                throw new DomainException(
+                    $"Check {check.CheckNumber} is an incoming customer check: settle it against the supplier " +
+                    "through the check endorsement workflow (endorse + settle), which records the endorsement " +
+                    "and posts no cash movement.");
 
             var alreadyUsed = await _db.SupplierPayments.AnyAsync(
                 p => p.CheckId == request.CheckId.Value && p.Status != TreasuryDocumentStatus.Cancelled, cancellationToken);
@@ -344,11 +373,16 @@ public class PaySupplierCommandHandler : IRequestHandler<PaySupplierCommand, Sup
 
         _db.SupplierPayments.Add(payment);
 
-        // Real cash/bank movement.
-        _db.TreasuryTransactions.Add(new TreasuryTransaction(
-            request.TreasuryAccountId, request.PaymentDate, DocumentType.SupplierPayment, paymentNumber, payment.Id,
-            request.Amount, TreasuryDirection.Out,
-            request.Description ?? $"Payment to supplier {supplier.Name}", _currentUser.UserName));
+        // Real cash/bank movement - and ONLY for a payment where cash really left an account. A payment
+        // settled by one of our own cheques is not cash out either: the cheque itself carries the value
+        // and its own clearance posts the movement, so posting here would count the same money twice.
+        if (account is not null && payment.CheckId is null)
+        {
+            _db.TreasuryTransactions.Add(new TreasuryTransaction(
+                account.Id, request.PaymentDate, DocumentType.SupplierPayment, paymentNumber, payment.Id,
+                request.Amount, TreasuryDirection.Out,
+                request.Description ?? $"Payment to supplier {supplier.Name}", _currentUser.UserName));
+        }
 
         // Payable reduction on the append-only supplier ledger.
         _db.SupplierLedgerEntries.Add(new SupplierLedgerEntry(
@@ -367,7 +401,7 @@ public class PaySupplierCommandHandler : IRequestHandler<PaySupplierCommand, Sup
             SupplierCode = supplier.Code,
             SupplierName = supplier.Name,
             TreasuryAccountId = payment.TreasuryAccountId,
-            TreasuryAccountName = account.Name,
+            TreasuryAccountName = account?.Name,
             Amount = payment.Amount,
             Currency = payment.Currency,
             PaymentMethod = payment.PaymentMethod,
@@ -406,7 +440,7 @@ public class GetSupplierPaymentsQueryHandler : IRequestHandler<GetSupplierPaymen
         if (payments.Count == 0) return new List<SupplierPaymentDto>();
 
         var supplierIds = payments.Select(p => p.SupplierId).Distinct().ToList();
-        var accountIds = payments.Select(p => p.TreasuryAccountId).Distinct().ToList();
+        var accountIds = payments.Select(p => p.TreasuryAccountId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
 
         var suppliers = await _db.Suppliers.AsNoTracking().Where(s => supplierIds.Contains(s.Id))
             .Select(s => new { s.Id, s.Code, s.Name })
@@ -427,7 +461,7 @@ public class GetSupplierPaymentsQueryHandler : IRequestHandler<GetSupplierPaymen
                 SupplierCode = supplier.Code,
                 SupplierName = supplier.Name,
                 TreasuryAccountId = p.TreasuryAccountId,
-                TreasuryAccountName = accounts.GetValueOrDefault(p.TreasuryAccountId) ?? string.Empty,
+                TreasuryAccountName = p.TreasuryAccountId is { } id ? accounts.GetValueOrDefault(id) : null,
                 Amount = p.Amount,
                 Currency = p.Currency,
                 PaymentMethod = p.PaymentMethod,
@@ -500,6 +534,25 @@ public class CancelSupplierPaymentCommandHandler : IRequestHandler<CancelSupplie
             debit: payment.Amount, credit: 0m,
             description: $"Cancellation of supplier payment {payment.PaymentNumber}: {request.Reason}",
             createdBy: _currentUser.UserName));
+
+        // A payment settled by an endorsed customer check also credited the CUSTOMER's account when the
+        // cheque was handed over. Cancelling only the supplier side would leave the customer's balance
+        // permanently settled by a check that no longer settles anything, so the same reversing Debit is
+        // written there too - both accounts move together, or neither does (spec section 39).
+        if (payment.CheckId.HasValue)
+        {
+            var check = await _db.Checks.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == payment.CheckId.Value, cancellationToken);
+
+            if (check is { Direction: CheckDirection.CustomerCheck, CustomerId: not null })
+            {
+                _db.CustomerLedgerEntries.Add(new CustomerLedgerEntry(
+                    check.CustomerId.Value, _clock.UtcNow.Date, DocumentType.CheckRegister,
+                    check.CheckNumber, check.Id, debit: payment.Amount, credit: 0m,
+                    description: $"Cancellation of endorsed check settlement {check.CheckNumber}: {request.Reason}",
+                    createdBy: _currentUser.UserName));
+            }
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
 

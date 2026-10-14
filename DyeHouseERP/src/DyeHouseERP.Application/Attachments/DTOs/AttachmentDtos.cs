@@ -55,3 +55,61 @@ public static class AttachmentEntityTypes
     public static bool IsKnown(string? entityType) =>
         entityType is not null && All.Contains(entityType, StringComparer.Ordinal);
 }
+
+/// <summary>
+/// The file kinds an attachment may be (spec section 47 + Phase 1 finding F.8). This is an
+/// ALLOWLIST, not a denylist: the bytes are served back from the API origin via
+/// <c>File(content, contentType, fileName)</c>, so an HTML, SVG, XML or script file would be
+/// rendered by the browser as active content on that origin - a stored-XSS vector. Because a
+/// denylist can never enumerate every dangerous type, only known-safe document and image kinds
+/// are accepted, and the declared content type must agree with that list.
+/// </summary>
+public static class AttachmentFileTypes
+{
+    public static readonly string[] AllowedExtensions =
+    {
+        ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp",
+        ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".rtf",
+        ".odt", ".ods", ".zip"
+    };
+
+    public static readonly string[] AllowedContentTypes =
+    {
+        "application/pdf",
+        "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp",
+        "text/plain", "text/csv", "application/rtf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/zip", "application/x-zip-compressed",
+        // Some browsers send this for a file they cannot classify. It is only ever accepted
+        // alongside an allowed extension, so it cannot smuggle in an active type.
+        "application/octet-stream"
+    };
+
+    /// <summary>A file is accepted only when BOTH its extension and its declared type are on the allowlist.</summary>
+    public static bool IsAllowed(string? fileName, string? contentType)
+    {
+        var extension = Path.GetExtension(fileName ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(extension) ||
+            !AllowedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            return false;
+
+        var normalized = NormalizeContentType(contentType);
+        // A missing type is tolerated (the extension already gates the file); a present type must match.
+        return normalized.Length == 0 || AllowedContentTypes.Contains(normalized);
+    }
+
+    /// <summary>Strips a charset/parameter suffix and lower-cases, so "text/plain; charset=utf-8" matches.</summary>
+    public static string NormalizeContentType(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType)) return string.Empty;
+        var value = contentType.Trim();
+        var separator = value.IndexOf(';');
+        if (separator >= 0) value = value[..separator];
+        return value.Trim().ToLowerInvariant();
+    }
+}
