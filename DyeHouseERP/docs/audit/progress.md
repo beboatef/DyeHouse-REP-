@@ -546,11 +546,18 @@ a live database.
   when the primary recorded more than one; **KG, Metre and roll count are three separate manual inputs**;
   and each primary line shows what is already distributed to other sub-permits and what remains - per unit,
   never combined (e.g. `400 + 350 + 250 = 1000 م`).
-* `DeliveryPrintPage.tsx:31-121` - a print column chooser for KG / Metre / rolls. Print-only (no recorded
-  value is touched), the identifying columns always print, the choice is remembered per document format in
+* `DeliveryPrintPage.tsx` - a print column chooser for KG / Metre / rolls. Print-only (no recorded value
+  is touched), the identifying columns always print, the choice is remembered per document format in
   `localStorage` (the same mechanism as the language/theme switches) and a sub-customer permit keeps its own
   key, so its format is independent of an ordinary permit's. The sub-permit print also names the primary
   permit and its customer.
+* `deliveryPrintColumns.ts` (new) - that choice in **one** place, because two surfaces must agree on it:
+  the print preview and the PDF. The single source of truth is why the key can never drift between them.
+* `DeliveriesController.cs` (`GetDeliveryPdf`) + `api/exports.ts` - the **PDF** honours the same choice
+  (`?includeKg/includeMeter/includeRolls`, default all), so the downloaded permit shows the columns the
+  user chose instead of a fixed set. Only the choice of columns travels: no quantity is edited, converted
+  or dropped from the data, and the identifying columns always print. `PrintingWorkflowTests` was updated
+  for the new signature (it now passes the export service by name and keeps the default of all columns).
 * `i18n/index.tsx` - 18 new keys in **both** dictionaries.
 
 ### Tests added (`SubCustomerPermitDeliveryTests`, 22 → 27)
@@ -562,13 +569,26 @@ item requires both units, while the same item on an ordinary permit still fails 
 rule was narrowed, not removed). The one existing test whose rule changed (the arbitrary colour) was
 corrected, not weakened.
 
+One controller-level suite (`DeliveryPermitPdfColumnsTests`, 5 tests) for the PDF half of the column
+choice, because that is the half reachable without a browser: it drives the real `GetDeliveryPdf` action
+and captures exactly what it hands the renderer. It pins that a hidden column is absent from the header
+**and** from every data row (so the table can never shift out of alignment), that all **eight** combinations
+stay well-formed with each quantity under its own column and its own value, that hiding a column changes no
+other printed figure, and - with the production `ReportExportService` - that the narrowed metre-only table
+renders as real bytes (`%PDF-`, correct file name).
+
 ### Checks (real output)
 
 Release build **0 errors** (5 pre-existing warnings, all in test files not touched) · unit suite
-**884 / 884** (was 879, +5) · `has-pending-model-changes` → **"No changes have been made to the model…"**
+**889 / 889** (was 879, +10) · `has-pending-model-changes` → **"No changes have been made to the model…"**
 (**no migration** added and none applied) · i18n **927 / 927** · permissions **118 / 118** · duplicate
 sweep clean · `wiring-sweep.js` output unchanged (login + public settings only) · frontend `tsc -b &&
 vite build` **PASS** · `eslint` **0 errors** (9 pre-existing warnings) · `git diff --check` **clean**.
+
+Note on the run itself: `dotnet test` **with** an inline build aborted twice with
+`Failed to launch testhost … System.OutOfMemoryException` on this shared VM (6.5 GB free, 119 processes -
+a resource ceiling, not a test failure). Building first and running with `--no-build` passes every time; all
+numbers above come from that form.
 
 ### Observed but deliberately NOT changed
 

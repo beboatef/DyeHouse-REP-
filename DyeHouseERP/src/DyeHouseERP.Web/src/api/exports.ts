@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { DeliveryQuantityColumns } from "../deliveryPrintColumns";
 
 /**
  * Every file-producing endpoint in the API, in one place.
@@ -125,7 +126,15 @@ export const ReadyGoodsExports = {
 
 export const DeliveriesExports = {
   ...both("/deliveries/export", "deliveries"),
-  documentPdf: (id: string) => () => downloadFile(`/deliveries/${id}/pdf`, "delivery.pdf"),
+  /**
+   * The permit PDF. The quantity columns the user chose for this document format travel with the
+   * request, so the downloaded file shows the same columns as the on-screen print preview (hidden
+   * columns are hidden on paper only - no recorded quantity changes).
+   */
+  documentPdf: (id: string, columns: DeliveryQuantityColumns) => () =>
+    downloadFile(`/deliveries/${id}/pdf`, "delivery.pdf", {
+      includeKg: columns.kg, includeMeter: columns.meter, includeRolls: columns.rolls
+    }),
   /** The delivery statement (بيان تسليم) with the production accounting per line. */
   statementPdf: (id: string) => () => downloadFile(`/deliveries/${id}/statement/pdf`, "delivery-statement.pdf")
 };

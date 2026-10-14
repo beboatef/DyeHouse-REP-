@@ -50,16 +50,35 @@ public class DeliveriesController : ControllerBase
         return ExportFileHelper.ToFile(export, format, "Deliveries", null, headers, rows, "deliveries", "Deliveries");
     }
 
+    /// <summary>
+    /// Printable delivery permit PDF (spec sections 31 and 39). The three QUANTITY columns can be
+    /// switched off per document format - the same choice the in-app print preview makes, so what is
+    /// downloaded matches what is on screen. Only the choice of COLUMNS travels here: no quantity is
+    /// ever edited or omitted from the data, and the identifying columns (job order, item, colour,
+    /// drawing number) always print.
+    /// </summary>
     [HttpGet("{id:guid}/pdf")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
-    public async Task<IActionResult> GetDeliveryPdf(Guid id, [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export)
+    public async Task<IActionResult> GetDeliveryPdf(Guid id,
+        [FromQuery] bool includeKg = true, [FromQuery] bool includeMeter = true, [FromQuery] bool includeRolls = true,
+        [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export = null!)
     {
         var delivery = await _mediator.Send(new GetDeliveryByIdQuery(id));
 
-        var headers = new List<string> { "Production Order", "Item", "Color", "Qty KG", "Qty Meter", "Pieces", "Drawing number / رقم الرسمة" };
-        var rows = delivery.Lines.Select(l => new object?[]
+        var headers = new List<string> { "Production Order", "Item", "Color" };
+        if (includeKg) headers.Add("Qty KG");
+        if (includeMeter) headers.Add("Qty Meter");
+        if (includeRolls) headers.Add("Pieces");
+        headers.Add("Drawing number / رقم الرسمة");
+
+        var rows = delivery.Lines.Select(l =>
         {
-            l.ProductionOrderNumber, l.ItemCode, l.Color, l.QuantityKg, l.QuantityMeter, l.PieceCount, string.Join(", ", l.DrawingNumbers)
+            var cells = new List<object?> { l.ProductionOrderNumber, l.ItemCode, l.Color };
+            if (includeKg) cells.Add(l.QuantityKg);
+            if (includeMeter) cells.Add(l.QuantityMeter);
+            if (includeRolls) cells.Add(l.PieceCount);
+            cells.Add(string.Join(", ", l.DrawingNumbers));
+            return cells.ToArray();
         }).ToList();
 
         var subtitle = $"{delivery.CustomerCode} - {delivery.CustomerName}  |  {delivery.DeliveryDate:yyyy-MM-dd}  |  {delivery.Status}";

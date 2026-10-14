@@ -6,6 +6,7 @@ import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui"
 import { useI18n } from "@/i18n";
 import { ExportButtons } from "@/components/ExportButtons";
 import { DeliveriesExports } from "@/api/exports";
+import { deliveryColumnsStorageKey, readDeliveryQuantityColumns } from "@/deliveryPrintColumns";
 
 const statusLabel: Record<string, string> = { Draft: "مسودة", Prepared: "مجهزة", Delivered: "تم التسليم", Cancelled: "ملغاة" };
 const statusTone: Record<string, "gray" | "blue" | "green" | "red"> = { Draft: "gray", Prepared: "blue", Delivered: "green", Cancelled: "red" };
@@ -457,7 +458,13 @@ export default function DeliveriesPage() {
               {d.status === "Draft" && <Button variant="secondary" onClick={() => prepareMutation.mutate(d.id)}>تجهيز</Button>}
               <Link to={`/print/delivery/${d.id}`} target="_blank"><Button type="button" variant="ghost">معاينة قبل الطباعة</Button></Link>
               <Link to={`/print/delivery-statement/${d.id}`} target="_blank"><Button type="button" variant="ghost">بيان التسليم</Button></Link>
-              <Button variant="ghost" onClick={DeliveriesExports.documentPdf(d.id)}>تنزيل PDF</Button>
+              {/* The PDF carries the SAME quantity columns the user chose for this document format,
+                  so what is downloaded matches the on-screen print preview. */}
+              <Button variant="ghost"
+                onClick={DeliveriesExports.documentPdf(
+                  d.id, readDeliveryQuantityColumns(deliveryColumnsStorageKey(d.isSubCustomerPermit)))}>
+                تنزيل PDF
+              </Button>
               <Button variant="ghost" onClick={DeliveriesExports.statementPdf(d.id)}>تنزيل بيان التسليم PDF</Button>
               {d.status === "Prepared" && <Button variant="secondary" onClick={() => deliverMutation.mutate(d.id)}>تسليم</Button>}
               {d.status === "Delivered" && correctingId !== d.id && (

@@ -111,7 +111,9 @@ public class PrintingWorkflowTests
                 rows.SelectMany(r => r).Should().Contain("DR-123");
                 return new ReportExportService(new TestCompanyIdentityProvider("شركة", "Test Co")).GeneratePdf(title, subtitle, headers, rows);
             });
-        var pdf = (FileContentResult)await new DeliveriesController(sender.Object).GetDeliveryPdf(delivery.Id, exporter.Object);
+        // The permit PDF also takes the printable quantity columns; passing none keeps the default
+        // (every column), which is what this test is about - the drawing number reaching the paper.
+        var pdf = (FileContentResult)await new DeliveriesController(sender.Object).GetDeliveryPdf(delivery.Id, export: exporter.Object);
         System.Text.Encoding.ASCII.GetString(pdf.FileContents, 0, 5).Should().Be("%PDF-");
         pdf.FileContents.Length.Should().BeGreaterThan(1000);
     }

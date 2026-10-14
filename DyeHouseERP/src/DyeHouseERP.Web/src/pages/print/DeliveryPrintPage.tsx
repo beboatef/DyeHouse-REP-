@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { DeliveriesApi, type DeliveryLine } from "@/api/client";
 import { useI18n } from "@/i18n";
 import PrintPreviewLayout, { type PrintColumn } from "@/components/PrintPreviewLayout";
+import {
+  ALL_DELIVERY_QUANTITY_COLUMNS, deliveryColumnsStorageKey, readDeliveryQuantityColumns,
+  saveDeliveryQuantityColumns, type DeliveryQuantityColumns
+} from "@/deliveryPrintColumns";
 
 /**
  * PRINTABLE DELIVERY PERMIT (إذن تسليم) - spec sections 31 and 39.
@@ -13,68 +17,34 @@ import PrintPreviewLayout, { type PrintColumn } from "@/components/PrintPreviewL
  * permit it was issued against, plus that permit's customer by code and name only.
  *
  * The three QUANTITY columns are choosable - KG, Meter and the roll count - because a sub-customer
- * who receives goods by the metre only does not want an empty KG column on their paper. The choice:
- *   * affects the PRINT-OUT ONLY: it never edits or deletes a recorded quantity, and the document
- *     keeps storing every figure exactly as it was entered;
- *   * never touches the identifying data - company identity, recipient, job order, item and colour
- *     always print;
- *   * is per document format: a sub-customer permit's choice is stored separately from an ordinary
- *     permit's, so setting up one never changes the other;
- *   * is remembered like the language and theme switches (localStorage), defaulting to all columns.
+ * who receives goods by the metre only does not want an empty KG column on their paper. The choice
+ * lives in one place (see src/deliveryPrintColumns.ts) because the register's PDF download makes the
+ * same choice: it affects the print-out ONLY, deletes no recorded quantity, and never hides the
+ * identifying data (company, recipient, job order, item, colour).
  */
-type QuantityColumns = { kg: boolean; meter: boolean; rolls: boolean };
-
-/** Everything prints by default - hiding a column is an explicit act. */
-const DEFAULT_COLUMNS: QuantityColumns = { kg: true, meter: true, rolls: true };
-
-/** A sub-customer permit keeps its own print format, independent of every other document. */
-const storageKeyFor = (isSubCustomerPermit: boolean) =>
-  isSubCustomerPermit ? "dyehouse_delivery_print_columns.sub" : "dyehouse_delivery_print_columns";
-
-const readColumns = (storageKey: string): QuantityColumns => {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return DEFAULT_COLUMNS;
-    const parsed = JSON.parse(raw) as Partial<QuantityColumns>;
-    return {
-      kg: typeof parsed.kg === "boolean" ? parsed.kg : DEFAULT_COLUMNS.kg,
-      meter: typeof parsed.meter === "boolean" ? parsed.meter : DEFAULT_COLUMNS.meter,
-      rolls: typeof parsed.rolls === "boolean" ? parsed.rolls : DEFAULT_COLUMNS.rolls
-    };
-  } catch {
-    // Private mode or a corrupt value - the defaults still print a complete document.
-    return DEFAULT_COLUMNS;
-  }
-};
 
 export default function DeliveryPrintPage() {
   const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
   const { data: delivery, isLoading, isError } = useQuery({ queryKey: ["delivery-print", id], queryFn: () => DeliveriesApi.get(id!), enabled: !!id });
 
-  const [quantityColumns, setQuantityColumns] = useState<QuantityColumns>(DEFAULT_COLUMNS);
+  const [quantityColumns, setQuantityColumns] = useState<DeliveryQuantityColumns>(ALL_DELIVERY_QUANTITY_COLUMNS);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
   // The permit's own kind decides WHICH stored choice applies, and that is only known once it has
   // loaded - so the remembered choice is read as soon as the key is known.
-  const storageKey = delivery ? storageKeyFor(delivery.isSubCustomerPermit) : null;
+  const storageKey = delivery ? deliveryColumnsStorageKey(delivery.isSubCustomerPermit) : null;
 
   useEffect(() => {
     if (!storageKey || loadedKey === storageKey) return;
-    setQuantityColumns(readColumns(storageKey));
+    setQuantityColumns(readDeliveryQuantityColumns(storageKey));
     setLoadedKey(storageKey);
   }, [storageKey, loadedKey]);
 
-  const toggleColumn = (key: keyof QuantityColumns) =>
+  const toggleColumn = (key: keyof DeliveryQuantityColumns) =>
     setQuantityColumns((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      if (storageKey) {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // Private mode - the choice still applies for this session.
-        }
-      }
+      if (storageKey) saveDeliveryQuantityColumns(storageKey, next);
       return next;
     });
 
