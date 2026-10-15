@@ -198,6 +198,15 @@ export const permissionGroupOf = (value: string): string =>
 export interface SignedInActor {
   readonly isAdmin: boolean;
   readonly roles: string[];
+  /**
+   * True when this account holds the given permission itself. Mirrors
+   * `PermissionAuthorizationHandler` exactly: the permission claim, or the catch-all `admin`.
+   *
+   * Use it to avoid OFFERING an action the API will refuse (e.g. an export button whose endpoint
+   * demands `reports.export`). It is never a substitute for that check - the server still decides
+   * every request from the authenticated claims, so a hand-crafted call cannot pass through here.
+   */
+  can(permission: string): boolean;
   /** True when this account is allowed to hand this permission to someone else. */
   canGrant(value: string): boolean;
   /** True when this account may edit/deactivate/reset the given account (administrators are protected). */
@@ -230,6 +239,8 @@ export function readSignedInActor(): SignedInActor {
   return {
     isAdmin,
     roles,
+    // Same rule as the API's handler: hold the permission, or hold the catch-all "admin".
+    can: (permission: string) => isAdmin || lower.includes(permission.toLowerCase()),
     canGrant: (value: string) => isAdmin || (value.toLowerCase() !== ADMIN && lower.includes(value.toLowerCase())),
     canManageAccount: (accountRoles: readonly string[]) =>
       isAdmin || !accountRoles.some((r) => r.toLowerCase() === ADMIN)

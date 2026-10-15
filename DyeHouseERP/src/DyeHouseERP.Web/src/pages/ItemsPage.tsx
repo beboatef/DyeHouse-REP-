@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import {
   ItemImportApi,
   ItemImportPreview,
@@ -10,6 +11,7 @@ import {
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ItemsExports } from "@/api/exports";
+import { readSignedInActor } from "@/permissions";
 import { useI18n } from "@/i18n";
 
 /**
@@ -27,6 +29,14 @@ import { useI18n } from "@/i18n";
 export default function ItemsPage() {
   const { t, pick } = useI18n();
   const qc = useQueryClient();
+
+  // The two rights this screen's FILE endpoints demand. Both names are the API's own constants
+  // (`Permissions.ItemsView` / `Permissions.ReportsExport`, mirrored in permissions.ts) - the import
+  // template needs items.view and every list export needs reports.export. A button the server would
+  // refuse is simply not offered; the refusal itself is still enforced server-side on every request.
+  const actor = useMemo(() => readSignedInActor(), []);
+  const canDownloadTemplate = actor.can("items.view");
+  const canExportList = actor.can("reports.export");
 
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -173,10 +183,12 @@ export default function ItemsPage() {
         subtitle={t("items.subtitle")}
         action={
           <div className="flex gap-2">
-            <ExportButtons
-              excel={{ label: t("common.export"), action: ItemsExports.excel }}
-              pdf={{ label: t("common.exportPdf"), action: ItemsExports.pdf }}
-            />
+            {canExportList && (
+              <ExportButtons
+                excel={{ label: t("common.export"), action: ItemsExports.excel }}
+                pdf={{ label: t("common.exportPdf"), action: ItemsExports.pdf }}
+              />
+            )}
             <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("items.new")}</Button>
           </div>
         }
@@ -462,6 +474,11 @@ export default function ItemsPage() {
         <p className="text-2xs text-amber-600 mt-0.5">{t("items.importUpdateHint")}</p>
 
         <div className="flex flex-wrap items-center gap-3 mt-3">
+          {canDownloadTemplate && (
+            <Button variant="secondary" type="button" onClick={() => void ItemsExports.template()}>
+              <Download size={15} /> {t("common.template")}
+            </Button>
+          )}
           <input
             type="file"
             accept=".xlsx,.xlsm"

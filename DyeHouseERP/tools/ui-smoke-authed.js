@@ -127,7 +127,14 @@ const IGNORE = [/Failed to load resource/i, /net::ERR_/i, /ERR_CONNECTION_REFUSE
   console.log("\n== export & import controls ==");
   for (const path of [...new Set([...EXPORT_ROUTES, ...IMPORT_ROUTES])]) {
     const page = await browser.newPage();
-    await page.evaluateOnNewDocument(() => localStorage.setItem("dyehouse_token", "smoke-test-token"));
+    // A screen only offers an export/import control to a user who HOLDS the right the endpoint
+    // demands (e.g. reports.export for the list exports, items.view for the import template), so this
+    // probe has to sign in as an authorised user - otherwise it would be asserting that the app shows
+    // buttons it must hide. "admin" is the documented catch-all (PermissionAuthorizationHandler).
+    await page.evaluateOnNewDocument(() => {
+      localStorage.setItem("dyehouse_token", "smoke-test-token");
+      localStorage.setItem("dyehouse_user", JSON.stringify({ username: "smoke", displayName: "Smoke", roles: ["admin"] }));
+    });
     const missing = [];
     try {
       await page.goto(BASE + path, { waitUntil: "domcontentloaded", timeout: 15000 });

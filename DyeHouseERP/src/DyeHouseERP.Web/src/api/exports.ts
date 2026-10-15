@@ -72,6 +72,13 @@ export const CustomersExports = {
 
 export const ItemsExports = {
   ...both("/items/export", "items"),
+  /**
+   * The item list as a printable PDF. `format=pdf` is sent EXPLICITLY: `/items/export`
+   * defaults to `excel`, so asking for it without the parameter downloads a real .xlsx
+   * spreadsheet under a .pdf name - a file that opens in the wrong program (or not at all).
+   * The API's own `format=pdf` branch is what produces these bytes; nothing else changed.
+   */
+  pdf: () => downloadFile("/items/export", "items.pdf", { format: "pdf" }),
   excel: download("/items/export/excel", "items.xlsx"),
   template: download("/items/import/template", "items-import-template.xlsx")
 };
