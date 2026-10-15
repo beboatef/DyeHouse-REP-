@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SuppliersApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Badge, SearchInput } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import ImportPanel from "@/components/ImportPanel";
 import { SuppliersExports } from "@/api/exports";
@@ -87,7 +87,7 @@ export default function SuppliersPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
             onSubmit={(e) => {
@@ -131,8 +131,8 @@ export default function SuppliersPage() {
         </Card>
       )}
 
-      <Card className="p-4 mb-4">
-        <Input
+      <Card className="card-pad mb-4">
+        <SearchInput
           placeholder={t("common.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -154,20 +154,20 @@ export default function SuppliersPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && suppliers?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {suppliers?.map((s) => (
-              <tr key={s.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={s.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{s.code}</td>
                 <td>{pick(s.nameAr, s.nameEn, s.name)}</td>
                 <td className="ltr-nums">{s.accountNumber}</td>
-                <td className="ltr-nums text-gray-600">{s.phone ?? "—"}</td>
+                <td className="ltr-nums text-ink-muted">{s.phone ?? "—"}</td>
                 <td>
                   <Badge tone={s.isActive ? "green" : "gray"}>{s.isActive ? t("common.active") : t("common.inactive")}</Badge>
                 </td>

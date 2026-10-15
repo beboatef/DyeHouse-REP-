@@ -102,7 +102,7 @@ export default function ReadyGoodsPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div className="sm:col-span-2">
               <label className="field-label">أمر التشغيل</label>
@@ -136,7 +136,7 @@ export default function ReadyGoodsPage() {
                 ))}
               </Select>
               {productionOrderId && closedStages.length === 0 && (
-                <p className="text-2xs text-amber-600 mt-1">
+                <p className="text-2xs text-warning-ink mt-1">
                   لا توجد مرحلة مغلقة لهذا الأمر التشغيلي - أغلق المرحلة أولًا ليتحرك ناتجها إلى الجاهز.
                 </p>
               )}
@@ -150,7 +150,7 @@ export default function ReadyGoodsPage() {
         </Card>
       )}
 
-      <h2 className="font-semibold text-gray-800 mb-3">الرصيد الجاهز الحالي</h2>
+      <h2 className="card-title mb-3">الرصيد الجاهز الحالي</h2>
       <Card className="mb-8">
         <table className="table">
           <thead><tr>
@@ -159,10 +159,10 @@ export default function ReadyGoodsPage() {
             <th className="text-end">إجراء</th>
           </tr></thead>
           <tbody>
-            {balanceLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
-            {!balanceLoading && balance?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا يوجد رصيد جاهز حاليًا</td></tr>}
+            {balanceLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {!balanceLoading && balance?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
             {balance?.map((b) => (
-              <tr key={`${b.productionOrderId}-${b.itemId}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={`${b.productionOrderId}-${b.itemId}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{b.customerCode}</td>
                 <td>{b.itemCode}</td><td>{b.color ?? "-"}</td>
                 <td className="ltr-nums font-medium">{b.remainingKg > 0 && `${b.remainingKg} كجم `}{b.remainingMeter > 0 && `${b.remainingMeter} م`}</td>
@@ -242,16 +242,16 @@ export default function ReadyGoodsPage() {
         })()}
       </Card>
 
-      <h2 className="font-semibold text-gray-800 mb-3">سجل الإرجاع إلى الخام</h2>
+      <h2 className="card-title mb-3">سجل الإرجاع إلى الخام</h2>
       <Card className="mb-8">
         <table className="table">
           <thead><tr>
             <th>الرقم</th><th>أمر التشغيل</th><th>الرسالة المستقبلة</th><th>الكمية</th><th>السبب</th><th>المستخدم</th>
           </tr></thead>
           <tbody>
-            {!rawReturns?.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد حركات إرجاع إلى الخام</td></tr>}
+            {!rawReturns?.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا توجد حركات إرجاع إلى الخام</td></tr>}
             {rawReturns?.map((m) => (
-              <tr key={m.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={m.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{m.movementNumber}</td>
                 <td className="ltr-nums">{m.productionOrderNumber}</td>
                 <td className="ltr-nums">{m.destinationMessageNumber}</td>
@@ -264,7 +264,7 @@ export default function ReadyGoodsPage() {
         </table>
       </Card>
 
-      <h2 className="font-semibold text-gray-800 mb-3">سجل الترحيلات</h2>
+      <h2 className="card-title mb-3">سجل الترحيلات</h2>
       <Card>
         <table className="table">
           <thead><tr>
@@ -273,9 +273,9 @@ export default function ReadyGoodsPage() {
             <th>الكمية المستلمة</th><th>المتاح الآن</th>
           </tr></thead>
           <tbody>
-            {transfersLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {transfersLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {transfers?.map((t) => (
-              <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td className="ltr-nums">{t.productionOrderNumber}</td>
                 <td>{t.stageSequence != null ? `#${t.stageSequence} ${t.stageName ?? ""}` : "—"}</td>
                 <td>{t.customerCode}</td>

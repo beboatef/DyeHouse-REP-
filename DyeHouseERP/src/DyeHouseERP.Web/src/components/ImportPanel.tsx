@@ -147,13 +147,10 @@ export default function ImportPanel({
           type="file"
           accept=".xlsx,.xlsm"
           onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); setResult(null); }}
-          className="block h-[38px] w-full max-w-xs cursor-pointer rounded-lg border border-line-strong
-                     bg-surface text-sm text-ink file:me-2 file:cursor-pointer file:rounded-md
-                     file:border-0 file:bg-surface-sunken file:px-3 file:py-2 file:text-xs
-                     file:font-semibold file:text-ink hover:border-brand-500"
+          className="file-input"
         />
         {supportsUpdate && (
-          <label className="flex items-center gap-2 text-sm text-gray-600">
+          <label className="flex items-center gap-2 text-sm text-ink-muted">
             <input
               type="checkbox"
               checked={withUpdate}
@@ -167,20 +164,20 @@ export default function ImportPanel({
         </Button>
       </div>
 
-      {error && <div className="motion-rise mt-3 text-sm text-red-600">{error}</div>}
+      {error && <div className="motion-rise mt-3 text-sm text-danger-ink">{error}</div>}
 
       {preview && !result && (
         <div className="motion-rise mt-4">
           <div className="flex flex-wrap gap-4 text-sm">
             <span>إجمالي الصفوف: <b className="ltr-nums">{preview.totalRows}</b></span>
-            <span className="text-green-700">صالحة: <b className="ltr-nums">{preview.validRows}</b></span>
-            <span className="text-red-600">أخطاء: <b className="ltr-nums">{preview.invalidRows}</b></span>
+            <span className="text-success-ink">صالحة: <b className="ltr-nums">{preview.validRows}</b></span>
+            <span className="text-danger-ink">أخطاء: <b className="ltr-nums">{preview.invalidRows}</b></span>
             <span>جديدة: <b className="ltr-nums">{preview.newRows}</b></span>
             <span>موجودة: <b className="ltr-nums">{preview.existingRows}</b></span>
           </div>
 
           {preview.invalidRows > 0 && (
-            <div className="mt-2 text-sm text-red-600">
+            <div className="mt-2 text-sm text-danger-ink">
               الصفوف غير الصالحة لن تُكتب نهائياً. صحّحها في الملف ثم أعد المعاينة.
             </div>
           )}
@@ -207,7 +204,7 @@ export default function ImportPanel({
                     {columns.map((c) => (
                       <td key={c}>{row.values[c] ?? ""}</td>
                     ))}
-                    <td className="text-red-600">{row.errors.join(" • ")}</td>
+                    <td className="text-danger-ink">{row.errors.join(" • ")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -219,14 +216,14 @@ export default function ImportPanel({
               {busy === "execute" ? <Loader2 size={15} className="animate-spin" /> : <CircleCheck size={15} />}
               تأكيد الاستيراد ({preview.validRows} صف)
             </Button>
-            {preview.validRows === 0 && <span className="text-sm text-gray-500">لا توجد صفوف صالحة للتنفيذ.</span>}
+            {preview.validRows === 0 && <span className="text-sm text-ink-muted">لا توجد صفوف صالحة للتنفيذ.</span>}
           </div>
         </div>
       )}
 
       {result && (
         <div className="motion-rise mt-4">
-          <div className="flex items-center gap-2 font-semibold text-green-700">
+          <div className="flex items-center gap-2 font-semibold text-success-ink">
             <CircleCheck size={18} /> تم الاستيراد
           </div>
           <div className="mt-2 flex flex-wrap gap-4 text-sm">
@@ -235,7 +232,7 @@ export default function ImportPanel({
             <span>تم التخطي: <b className="ltr-nums">{result.skipped}</b></span>
           </div>
           {result.errors.length > 0 && (
-            <ul className="mt-2 list-inside list-disc text-sm text-red-600">
+            <ul className="mt-2 list-inside list-disc text-sm text-danger-ink">
               {result.errors.map((e, i) => <li key={i}>{e}</li>)}
             </ul>
           )}

@@ -95,7 +95,7 @@ function Section({
       className={`mb-6 ${delay !== undefined ? "motion-rise" : ""}`}
       style={delay !== undefined ? revealStyle(delay) : undefined}
     >
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">{title}</h2>
+      <h2 className="section-title mb-3">{title}</h2>
       {children}
     </section>
   );
@@ -147,16 +147,18 @@ export default function DashboardPage() {
   // Charts need explicit colours; recharts does not read CSS variables from
   // SVG attributes, so the theme value is resolved here.
   const chart = {
-    grid: isDark ? "#1f2937" : "#eef2f7",
-    axis: isDark ? "#94a3b8" : "#6b7280",
-    // Pastel multi-series palette echoing the reference area/line charts.
+    grid: isDark ? "#232c40" : "#eaeef6",
+    axis: isDark ? "#7d8798" : "#8b95a7",
+    // The series palette mirrors the design system's own accents (brand blue,
+    // success, a lighter blue, danger, warning) so a chart can never introduce
+    // a colour the rest of the interface does not use.
     series: isDark
-      ? ["#60a5fa", "#34d399", "#a78bfa", "#fb7185", "#fbbf24"]
-      : ["#2f80ed", "#2dce89", "#5b6ef5", "#f5365c", "#fb6340"],
-    line: isDark ? "#60a5fa" : "#2f80ed",
-    tooltipBg: isDark ? "#1f2937" : "#ffffff",
-    tooltipBorder: isDark ? "#334155" : "#e5e7eb",
-    tooltipText: isDark ? "#f3f4f6" : "#111827"
+      ? ["#5b82ff", "#34d399", "#9ab7ff", "#f87171", "#fbbf24"]
+      : ["#2b5cff", "#12a06a", "#6b8dff", "#e03d3d", "#d98307"],
+    line: isDark ? "#5b82ff" : "#2b5cff",
+    tooltipBg: isDark ? "#1d2537" : "#ffffff",
+    tooltipBorder: isDark ? "#33405c" : "#eaeef6",
+    tooltipText: isDark ? "#f5f7fb" : "#0f172a"
   };
 
   const attentionCount =
@@ -248,9 +250,9 @@ export default function DashboardPage() {
 
       {/* ---- Hero chart + distribution panel ---- */}
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="p-4 sm:p-5 lg:col-span-2" delay={330}>
+        <Card className="card-pad lg:col-span-2" delay={330}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-ink">{t("fr.rawMessage")} - 14d (KG)</div>
+            <div className="card-title">{t("fr.rawMessage")} - 14d (KG)</div>
             <span className="flex items-center gap-1.5 text-2xs text-ink-subtle">
               <span className="legend-dot" style={{ background: chart.series[0] }} />
               {t("fr.rawMessage")}
@@ -280,9 +282,9 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </Card>
 
-        <Card className="p-4 sm:p-5" delay={330}>
+        <Card className="card-pad" delay={330}>
           <div className="mb-4 flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-ink">{t("nav.jobOrders")}</div>
+            <div className="card-title">{t("nav.jobOrders")}</div>
             <ArrowUpRight size={16} className="text-ink-subtle" />
           </div>
 
@@ -356,9 +358,9 @@ export default function DashboardPage() {
       </Section>
 
       {/* ---- Recent posted documents: real ledger-backed activity ---- */}
-      <Card className="p-4 sm:p-5" delay={530}>
+      <Card className="card-pad" delay={530}>
         <div className="mb-4 flex items-center justify-between gap-2">
-          <div className="text-sm font-semibold text-ink">{t("dash.recentTransactions")}</div>
+          <div className="card-title">{t("dash.recentTransactions")}</div>
           <button
             type="button"
             onClick={() => navigate("/audit-log")}

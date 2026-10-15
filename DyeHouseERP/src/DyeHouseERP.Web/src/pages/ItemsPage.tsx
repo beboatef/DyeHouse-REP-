@@ -8,7 +8,7 @@ import {
   ItemsApi,
   UnitOfMeasure
 } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ItemsExports } from "@/api/exports";
 import { readSignedInActor } from "@/permissions";
@@ -195,11 +195,11 @@ export default function ItemsPage() {
       />
 
       {editing && (
-        <Card className="p-5 mb-6">
-          <h3 className="text-sm font-bold text-slate-800">
+        <Card className="card-pad mb-6">
+          <h3 className="card-title">
             {t("items.editTitle")}: <span className="ltr-nums">{editing.code}</span>
           </h3>
-          <p className="text-2xs text-slate-500 mt-1">{t("items.editHint")}</p>
+          <p className="text-2xs text-ink-muted mt-1">{t("items.editHint")}</p>
           <form
             className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end mt-3"
             onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }}
@@ -253,7 +253,7 @@ export default function ItemsPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <label className="flex items-center gap-2 text-sm text-ink">
                 <input
                   type="checkbox"
                   checked={editing.requireBothUnits}
@@ -262,7 +262,7 @@ export default function ItemsPage() {
                 />
                 <span>{t("items.requireBothUnits")}</span>
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <label className="flex items-center gap-2 text-sm text-ink">
                 <input
                   type="checkbox"
                   checked={editing.isActive}
@@ -285,11 +285,11 @@ export default function ItemsPage() {
           {/* Explicit, item-scoped conversion rules. Only available when the item uses two units;
               empty is the normal case, because KG<->Meter is never converted automatically. */}
           <div className="mt-5 border-t border-line pt-4">
-            <h4 className="text-xs font-bold text-slate-700">{t("items.conversionsTitle")}</h4>
-            <p className="text-2xs text-slate-500 mt-1">{t("items.conversionsHint")}</p>
+            <h4 className="card-title">{t("items.conversionsTitle")}</h4>
+            <p className="text-2xs text-ink-muted mt-1">{t("items.conversionsHint")}</p>
 
             {!editing.secondaryUnit ? (
-              <p className="text-2xs text-amber-600 mt-2">{t("items.conversionsNeedSecondary")}</p>
+              <p className="text-2xs text-warning-ink mt-2">{t("items.conversionsNeedSecondary")}</p>
             ) : (
               <>
                 <div className="mt-2 max-w-2xl">
@@ -305,7 +305,7 @@ export default function ItemsPage() {
                     </thead>
                     <tbody>
                       {(!conversions || conversions.length === 0) && (
-                        <tr><td colSpan={5} className="text-center text-gray-400">{t("items.noConversions")}</td></tr>
+                        <tr><td colSpan={5} className="text-center text-ink-subtle">{t("items.noConversions")}</td></tr>
                       )}
                       {conversions?.map((rule) => (
                         <tr key={rule.id}>
@@ -372,7 +372,7 @@ export default function ItemsPage() {
       )}
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-end"
             onSubmit={(e) => {
@@ -438,7 +438,7 @@ export default function ItemsPage() {
               </Select>
             </div>
             <div className="flex flex-col justify-end">
-              <label className="flex items-center gap-2 text-sm text-gray-700 h-[38px]">
+              <label className="check-row">
                 <input
                   type="checkbox"
                   checked={form.requireBothUnits}
@@ -460,7 +460,7 @@ export default function ItemsPage() {
               >
                 {createMutation.isPending ? t("common.saving") : t("common.save")}
               </Button>
-              <span className="text-2xs text-slate-400">{t("items.baseUnitHint")}</span>
+              <span className="text-2xs text-ink-subtle">{t("items.baseUnitHint")}</span>
               {error && <span className="form-error">{error}</span>}
             </div>
           </form>
@@ -468,10 +468,10 @@ export default function ItemsPage() {
       )}
 
       {/* ---------------- Excel import (template -> preview -> confirm -> result) ---------------- */}
-      <Card className="p-5 mb-6">
-        <h3 className="text-sm font-bold text-slate-800">{t("items.importTitle")}</h3>
-        <p className="text-2xs text-slate-500 mt-1">{t("items.importHint")}</p>
-        <p className="text-2xs text-amber-600 mt-0.5">{t("items.importUpdateHint")}</p>
+      <Card className="card-pad mb-6">
+        <h3 className="card-title">{t("items.importTitle")}</h3>
+        <p className="text-2xs text-ink-muted mt-1">{t("items.importHint")}</p>
+        <p className="text-2xs text-warning-ink mt-0.5">{t("items.importUpdateHint")}</p>
 
         <div className="flex flex-wrap items-center gap-3 mt-3">
           {canDownloadTemplate && (
@@ -482,10 +482,7 @@ export default function ItemsPage() {
           <input
             type="file"
             accept=".xlsx,.xlsm"
-            className="block h-[38px] w-full max-w-xs cursor-pointer rounded-lg border border-line-strong
-                       bg-surface text-sm text-ink file:me-2 file:cursor-pointer file:rounded-md
-                       file:border-0 file:bg-surface-sunken file:px-3 file:py-2 file:text-xs
-                       file:font-semibold file:text-ink hover:border-brand-500"
+            className="file-input"
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);
               setPreview(null);
@@ -508,18 +505,18 @@ export default function ItemsPage() {
 
         {preview && (
           <div className="mt-4">
-            <div className="flex flex-wrap gap-4 text-xs text-slate-600 mb-2">
+            <div className="flex flex-wrap gap-4 text-xs text-ink-muted mb-2">
               <span>{t("common.total")}: <b className="ltr-nums">{preview.totalRows}</b></span>
-              <span className="text-green-700">{t("common.validRows")}: <b className="ltr-nums">{preview.validRows}</b></span>
-              <span className="text-red-600">{t("common.invalidRows")}: <b className="ltr-nums">{preview.invalidRows}</b></span>
+              <span className="text-success-ink">{t("common.validRows")}: <b className="ltr-nums">{preview.validRows}</b></span>
+              <span className="text-danger-ink">{t("common.invalidRows")}: <b className="ltr-nums">{preview.invalidRows}</b></span>
               <span>{t("common.add")}: <b className="ltr-nums">{preview.newRows}</b></span>
               <span>{t("items.updated")}: <b className="ltr-nums">{preview.existingRows}</b></span>
             </div>
 
-            <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg">
+            <div className="max-h-64 overflow-y-auto border border-line rounded-lg">
               <table className="table table-dense">
-                <thead className="bg-slate-50">
-                  <tr className="text-gray-500">
+                <thead className="bg-surface-sunken">
+                  <tr className="text-ink-muted">
                     <th>{t("common.row")}</th>
                     <th>{t("common.code")}</th>
                     <th>{t("common.nameAr")}</th>
@@ -532,7 +529,7 @@ export default function ItemsPage() {
                 </thead>
                 <tbody>
                   {preview.rows.map((row) => (
-                    <tr key={row.rowNumber} className="border-t border-slate-100">
+                    <tr key={row.rowNumber} className="border-t border-line">
                       <td className="ltr-nums">{row.rowNumber}</td>
                       <td className="ltr-nums">{row.code}</td>
                       <td>{row.nameAr}</td>
@@ -544,7 +541,7 @@ export default function ItemsPage() {
                         {row.isValid ? (
                           <Badge tone={row.action === "Update" ? "yellow" : "green"}>{row.action}</Badge>
                         ) : (
-                          <span className="text-red-600">{row.errors.join("; ")}</span>
+                          <span className="text-danger-ink">{row.errors.join("; ")}</span>
                         )}
                       </td>
                     </tr>
@@ -574,15 +571,15 @@ export default function ItemsPage() {
         )}
 
         {result && (
-          <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs">
-            <div className="font-semibold text-slate-700 mb-1">{t("common.results")}</div>
+          <div className="mt-4 rounded-lg bg-surface-sunken border border-line p-3 text-xs">
+            <div className="font-semibold text-ink mb-1">{t("common.results")}</div>
             <div className="flex flex-wrap gap-4">
               <span>{t("items.imported")}: <b className="ltr-nums">{result.created}</b></span>
               <span>{t("items.updated")}: <b className="ltr-nums">{result.updated}</b></span>
               <span>{t("items.skipped")}: <b className="ltr-nums">{result.skipped}</b></span>
             </div>
             {result.errors.length > 0 && (
-              <ul className="mt-2 list-disc ps-4 text-red-600 space-y-0.5">
+              <ul className="mt-2 list-disc ps-4 text-danger-ink space-y-0.5">
                 {result.errors.map((e, index) => (
                   <li key={index}>{e}</li>
                 ))}
@@ -592,8 +589,8 @@ export default function ItemsPage() {
         )}
       </Card>
 
-      <Card className="p-4 mb-4">
-        <Input placeholder={t("common.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Card className="card-pad mb-4">
+        <SearchInput placeholder={t("common.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
       </Card>
 
       <Card>
@@ -612,13 +609,13 @@ export default function ItemsPage() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {!isLoading && items?.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {items?.map((item) => (
-              <tr key={item.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={item.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{item.code}</td>
                 <td>{item.nameAr || pick(item.nameAr, item.nameEn, item.name)}</td>
                 <td>{item.nameEn || "—"}</td>

@@ -133,7 +133,7 @@ export default function ProductionOrderDetailPage() {
     onError: (err: ApiErrorLike) => setCancelError(errorMessage(err, t("common.error")))
   });
 
-  if (isLoading || !order) return <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>;
+  if (isLoading || !order) return <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>;
 
   // The ordinary cancellation ("unused raw material return") only covers cases A and B:
   // a draft with no issue, or an issued order that no stage has consumed yet. Once any stage
@@ -176,7 +176,7 @@ export default function ProductionOrderDetailPage() {
       />
 
       {canCancel && (
-        <Card className="p-4 mb-6">
+        <Card className="card-pad mb-6">
           {!cancelOpen ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-2xs text-ink-subtle">{t("po.cancelHint")}</p>
@@ -206,13 +206,13 @@ export default function ProductionOrderDetailPage() {
       )}
 
       {cancelBlockedByProduction && (
-        <Card className="p-4 mb-6">
+        <Card className="card-pad mb-6">
           <p className="text-2xs text-ink-subtle">{t("po.cancelBlockedStarted")}</p>
         </Card>
       )}
 
       {canEdit && (
-        <Card className="p-4 mb-6">
+        <Card className="card-pad mb-6">
           {!editOpen ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-2xs text-ink-subtle">{t("po.editHint")}</p>
@@ -252,7 +252,7 @@ export default function ProductionOrderDetailPage() {
                   <Input value={editValues.notes} onChange={(e) => setEditValues({ ...editValues, notes: e.target.value })} />
                 </Field>
               </div>
-              <p className="text-2xs text-amber-600">{t("po.editRestricted")}</p>
+              <p className="text-2xs text-warning-ink">{t("po.editRestricted")}</p>
               {editError && <p className="form-error">{editError}</p>}
               <div className="flex gap-2">
                 <Button disabled={editMutation.isPending || editValues.orderDate === ""} onClick={() => order && editMutation.mutate(order)}>
@@ -266,9 +266,9 @@ export default function ProductionOrderDetailPage() {
       )}
 
       {/* Raw allocation - manual message picker, NO FIFO */}
-      <Card className="p-5 mb-6">
-        <h2 className="font-semibold text-gray-800 mb-1">تخصيص الخام</h2>
-        <p className="text-xs text-gray-500 mb-4">
+      <Card className="card-pad mb-6">
+        <h2 className="card-title mb-1">تخصيص الخام</h2>
+        <p className="text-xs text-ink-muted mb-4">
           يتم اختيار الرسالة (المرسال) يدويًا من قبل المستخدم - لا يوجد اختيار تلقائي (لا FIFO). يمكن التخصيص من أكثر من رسالة.
         </p>
 
@@ -277,15 +277,15 @@ export default function ProductionOrderDetailPage() {
             rule (the same one every production-start path runs), so the screen can never
             promise a start the backend would refuse. */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <div className="rounded-lg bg-gray-50 px-3 py-2">
-            <div className="text-2xs text-gray-500">{t("po.alloc.required")}</div>
+          <div className="rounded-lg bg-surface-sunken px-3 py-2">
+            <div className="text-2xs text-ink-muted">{t("po.alloc.required")}</div>
             <div className="ltr-nums font-medium">
               {order.requestedQuantityKg != null && `${order.requestedQuantityKg} ${t("common.kg")} `}
               {order.requestedQuantityMeter != null && `${order.requestedQuantityMeter} ${t("common.meter")}`}
             </div>
           </div>
-          <div className="rounded-lg bg-gray-50 px-3 py-2">
-            <div className="text-2xs text-gray-500">{t("po.alloc.allocated")}</div>
+          <div className="rounded-lg bg-surface-sunken px-3 py-2">
+            <div className="text-2xs text-ink-muted">{t("po.alloc.allocated")}</div>
             <div className="ltr-nums font-medium">
               {(order.requestedQuantityKg != null || order.allocatedQuantityKg > 0) &&
                 `${order.allocatedQuantityKg} ${t("common.kg")} `}
@@ -293,8 +293,8 @@ export default function ProductionOrderDetailPage() {
                 `${order.allocatedQuantityMeter} ${t("common.meter")}`}
             </div>
           </div>
-          <div className="rounded-lg bg-gray-50 px-3 py-2">
-            <div className="text-2xs text-gray-500">{t("po.alloc.remaining")}</div>
+          <div className="rounded-lg bg-surface-sunken px-3 py-2">
+            <div className="text-2xs text-ink-muted">{t("po.alloc.remaining")}</div>
             <div className="ltr-nums font-medium">
               {(order.requestedQuantityKg != null || order.allocatedQuantityKg > 0) &&
                 `${order.remainingToAllocateKg} ${t("common.kg")} `}
@@ -302,14 +302,14 @@ export default function ProductionOrderDetailPage() {
                 `${order.remainingToAllocateMeter} ${t("common.meter")}`}
             </div>
           </div>
-          <div className="rounded-lg px-3 py-2" style={{ background: order.isRawAllocationComplete ? "#f0fdf4" : "#fffbeb" }}>
-            <div className="text-2xs text-gray-500">{t("po.alloc.status")}</div>
-            <div className={order.isRawAllocationComplete ? "text-sm font-medium text-green-800" : "text-sm font-medium text-amber-700"}>
+          <div className={`rounded-xl px-3 py-2 ${order.isRawAllocationComplete ? "bg-success-soft" : "bg-warning-soft"}`}>
+            <div className="text-2xs text-ink-muted">{t("po.alloc.status")}</div>
+            <div className={order.isRawAllocationComplete ? "text-sm font-medium text-success-ink" : "text-sm font-medium text-warning-ink"}>
               {order.isRawAllocationComplete ? t("po.alloc.statusComplete") : t("po.alloc.statusIncomplete")}
             </div>
           </div>
         </div>
-        <p className="text-2xs text-gray-400 mb-4">{t("po.alloc.note")}</p>
+        <p className="text-2xs text-ink-subtle mb-4">{t("po.alloc.note")}</p>
 
         {order.rawAllocations.length > 0 && (
           <table className="table mb-4">
@@ -322,21 +322,21 @@ export default function ProductionOrderDetailPage() {
             </thead>
             <tbody>
               {order.rawAllocations.map((a) => (
-                <tr key={a.id} className="border-b border-gray-50 last:border-0">
+                <tr key={a.id} className="border-b border-line last:border-0">
                   <td className="ltr-nums font-medium">{a.messageNumber}</td>
                   <td className="ltr-nums">
                     {a.quantityKg != null && `${a.quantityKg} كجم`}
                     {a.quantityKg != null && a.quantityMeter != null && " / "}
                     {a.quantityMeter != null && `${a.quantityMeter} م`}
                   </td>
-                  <td className="text-gray-500">{a.allocatedBy}</td>
+                  <td className="text-ink-muted">{a.allocatedBy}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-gray-50 rounded-lg p-3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-surface-sunken rounded-lg p-3">
           <div className="sm:col-span-2">
             <label className="field-label">اختر الرسالة</label>
             <Select
@@ -376,7 +376,7 @@ export default function ProductionOrderDetailPage() {
         </div>
 
         {selectedLine && (
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-ink-muted mt-2">
             الرصيد المتاح للصنف المحدد في هذه الرسالة:{" "}
             <span className="ltr-nums font-medium">
               {selectedLine.remainingKg != null && `${selectedLine.remainingKg} كجم `}
@@ -397,8 +397,8 @@ export default function ProductionOrderDetailPage() {
         {allocError && <p className="form-error mt-2">{allocError}</p>}
 
         {negativeStockDetail && (
-          <Card className="p-4 mt-3 border-yellow-300 bg-yellow-50">
-            <p className="text-sm text-yellow-800">
+          <Card className="card-pad mt-3 border-warning/30 bg-warning-soft">
+            <p className="text-sm text-warning-ink">
               الكمية المطلوبة تتجاوز الرصيد المتاح بمقدار <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
               لا يتم تجاوز الرصيد السالب هنا: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه إلا مستخدم آخر يملك
               صلاحية اعتماد تجاوز الرصيد السالب - ولا يمكن لمقدّم الطلب اعتماده بنفسه.
@@ -417,14 +417,14 @@ export default function ProductionOrderDetailPage() {
                 {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
               </Button>
             </div>
-            <p className="mt-2 text-2xs text-yellow-800">
+            <p className="mt-2 text-2xs text-warning-ink">
               الاعتماد مرتبط بنفس أمر التشغيل ونفس الرسالة والصنف والكمية والوحدة - أي تغيير يتطلب طلبًا جديدًا.
             </p>
           </Card>
         )}
 
         {approvalRequested && (
-          <p className="mt-2 text-sm text-green-700">
+          <p className="mt-2 text-sm text-success-ink">
             تم إرسال طلب اعتماد على أمر التشغيل <span className="ltr-nums font-bold">{approvalRequested}</span>.
             لن يتم الصرف إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
           </p>
@@ -432,8 +432,8 @@ export default function ProductionOrderDetailPage() {
       </Card>
 
       {/* Stage timeline */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-gray-800 mb-1">مراحل التشغيل</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">مراحل التشغيل</h2>
         <p className="mb-4 text-2xs text-ink-subtle">{t("stage.transferHint")}</p>
         <div className="space-y-3">
           {order.stageExecutions.map((s) => (
@@ -635,9 +635,9 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   const resumeLines = messages?.find((m) => m.id === resumeMessageId)?.lines ?? [];
 
   return (
-    <Card className="p-5 mt-6">
+    <Card className="card-pad mt-6">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-        <h2 className="font-semibold text-gray-800">{t("stage.transfer")}</h2>
+        <h2 className="card-title">{t("stage.transfer")}</h2>
         {canPause && !pauseOpen && (
           <Button variant="secondary" size="sm" onClick={() => setPauseOpen(true)}>
             {t("pause.title")}
@@ -784,7 +784,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
                 )}
               </p>
               {drawingFixFor === s.id && (
-                <div className="mt-2 grid grid-cols-1 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 sm:grid-cols-3">
+                <div className="mt-2 grid grid-cols-1 gap-3 rounded-lg border border-warning/30 bg-warning-soft/60 p-3 sm:grid-cols-3">
                   <Field label={t("printing.drawingNumber")}>
                     <Input maxLength={100} value={drawingFixValue} onChange={(e) => setDrawingFixValue(e.target.value)} />
                   </Field>
@@ -961,9 +961,9 @@ function CostPanel({
     v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <Card className="p-5 mt-6">
+    <Card className="card-pad mt-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-gray-800">{t("cost.tab")}</h2>
+        <h2 className="card-title">{t("cost.tab")}</h2>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" onClick={() => JobOrderCostingExports.file("excel")(productionOrderId, productionOrderNumber)}>
             {t("export.costing")} {t("common.excel")}
@@ -977,8 +977,8 @@ function CostPanel({
 
       {/* Three figures, never conflated: estimate, live actual, approved sign-off. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <div className="bg-gray-50 rounded-lg p-3">
-          <div className="text-xs text-gray-500">{t("cost.estimated")}</div>
+        <div className="bg-surface-sunken rounded-lg p-3">
+          <div className="text-xs text-ink-muted">{t("cost.estimated")}</div>
           <div className="ltr-nums text-lg font-semibold">
             {cost.estimatedCost != null ? money(cost.estimatedCost) : "—"}
           </div>
@@ -997,19 +997,19 @@ function CostPanel({
           </div>
         </div>
 
-        <div className="bg-gray-50 rounded-lg p-3">
-          <div className="text-xs text-gray-500">{t("cost.actual")}</div>
+        <div className="bg-surface-sunken rounded-lg p-3">
+          <div className="text-xs text-ink-muted">{t("cost.actual")}</div>
           <div className="ltr-nums text-lg font-semibold">{money(cost.totalCost)}</div>
-          <p className="text-2xs text-gray-400 mt-2">{t("cost.actualNote")}</p>
+          <p className="text-2xs text-ink-subtle mt-2">{t("cost.actualNote")}</p>
         </div>
 
-        <div className="bg-gray-50 rounded-lg p-3">
-          <div className="text-xs text-gray-500">{t("cost.approved")}</div>
+        <div className="bg-surface-sunken rounded-lg p-3">
+          <div className="text-xs text-ink-muted">{t("cost.approved")}</div>
           <div className="ltr-nums text-lg font-semibold">
             {cost.approvedCost != null ? money(cost.approvedCost) : "—"}
           </div>
           {cost.approvedCost != null ? (
-            <p className="text-2xs text-gray-400 mt-1">
+            <p className="text-2xs text-ink-subtle mt-1">
               {t("cost.approvedBy")} {cost.costApprovedBy}
               {cost.costApprovedAtUtc && <> · {new Date(cost.costApprovedAtUtc).toLocaleDateString("en-GB")}</>}
             </p>
@@ -1035,19 +1035,19 @@ function CostPanel({
             </div>
           )}
           {cost.approvedVariance != null && (
-            <p className="text-2xs text-gray-500 mt-1">
+            <p className="text-2xs text-ink-muted mt-1">
               {t("cost.variance")}: <span className="ltr-nums">{money(cost.approvedVariance)}</span>
             </p>
           )}
         </div>
       </div>
 
-      <p className="text-2xs text-gray-400 mb-3">{t("cost.customerOwnedNote")}</p>
+      <p className="text-2xs text-ink-subtle mb-3">{t("cost.customerOwnedNote")}</p>
 
       {costError && <p className="form-error mb-3">{costError}</p>}
 
       {showForm && (
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end mb-4 bg-gray-50 rounded-lg p-3">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end mb-4 bg-surface-sunken rounded-lg p-3">
           <div>
             <label className="field-label">البند</label>
             <Select value={category} onChange={(e) => setCategory(e.target.value as CostCategory)}>
@@ -1058,7 +1058,7 @@ function CostPanel({
           </div>
           <div><label className="field-label">المبلغ</label><Input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
           <div><label className="field-label">بيان</label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
-          <label className="flex items-center gap-2 text-sm text-slate-600" title={t("cost.chargeableNote")}>
+          <label className="flex items-center gap-2 text-sm text-ink-muted" title={t("cost.chargeableNote")}>
             <input type="checkbox" checked={chargeable} onChange={(e) => setChargeable(e.target.checked)} />
             {t("cost.chargeableToCustomer")}
           </label>
@@ -1067,23 +1067,23 @@ function CostPanel({
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-        <div><div className="text-gray-500 text-xs">تكلفة المواد</div><div className="ltr-nums font-medium">{cost.materialCost}</div></div>
-        <div><div className="text-gray-500 text-xs">تكلفة التحضير</div><div className="ltr-nums font-medium">{cost.preparationCost}</div></div>
-        <div><div className="text-gray-500 text-xs">{t("cost.externalProcessing")}</div><div className="ltr-nums font-medium">{cost.externalProcessingCost}</div></div>
-        <div><div className="text-gray-500 text-xs">عمالة</div><div className="ltr-nums font-medium">{cost.laborCost}</div></div>
-        <div><div className="text-gray-500 text-xs">كهرباء</div><div className="ltr-nums font-medium">{cost.electricityCost}</div></div>
-        <div><div className="text-gray-500 text-xs">وقود</div><div className="ltr-nums font-medium">{cost.fuelCost}</div></div>
-        <div><div className="text-gray-500 text-xs">{t("cost.cat.Maintenance")}</div><div className="ltr-nums font-medium">{cost.maintenanceCost}</div></div>
-        <div><div className="text-gray-500 text-xs">{t("cost.cat.Transport")}</div><div className="ltr-nums font-medium">{cost.transportCost}</div></div>
-        <div><div className="text-gray-500 text-xs">{t("cost.cat.Packaging")}</div><div className="ltr-nums font-medium">{cost.packagingCost}</div></div>
-        <div><div className="text-gray-500 text-xs">{t("cost.cat.Repair")}</div><div className="ltr-nums font-medium">{cost.repairCost}</div></div>
-        <div><div className="text-gray-500 text-xs">أخرى</div><div className="ltr-nums font-medium">{cost.otherCost}</div></div>
-        <div><div className="text-gray-500 text-xs">إجمالي التكلفة</div><div className="ltr-nums font-bold">{cost.totalCost}</div></div>
-        {cost.costPerKg != null && <div><div className="text-gray-500 text-xs">التكلفة/كجم</div><div className="ltr-nums font-medium">{cost.costPerKg.toFixed(2)}</div></div>}
-        {cost.costPerMeter != null && <div><div className="text-gray-500 text-xs">التكلفة/متر</div><div className="ltr-nums font-medium">{cost.costPerMeter.toFixed(2)}</div></div>}
-        <div><div className="text-gray-500 text-xs">قيمة التشغيل</div><div className="ltr-nums font-medium">{cost.processingValue}</div></div>
-        <div><div className="text-gray-500 text-xs">الربح</div><div className="ltr-nums font-bold">{cost.profit}</div></div>
-        {cost.marginPercent != null && <div><div className="text-gray-500 text-xs">هامش الربح</div><div className="ltr-nums font-medium">{cost.marginPercent}%</div></div>}
+        <div><div className="text-ink-muted text-xs">تكلفة المواد</div><div className="ltr-nums font-medium">{cost.materialCost}</div></div>
+        <div><div className="text-ink-muted text-xs">تكلفة التحضير</div><div className="ltr-nums font-medium">{cost.preparationCost}</div></div>
+        <div><div className="text-ink-muted text-xs">{t("cost.externalProcessing")}</div><div className="ltr-nums font-medium">{cost.externalProcessingCost}</div></div>
+        <div><div className="text-ink-muted text-xs">عمالة</div><div className="ltr-nums font-medium">{cost.laborCost}</div></div>
+        <div><div className="text-ink-muted text-xs">كهرباء</div><div className="ltr-nums font-medium">{cost.electricityCost}</div></div>
+        <div><div className="text-ink-muted text-xs">وقود</div><div className="ltr-nums font-medium">{cost.fuelCost}</div></div>
+        <div><div className="text-ink-muted text-xs">{t("cost.cat.Maintenance")}</div><div className="ltr-nums font-medium">{cost.maintenanceCost}</div></div>
+        <div><div className="text-ink-muted text-xs">{t("cost.cat.Transport")}</div><div className="ltr-nums font-medium">{cost.transportCost}</div></div>
+        <div><div className="text-ink-muted text-xs">{t("cost.cat.Packaging")}</div><div className="ltr-nums font-medium">{cost.packagingCost}</div></div>
+        <div><div className="text-ink-muted text-xs">{t("cost.cat.Repair")}</div><div className="ltr-nums font-medium">{cost.repairCost}</div></div>
+        <div><div className="text-ink-muted text-xs">أخرى</div><div className="ltr-nums font-medium">{cost.otherCost}</div></div>
+        <div><div className="text-ink-muted text-xs">إجمالي التكلفة</div><div className="ltr-nums font-bold">{cost.totalCost}</div></div>
+        {cost.costPerKg != null && <div><div className="text-ink-muted text-xs">التكلفة/كجم</div><div className="ltr-nums font-medium">{cost.costPerKg.toFixed(2)}</div></div>}
+        {cost.costPerMeter != null && <div><div className="text-ink-muted text-xs">التكلفة/متر</div><div className="ltr-nums font-medium">{cost.costPerMeter.toFixed(2)}</div></div>}
+        <div><div className="text-ink-muted text-xs">قيمة التشغيل</div><div className="ltr-nums font-medium">{cost.processingValue}</div></div>
+        <div><div className="text-ink-muted text-xs">الربح</div><div className="ltr-nums font-bold">{cost.profit}</div></div>
+        {cost.marginPercent != null && <div><div className="text-ink-muted text-xs">هامش الربح</div><div className="ltr-nums font-medium">{cost.marginPercent}%</div></div>}
       </div>
     </Card>
   );
@@ -1157,7 +1157,7 @@ function ProfitabilityPanel({ productionOrderId }: { productionOrderId: string }
   const stageOptions = (stages ?? []).filter((s) => s.isActive && !s.isReadyGoodsStage);
 
   return (
-    <Card className="p-5 mt-6">
+    <Card className="card-pad mt-6">
       <div className="flex items-center gap-2 mb-1">
         <TrendingUp size={18} className="text-ink-muted" />
         <h2 className="text-base font-semibold">{t("profit.title", "Profitability")}</h2>

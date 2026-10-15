@@ -49,16 +49,16 @@ export default function SeparatesPage() {
         subtitle="المنفصلات ليست فاقدًا - يتم تتبعها بشكل مستقل، وإعادة تشغيلها ينشئ أمر تشغيل جديد دون المساس بتاريخ الأمر الأصلي"
       />
       <div className="space-y-3">
-        {isLoading && <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>}
-        {!isLoading && separates?.length === 0 && <Card className="p-6 text-center text-gray-400">لا توجد منفصلات مسجلة بعد</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
+        {!isLoading && separates?.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد منفصلات مسجلة بعد</Card>}
         {separates?.map((s) => (
           <Card key={s.id} className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className="text-sm text-gray-600">من أمر <span className="ltr-nums font-medium">{s.originalOrderNumber}</span> · مرحلة {s.stageName}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-sm text-gray-600">{s.itemCode} - {s.itemName}</span>
-                <span className="text-gray-400 mx-2">·</span>
+                <span className="text-sm text-ink-muted">من أمر <span className="ltr-nums font-medium">{s.originalOrderNumber}</span> · مرحلة {s.stageName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{s.itemCode} - {s.itemName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
                 <span className="ltr-nums font-medium">
                   {s.quantityKg != null && `${s.quantityKg} كجم `}
                   {s.quantityMeter != null && `${s.quantityMeter} م`}
@@ -68,7 +68,7 @@ export default function SeparatesPage() {
             </div>
 
             {s.reprocessingOrderNumber && (
-              <p className="text-xs text-gray-500 mt-1">أمر إعادة التشغيل: <span className="ltr-nums font-medium">{s.reprocessingOrderNumber}</span></p>
+              <p className="text-xs text-ink-muted mt-1">أمر إعادة التشغيل: <span className="ltr-nums font-medium">{s.reprocessingOrderNumber}</span></p>
             )}
 
             {s.status === "PendingReprocessing" && (

@@ -73,9 +73,9 @@ export default function DeliveryPrintPage() {
     <>
       {/* Column chooser. Deliberately part of the screen rather than of the document - it is hidden
           by the print stylesheet, so a printed permit never carries the controls. */}
-      <div className="no-print mx-auto mt-4 max-w-[210mm] rounded-lg border border-gray-200 bg-white p-4" dir="rtl">
-        <div className="mb-2 text-sm font-semibold text-gray-700">{t("del.printColumns")}</div>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-600">
+      <div className="no-print mx-auto mt-4 max-w-[210mm] rounded-2xl border border-line bg-surface p-4" dir="rtl">
+        <div className="mb-2 text-sm font-semibold text-ink">{t("del.printColumns")}</div>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-ink-muted">
           {(
             [
               ["kg", t("del.printColumnKg")],
@@ -89,7 +89,7 @@ export default function DeliveryPrintPage() {
             </label>
           ))}
         </div>
-        <p className="mt-2 text-2xs text-gray-500">{t("del.printColumnsHint")}</p>
+        <p className="mt-2 text-2xs text-ink-muted">{t("del.printColumnsHint")}</p>
       </div>
 
       <PrintPreviewLayout

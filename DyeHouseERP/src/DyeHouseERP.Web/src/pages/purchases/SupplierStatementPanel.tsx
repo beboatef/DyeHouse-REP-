@@ -39,7 +39,7 @@ export default function SupplierStatementPanel() {
 
   return (
     <Card className="mb-6">
-      <div className="flex flex-wrap items-end gap-3 p-4 border-b border-gray-100">
+      <div className="flex flex-wrap items-end gap-3 p-4 border-b border-line">
         <div className="w-64">
           <label className="field-label">كشف حساب مورد</label>
           <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
@@ -71,20 +71,20 @@ export default function SupplierStatementPanel() {
       </div>
 
       {!supplierId && (
-        <p className="p-4 text-sm text-gray-500">
+        <p className="p-4 text-sm text-ink-muted">
           اختر موردًا لعرض كشف حسابه الكامل (الفواتير، المدفوعات، والرصيد الجاري).
         </p>
       )}
 
       {supplierId && isLoading && (
-        <p className="p-4 text-sm text-gray-400">جارٍ التحميل...</p>
+        <p className="p-4 text-sm text-ink-subtle">جارٍ التحميل...</p>
       )}
 
       {supplierId && !isLoading && (
         <div className="p-4">
           <div className="flex flex-wrap gap-6 text-sm mb-3">
             <span>إجمالي المستحق (مدين): <b className="ltr-nums">{money(totalOut)}</b></span>
-            <span className="text-green-700">إجمالي المدفوع (دائن): <b className="ltr-nums">{money(totalIn)}</b></span>
+            <span className="text-success-ink">إجمالي المدفوع (دائن): <b className="ltr-nums">{money(totalIn)}</b></span>
             <span>الرصيد الجاري: <b className="ltr-nums">{money(totalOut - totalIn)}</b></span>
           </div>
           <div className="table-wrap">

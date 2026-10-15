@@ -151,7 +151,7 @@ export default function SuppliesPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end"
             onSubmit={(e) => {
@@ -198,7 +198,7 @@ export default function SuppliesPage() {
         </Card>
       )}
 
-      <Card className="p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-end">
+      <Card className="card-pad mb-4 flex flex-col sm:flex-row gap-3 sm:items-end">
         <div className="w-full sm:w-56">
           <label className="field-label">{t("common.status")}</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "" | SupplyIssueStatus)}>
@@ -208,7 +208,7 @@ export default function SuppliesPage() {
             <option value="Cancelled">{t("sup.cancelled")}</option>
           </Select>
         </div>
-        <p className="text-xs text-gray-400 sm:mb-2">{t("sup.onlySupplies")}</p>
+        <p className="text-xs text-ink-subtle sm:mb-2">{t("sup.onlySupplies")}</p>
       </Card>
 
       {error && <p className="form-error mb-3">{error}</p>}
@@ -230,17 +230,17 @@ export default function SuppliesPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && issues?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {issues?.map((issue: SupplyIssue) => (
               <Fragment key={issue.id}>
-                <tr className="border-b border-gray-100 hover:bg-gray-50">
+                <tr className="border-b border-line hover:bg-surface-sunken">
                   <td className="font-medium ltr-nums">{issue.issueNumber}</td>
                   <td>
                     <Button variant="ghost" onClick={SuppliesExports.documentPdf(issue.id)}>PDF</Button>
@@ -248,7 +248,7 @@ export default function SuppliesPage() {
                   <td className="ltr-nums">{new Date(issue.issueDate).toLocaleDateString("en-GB")}</td>
                   <td>
                     <div>{issue.issuedTo}</div>
-                    {issue.departmentName && <div className="text-xs text-gray-400">{issue.departmentName}</div>}
+                    {issue.departmentName && <div className="text-xs text-ink-subtle">{issue.departmentName}</div>}
                   </td>
                   <td className="text-ink-muted">{issue.purpose}</td>
                   <td className="ltr-nums">{money(issue.totalCost)}</td>
@@ -273,7 +273,7 @@ export default function SuppliesPage() {
                 </tr>
 
                 {expanded === issue.id && (
-                  <tr className="bg-gray-50/60">
+                  <tr className="bg-surface-sunken/60">
                     <td colSpan={8} className="px-4 py-4">
                       <table className="table mb-4">
                         <thead>
@@ -288,13 +288,13 @@ export default function SuppliesPage() {
                         <tbody>
                           {issue.lines.length === 0 && (
                             <tr>
-                              <td colSpan={5} className="py-3 text-center text-gray-400 text-xs">{t("common.empty")}</td>
+                              <td colSpan={5} className="py-3 text-center text-ink-subtle text-xs">{t("common.empty")}</td>
                             </tr>
                           )}
                           {issue.lines.map((l) => (
-                            <tr key={l.id} className="border-b border-gray-100 last:border-0">
+                            <tr key={l.id} className="border-b border-line last:border-0">
                               <td>
-                                <span className="ltr-nums text-gray-500 me-2">{l.materialCode}</span>
+                                <span className="ltr-nums text-ink-muted me-2">{l.materialCode}</span>
                                 {l.materialName}
                               </td>
                               <td className="ltr-nums">{l.quantity} {l.unit}</td>
@@ -303,7 +303,7 @@ export default function SuppliesPage() {
                               <td>
                                 {issue.isEditable && (
                                   <button
-                                    className="text-red-500 hover:underline text-xs font-semibold"
+                                    className="text-danger-ink hover:underline text-xs font-semibold"
                                     onClick={() => removeLine.mutate({ id: issue.id, lineId: l.id })}
                                   >
                                     {t("common.remove")}
@@ -359,11 +359,11 @@ export default function SuppliesPage() {
 
                       {issue.status !== "Draft" && issue.timeline.length > 0 && (
                         <div className="mt-4">
-                          <div className="text-xs font-semibold text-gray-600 mb-2">{t("common.timeline")}</div>
-                          <ul className="text-xs text-gray-500 space-y-1">
+                          <div className="text-xs font-semibold text-ink-muted mb-2">{t("common.timeline")}</div>
+                          <ul className="text-xs text-ink-muted space-y-1">
                             {issue.timeline.map((entry, i) => (
                               <li key={i}>
-                                <span className="font-medium text-gray-700">{entry.action}</span>
+                                <span className="font-medium text-ink">{entry.action}</span>
                                 {entry.user && <> · {entry.user}</>}
                                 {entry.atUtc && <> · {new Date(entry.atUtc).toLocaleString("en-GB")}</>}
                               </li>

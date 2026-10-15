@@ -59,7 +59,7 @@ export default function PeriodClosingPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); closeMutation.mutate(); }}>
             <div>
               <label className="field-label">من تاريخ</label>
@@ -86,10 +86,10 @@ export default function PeriodClosingPage() {
             <th>بواسطة</th><th>الحالة</th><th></th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
-            {!isLoading && periods?.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">لا توجد فترات مقفلة</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {!isLoading && periods?.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">لا توجد فترات مقفلة</td></tr>}
             {periods?.map((p) => (
-              <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="ltr-nums">{new Date(p.periodStart).toLocaleDateString("en-GB")}</td>
                 <td className="ltr-nums">{new Date(p.periodEnd).toLocaleDateString("en-GB")}</td>
                 <td>{p.createdBy}</td>

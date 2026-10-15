@@ -4,7 +4,7 @@ import {
   CustomerReturnsApi, CustomersApi, ItemsApi, RawMessagesApi, ProductionOrdersApi, ProductionStagesApi,
   type CustomerReturn, type CustomerReturnLineInput, type CostBearer, type ReturnOwnership
 } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Field, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Field, Badge, SearchInput } from "@/components/ui";
 import { TableStateRow, errorMessage } from "@/components/ui";
 import { useI18n } from "@/i18n";
 import { PackageOpen, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
@@ -272,7 +272,7 @@ export default function CustomerReturnsPage() {
       />
 
       {showForm && (
-        <Card className="mb-6 p-5">
+        <Card className="card-pad mb-6">
           <form onSubmit={submit}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Field label={t("common.customer")} required>
@@ -414,7 +414,7 @@ export default function CustomerReturnsPage() {
       )}
 
       {/* ---- Filters ---- */}
-      <Card className="mb-4 p-4 sm:p-5">
+      <Card className="card-pad mb-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label={t("common.customer")}>
             <Select value={filterCustomerId} onChange={(e) => setFilterCustomerId(e.target.value)}>
@@ -431,7 +431,7 @@ export default function CustomerReturnsPage() {
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           </Field>
           <Field label={t("app.search")}>
-            <Input value={search} onChange={(e) => setSearch(e.target.value)}
+            <SearchInput value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder={t("returns.searchPlaceholder")} />
           </Field>
         </div>
@@ -538,7 +538,7 @@ export default function CustomerReturnsPage() {
 
                           {/* ---- Job Orders raised from this return ---- */}
                           {ret.productionOrders.length > 0 && (
-                            <div className="mx-3 mb-2 rounded-lg border border-line bg-white px-4 py-2 text-sm">
+                            <div className="mx-3 mb-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm">
                               <span className="text-ink-subtle">{t("returns.raisedOrders", "أوامر تشغيل أُنشئت من هذا المرتجع")}: </span>
                               {ret.productionOrders.map((o) => (
                                 <span key={o.productionOrderId} className="ltr-nums me-3">
@@ -554,18 +554,18 @@ export default function CustomerReturnsPage() {
                           )}
 
                           {ret.isCancelled ? (
-                            <div className="mx-3 mb-3 rounded-lg border border-red-200 bg-red-50/50 px-4 py-3 text-sm text-red-900">
+                            <div className="mx-3 mb-3 rounded-lg border border-danger/30 bg-danger-soft/50 px-4 py-3 text-sm text-danger-ink">
                               <div className="font-semibold">{t("returns.cancel.title")}</div>
-                              <div className="ltr-nums text-xs text-red-800">
+                              <div className="ltr-nums text-xs text-danger-ink">
                                 {ret.cancelledBy} · {ret.cancelledAtUtc ? new Date(ret.cancelledAtUtc).toLocaleString("en-GB") : ""}
                               </div>
                               <div className="mt-1" dir="auto">{ret.cancellationReason}</div>
                             </div>
                           ) : cancelFor === ret.id ? (
-                            <div className="mx-3 mb-3 rounded-lg border border-red-200 bg-red-50/60 p-4">
+                            <div className="mx-3 mb-3 rounded-lg border border-danger/30 bg-danger-soft/60 p-4">
                               <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                                <span className="text-sm font-semibold text-red-900">{t("returns.cancel.title")}</span>
-                                <span className="text-xs text-red-800">{t("returns.cancel.hint")}</span>
+                                <span className="text-sm font-semibold text-danger-ink">{t("returns.cancel.title")}</span>
+                                <span className="text-xs text-danger-ink">{t("returns.cancel.hint")}</span>
                               </div>
                               <div className="mt-3">
                                 <Field label={t("returns.cancel.reason")}>

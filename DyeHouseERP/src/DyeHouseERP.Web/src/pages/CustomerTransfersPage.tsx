@@ -97,7 +97,7 @@ export default function CustomerTransfersPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -162,8 +162,8 @@ export default function CustomerTransfersPage() {
             {error && <p className="form-error">{error}</p>}
 
             {negativeStockDetail && (
-              <Card className="p-4 border-yellow-300 bg-yellow-50">
-                <p className="text-sm text-yellow-800">
+              <Card className="card-pad border-warning/30 bg-warning-soft">
+                <p className="text-sm text-warning-ink">
                   الكمية تتجاوز رصيد العميل المرسل بمقدار <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
                   لا يتم تجاوز الرصيد السالب هنا: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه إلا مستخدم آخر
                   يملك صلاحية اعتماد تجاوز الرصيد السالب. لا يمكن للمستخدم اعتماد طلبه بنفسه.
@@ -177,14 +177,14 @@ export default function CustomerTransfersPage() {
                     {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
                   </Button>
                 </div>
-                <p className="mt-2 text-2xs text-yellow-800">
+                <p className="mt-2 text-2xs text-warning-ink">
                   الاعتماد مرتبط بنفس التحويل ونفس الكميات والوحدة والعميلين - أي تغيير في التفاصيل يتطلب طلبًا جديدًا.
                 </p>
               </Card>
             )}
 
             {approvalRequested && (
-              <p className="text-sm text-green-700">
+              <p className="text-sm text-success-ink">
                 تم إرسال طلب اعتماد على الرسالة <span className="ltr-nums font-bold">{approvalRequested}</span>.
                 لن يتم الحفظ إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
               </p>
@@ -206,10 +206,10 @@ export default function CustomerTransfersPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
-            {!isLoading && transfers?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد تحويلات بعد</td></tr>}
+            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {!isLoading && transfers?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا توجد تحويلات بعد</td></tr>}
             {transfers?.map((t) => (
-              <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td>
                 <td>{t.fromCustomerCode}</td>
                 <td>{t.toCustomerCode}</td>

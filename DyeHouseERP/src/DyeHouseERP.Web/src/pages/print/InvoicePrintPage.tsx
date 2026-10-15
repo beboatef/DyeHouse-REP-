@@ -7,7 +7,7 @@ export default function InvoicePrintPage() {
   const { id } = useParams<{ id: string }>();
   const { data: invoice, isLoading } = useQuery({ queryKey: ["invoice-print", id], queryFn: () => InvoicesApi.get(id!), enabled: !!id });
 
-  if (isLoading || !invoice) return <div className="p-10 text-center text-gray-400">جارٍ التحميل...</div>;
+  if (isLoading || !invoice) return <div className="p-10 text-center text-ink-subtle">جارٍ التحميل...</div>;
 
   return (
     <PrintPreviewLayout

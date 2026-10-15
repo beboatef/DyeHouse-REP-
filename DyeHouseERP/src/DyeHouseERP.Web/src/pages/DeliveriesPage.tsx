@@ -270,7 +270,7 @@ export default function DeliveriesPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -322,7 +322,7 @@ export default function DeliveriesPage() {
                   // What the primary permit delivered for this line and what other sub-permits claim of it.
                   const usage = source?.fromPrimary ? primaryUsage.get(line.sourceKey) : undefined;
                   return (
-                  <div key={idx} className="rounded-lg bg-gray-50 p-3">
+                  <div key={idx} className="rounded-lg bg-surface-sunken p-3">
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                       <div className="sm:col-span-2">
                         <label className="field-label">{primaryPermit ? t("del.sourceLine") : "أمر التشغيل (الرصيد الجاهز)"}</label>
@@ -392,14 +392,14 @@ export default function DeliveriesPage() {
       )}
 
       <div className="space-y-3">
-        {isLoading && <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
         {deliveries?.map((d) => (
           <Card key={d.id} className="card-pad">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="font-bold ltr-nums">{d.deliveryNumber}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-sm text-gray-600">{d.customerCode} - {d.customerName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{d.customerCode} - {d.customerName}</span>
                 {/* The one cross-reference a sub-customer permit carries: the primary permit and
                     its customer's code/name. Never the primary customer's full record. */}
                 {d.isSubCustomerPermit && d.primaryDeliveryNumber && (

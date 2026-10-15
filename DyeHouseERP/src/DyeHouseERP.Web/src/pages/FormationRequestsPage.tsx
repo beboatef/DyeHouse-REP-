@@ -363,7 +363,7 @@ export default function FormationRequestsPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6 space-y-5">
+        <Card className="card-pad mb-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <label className="field-label">{t("common.customer")}</label>
@@ -403,7 +403,7 @@ export default function FormationRequestsPage() {
           </div>
 
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800">{t("fr.groups")}</h3>
+            <h3 className="card-title">{t("fr.groups")}</h3>
             <Button variant="secondary" onClick={() => setGroups((prev) => [...prev, emptyGroup(unit)])}>
               {t("fr.addGroup")}
             </Button>
@@ -411,14 +411,14 @@ export default function FormationRequestsPage() {
 
           <div className="space-y-4">
             {groups.map((group, index) => (
-              <div key={group.key} className="rounded-xl border border-slate-200 p-4 bg-slate-50/60">
+              <div key={group.key} className="rounded-xl border border-line p-4 bg-surface-sunken/60">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500">
+                  <span className="text-xs font-bold text-ink-muted">
                     {t("fr.group")} #{index + 1}
                   </span>
                   {groups.length > 1 && (
                     <button
-                      className="text-xs font-semibold text-red-600 hover:underline"
+                      className="text-xs font-semibold text-danger-ink hover:underline"
                       onClick={() => setGroups((prev) => prev.filter((g) => g.key !== group.key))}
                     >
                       {t("fr.removeGroup")}
@@ -436,9 +436,9 @@ export default function FormationRequestsPage() {
                       {t("fr.plannedQuantity")} ({unit})
                     </label>
                     {group.basins.length > 0 ? (
-                      <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm ltr-nums font-semibold text-slate-700">
+                      <div className="rounded-lg border border-line bg-surface-sunken px-3 py-2 text-sm ltr-nums font-semibold text-ink">
                         {groupQuantity(group)} {unit}
-                        <span className="block text-[10px] font-normal text-slate-500">
+                        <span className="block text-[10px] font-normal text-ink-muted">
                           {t("fr.groupQuantityIsBasinSum")}
                         </span>
                       </div>
@@ -505,7 +505,7 @@ export default function FormationRequestsPage() {
                 </div>
 
                 <details className="mt-3">
-                  <summary className="text-2xs font-semibold text-slate-500 cursor-pointer">
+                  <summary className="text-2xs font-semibold text-ink-muted cursor-pointer">
                     {t("fr.qualityInstructions")} / {t("fr.labInstructions")} / {t("fr.internalInstructions")} / {t("fr.customerInstructions")}
                   </summary>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
@@ -521,7 +521,7 @@ export default function FormationRequestsPage() {
                         <label className="field-label">{label}</label>
                         <textarea
                           rows={2}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                          className="w-full rounded-lg border border-line-strong px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
                           value={String(group[key] ?? "")}
                           onChange={(e) => updateGroup(group.key, { [key]: e.target.value } as Partial<GroupDraft>)}
                         />
@@ -533,9 +533,9 @@ export default function FormationRequestsPage() {
                 {/* Basins (spec sections 10-11): the group is planned as one piece until the first basin
                     is added; from then on every basin carries its own quantity and its own copy of the
                     cell's specification, and the group quantity is their sum. */}
-                <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-3">
+                <div className="mt-4 rounded-xl border border-dashed border-line-strong bg-surface p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-2xs font-bold text-slate-500">{t("fr.basins")}</span>
+                    <span className="text-2xs font-bold text-ink-muted">{t("fr.basins")}</span>
                     <Button
                       variant="secondary"
                       onClick={() =>
@@ -561,18 +561,18 @@ export default function FormationRequestsPage() {
                   </div>
 
                   {group.basins.length === 0 && (
-                    <p className="text-2xs text-slate-400 mt-2">{t("fr.noBasinsHint")}</p>
+                    <p className="text-2xs text-ink-subtle mt-2">{t("fr.noBasinsHint")}</p>
                   )}
 
                   <div className="space-y-2 mt-3">
                     {group.basins.map((basin, basinIndex) => (
-                      <div key={basin.key} className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                      <div key={basin.key} className="rounded-lg border border-line p-3 bg-surface-sunken">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-2xs font-bold text-slate-500">
+                          <span className="text-2xs font-bold text-ink-muted">
                             {t("fr.basin")} #{basinIndex + 1}
                           </span>
                           <button
-                            className="text-xs font-semibold text-red-600 hover:underline"
+                            className="text-xs font-semibold text-danger-ink hover:underline"
                             onClick={() =>
                               updateGroup(group.key, {
                                 basins: group.basins.filter((b) => b.key !== basin.key)
@@ -680,9 +680,9 @@ export default function FormationRequestsPage() {
               <label className="field-label">{t("common.notes")}</label>
               <Input value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} />
             </div>
-            <div className="text-sm text-slate-600">
+            <div className="text-sm text-ink-muted">
               {t("fr.totalQuantity")}: <span className="ltr-nums font-bold">{totalQuantity}</span> {unit}
-              <div className="text-2xs text-slate-400">{t("fr.totalMustMatch")}</div>
+              <div className="text-2xs text-ink-subtle">{t("fr.totalMustMatch")}</div>
             </div>
           </div>
 
@@ -690,13 +690,13 @@ export default function FormationRequestsPage() {
             <Button onClick={() => saveMutation.mutate()} disabled={!canSave || saveMutation.isPending}>
               {saveMutation.isPending ? t("common.saving") : editId ? t("common.save") : t("common.add")}
             </Button>
-            {!header.rawMessageId && <span className="text-2xs text-amber-600">{t("fr.selectMessage")}</span>}
+            {!header.rawMessageId && <span className="text-2xs text-warning-ink">{t("fr.selectMessage")}</span>}
             {error && <span className="form-error">{error}</span>}
           </div>
         </Card>
       )}
 
-      <Card className="p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as FormationRequestStatus | "")}>
           <option value="">{t("common.all")} - {t("common.status")}</option>
           {(["Draft", "Submitted", "Approved", "InProgress", "PartiallyCompleted", "Completed", "Rejected", "Cancelled"] as FormationRequestStatus[]).map(
@@ -730,13 +730,13 @@ export default function FormationRequestsPage() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {!isLoading && requests?.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {requests?.map((request) => (
-              <tr key={request.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={request.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium">
                   <Link to={`/formation-requests/${request.id}`} className="btn-link ltr-nums">
                     {request.requestNumber}
@@ -747,10 +747,10 @@ export default function FormationRequestsPage() {
                     {t("common.pdf")}
                   </Button>
                 </td>
-                <td className="ltr-nums text-gray-600">{request.requestDate.slice(0, 10)}</td>
+                <td className="ltr-nums text-ink-muted">{request.requestDate.slice(0, 10)}</td>
                 <td>
                   <span className="ltr-nums font-medium">{request.customerCode}</span>
-                  <span className="text-gray-500"> · {request.customerName}</span>
+                  <span className="text-ink-muted"> · {request.customerName}</span>
                 </td>
                 <td className="ltr-nums">{request.itemCode}</td>
                 <td className="ltr-nums">{request.groups.length}</td>

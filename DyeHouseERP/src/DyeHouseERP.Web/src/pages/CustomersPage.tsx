@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Customer, CustomersApi } from "@/api/client";
 import { CustomersExports } from "@/api/exports";
-import { PageHeader, Card, Button, Input, Select, Badge, TableStateRow, TableWrap } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, TableStateRow, TableWrap, SearchInput } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import ImportPanel from "@/components/ImportPanel";
 import { useI18n } from "@/i18n";
@@ -124,8 +124,8 @@ export default function CustomersPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
-          <h3 className="text-sm font-bold text-slate-800 mb-3">
+        <Card className="card-pad mb-6">
+          <h3 className="card-title mb-3">
             {editing ? t("cust.editTitle") : t("cust.newTitle")}
           </h3>
           <form
@@ -145,7 +145,7 @@ export default function CustomersPage() {
                 // The code is the join key to every downstream document, so it is fixed once created.
                 disabled={Boolean(editing)}
               />
-              {editing && <p className="text-[10px] text-slate-400 mt-1">{t("cust.codeLocked")}</p>}
+              {editing && <p className="text-[10px] text-ink-subtle mt-1">{t("cust.codeLocked")}</p>}
             </div>
             <div>
               <label className="field-label">{t("cust.name")}</label>
@@ -204,7 +204,7 @@ export default function CustomersPage() {
                       <option key={x.id} value={x.id}>{x.code} — {x.name}</option>
                     ))}
                 </Select>
-                <p className="text-[10px] text-slate-400 mt-1">{t("cust.parentHint")}</p>
+                <p className="text-[10px] text-ink-subtle mt-1">{t("cust.parentHint")}</p>
               </div>
             )}
             <div className="flex items-center gap-3">
@@ -225,8 +225,8 @@ export default function CustomersPage() {
         onDone={() => qc.invalidateQueries({ queryKey: ["customers"] })}
       />
 
-      <Card className="p-4 mb-4">
-        <Input placeholder={t("cust.search")} value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Card className="card-pad mb-4">
+        <SearchInput placeholder={t("cust.search")} value={search} onChange={(e) => setSearch(e.target.value)} />
       </Card>
 
       <Card>
@@ -253,7 +253,7 @@ export default function CustomersPage() {
                 emptyText={t("cust.empty")}
               />
               {customers?.map((c) => (
-                <tr key={c.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${c.isActive ? "" : "opacity-60"}`}>
+                <tr key={c.id} className={`border-b border-line last:border-0 hover:bg-surface-sunken ${c.isActive ? "" : "opacity-60"}`}>
                   <td className="font-medium ltr-nums">{c.code}</td>
                   <td>{c.name}</td>
                   <td className="ltr-nums">{c.parentCustomerCode ?? "—"}</td>

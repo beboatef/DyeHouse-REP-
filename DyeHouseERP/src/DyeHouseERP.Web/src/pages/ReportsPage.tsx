@@ -33,14 +33,12 @@ export default function ReportsPage() {
         title="التقارير"
         subtitle="تقارير حقيقية من سجل الحركات وسجل الأرصدة - كل تقرير قابل للطباعة والتنزيل Excel و PDF"
       />
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
+      <div className="tabs mb-6">
         {tabs.map((x) => (
           <button
             key={x.key}
             onClick={() => setTab(x.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === x.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            className={`tab ${tab === x.key ? "tab-active" : ""}`}
           >
             {x.label}
           </button>
@@ -155,12 +153,12 @@ function MovementsReport() {
           </tr>
         </thead>
         <tbody>
-          {isLoading && <tr><td colSpan={11} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+          {isLoading && <tr><td colSpan={11} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
           {!isLoading && data?.length === 0 && (
-            <tr><td colSpan={11} className="px-4 py-6 text-center text-gray-400">لا توجد حركات مطابقة</td></tr>
+            <tr><td colSpan={11} className="px-4 py-6 text-center text-ink-subtle">لا توجد حركات مطابقة</td></tr>
           )}
           {data?.map((m) => (
-            <tr key={m.id} className="border-b border-gray-100 last:border-0">
+            <tr key={m.id} className="border-b border-line last:border-0">
               <td className="ltr-nums">{new Date(m.transactionDate).toLocaleDateString("en-GB")}</td>
               <td className="ltr-nums">{m.sourceDocumentNumber}</td>
               <td>{m.sourceDocumentType}</td>
@@ -210,7 +208,7 @@ function BalancesReport() {
         </div>
       }
     >
-      <div className="p-4 text-sm text-gray-600 border-b border-gray-100">
+      <div className="p-4 text-sm text-ink-muted border-b border-line">
         رصيد الخام لكل رسالة استلام + رصيد الجاهز لكل أمر تشغيل. الأرصدة مُحتسبة من دفتر الحركات
         وليست حقولًا مخزَّنة، فلا يمكن أن تنحرف عن Reality.
       </div>
@@ -226,12 +224,12 @@ function BalancesReport() {
           </tr>
         </thead>
         <tbody>
-          {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+          {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
           {!isLoading && ready?.length === 0 && (
-            <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد أرصدة جاهزة</td></tr>
+            <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا توجد أرصدة جاهزة</td></tr>
           )}
           {ready?.map((r) => (
-            <tr key={r.productionOrderId} className="border-b border-gray-100 last:border-0">
+            <tr key={r.productionOrderId} className="border-b border-line last:border-0">
               <td className="ltr-nums">{r.productionOrderNumber}</td>
               <td>{r.customerCode} - {r.customerName}</td>
               <td>{r.itemCode} - {r.itemName}</td>
@@ -283,12 +281,12 @@ function OverridesReport() {
           <th>طلبه</th><th>اعتمده</th>
         </tr></thead>
         <tbody>
-          {isLoading && <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+          {isLoading && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
           {!isLoading && overrides?.length === 0 && (
-            <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">لا توجد تجاوزات مسجلة</td></tr>
+            <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">لا توجد تجاوزات مسجلة</td></tr>
           )}
           {overrides?.map((o) => (
-            <tr key={o.id} className="border-b border-gray-100 last:border-0">
+            <tr key={o.id} className="border-b border-line last:border-0">
               <td className="ltr-nums">{new Date(o.approvedAtUtc).toLocaleString("en-GB")}</td>
               <td className="ltr-nums">{o.messageNumber}</td>
               <td>{o.customerCode}</td>

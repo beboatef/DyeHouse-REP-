@@ -199,7 +199,7 @@ export default function RawMessagesPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form onSubmit={submit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
@@ -233,7 +233,7 @@ export default function RawMessagesPage() {
               </div>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-7 gap-3 items-end bg-gray-50 rounded-lg p-3">
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-7 gap-3 items-end bg-surface-sunken rounded-lg p-3">
                     <div className="sm:col-span-2">
                       <label className="field-label">{t("common.item")}</label>
                       <Select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })} required>
@@ -293,20 +293,20 @@ export default function RawMessagesPage() {
       )}
 
       <div className="space-y-4">
-        {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
-        {!isLoading && messages?.length === 0 && <Card className="p-6 text-center text-gray-400">{t("raw.empty")}</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">{t("common.loading")}</Card>}
+        {!isLoading && messages?.length === 0 && <Card className="card-pad text-center text-ink-subtle">{t("raw.empty")}</Card>}
 
         {messages?.map((m) => (
           <Card key={m.id} className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div>
                 <span className="font-bold text-lg ltr-nums">{m.messageNumber}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-sm text-gray-600">{m.customerCode} - {m.customerName}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-sm text-gray-600">{m.warehouseName}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-sm text-gray-500 ltr-nums">{new Date(m.receiptDate).toLocaleDateString("en-GB")}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{m.customerCode} - {m.customerName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{m.warehouseName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted ltr-nums">{new Date(m.receiptDate).toLocaleDateString("en-GB")}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Link to={`/print/raw-message/${m.id}`} target="_blank">
@@ -344,7 +344,7 @@ export default function RawMessagesPage() {
               </thead>
               <tbody>
                 {m.lines.map((l) => (
-                  <tr key={l.id} className="border-b border-gray-50 last:border-0">
+                  <tr key={l.id} className="border-b border-line last:border-0">
                     <td>{l.itemCode} - {l.itemName}</td>
                     <td dir="auto">{l.color ?? "-"}</td>
                     <td className="ltr-nums">
@@ -352,7 +352,7 @@ export default function RawMessagesPage() {
                       {l.quantityKg != null && l.quantityMeter != null && " / "}
                       {l.quantityMeter != null && `${l.quantityMeter} ${t("common.meter")}`}
                     </td>
-                    <td className="ltr-nums text-red-600">
+                    <td className="ltr-nums text-danger-ink">
                       {l.rejectedQuantityKg == null && l.rejectedQuantityMeter == null
                         ? "-"
                         : [
@@ -377,9 +377,9 @@ export default function RawMessagesPage() {
             </table>
 
             {m.status === "Cancelled" && m.cancellationReason && (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50/50 px-4 py-3 text-sm text-red-900">
+              <div className="mt-3 rounded-lg border border-danger/30 bg-danger-soft/50 px-4 py-3 text-sm text-danger-ink">
                 <div className="font-semibold">{t("raw.cancel.title")}</div>
-                <div className="ltr-nums text-xs text-red-800">
+                <div className="ltr-nums text-xs text-danger-ink">
                   {m.cancelledBy} · {m.cancelledAtUtc ? new Date(m.cancelledAtUtc).toLocaleString("en-GB") : ""}
                 </div>
                 <div className="mt-1" dir="auto">{m.cancellationReason}</div>
@@ -387,10 +387,10 @@ export default function RawMessagesPage() {
             )}
 
             {cancelFor === m.id && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-4">
+              <div className="mt-4 rounded-lg border border-danger/30 bg-danger-soft/60 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                  <span className="text-sm font-semibold text-red-900">{t("raw.cancel.title")}</span>
-                  <span className="text-xs text-red-800">{t("raw.cancel.hint")}</span>
+                  <span className="text-sm font-semibold text-danger-ink">{t("raw.cancel.title")}</span>
+                  <span className="text-xs text-danger-ink">{t("raw.cancel.hint")}</span>
                 </div>
 
                 <div className="mt-3">
@@ -418,10 +418,10 @@ export default function RawMessagesPage() {
             )}
 
             {inspectionFor === m.id && (
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+              <div className="mt-4 rounded-lg border border-warning/30 bg-warning-soft/60 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                  <span className="text-sm font-semibold text-amber-900">{t("raw.inspection.title")}</span>
-                  <span className="text-xs text-amber-800">{t("raw.inspection.hint")}</span>
+                  <span className="text-sm font-semibold text-warning-ink">{t("raw.inspection.title")}</span>
+                  <span className="text-xs text-warning-ink">{t("raw.inspection.hint")}</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
@@ -440,10 +440,10 @@ export default function RawMessagesPage() {
 
                 <div className="mt-3 space-y-2">
                   {m.lines.map((l) => (
-                    <div key={l.id} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end bg-white/70 rounded-lg p-3">
-                      <div className="text-sm text-gray-700">
+                    <div key={l.id} className="grid grid-cols-1 items-end gap-3 rounded-xl bg-surface/70 p-3 sm:grid-cols-3">
+                      <div className="text-sm text-ink">
                         {l.itemCode} - {l.itemName}
-                        <div className="text-2xs text-gray-400 ltr-nums">
+                        <div className="text-2xs text-ink-subtle ltr-nums">
                           {t("raw.receivedQty")}: {l.quantityKg ?? "-"} {t("common.kg")} / {l.quantityMeter ?? "-"} {t("common.meter")}
                         </div>
                       </div>

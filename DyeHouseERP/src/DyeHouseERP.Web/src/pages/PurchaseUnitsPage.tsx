@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PurchaseUnitsApi, type PurchaseUnit, type PurchaseUnitInput } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Field, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Field, Badge, SearchInput } from "@/components/ui";
 import { TableStateRow, errorMessage } from "@/components/ui";
 import { useI18n } from "@/i18n";
 import { Ruler, Plus } from "lucide-react";
@@ -131,7 +131,7 @@ export default function PurchaseUnitsPage() {
       />
 
       {form && (
-        <Card className="mb-6 p-5">
+        <Card className="card-pad mb-6">
           <form onSubmit={submit} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label={t("common.code")} required>
               <Input
@@ -217,10 +217,10 @@ export default function PurchaseUnitsPage() {
       )}
 
       {/* ---- Filters ---- */}
-      <Card className="mb-4 p-4 sm:p-5">
+      <Card className="card-pad mb-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label={t("app.search")}>
-            <Input
+            <SearchInput
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("units.searchPlaceholder")}

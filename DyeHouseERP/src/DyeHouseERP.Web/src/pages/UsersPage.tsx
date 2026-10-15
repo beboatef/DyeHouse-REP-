@@ -55,30 +55,30 @@ function PermissionPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-ink-muted">
           المحدد: <span className="ltr-nums font-semibold">{selected.length}</span> من {grantableCount}
         </span>
       </div>
 
-      <div className="space-y-3 max-h-80 overflow-y-auto border border-gray-100 rounded-lg p-3">
+      <div className="space-y-3 max-h-80 overflow-y-auto border border-line rounded-lg p-3">
         {filtered.map((g) => (
           <div key={g.group}>
-            <div className="text-xs font-bold text-slate-500 mb-1">{g.group}</div>
+            <div className="text-xs font-bold text-ink-muted mb-1">{g.group}</div>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {g.items.map((p) => (
-                <label key={p.value} className="flex items-center gap-2 text-sm text-gray-700">
+                <label key={p.value} className="flex items-center gap-2 text-sm text-ink">
                   <input type="checkbox" checked={selected.includes(p.value)} onChange={() => onToggle(p.value)} />
                   <span>{p.label}</span>
-                  <span className="text-[10px] text-gray-400 ltr-nums">{p.value}</span>
+                  <span className="text-[10px] text-ink-subtle ltr-nums">{p.value}</span>
                 </label>
               ))}
             </div>
           </div>
         ))}
-        {filtered.length === 0 && <p className="text-sm text-gray-400">لا توجد صلاحيات مطابقة</p>}
+        {filtered.length === 0 && <p className="text-sm text-ink-subtle">لا توجد صلاحيات مطابقة</p>}
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-ink-muted">
         تُعرض فقط الصلاحيات التي يملكها حسابك ويحق له منحها؛ ولا تُعرض صلاحية admin إلا لمدير نظام.
         الحماية نفسها مطبَّقة على الخادم.
       </p>
@@ -159,7 +159,7 @@ export default function UsersPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div><label className="field-label">اسم المستخدم</label><Input value={username} onChange={(e) => setUsername(e.target.value)} required /></div>
@@ -180,9 +180,9 @@ export default function UsersPage() {
       )}
 
       {editing && (
-        <Card className="p-5 mb-6 border-brand-200">
+        <Card className="card-pad mb-6 border-brand-200">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h3 className="font-semibold">
+            <h3 className="card-title">
               تعديل صلاحيات: <span className="ltr-nums">{users?.find((u) => u.id === editing)?.username}</span>
             </h3>
             <Button variant="secondary" onClick={() => { setEditing(null); setEditError(null); }}>إغلاق</Button>
@@ -199,7 +199,7 @@ export default function UsersPage() {
               {updateMutation.isPending ? "جارٍ الحفظ..." : "حفظ الصلاحيات"}
             </Button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-ink-muted mt-2">
             لا يمكن للمستخدم تعديل صلاحيات نفسه، ولا يمكن سحب صلاحية admin من آخر مدير نظام نشط - لتجنب فقدان الوصول.
           </p>
           {editError && <p className="form-error mt-2">{editError}</p>}
@@ -213,25 +213,25 @@ export default function UsersPage() {
             <th>الأدوار</th><th>الحالة</th><th></th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {users?.map((u) => {
               // An administrator account may only be changed by an administrator - the same rule the
               // API enforces - so its controls are simply not offered to a delegated administrator.
               const canManage = actor.canManageAccount(u.roles);
               return (
-              <tr key={u.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 align-top">
+              <tr key={u.id} className="border-b border-line last:border-0 hover:bg-surface-sunken align-top">
                 <td className="font-medium ltr-nums">{u.username}</td>
                 <td>{u.displayName}</td>
                 <td>
                   <div className="flex flex-wrap gap-1 max-w-md">
-                    {u.roles.length === 0 && <span className="text-gray-400">-</span>}
+                    {u.roles.length === 0 && <span className="text-ink-subtle">-</span>}
                     {u.roles.map((r) => <Badge key={r} tone="blue">{r}</Badge>)}
                   </div>
                 </td>
                 <td><Badge tone={u.isActive ? "green" : "gray"}>{u.isActive ? "نشط" : "معطل"}</Badge></td>
                 <td>
                   {!canManage ? (
-                    <span className="text-xs text-gray-400">حساب مسؤول - يتطلب صلاحية admin</span>
+                    <span className="text-xs text-ink-subtle">حساب مسؤول - يتطلب صلاحية admin</span>
                   ) : (
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" onClick={() => startEdit(u)}>الصلاحيات</Button>

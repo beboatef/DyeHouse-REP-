@@ -8,7 +8,7 @@ import {
   SuppliersApi,
   TreasuryAccountsApi
 } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
 import { ChecksExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
@@ -198,8 +198,8 @@ export default function ChecksPage() {
       </div>
 
       {incomingForm && (
-        <Card className="p-5 mb-6">
-          <h3 className="text-sm font-bold text-slate-800 mb-3">{t("checks.newIncoming")}</h3>
+        <Card className="card-pad mb-6">
+          <h3 className="card-title mb-3">{t("checks.newIncoming")}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <Field label={t("checks.number")}>
               <Input value={customerForm.checkNumber} onChange={(e) => setCustomerForm({ ...customerForm, checkNumber: e.target.value })} />
@@ -241,8 +241,8 @@ export default function ChecksPage() {
       )}
 
       {outgoingForm && (
-        <Card className="p-5 mb-6">
-          <h3 className="text-sm font-bold text-slate-800 mb-3">{t("checks.newOutgoing")}</h3>
+        <Card className="card-pad mb-6">
+          <h3 className="card-title mb-3">{t("checks.newOutgoing")}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <Field label={t("checks.number")}>
               <Input value={supplierForm.checkNumber} onChange={(e) => setSupplierForm({ ...supplierForm, checkNumber: e.target.value })} />
@@ -286,7 +286,7 @@ export default function ChecksPage() {
         </Card>
       )}
 
-      <Card className="p-4 mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
         <Select value={direction} onChange={(e) => setDirection(e.target.value as CheckDirection | "")}>
           <option value="">{t("common.all")}</option>
           <option value="CustomerCheck">{t("checks.direction.CustomerCheck")}</option>
@@ -298,8 +298,8 @@ export default function ChecksPage() {
             <option key={s} value={s}>{t(`checks.status.${s}`)}</option>
           ))}
         </Select>
-        <Input placeholder={t("common.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
-        <label className="flex items-center gap-2 text-sm text-slate-600">
+        <SearchInput placeholder={t("common.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <label className="flex items-center gap-2 text-sm text-ink-muted">
           <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
           {t("checks.overdueOnly")}
         </label>
@@ -308,22 +308,22 @@ export default function ChecksPage() {
       {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-3">
-        {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
-        {!isLoading && checks?.length === 0 && <Card className="p-6 text-center text-gray-400">{t("common.empty")}</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">{t("common.loading")}</Card>}
+        {!isLoading && checks?.length === 0 && <Card className="card-pad text-center text-ink-subtle">{t("common.empty")}</Card>}
         {checks?.map((check) => (
           <Card key={check.id} className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm">
                 <span className="ltr-nums font-bold">{check.checkNumber}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-gray-600">{check.bankName}</span>
-                <span className="text-gray-400 mx-2">·</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-ink-muted">{check.bankName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
                 <span className="ltr-nums font-medium">{check.amount} {check.currency}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-gray-600">
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-ink-muted">
                   {t("checks.dueDate")}: <span className="ltr-nums">{check.dueDate.slice(0, 10)}</span>
                   {check.daysToDueDate !== null && (
-                    <span className={check.daysToDueDate < 0 ? "text-red-600 ms-1" : "text-gray-400 ms-1"}>
+                    <span className={check.daysToDueDate < 0 ? "text-danger-ink ms-1" : "text-ink-subtle ms-1"}>
                       ({check.daysToDueDate} {t("checks.daysToDue")})
                     </span>
                   )}
@@ -349,14 +349,14 @@ export default function ChecksPage() {
               </div>
             </div>
 
-            <div className="text-2xs text-slate-500 mt-1.5">
+            <div className="text-2xs text-ink-muted mt-1.5">
               {t("checks.originalHolder")}: {check.originalHolder} → {t("checks.currentHolder")}: {check.currentHolder}
               {check.customerCode && <> · {t("common.customer")}: <span className="ltr-nums">{check.customerCode}</span></>}
               {check.supplierCode && <> · {t("common.supplier")}: <span className="ltr-nums">{check.supplierCode}</span></>}
             </div>
 
             {actionState.id === check.id && (
-              <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2 items-center">
+              <div className="mt-3 pt-3 border-t border-line flex flex-wrap gap-2 items-center">
                 {check.status === "Received" && (
                   <Button variant="secondary" onClick={() => movementMutation.mutate({ action: "confirm", id: check.id })}>
                     {t("checks.action.confirmReceipt")}
@@ -418,7 +418,7 @@ export default function ChecksPage() {
                     >
                       {t("checks.action.settleSupplier")}
                     </Button>
-                    <span className="text-2xs text-slate-400">{t("checks.settleNote")}</span>
+                    <span className="text-2xs text-ink-subtle">{t("checks.settleNote")}</span>
                   </>
                 )}
                 {(check.status === "Deposited" || check.status === "Endorsed") && (
@@ -453,21 +453,21 @@ export default function ChecksPage() {
                     </Button>
                   </>
                 )}
-                <span className="text-2xs text-slate-400 w-full mt-1">{t("checks.transferNote")} · {t("checks.clearNote")}</span>
+                <span className="text-2xs text-ink-subtle w-full mt-1">{t("checks.transferNote")} · {t("checks.clearNote")}</span>
               </div>
             )}
 
             {expanded === check.id && (
-              <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
-                {check.movements.length === 0 && <p className="text-xs text-slate-400">{t("common.empty")}</p>}
+              <div className="mt-3 pt-3 border-t border-line space-y-2">
+                {check.movements.length === 0 && <p className="text-xs text-ink-subtle">{t("common.empty")}</p>}
                 {check.movements.map((m) => (
-                  <div key={m.id} className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                  <div key={m.id} className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
                     <span className="w-2 h-2 rounded-full bg-brand-500" />
                     <span className="font-semibold">{t(`checks.movement.${m.movementType}`)}</span>
                     <span className="ltr-nums">{m.movementDate.slice(0, 10)}</span>
                     <span>{m.fromHolder} → {m.toHolder}</span>
-                    {m.reason && <span className="text-slate-400">({m.reason})</span>}
-                    <span className="text-slate-400">{m.createdBy}</span>
+                    {m.reason && <span className="text-ink-subtle">({m.reason})</span>}
+                    <span className="text-ink-subtle">{m.createdBy}</span>
                   </div>
                 ))}
               </div>
@@ -481,10 +481,10 @@ export default function ChecksPage() {
 
 function Kpi({ label, value, tone = "slate" }: { label: string; value: number; tone?: "slate" | "amber" | "red" }) {
   const color =
-    tone === "red" ? "text-red-600" : tone === "amber" ? "text-amber-600" : "text-slate-800";
+    tone === "red" ? "text-danger-ink" : tone === "amber" ? "text-warning-ink" : "text-ink";
   return (
-    <Card className="p-3">
-      <div className="text-2xs text-slate-500 mb-1 leading-tight">{label}</div>
+    <Card className="card-pad">
+      <div className="text-2xs text-ink-muted mb-1 leading-tight">{label}</div>
       <div className={`text-lg font-bold ltr-nums ${color}`}>{value.toLocaleString()}</div>
     </Card>
   );

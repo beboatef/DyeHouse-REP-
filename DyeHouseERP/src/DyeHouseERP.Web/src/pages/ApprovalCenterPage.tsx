@@ -76,26 +76,26 @@ export default function ApprovalCenterPage() {
     status === "Approved" ? "green" : status === "Rejected" ? "red" : "yellow";
 
   const renderRow = (item: ApprovalItem) => (
-    <tr key={`${item.category}-${item.id}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+    <tr key={`${item.category}-${item.id}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
       <td>
-        <div className="font-medium text-gray-800 ltr-nums">{item.documentNumber}</div>
-        <div className="text-xs text-gray-400">{new Date(item.date).toLocaleDateString("en-GB")}</div>
+        <div className="font-medium text-ink ltr-nums">{item.documentNumber}</div>
+        <div className="text-xs text-ink-subtle">{new Date(item.date).toLocaleDateString("en-GB")}</div>
       </td>
       <td>
         <Badge tone={item.informational ? "gray" : "yellow"}>
           {t(`approvals.cat.${item.category}`, item.category)}
         </Badge>
       </td>
-      <td className="text-gray-700">{item.party ?? "—"}</td>
+      <td className="text-ink">{item.party ?? "—"}</td>
       <td className="text-ink-muted">
         <div>{item.summary ?? "—"}</div>
-        {item.amount != null && <div className="text-xs text-gray-500 ltr-nums">{money(item.amount)}</div>}
-        {item.informational && <div className="text-xs text-gray-400">{t("approvals.informational")}</div>}
+        {item.amount != null && <div className="text-xs text-ink-muted ltr-nums">{money(item.amount)}</div>}
+        {item.informational && <div className="text-xs text-ink-subtle">{t("approvals.informational")}</div>}
       </td>
       <td className="text-ink-muted">
         <div>{item.requestedBy}</div>
         {item.requestedAtUtc && (
-          <div className="text-xs text-gray-400">{new Date(item.requestedAtUtc).toLocaleString("en-GB")}</div>
+          <div className="text-xs text-ink-subtle">{new Date(item.requestedAtUtc).toLocaleString("en-GB")}</div>
         )}
       </td>
       <td>
@@ -107,10 +107,10 @@ export default function ApprovalCenterPage() {
   );
 
   const renderRequest = (request: ApprovalRequestRow) => (
-    <tr key={request.id} className="border-b border-gray-100 last:border-0 align-top hover:bg-gray-50">
+    <tr key={request.id} className="border-b border-line last:border-0 align-top hover:bg-surface-sunken">
       <td>
-        <div className="font-medium text-gray-800 ltr-nums">{request.documentNumber}</div>
-        <div className="text-xs text-gray-400">
+        <div className="font-medium text-ink ltr-nums">{request.documentNumber}</div>
+        <div className="text-xs text-ink-subtle">
           {t("approvals.sod.requestedAt")}: {new Date(request.requestedAtUtc).toLocaleString("en-GB")}
         </div>
       </td>
@@ -120,7 +120,7 @@ export default function ApprovalCenterPage() {
       <td className="text-ink-muted">
         <div>{request.requestedBy}</div>
         {request.decidedBy && (
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-ink-subtle">
             {t("approvals.sod.decidedBy")}: {request.decidedBy}
           </div>
         )}
@@ -128,7 +128,7 @@ export default function ApprovalCenterPage() {
       <td className="text-ink-muted">
         <div>{request.reason}</div>
         {request.decisionReason && (
-          <div className="text-xs text-red-600">
+          <div className="text-xs text-danger-ink">
             {t("approvals.sod.decisionReason")}: {request.decisionReason}
           </div>
         )}
@@ -181,14 +181,14 @@ export default function ApprovalCenterPage() {
       <PageHeader title={t("approvals.title")} subtitle={t("approvals.subtitle")} />
 
       <Card className="mb-6">
-        <div className="px-4 pt-4 text-sm font-semibold text-gray-700">{t("approvals.sod.title")}</div>
-        <p className="px-4 pt-1 text-xs text-gray-500">{t("approvals.sod.subtitle")}</p>
-        <p className="px-4 pt-1 text-2xs text-gray-400">{t("approvals.sod.bound")}</p>
+        <div className="px-4 pt-4 text-sm font-semibold text-ink">{t("approvals.sod.title")}</div>
+        <p className="px-4 pt-1 text-xs text-ink-muted">{t("approvals.sod.subtitle")}</p>
+        <p className="px-4 pt-1 text-2xs text-ink-subtle">{t("approvals.sod.bound")}</p>
 
         {error && <p className="mx-4 mt-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-ink">{error}</p>}
 
         {openRequests.length === 0
-          ? <p className="px-4 py-6 text-center text-sm text-gray-400">{t("approvals.sod.empty")}</p>
+          ? <p className="px-4 py-6 text-center text-sm text-ink-subtle">{t("approvals.sod.empty")}</p>
           : requestTable(openRequests, true)}
 
         {rejecting && (
@@ -215,7 +215,7 @@ export default function ApprovalCenterPage() {
 
         {decidedRequests.length > 0 && (
           <>
-            <div className="px-4 pt-4 text-sm font-semibold text-gray-700">{t("approvals.sod.history")}</div>
+            <div className="px-4 pt-4 text-sm font-semibold text-ink">{t("approvals.sod.history")}</div>
             {requestTable(decidedRequests, false)}
           </>
         )}
@@ -224,13 +224,13 @@ export default function ApprovalCenterPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {Object.entries(data?.countsByCategory ?? {}).map(([category, count]) => (
           <Card key={category} className="p-4">
-            <div className="text-2xl font-bold text-gray-900 ltr-nums">{count}</div>
-            <div className="text-xs text-gray-500 mt-0.5">{t(`approvals.cat.${category}`, category)}</div>
+            <div className="text-2xl font-bold text-ink ltr-nums">{count}</div>
+            <div className="text-xs text-ink-muted mt-0.5">{t(`approvals.cat.${category}`, category)}</div>
           </Card>
         ))}
-        <Card className="p-4">
-          <div className="text-2xl font-bold text-amber-600 ltr-nums">{data?.totalPending ?? 0}</div>
-          <div className="text-xs text-gray-500 mt-0.5">{t("approvals.totalPending")}</div>
+        <Card className="card-pad">
+          <div className="text-2xl font-bold text-warning-ink ltr-nums">{data?.totalPending ?? 0}</div>
+          <div className="text-xs text-ink-muted mt-0.5">{t("approvals.totalPending")}</div>
         </Card>
       </div>
 
@@ -249,12 +249,12 @@ export default function ApprovalCenterPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && pending.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("approvals.empty")}</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("approvals.empty")}</td>
               </tr>
             )}
             {pending.map(renderRow)}
@@ -264,10 +264,10 @@ export default function ApprovalCenterPage() {
 
       {recorded.length > 0 && (
         <Card>
-          <div className="px-4 pt-4 text-sm font-semibold text-gray-700">
+          <div className="px-4 pt-4 text-sm font-semibold text-ink">
             {t("approvals.cat.NegativeStockException")}
           </div>
-          <p className="px-4 pt-1 text-xs text-gray-400">{t("approvals.informational")}</p>
+          <p className="px-4 pt-1 text-xs text-ink-subtle">{t("approvals.informational")}</p>
           <table className="table">
             <thead>
               <tr>

@@ -21,9 +21,9 @@ export default function TreasuryPage() {
   return (
     <>
       <PageHeader title="الخزينة" subtitle="حسابات نقدية وبنكية، مقبوضات، مدفوعات، وتحويلات بين الحسابات" />
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
+      <div className="tabs mb-6">
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500"}`}>{t.label}</button>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`tab ${tab === t.key ? "tab-active" : ""}`}>{t.label}</button>
         ))}
       </div>
       {tab === "accounts" && <AccountsTab />}
@@ -62,7 +62,7 @@ function AccountsTab() {
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ حساب جديد"}</Button></div>
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">الكود</label><Input value={code} onChange={(e) => setCode(e.target.value)} required /></div>
             <div><label className="field-label">الاسم</label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
@@ -82,9 +82,9 @@ function AccountsTab() {
             <th>كشف الحساب</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {accounts?.map((a) => (
-              <tr key={a.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={a.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{a.code}</td><td>{a.name}</td>
                 <td><Badge tone="blue">{a.kind === "Cash" ? "نقدي" : "بنكي"}</Badge></td>
                 <td className="ltr-nums font-medium">{a.balance}</td>
@@ -104,10 +104,10 @@ function AccountsTab() {
 
       {statementFor && (
         <Card className="mt-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-100">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-line">
             <div>
               <div className="font-semibold">كشف حساب: {statementFor.code} - {statementFor.name}</div>
-              <div className="text-xs text-gray-500">الرصيد الافتتاحي والإجماليات محسوبة من دفتر الخزينة، وليست حقولًا مخزَّنة</div>
+              <div className="text-xs text-ink-muted">الرصيد الافتتاحي والإجماليات محسوبة من دفتر الخزينة، وليست حقولًا مخزَّنة</div>
             </div>
             <div className="flex flex-wrap items-end gap-2">
               <div><label className="field-label">من</label>
@@ -129,8 +129,8 @@ function AccountsTab() {
             <div className="p-4">
               <div className="flex flex-wrap gap-6 text-sm mb-3">
                 <span>افتتاحي: <b className="ltr-nums">{statement.openingBalance}</b></span>
-                <span className="text-green-700">وارد: <b className="ltr-nums">{statement.totalIn}</b></span>
-                <span className="text-red-600">منصرف: <b className="ltr-nums">{statement.totalOut}</b></span>
+                <span className="text-success-ink">وارد: <b className="ltr-nums">{statement.totalIn}</b></span>
+                <span className="text-danger-ink">منصرف: <b className="ltr-nums">{statement.totalOut}</b></span>
                 <span>ختامي: <b className="ltr-nums">{statement.closingBalance}</b></span>
               </div>
               <table className="table">
@@ -144,10 +144,10 @@ function AccountsTab() {
                 </tr></thead>
                 <tbody>
                   {statement.lines.length === 0 && (
-                    <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">لا توجد حركات في هذه الفترة</td></tr>
+                    <tr><td colSpan={6} className="px-3 py-6 text-center text-ink-subtle">لا توجد حركات في هذه الفترة</td></tr>
                   )}
                   {statement.lines.map((l, i) => (
-                    <tr key={i} className="border-b border-gray-100 last:border-0">
+                    <tr key={i} className="border-b border-line last:border-0">
                       <td className="ltr-nums">{new Date(l.transactionDate).toLocaleDateString("en-GB")}</td>
                       <td className="ltr-nums">{l.sourceDocumentNumber}</td>
                       <td>{l.description ?? l.sourceDocumentType}</td>
@@ -195,7 +195,7 @@ function ReceiptsTab() {
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ مقبوض جديد"}</Button></div>
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">الحساب</label>
               <Select value={treasuryAccountId} onChange={(e) => setTreasuryAccountId(e.target.value)} required><option value="">اختر...</option>{accounts?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
@@ -221,15 +221,15 @@ function ReceiptsTab() {
             <th>العميل</th><th>الفاتورة</th><th>المبلغ</th><th>الحالة</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {receipts?.map((r) => (
-              <tr key={r.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${r.status === "Cancelled" ? "opacity-50" : ""}`}>
+              <tr key={r.id} className={`border-b border-line last:border-0 hover:bg-surface-sunken ${r.status === "Cancelled" ? "opacity-50" : ""}`}>
                 <td className="font-medium ltr-nums">{r.receiptNumber}</td><td>{r.treasuryAccountName}</td>
                 <td>{r.customerCode ?? "-"}</td><td className="ltr-nums">{r.invoiceNumber ?? "-"}</td>
                 <td className="ltr-nums font-medium">{r.amount}</td>
                 <td>
                   {r.status === "Cancelled"
-                    ? <span className="text-xs text-red-600 font-medium">ملغاة</span>
+                    ? <span className="text-xs text-danger-ink font-medium">ملغاة</span>
                     : <CancelDocButton label="إلغاء" onConfirm={(reason) => ReceiptsApi.cancel(r.id, reason)} invalidate={["receipts", "treasury-accounts"]} />}
                 </td>
               </tr>
@@ -260,7 +260,7 @@ function PaymentsTab() {
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ مدفوع جديد"}</Button></div>
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">الحساب</label>
               <Select value={treasuryAccountId} onChange={(e) => setTreasuryAccountId(e.target.value)} required><option value="">اختر...</option>{accounts?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
@@ -278,14 +278,14 @@ function PaymentsTab() {
             <th>البيان</th><th>المبلغ</th><th>الحالة</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {payments?.map((p) => (
-              <tr key={p.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${p.status === "Cancelled" ? "opacity-50" : ""}`}>
+              <tr key={p.id} className={`border-b border-line last:border-0 hover:bg-surface-sunken ${p.status === "Cancelled" ? "opacity-50" : ""}`}>
                 <td className="font-medium ltr-nums">{p.paymentNumber}</td><td>{p.treasuryAccountName}</td>
                 <td>{p.payeeDescription}</td><td className="ltr-nums font-medium">{p.amount}</td>
                 <td>
                   {p.status === "Cancelled"
-                    ? <span className="text-xs text-red-600 font-medium">ملغاة</span>
+                    ? <span className="text-xs text-danger-ink font-medium">ملغاة</span>
                     : <CancelDocButton label="إلغاء" onConfirm={(reason) => PaymentsApi.cancel(p.id, reason)} invalidate={["payments", "treasury-accounts"]} />}
                 </td>
               </tr>
@@ -316,7 +316,7 @@ function TransfersTab() {
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تحويل جديد"}</Button></div>
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">من حساب</label>
               <Select value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)} required><option value="">اختر...</option>{accounts?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
@@ -336,14 +336,14 @@ function TransfersTab() {
             <th>إلى</th><th>المبلغ</th><th>الحالة</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {transfers?.map((t) => (
-              <tr key={t.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${t.status === "Cancelled" ? "opacity-50" : ""}`}>
+              <tr key={t.id} className={`border-b border-line last:border-0 hover:bg-surface-sunken ${t.status === "Cancelled" ? "opacity-50" : ""}`}>
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td>{t.fromAccountName}</td>
                 <td>{t.toAccountName}</td><td className="ltr-nums font-medium">{t.amount}</td>
                 <td>
                   {t.status === "Cancelled"
-                    ? <span className="text-xs text-red-600 font-medium">ملغاة</span>
+                    ? <span className="text-xs text-danger-ink font-medium">ملغاة</span>
                     : <CancelDocButton label="إلغاء" onConfirm={(reason) => TreasuryTransfersApi.cancel(t.id, reason)} invalidate={["treasury-transfers", "treasury-accounts"]} />}
                 </td>
               </tr>
@@ -386,7 +386,7 @@ function CancelDocButton({ label, onConfirm, invalidate }: {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-red-600 hover:text-red-800 font-medium"
+        className="text-xs text-danger-ink hover:text-danger-ink font-medium"
       >
         {label}
       </button>
@@ -400,17 +400,17 @@ function CancelDocButton({ label, onConfirm, invalidate }: {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && reason.trim()) cancelMutation.mutate(); }}
-        className="border rounded px-2 py-1 text-xs w-36"
+        className="input input-sm w-36"
       />
       <button
         type="button"
         disabled={!reason.trim() || cancelMutation.isPending}
         onClick={() => cancelMutation.mutate()}
-        className="text-xs bg-red-600 text-white rounded px-2 py-1 disabled:opacity-40"
+        className="btn btn-danger btn-sm"
       >
         تأكيد
       </button>
-      <button type="button" onClick={() => { setOpen(false); setError(null); }} className="text-xs text-gray-500 px-1">
+      <button type="button" onClick={() => { setOpen(false); setError(null); }} className="btn btn-ghost btn-sm">
         ×
       </button>
       {error && <span className="form-error">{error}</span>}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormationSpecTemplate, FormationSpecificationsApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Badge, SearchInput } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
 /**
@@ -122,7 +122,7 @@ export default function FormationSpecificationsPage() {
     <div>
       <label className="field-label">{label}</label>
       <textarea
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+        className="w-full rounded-lg border border-line-strong px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
         rows={2}
         value={form[key]}
         onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -148,7 +148,7 @@ export default function FormationSpecificationsPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             {field("code", t("common.code"))}
             {field("nameAr", t("common.nameAr"))}
@@ -175,8 +175,8 @@ export default function FormationSpecificationsPage() {
         </Card>
       )}
 
-      <Card className="p-4 mb-4">
-        <Input placeholder={t("common.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Card className="card-pad mb-4">
+        <SearchInput placeholder={t("common.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
       </Card>
 
       <Card>
@@ -195,13 +195,13 @@ export default function FormationSpecificationsPage() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {!isLoading && templates?.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {templates?.map((template) => (
-              <tr key={template.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={template.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{template.code}</td>
                 <td>{pick(template.nameAr, template.nameEn)}</td>
                 <td className="ltr-nums">{template.widthCm ?? "—"}</td>
@@ -218,7 +218,7 @@ export default function FormationSpecificationsPage() {
                     {t("common.edit")}
                   </button>
                   <button
-                    className="text-slate-500 hover:underline text-xs font-semibold"
+                    className="text-ink-muted hover:underline text-xs font-semibold"
                     onClick={() => toggleMutation.mutate({ id: template.id, isActive: !template.isActive })}
                   >
                     {template.isActive ? t("common.inactive") : t("common.active")}

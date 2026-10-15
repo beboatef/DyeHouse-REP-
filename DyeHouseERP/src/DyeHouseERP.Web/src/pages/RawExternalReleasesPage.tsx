@@ -80,7 +80,7 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "تعذر الإلغاء")
   });
 
-  if (release.reason !== "ExternalProcessing") return <span className="text-gray-300">—</span>;
+  if (release.reason !== "ExternalProcessing") return <span className="text-line-strong">—</span>;
 
   const closed = release.status === "Returned" || release.status === "Cancelled";
 
@@ -95,8 +95,8 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
       )}
 
       {panel === "return" && (
-        <Card className="p-3 mt-2 w-full border-gray-200">
-          <p className="text-xs text-gray-500 mb-2">
+        <Card className="card-pad mt-2 w-full border-line">
+          <p className="text-xs text-ink-muted mb-2">
             العودة تُسجَّل كحركة إدخال في سجل المخزون مقابل نفس الرسالة والعميل، فلا يتضاعف الرصيد.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -112,7 +112,7 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
       )}
 
       {panel === "details" && (
-        <Card className="p-3 mt-2 w-full border-gray-200">
+        <Card className="card-pad mt-2 w-full border-line">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
             <Input placeholder="الطرف الخارجي" value={party} onChange={(e) => setParty(e.target.value)} />
             <Input placeholder="المرحلة" value={stage} onChange={(e) => setStage(e.target.value)} />
@@ -126,8 +126,8 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
       )}
 
       {panel === "cancel" && (
-        <Card className="p-3 mt-2 w-full border-gray-200">
-          <p className="text-xs text-gray-500 mb-2">الإلغاء لا يحذف الحركة، بل يوثّق سببها في السجل.</p>
+        <Card className="card-pad mt-2 w-full border-line">
+          <p className="text-xs text-ink-muted mb-2">الإلغاء لا يحذف الحركة، بل يوثّق سببها في السجل.</p>
           <div className="flex gap-2">
             <Input placeholder="سبب الإلغاء" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
             <Button variant="secondary" disabled={!cancelReason || cancelMutation.isPending} onClick={() => cancelMutation.mutate()}>تأكيد الإلغاء</Button>
@@ -135,7 +135,7 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
         </Card>
       )}
 
-      {error && <p className="text-sm text-red-600 w-full">{error}</p>}
+      {error && <p className="text-sm text-danger-ink w-full">{error}</p>}
     </div>
   );
 }
@@ -249,7 +249,7 @@ export default function RawExternalReleasesPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -331,8 +331,8 @@ export default function RawExternalReleasesPage() {
             {error && <p className="form-error">{error}</p>}
 
             {negativeStockDetail && (
-              <Card className="p-4 border-yellow-300 bg-yellow-50">
-                <p className="text-sm text-yellow-800">
+              <Card className="card-pad border-warning/30 bg-warning-soft">
+                <p className="text-sm text-warning-ink">
                   الكمية تتجاوز الرصيد المتاح بمقدار <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
                   لا يتم تجاوز الرصيد السالب هنا: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه إلا مستخدم آخر يملك صلاحية اعتماد تجاوز الرصيد السالب.
                 </p>
@@ -345,14 +345,14 @@ export default function RawExternalReleasesPage() {
                     {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
                   </Button>
                 </div>
-                <p className="mt-2 text-2xs text-yellow-800">
+                <p className="mt-2 text-2xs text-warning-ink">
                   الاعتماد مرتبط بنفس الحركة ونفس السبب (إرجاع / تشغيل خارجي / بيع) والكمية والوحدة والصنف والعميل - أي تغيير يتطلب طلبًا جديدًا.
                 </p>
               </Card>
             )}
 
             {approvalRequested && (
-              <p className="text-sm text-green-700">
+              <p className="text-sm text-success-ink">
                 تم إرسال طلب اعتماد على الرسالة <span className="ltr-nums font-bold">{approvalRequested}</span>.
                 لن يتم الحفظ إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
               </p>
@@ -362,8 +362,8 @@ export default function RawExternalReleasesPage() {
       )}
 
       <Card>
-        <div className="flex items-center gap-2 p-3 border-b border-gray-100">
-          <span className="text-xs text-gray-500">حالة التشغيل الخارجي:</span>
+        <div className="flex items-center gap-2 p-3 border-b border-line">
+          <span className="text-xs text-ink-muted">حالة التشغيل الخارجي:</span>
           <Select className="w-48" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as ExternalProcessingStatus | "")}>
             <option value="">الكل</option>
             <option value="AwaitingReturn">بانتظار العودة</option>
@@ -386,10 +386,10 @@ export default function RawExternalReleasesPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
-            {!isLoading && releases?.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">لا توجد حركات بعد</td></tr>}
+            {isLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {!isLoading && releases?.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">لا توجد حركات بعد</td></tr>}
             {releases?.map((r) => (
-              <tr key={r.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 align-top">
+              <tr key={r.id} className="border-b border-line last:border-0 hover:bg-surface-sunken align-top">
                 <td className="font-medium ltr-nums">{r.releaseNumber}</td>
                 <td>{r.customerCode} - {r.customerName}</td>
                 <td>{r.itemCode} - {r.itemName}</td>
@@ -398,10 +398,10 @@ export default function RawExternalReleasesPage() {
                   {r.quantityKg != null && `${r.quantityKg} كجم `}
                   {r.quantityMeter != null && `${r.quantityMeter} م`}
                   {r.returnedQuantityKg != null && (
-                    <div className="text-xs text-green-700">عائد: {r.returnedQuantityKg} كجم</div>
+                    <div className="text-xs text-success-ink">عائد: {r.returnedQuantityKg} كجم</div>
                   )}
                   {r.returnedQuantityMeter != null && (
-                    <div className="text-xs text-green-700">عائد: {r.returnedQuantityMeter} م</div>
+                    <div className="text-xs text-success-ink">عائد: {r.returnedQuantityMeter} م</div>
                   )}
                 </td>
                 <td><Badge tone={reasonTone[r.reason]}>{reasonLabel[r.reason]}</Badge></td>

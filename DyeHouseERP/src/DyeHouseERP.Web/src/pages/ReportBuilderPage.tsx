@@ -31,11 +31,11 @@ export default function ReportBuilderPage() {
       <PageHeader title="منشئ التقارير المخصص" subtitle="اختر كيانًا وأعمدته المسموح بها، شغّل التقرير، احفظه كقالب، أو صدّره PDF/Excel" />
 
       {templates && templates.length > 0 && (
-        <Card className="p-4 mb-4">
-          <div className="text-xs text-gray-500 mb-2">قوالب محفوظة</div>
+        <Card className="card-pad mb-4">
+          <div className="text-xs text-ink-muted mb-2">قوالب محفوظة</div>
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
-              <button key={t.id} onClick={() => loadTemplate(t)} className="text-xs px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200">
+              <button key={t.id} onClick={() => loadTemplate(t)} className="text-xs px-3 py-1.5 rounded-full bg-surface-sunken hover:bg-line">
                 {t.nameAr}
               </button>
             ))}
@@ -43,7 +43,7 @@ export default function ReportBuilderPage() {
         </Card>
       )}
 
-      <Card className="p-5 mb-6">
+      <Card className="card-pad mb-6">
         <div className="mb-4">
           <label className="field-label">الكيان</label>
           <Select value={entityKey} onChange={(e) => { setEntityKey(e.target.value); setColumns([]); }}>
@@ -74,7 +74,7 @@ export default function ReportBuilderPage() {
           <Button variant="secondary" disabled={!entityKey || columns.length === 0} onClick={() => ReportBuilderApi.runExcel({ entityKey, columns })}>تصدير Excel</Button>
         </div>
 
-        <div className="flex items-end gap-2 mt-4 pt-4 border-t border-gray-100">
+        <div className="flex items-end gap-2 mt-4 pt-4 border-t border-line">
           <div><label className="field-label">اسم القالب (عربي)</label><Input value={templateNameAr} onChange={(e) => setTemplateNameAr(e.target.value)} className="w-40" /></div>
           <div><label className="field-label">اسم القالب (إنجليزي)</label><Input value={templateNameEn} onChange={(e) => setTemplateNameEn(e.target.value)} className="w-40" dir="ltr" /></div>
           <Button variant="ghost" disabled={!entityKey || columns.length === 0 || !templateNameAr || !templateNameEn} onClick={() => saveMutation.mutate()}>حفظ كقالب</Button>
@@ -91,10 +91,10 @@ export default function ReportBuilderPage() {
             </thead>
             <tbody>
               {runMutation.data.rows.length === 0 && (
-                <tr><td colSpan={runMutation.data.headers.length} className="px-4 py-6 text-center text-gray-400">لا توجد نتائج</td></tr>
+                <tr><td colSpan={runMutation.data.headers.length} className="px-4 py-6 text-center text-ink-subtle">لا توجد نتائج</td></tr>
               )}
               {runMutation.data.rows.map((row, i) => (
-                <tr key={i} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <tr key={i} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                   {row.map((cell, j) => <td key={j} className="px-4 py-3 ltr-nums">{cell ?? "-"}</td>)}
                 </tr>
               ))}

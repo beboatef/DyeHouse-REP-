@@ -61,7 +61,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen bg-surface-sunken">
       {/* ---- Brand / industrial panel (large screens only) ---- */}
       <aside
-        className="relative hidden w-1/2 max-w-2xl flex-col justify-between overflow-hidden border-e border-brand-800/40 bg-brand-700 p-10 text-white lg:flex"
+        className="relative hidden w-1/2 max-w-2xl flex-col justify-between overflow-hidden border-e border-brand-800/40 bg-brand-700 p-10 on-brand lg:flex"
         aria-hidden="true"
       >
         {/* Lightweight industrial grid: one CSS background, no blur, no images. */}
@@ -75,7 +75,7 @@ export default function LoginPage() {
         />
         <div className="relative">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/25">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#ffffff]/15 ring-1 ring-inset ring-[#ffffff]/25">
               {settings?.logoDataUrl ? (
                 <img src={settings.logoDataUrl} alt="" className="h-full w-full object-contain p-1.5" />
               ) : (
@@ -84,21 +84,21 @@ export default function LoginPage() {
             </div>
             <div>
               <div className="text-base font-bold leading-tight">{companyName}</div>
-              <div className="mt-0.5 text-xs text-white/70">{t("app.subtitle")}</div>
+              <div className="mt-0.5 text-xs text-[#ffffff]/70">{t("app.subtitle")}</div>
             </div>
           </div>
 
           <p className="mt-12 max-w-md text-2xl font-bold leading-snug">{t("login.highlight")}</p>
           <ul className="mt-6 space-y-3">
             {features.map((f) => (
-              <li key={f} className="flex items-start gap-2.5 text-sm text-white/85">
-                <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-white" />
+              <li key={f} className="flex items-start gap-2.5 text-sm text-[#ffffff]/85">
+                <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-[#ffffff]" />
                 <span>{f}</span>
               </li>
             ))}
           </ul>
         </div>
-        <p className="relative text-2xs text-white/60">© {new Date().getFullYear()} {companyName}</p>
+        <p className="relative text-2xs text-[#ffffff]/60">© {new Date().getFullYear()} {companyName}</p>
       </aside>
 
       {/* ---- Form column ---- */}
@@ -120,13 +120,13 @@ export default function LoginPage() {
             <Languages size={15} />
             <span className="text-2xs font-semibold">{lang === "ar" ? "EN" : "ع"}</span>
           </button>
-          <div className="flex items-center overflow-hidden rounded-lg border border-line-strong bg-surface p-0.5">
+          <div className="flex items-center gap-0.5 rounded-xl bg-surface-sunken p-0.5">
             {themeOptions.map((o) => (
               <button
                 key={o.value}
                 onClick={() => setTheme(o.value)}
-                className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                  theme === o.value ? "bg-brand-600 text-white" : "text-ink-muted hover:bg-surface-sunken"
+                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
+                  theme === o.value ? "bg-surface text-brand-700 shadow-sm" : "text-ink-subtle hover:text-ink"
                 }`}
                 aria-label={o.label}
                 aria-pressed={theme === o.value}

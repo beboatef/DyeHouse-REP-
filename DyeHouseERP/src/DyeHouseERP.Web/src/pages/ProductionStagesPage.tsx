@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProductionStagesApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Badge, SearchInput } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
 type Draft = {
@@ -126,14 +126,14 @@ export default function ProductionStagesPage() {
       />
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <Input
+        <SearchInput
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("common.searchPlaceholder")}
           aria-label={t("common.search")}
           className="w-full sm:w-72"
         />
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-ink-muted">
           {t("common.results")}: {stages?.length ?? 0}
         </span>
       </div>
@@ -141,7 +141,7 @@ export default function ProductionStagesPage() {
       {error && <p className="form-error mb-4" role="alert">{error}</p>}
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -166,7 +166,7 @@ export default function ProductionStagesPage() {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {flags.map((f) => (
-                <label key={f.key} className="flex items-center gap-2 text-sm text-gray-700">
+                <label key={f.key} className="flex items-center gap-2 text-sm text-ink">
                   <input
                     type="checkbox"
                     checked={draft[f.key] as boolean}
@@ -203,13 +203,13 @@ export default function ProductionStagesPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>}
-            {isError && <tr><td colSpan={7} className="px-4 py-6 text-center text-red-500">{t("common.error")}</td></tr>}
+            {isLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>}
+            {isError && <tr><td colSpan={7} className="px-4 py-6 text-center text-danger-ink">{t("common.error")}</td></tr>}
             {!isLoading && !isError && stages?.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {stages?.map((s) => (
-              <tr key={s.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={s.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="ltr-nums">
                   {editingId === s.id ? (
                     <Input

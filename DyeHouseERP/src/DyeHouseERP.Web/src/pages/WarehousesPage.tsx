@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WarehousesApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import ImportPanel from "@/components/ImportPanel";
 import { WarehousesExports } from "@/api/exports";
@@ -114,7 +114,7 @@ export default function WarehousesPage() {
       />
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <Input
+        <SearchInput
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("common.searchPlaceholder")}
@@ -126,7 +126,7 @@ export default function WarehousesPage() {
       {error && <p className="form-error mb-4" role="alert">{error}</p>}
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
             onSubmit={(e) => {
@@ -170,16 +170,16 @@ export default function WarehousesPage() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {isError && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-red-500">{t("common.error")}</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-danger-ink">{t("common.error")}</td></tr>
             )}
             {!isLoading && !isError && warehouses?.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {warehouses?.map((w) => (
-              <tr key={w.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={w.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{w.code}</td>
                 <td>
                   {editingId === w.id ? (

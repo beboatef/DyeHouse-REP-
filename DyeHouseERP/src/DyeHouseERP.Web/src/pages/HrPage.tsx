@@ -53,15 +53,15 @@ export default function HrPage() {
     <>
       <PageHeader title={t("hr.title")} subtitle={t("hr.subtitle")} />
 
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="tabs mb-6">
         {tabs.map((item) => (
-          <Button
+          <button
             key={item.key}
-            variant={tab === item.key ? "primary" : "secondary"}
             onClick={() => setTab(item.key)}
+            className={`tab ${tab === item.key ? "tab-active" : ""}`}
           >
             {item.label}
-          </Button>
+          </button>
         ))}
       </div>
 
@@ -204,8 +204,8 @@ function ConfigTab() {
       {error && <p className="form-error">{error}</p>}
 
       {/* HR attendance shift - separate from the production execution shift. */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.sec.shifts")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.sec.shifts")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.sec.shiftsHint")}</p>
         <div className="grid grid-cols-2 md:grid-cols-8 gap-2 items-end">
           <Input placeholder={t("common.code")} value={shift.code} onChange={(e) => setShift({ ...shift, code: e.target.value })} />
@@ -244,8 +244,8 @@ function ConfigTab() {
       </Card>
 
       {/* Attendance policy - standard hours, penalties and overtime multipliers. */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.sec.policy")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.sec.policy")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.sec.policyHint")}</p>
         <div className="flex flex-wrap gap-2 mb-3">
           <Button
@@ -285,8 +285,8 @@ function ConfigTab() {
       </Card>
 
       {/* Leave types */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-3">{t("hr.sec.leaveTypes")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-3">{t("hr.sec.leaveTypes")}</h2>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <Input placeholder={t("common.code")} value={leaveType.code} onChange={(e) => setLeaveType({ ...leaveType, code: e.target.value })} />
           <Input placeholder={t("common.nameAr")} value={leaveType.nameAr} onChange={(e) => setLeaveType({ ...leaveType, nameAr: e.target.value })} />
@@ -318,8 +318,8 @@ function ConfigTab() {
       </Card>
 
       {/* Pay components: allowances, incentives, bonuses, commissions, deductions. */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.sec.payComponents")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.sec.payComponents")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.sec.payComponentsHint")}</p>
         <div className="grid grid-cols-2 md:grid-cols-8 gap-2 items-end">
           <Input placeholder={t("common.code")} value={component.code} onChange={(e) => setComponent({ ...component, code: e.target.value })} />
@@ -366,8 +366,8 @@ function ConfigTab() {
       </Card>
 
       {/* Tax & insurance rules */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.sec.contributions")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.sec.contributions")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.sec.contributionsHint")}</p>
         <div className="grid grid-cols-2 md:grid-cols-8 gap-2 items-end">
           <Input placeholder={t("common.code")} value={contribution.code} onChange={(e) => setContribution({ ...contribution, code: e.target.value })} />
@@ -409,8 +409,8 @@ function ConfigTab() {
       </Card>
 
       {/* Accounting mappings */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.sec.accounts")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.sec.accounts")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.sec.accountsHint")}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <Select value={mapping.kind} onChange={(e) => setMapping({ ...mapping, kind: e.target.value as PayrollAccountKind })}>
@@ -438,8 +438,8 @@ function ConfigTab() {
       </Card>
 
       {/* Organisation: cost centers, sections, jobs */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-3">{t("hr.sec.org")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-3">{t("hr.sec.org")}</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end mb-4">
           <Input placeholder={t("common.code")} value={costCenter.code} onChange={(e) => setCostCenter({ ...costCenter, code: e.target.value })} />
           <Input placeholder={t("common.nameAr")} value={costCenter.nameAr} onChange={(e) => setCostCenter({ ...costCenter, nameAr: e.target.value })} />
@@ -474,7 +474,7 @@ function ConfigTab() {
           >{t("hr.addJob")}</Button>
         </div>
         {/* Employee classification & pay component assignment */}
-        <h3 className="font-semibold text-ink mt-6 mb-1">{t("hr.sec.employeeProfile")}</h3>
+        <h3 className="card-title mt-6 mb-1">{t("hr.sec.employeeProfile")}</h3>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.sec.employeeProfileHint")}</p>
         <div className="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
           <Select value={profile.employeeId} onChange={(e) => pickEmployee(e.target.value)}>
@@ -620,8 +620,8 @@ function AttendanceTab() {
     <div className="space-y-6">
       {error && <p className="form-error">{error}</p>}
 
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.attendance.record")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.attendance.record")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.attendance.recordHint")}</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <Select value={record.employeeId} onChange={(e) => setRecord({ ...record, employeeId: e.target.value })}>
@@ -670,14 +670,14 @@ function AttendanceTab() {
         </div>
       </Card>
 
-      <Card className="p-5">
+      <Card className="card-pad">
         <div className="flex flex-wrap items-end gap-2 mb-3">
           <div><label className="field-label">{t("hr.from")}</label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
           <div><label className="field-label">{t("hr.to")}</label>
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         </div>
-        <h2 className="font-semibold text-ink mb-2">{t("hr.attendance.summary")}</h2>
+        <h2 className="card-title mb-2">{t("hr.attendance.summary")}</h2>
         <table className="table mb-6">
           <thead><tr>
             <th>{t("hr.employee")}</th><th>{t("hr.attendance.present")}</th><th>{t("hr.attendance.late")}</th>
@@ -697,7 +697,7 @@ function AttendanceTab() {
           </tbody>
         </table>
 
-        <h2 className="font-semibold text-ink mb-2">{t("hr.attendance.log")}</h2>
+        <h2 className="card-title mb-2">{t("hr.attendance.log")}</h2>
         <table className="table">
           <thead><tr>
             <th>{t("hr.employee")}</th><th>{t("hr.workDate")}</th><th>{t("hr.shift")}</th>
@@ -764,8 +764,8 @@ function LeaveTab() {
     <div className="space-y-6">
       {error && <p className="form-error">{error}</p>}
 
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.leave.new")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.leave.new")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.leave.sod")}</p>
         <div className="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
           <Select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
@@ -790,7 +790,7 @@ function LeaveTab() {
         </div>
       </Card>
 
-      <Card className="p-5">
+      <Card className="card-pad">
         <table className="table">
           <thead><tr>
             <th>{t("hr.employee")}</th><th>{t("hr.leaveType")}</th><th>{t("hr.from")}</th><th>{t("hr.to")}</th>
@@ -864,8 +864,8 @@ function OvertimeTab() {
     <div className="space-y-6">
       {error && <p className="form-error">{error}</p>}
 
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.overtime.new")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.overtime.new")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.overtime.sod")}</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <Select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
@@ -890,7 +890,7 @@ function OvertimeTab() {
         </div>
       </Card>
 
-      <Card className="p-5">
+      <Card className="card-pad">
         <table className="table">
           <thead><tr>
             <th>{t("hr.employee")}</th><th>{t("hr.workDate")}</th><th>{t("hr.hours")}</th>
@@ -963,8 +963,8 @@ function AdvancesTab() {
     <div className="space-y-6">
       {error && <p className="form-error">{error}</p>}
 
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink mb-1">{t("hr.advances.new")}</h2>
+      <Card className="card-pad">
+        <h2 className="card-title mb-1">{t("hr.advances.new")}</h2>
         <p className="text-xs text-ink-subtle mb-3">{t("hr.advances.hint")}</p>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <Select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
@@ -985,7 +985,7 @@ function AdvancesTab() {
         </div>
       </Card>
 
-      <Card className="p-5">
+      <Card className="card-pad">
         <table className="table">
           <thead><tr>
             <th>{t("hr.employee")}</th><th>{t("hr.date")}</th><th>{t("hr.amount")}</th>
@@ -1046,7 +1046,7 @@ function LaborCostTab() {
     <div className="space-y-6">
       {error && <p className="form-error">{error}</p>}
 
-      <Card className="p-5">
+      <Card className="card-pad">
         <div className="flex flex-wrap items-end gap-3">
           <div><label className="field-label">{t("hr.year")}</label>
             <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /></div>
@@ -1061,7 +1061,7 @@ function LaborCostTab() {
         </div>
       </Card>
 
-      <Card className="p-5">
+      <Card className="card-pad">
         <table className="table">
           <thead><tr>
             <th>{t("hr.group")}</th><th>{t("hr.employees")}</th><th>{t("hr.basic")}</th><th>{t("hr.allowances")}</th>

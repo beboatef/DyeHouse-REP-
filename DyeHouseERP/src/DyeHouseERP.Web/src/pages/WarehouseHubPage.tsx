@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CustomersApi, InventoryLedgerApi, RawMessagesApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ReportsExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
@@ -45,16 +45,12 @@ export default function WarehouseHubPage() {
   return (
     <>
       <PageHeader title={t("nav.warehouseHub")} subtitle={t("wh.subtitle")} />
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="tabs mb-5">
         {tabs.map((item) => (
           <button
             key={item.key}
             onClick={() => select(item.key)}
-            className={`rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors ${
-              tab === item.key
-                ? "bg-slate-900 text-white"
-                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-            }`}
+            className={`tab ${tab === item.key ? "tab-active" : ""}`}
           >
             {t(item.labelKey)}
           </button>
@@ -109,7 +105,7 @@ function BalancesTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
         <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
           <option value="">{t("common.all")} - {t("common.customer")}</option>
           {customers?.map((c) => (
@@ -118,22 +114,22 @@ function BalancesTab() {
             </option>
           ))}
         </Select>
-        <Input
+        <SearchInput
           placeholder={t("common.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <label className="flex items-center gap-2 text-xs text-slate-600">
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
           <input
             type="checkbox"
             checked={negativesOnly}
             onChange={(e) => setNegativesOnly(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300"
+            className="h-4 w-4 rounded border-line-strong"
           />
           {t("wh.negativesOnly")}
         </label>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs text-slate-500">{t("wh.balanceNote")}</span>
+          <span className="text-xs text-ink-muted">{t("wh.balanceNote")}</span>
           {negativeCount > 0 && (
             <span className="text-xs font-semibold text-danger">
               {negativeCount} {t("wh.negativeBalances")}
@@ -163,26 +159,26 @@ function BalancesTab() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {!isLoading && rows.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {rows.map(({ message, line }) => {
               const negative = isNegative(line);
               return (
                 <tr
                   key={line.id}
-                  className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${negative ? "bg-danger/5" : ""}`}
+                  className={`border-b border-line last:border-0 hover:bg-surface-sunken ${negative ? "bg-danger/5" : ""}`}
                 >
                   <td className="font-medium ltr-nums">{message.messageNumber}</td>
                   <td>
                     <span className="ltr-nums font-medium">{message.customerCode}</span>
-                    <span className="text-gray-500"> · {message.customerName}</span>
+                    <span className="text-ink-muted"> · {message.customerName}</span>
                   </td>
                   <td>
                     <span className="ltr-nums font-medium">{line.itemCode}</span>
-                    <span className="text-gray-500"> · {line.itemName}</span>
+                    <span className="text-ink-muted"> · {line.itemName}</span>
                   </td>
                   <td className={`px-4 py-3 ltr-nums ${(line.remainingKg ?? 0) < 0 ? "font-bold text-danger" : ""}`}>
                     {line.remainingKg ?? "—"}
@@ -225,7 +221,7 @@ function MovementsTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
         <div>
           <label className="field-label">{t("common.from")}</label>
           <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
@@ -249,7 +245,7 @@ function MovementsTab() {
             extra={<Button variant="secondary" onClick={() => window.print()}>{t("common.print")}</Button>}
           />
         </div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-ink-muted">
           {t("wh.tab.movements")}: {data?.length ?? 0}
         </div>
       </Card>
@@ -269,24 +265,24 @@ function MovementsTab() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {!isLoading && (data?.length ?? 0) === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {data?.map((m) => (
-              <tr key={m.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td className="ltr-nums text-gray-600">{m.transactionDate.slice(0, 10)}</td>
+              <tr key={m.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
+                <td className="ltr-nums text-ink-muted">{m.transactionDate.slice(0, 10)}</td>
                 <td>
                   <div className="ltr-nums font-medium">{m.sourceDocumentNumber}</div>
-                  <div className="text-2xs text-gray-400">{m.sourceDocumentType}</div>
+                  <div className="text-2xs text-ink-subtle">{m.sourceDocumentType}</div>
                 </td>
                 <td className="ltr-nums">{m.customerCode}</td>
                 <td className="ltr-nums">{m.itemCode}</td>
-                <td className={`px-4 py-3 ltr-nums font-medium ${(m.signedQuantityKg ?? 0) < 0 ? "text-red-600" : "text-green-700"}`}>
+                <td className={`px-4 py-3 ltr-nums font-medium ${(m.signedQuantityKg ?? 0) < 0 ? "text-danger-ink" : "text-success-ink"}`}>
                   {m.signedQuantityKg ?? "—"}
                 </td>
-                <td className={`px-4 py-3 ltr-nums font-medium ${(m.signedQuantityMeter ?? 0) < 0 ? "text-red-600" : "text-green-700"}`}>
+                <td className={`px-4 py-3 ltr-nums font-medium ${(m.signedQuantityMeter ?? 0) < 0 ? "text-danger-ink" : "text-success-ink"}`}>
                   {m.signedQuantityMeter ?? "—"}
                 </td>
                 <td className="text-ink-muted">{m.createdBy}</td>

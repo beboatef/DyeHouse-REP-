@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PayrollApi, TreasuryAccountsApi } from "@/api/client";
 import type { EmployeeStatus, PayrollRun, PayrollRunStatus } from "@/api/client";
 import { PayrollExports } from "@/api/exports";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import ImportPanel from "@/components/ImportPanel";
 import { EmployeesExports } from "@/api/exports";
@@ -62,11 +62,15 @@ export default function PayrollPage() {
     <>
       <PageHeader title={t("pay.title")} subtitle={t("pay.subtitle")} />
 
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="tabs mb-5">
         {tabs.map((x) => (
-          <Button key={x.key} variant={tab === x.key ? "primary" : "secondary"} onClick={() => select(x.key)}>
+          <button
+            key={x.key}
+            onClick={() => select(x.key)}
+            className={`tab ${tab === x.key ? "tab-active" : ""}`}
+          >
             {t(x.labelKey)}
-          </Button>
+          </button>
         ))}
       </div>
 
@@ -112,12 +116,12 @@ function DepartmentsTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4">
+      <Card className="card-pad mb-4">
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pay.newDepartment")}</Button>
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
             onSubmit={(e) => {
@@ -159,16 +163,16 @@ function DepartmentsTab() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && departments?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {departments?.map((d) => (
-              <tr key={d.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={d.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{d.code}</td>
                 <td>{pick(d.nameAr, d.nameEn, d.name)}</td>
                 <td className="ltr-nums">{d.employeeCount}</td>
@@ -275,7 +279,7 @@ function EmployeesTab() {
         onDone={() => qc.invalidateQueries({ queryKey: ["employees"] })}
       />
 
-      <Card className="p-4 mb-4 flex flex-wrap items-end gap-3">
+      <Card className="card-pad mb-4 flex flex-wrap items-end gap-3">
         <div className="w-56">
           <label className="field-label">{t("pay.department")}</label>
           <Select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
@@ -287,13 +291,13 @@ function EmployeesTab() {
         </div>
         <div className="w-64">
           <label className="field-label">{t("common.search")}</label>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("common.searchPlaceholder")} />
+          <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("common.searchPlaceholder")} />
         </div>
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pay.newEmployee")}</Button>
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
             onSubmit={(e) => {
@@ -374,16 +378,16 @@ function EmployeesTab() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && employees?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {employees?.map((e) => (
-              <tr key={e.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={e.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{e.code}</td>
                 <td>{pick(e.nameAr, e.nameEn, e.name)}</td>
                 <td>{e.departmentName}</td>
@@ -396,7 +400,7 @@ function EmployeesTab() {
                 <td>
                   {e.status === "Active" ? (
                     <button
-                      className="text-amber-600 hover:underline text-xs font-semibold"
+                      className="text-warning-ink hover:underline text-xs font-semibold"
                       onClick={() => statusMutation.mutate({ id: e.id, status: "Suspended" })}
                     >
                       {t("pay.empStatus.Suspended")}
@@ -523,13 +527,13 @@ function RunsTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4">
+      <Card className="card-pad mb-4">
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pay.newRun")}</Button>
-        <p className="text-xs text-gray-500 mt-2">{t("pay.runHint")}</p>
+        <p className="text-xs text-ink-muted mt-2">{t("pay.runHint")}</p>
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
             onSubmit={(e) => {
@@ -566,15 +570,15 @@ function RunsTab() {
               {createMutation.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </form>
-          <p className="text-xs text-gray-500 mt-2">{t("pay.oneRunPerMonth")}</p>
+          <p className="text-xs text-ink-muted mt-2">{t("pay.oneRunPerMonth")}</p>
         </Card>
       )}
 
       {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-4">
-        {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
-        {!isLoading && runs?.length === 0 && <Card className="p-6 text-center text-gray-400">{t("common.empty")}</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">{t("common.loading")}</Card>}
+        {!isLoading && runs?.length === 0 && <Card className="card-pad text-center text-ink-subtle">{t("common.empty")}</Card>}
 
         {runs?.map((r) => (
           <Card key={r.id} className="p-5">
@@ -582,13 +586,13 @@ function RunsTab() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-bold ltr-nums">{r.runNumber}</span>
                 <Badge tone={runTone[r.status]}>{t(`pay.runStatus.${r.status}`)}</Badge>
-                <span className="text-sm text-gray-600 ltr-nums">{String(r.periodMonth).padStart(2, "0")}/{r.periodYear}</span>
-                <span className="text-gray-400">·</span>
-                <span className="text-sm text-gray-600">{r.employeeCount} {t("pay.employeeCount")}</span>
+                <span className="text-sm text-ink-muted ltr-nums">{String(r.periodMonth).padStart(2, "0")}/{r.periodYear}</span>
+                <span className="text-ink-subtle">·</span>
+                <span className="text-sm text-ink-muted">{r.employeeCount} {t("pay.employeeCount")}</span>
                 {r.treasuryAccountName && (
                   <>
-                    <span className="text-gray-400">·</span>
-                    <span className="text-sm text-gray-600">{r.treasuryAccountName}</span>
+                    <span className="text-ink-subtle">·</span>
+                    <span className="text-sm text-ink-muted">{r.treasuryAccountName}</span>
                   </>
                 )}
               </div>
@@ -673,9 +677,9 @@ function RunsTab() {
                     {r.lines.map((l) => {
                       const editing = editLine?.runId === r.id && editLine.lineId === l.id;
                       return (
-                        <tr key={l.id} className="border-b border-gray-50 last:border-0">
+                        <tr key={l.id} className="border-b border-line last:border-0">
                           <td>{l.employeeCode} - {l.employeeName}</td>
-                          <td className="text-gray-600">{l.departmentName ?? "—"}</td>
+                          <td className="text-ink-muted">{l.departmentName ?? "—"}</td>
                           <td className="ltr-nums">{money(l.basicSalary)}</td>
                           <td className="ltr-nums">
                             {editing ? (
@@ -701,7 +705,7 @@ function RunsTab() {
                           <td>
                             {r.status !== "Cancelled" && (
                               <button
-                                className="text-gray-600 hover:underline text-xs font-semibold"
+                                className="text-ink-muted hover:underline text-xs font-semibold"
                                 onClick={PayrollExports.payslipPdf(r.id, l.id)}
                               >
                                 {t("export.payslip")}
@@ -719,7 +723,7 @@ function RunsTab() {
                                   {t("pay.editLine")}
                                 </button>
                                 <button
-                                  className="text-red-600 hover:underline text-xs font-semibold ms-3"
+                                  className="text-danger-ink hover:underline text-xs font-semibold ms-3"
                                   onClick={() => removeLineMutation.mutate({ runId: r.id, lineId: l.id })}
                                 >
                                   {t("pay.removeLine")}
@@ -742,7 +746,7 @@ function RunsTab() {
                                   {t("common.save")}
                                 </button>
                                 <button
-                                  className="text-gray-500 hover:underline text-xs font-semibold ms-3"
+                                  className="text-ink-muted hover:underline text-xs font-semibold ms-3"
                                   onClick={() => setEditLine(null)}
                                 >
                                   {t("common.cancel")}

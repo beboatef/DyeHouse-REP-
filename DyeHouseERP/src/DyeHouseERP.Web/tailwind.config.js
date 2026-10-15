@@ -113,16 +113,22 @@ export default {
       fontFamily: {
         sans: ["Cairo", "system-ui", "sans-serif"]
       },
+      /* Card corners are 16px (the reference design's `rounded-2xl`), controls
+         12px. Both are tokens, so `rounded-2xl` on a card and `rounded-xl` on a
+         button can never drift from each other or from the CSS layer. */
       borderRadius: {
         sm: "var(--radius-sm)",
         DEFAULT: "var(--radius)",
         md: "var(--radius)",
         lg: "var(--radius-lg)",
-        xl: "var(--radius-lg)"
+        xl: "var(--radius-lg)",
+        "2xl": "var(--radius-card)",
+        "3xl": "1.375rem"
       },
       boxShadow: {
         card: "var(--shadow-card)",
-        pop: "var(--shadow-pop)"
+        pop: "var(--shadow-pop)",
+        primary: "var(--shadow-primary)"
       },
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }] // 11px - the floor for dense tables

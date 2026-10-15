@@ -61,12 +61,12 @@ export default function AttachmentsPanel({
       : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
   return (
-    <Card className="p-5">
+    <Card className="card-pad">
       <div className="flex items-center gap-2 mb-1">
-        <Paperclip size={16} className="text-gray-400" />
-        <div className="text-sm font-semibold text-gray-700">{title ?? t("att.title")}</div>
+        <Paperclip size={16} className="text-ink-subtle" />
+        <div className="card-title">{title ?? t("att.title")}</div>
       </div>
-      <p className="text-xs text-gray-400 mb-4">{t("att.private")}</p>
+      <p className="text-xs text-ink-subtle mb-4">{t("att.private")}</p>
 
       <div className="flex flex-col sm:flex-row gap-3 sm:items-end mb-4">
         <div className="flex-1">
@@ -74,7 +74,7 @@ export default function AttachmentsPanel({
           <input
             ref={fileRef}
             type="file"
-            className="w-full text-sm text-gray-600 file:me-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-gray-700"
+            className="w-full text-sm text-ink-muted file:me-3 file:rounded-lg file:border-0 file:bg-surface-sunken file:px-3 file:py-2 file:text-xs file:font-semibold file:text-ink"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
@@ -92,23 +92,23 @@ export default function AttachmentsPanel({
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <p className="text-sm text-danger-ink mb-3">{error}</p>}
 
-      {isLoading && <p className="text-sm text-gray-400">{t("common.loading")}</p>}
+      {isLoading && <p className="text-sm text-ink-subtle">{t("common.loading")}</p>}
       {!isLoading && attachments?.length === 0 && (
-        <p className="text-sm text-gray-400">{t("att.empty")}</p>
+        <p className="text-sm text-ink-subtle">{t("att.empty")}</p>
       )}
 
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-surface-sunken">
         {attachments?.map((a: Attachment) => (
           <li key={a.id} className="py-3 flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-800 truncate">{a.fileName}</div>
-              <div className="text-xs text-gray-400 mt-0.5">
+              <div className="text-sm font-medium text-ink truncate">{a.fileName}</div>
+              <div className="text-xs text-ink-subtle mt-0.5">
                 {sizeLabel(a.sizeBytes)} · {t("att.uploadedBy")} {a.uploadedBy} ·{" "}
                 {new Date(a.uploadedAtUtc).toLocaleString("en-GB")}
               </div>
-              {a.description && <div className="text-xs text-gray-500 mt-1">{a.description}</div>}
+              {a.description && <div className="text-xs text-ink-muted mt-1">{a.description}</div>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button
@@ -124,7 +124,7 @@ export default function AttachmentsPanel({
                   if (window.confirm(t("att.deleteConfirm"))) remove.mutate(a.id);
                 }}
               >
-                <Trash2 size={14} className="text-red-500" />
+                <Trash2 size={14} className="text-danger-ink" />
               </Button>
             </div>
           </li>

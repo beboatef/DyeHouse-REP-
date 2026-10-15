@@ -81,7 +81,7 @@ export default function InvoicesPage() {
           </div>
 
           {showForm && (
-            <Card className="p-5 mb-6">
+            <Card className="card-pad mb-6">
               <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="sm:col-span-2">
@@ -102,7 +102,7 @@ export default function InvoicesPage() {
                   </div>
                   <div className="space-y-3">
                     {lines.map((line, idx) => (
-                      <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end bg-gray-50 rounded-lg p-3">
+                      <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end bg-surface-sunken rounded-lg p-3">
                         <div>
                           <label className="field-label">الصنف</label>
                           <Select value={line.itemId} onChange={(e) => updateLine(idx, { itemId: e.target.value })} required>
@@ -130,15 +130,15 @@ export default function InvoicesPage() {
           )}
 
           <div className="space-y-3">
-            {isLoading && <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>}
+            {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
             {invoices?.map((inv) => (
               <Card key={inv.id} className="card-pad">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <span className="font-bold ltr-nums">{inv.invoiceNumber}</span>
-                    <span className="text-gray-400 mx-2">·</span>
-                    <span className="text-sm text-gray-600">{inv.customerCode} - {inv.customerName}</span>
-                    <span className="text-gray-400 mx-2">·</span>
+                    <span className="text-ink-subtle mx-2">·</span>
+                    <span className="text-sm text-ink-muted">{inv.customerCode} - {inv.customerName}</span>
+                    <span className="text-ink-subtle mx-2">·</span>
                     <span className="ltr-nums font-medium">{inv.total}</span>
                   </div>
                   <Badge tone={statusTone[inv.status]}>{statusLabel[inv.status]}</Badge>
@@ -170,7 +170,7 @@ export default function InvoicesPage() {
 
       {tab === "statement" && (
         <>
-          <Card className="p-4 mb-4">
+          <Card className="card-pad mb-4">
             <Select value={statementCustomerId} onChange={(e) => setStatementCustomerId(e.target.value)}>
               <option value="">اختر عميلًا لعرض كشف حسابه...</option>
               {customers?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
@@ -200,9 +200,9 @@ export default function InvoicesPage() {
                   <th>دائن</th><th>الرصيد</th>
                 </tr></thead>
                 <tbody>
-                  {statement?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد حركات بعد</td></tr>}
+                  {statement?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا توجد حركات بعد</td></tr>}
                   {statement?.map((s, idx) => (
-                    <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <tr key={idx} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                       <td className="ltr-nums">{new Date(s.date).toLocaleDateString("en-GB")}</td>
                       <td>{s.description}</td>
                       <td className="ltr-nums">{s.documentNumber}</td>
@@ -286,7 +286,7 @@ function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
     setLineEdits((prev) => ({ ...prev, [lineId]: { ...prev[lineId], ...p } }));
 
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4 space-y-4">
+    <div className="mt-4 border-t border-line pt-4 space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
         <div><label className="field-label">تاريخ الفاتورة</label><Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
         <div><label className="field-label">الخصم</label><Input type="number" step="0.01" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} /></div>
@@ -298,11 +298,11 @@ function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
       </div>
 
       <div className="space-y-2">
-        <div className="text-sm font-medium text-gray-700">بنود الفاتورة</div>
+        <div className="text-sm font-medium text-ink">بنود الفاتورة</div>
         {invoice.lines.map((l) => {
           const edit = lineEdits[l.id] ?? { quantity: String(l.quantity), processingPrice: String(l.processingPrice), color: l.color ?? "", unit: l.unit };
           return (
-            <div key={l.id} className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end bg-gray-50 rounded-lg p-3">
+            <div key={l.id} className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end bg-surface-sunken rounded-lg p-3">
               <div className="text-sm"><div className="field-label">الصنف</div>{l.itemCode}</div>
               <div><label className="field-label">اللون</label><Input value={edit.color} onChange={(e) => patch(l.id, { color: e.target.value })} /></div>
               <div>
@@ -324,7 +324,7 @@ function DraftInvoiceEditor({ invoice, items, onDone, onClose }: {
         })}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end bg-green-50 rounded-lg p-3">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end bg-success-soft rounded-lg p-3">
         <div>
           <label className="field-label">إضافة بند - الصنف</label>
           <Select value={newLine.itemId} onChange={(e) => setNewLine((p) => ({ ...p, itemId: e.target.value }))}>

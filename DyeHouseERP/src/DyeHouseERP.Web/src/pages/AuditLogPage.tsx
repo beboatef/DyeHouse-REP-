@@ -20,13 +20,13 @@ export default function AuditLogPage() {
     <>
       <PageHeader title="سجل التدقيق" subtitle="كل حركة إنشاء/تعديل/حذف مسجلة تلقائيًا - من عمل إيه، امتى، وقبل/بعد التغيير" />
 
-      <Card className="p-4 mb-4 flex flex-wrap gap-3">
+      <Card className="card-pad mb-4 flex flex-wrap gap-3">
         <Input placeholder="اسم الكيان (مثال: ProductionOrder)" value={entityName} onChange={(e) => setEntityName(e.target.value)} className="max-w-xs" />
         <Input placeholder="اسم المستخدم" value={userName} onChange={(e) => setUserName(e.target.value)} className="max-w-xs" />
       </Card>
 
       {error && (
-        <Card className="p-4 mb-4 border-red-300 bg-red-50 text-sm text-red-700">
+        <Card className="card-pad mb-4 border-danger/30 bg-danger-soft text-sm text-danger-ink">
           هذه الشاشة متاحة فقط لمن يملك دور admin.
         </Card>
       )}
@@ -39,16 +39,16 @@ export default function AuditLogPage() {
             <th>المعرّف</th><th>IP</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
-            {!isLoading && entries?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">لا توجد حركات مسجلة</td></tr>}
+            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {!isLoading && entries?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا توجد حركات مسجلة</td></tr>}
             {entries?.map((e) => (
-              <tr key={e.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={e.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="ltr-nums">{new Date(e.occurredAtUtc).toLocaleString("en-GB")}</td>
                 <td>{e.userName}</td>
                 <td><Badge tone={actionTone[e.action] ?? "gray"}>{e.action}</Badge></td>
                 <td>{e.entityName}</td>
-                <td className="ltr-nums text-xs text-gray-500">{e.entityId?.slice(0, 8) ?? "-"}</td>
-                <td className="ltr-nums text-xs text-gray-500">{e.ipAddress ?? "-"}</td>
+                <td className="ltr-nums text-xs text-ink-muted">{e.entityId?.slice(0, 8) ?? "-"}</td>
+                <td className="ltr-nums text-xs text-ink-muted">{e.ipAddress ?? "-"}</td>
               </tr>
             ))}
           </tbody>

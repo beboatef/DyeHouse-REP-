@@ -134,7 +134,7 @@ export default function FormationRequestDetailPage() {
   };
 
   if (isLoading || !request) {
-    return <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>;
+    return <Card className="card-pad text-center text-ink-subtle">{t("common.loading")}</Card>;
   }
 
   const canEdit = request.status === "Draft" || request.status === "Rejected";
@@ -186,7 +186,7 @@ export default function FormationRequestDetailPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-        <Card className="p-5 lg:col-span-2">
+        <Card className="card-pad lg:col-span-2">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <Info label={t("common.status")}>
               <Badge tone={statusTone[request.status]}>{t(`fr.status.${request.status}`)}</Badge>
@@ -200,7 +200,7 @@ export default function FormationRequestDetailPage() {
                   {request.messageNumber}
                 </Link>
               ) : (
-                <span className="text-amber-600">—</span>
+                <span className="text-warning-ink">—</span>
               )}
             </Info>
             <Info label={t("fr.submittedBy")}>
@@ -216,17 +216,17 @@ export default function FormationRequestDetailPage() {
               <span className="ltr-nums">{request.totalQuantity - request.producedQuantity} {request.unit}</span>
             </Info>
           </div>
-          {request.notes && <p className="text-sm text-gray-600 mt-4">{request.notes}</p>}
+          {request.notes && <p className="text-sm text-ink-muted mt-4">{request.notes}</p>}
           {request.rejectionReason && (
-            <p className="text-sm text-red-600 mt-4">{t("fr.rejectReason")}: {request.rejectionReason}</p>
+            <p className="text-sm text-danger-ink mt-4">{t("fr.rejectReason")}: {request.rejectionReason}</p>
           )}
           {request.cancellationReason && (
-            <p className="text-sm text-red-600 mt-4">{t("fr.cancelReason")}: {request.cancellationReason}</p>
+            <p className="text-sm text-danger-ink mt-4">{t("fr.cancelReason")}: {request.cancellationReason}</p>
           )}
         </Card>
 
-        <Card className="p-5">
-          <h3 className="text-sm font-bold text-slate-800 mb-3">{t("common.actions")}</h3>
+        <Card className="card-pad">
+          <h3 className="card-title mb-3">{t("common.actions")}</h3>
           <div className="space-y-3">
             {request.status === "Draft" && (
               <Button className="w-full" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending}>
@@ -271,10 +271,10 @@ export default function FormationRequestDetailPage() {
       </div>
 
       <Card className="mb-6">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800">{t("fr.groups")} / {t("fr.specification")}</h3>
+        <div className="px-5 py-4 border-b border-line flex items-center justify-between">
+          <h3 className="card-title">{t("fr.groups")} / {t("fr.specification")}</h3>
           {request.groups.some((g) => g.specificationSnapshotAtUtc) && (
-            <span className="text-2xs text-slate-400">{t("fr.snapshotFrozen")}</span>
+            <span className="text-2xs text-ink-subtle">{t("fr.snapshotFrozen")}</span>
           )}
         </div>
         <div className="overflow-x-auto">
@@ -297,9 +297,9 @@ export default function FormationRequestDetailPage() {
             <tbody>
               {request.groups.map((g) => (
                 <Fragment key={g.id}>
-                  <tr className="border-b border-gray-100 last:border-0">
+                  <tr className="border-b border-line last:border-0">
                     <td className="font-medium">{g.groupNumber}</td>
-                    <td className="ltr-nums text-gray-400">
+                    <td className="ltr-nums text-ink-subtle">
                       {(g.basins?.length ?? 0) === 0 ? "—" : t("fr.groupTotal")}
                     </td>
                     <td className="ltr-nums">{g.plannedQuantity} {g.unit}</td>
@@ -322,7 +322,7 @@ export default function FormationRequestDetailPage() {
                   </tr>
                   {/* One row per basin (spec sections 10-11) - its own quantity and its own specification. */}
                   {(g.basins ?? []).map((b) => (
-                    <tr key={b.id} className="border-b border-gray-100 bg-slate-50/60 last:border-0">
+                    <tr key={b.id} className="border-b border-line bg-surface-sunken/60 last:border-0">
                       <td className="font-medium text-brand-700">{g.groupNumber}</td>
                       <td className="font-medium text-brand-700">
                         {t("fr.basin")} #{b.basinNumber}
@@ -330,7 +330,7 @@ export default function FormationRequestDetailPage() {
                       <td className="ltr-nums">
                         {b.plannedQuantity} {b.unit}
                         {b.producedQuantity > 0 && (
-                          <span className="text-gray-400"> / {b.producedQuantity}</span>
+                          <span className="text-ink-subtle"> / {b.producedQuantity}</span>
                         )}
                       </td>
                       <td className="ltr-nums">
@@ -348,7 +348,7 @@ export default function FormationRequestDetailPage() {
                       <td className="ltr-nums">{b.metersPerKg ?? g.metersPerKg ?? "—"}</td>
                       <td className="ltr-nums">{b.gsm ?? g.gsm ?? "—"}</td>
                       <td>{b.tubFormat ?? g.tubFormat ?? "—"}</td>
-                      <td className="text-gray-500">
+                      <td className="text-ink-muted">
                         {b.specificationTemplateName ?? g.specificationTemplateName ?? "—"}
                       </td>
                     </tr>
@@ -360,14 +360,14 @@ export default function FormationRequestDetailPage() {
         </div>
       </Card>
 
-      <Card className="p-5">
-        <h3 className="text-sm font-bold text-slate-800 mb-4">{t("common.traceability")}</h3>
+      <Card className="card-pad">
+        <h3 className="card-title mb-4">{t("common.traceability")}</h3>
         <ol className="space-y-2">
           {traceability?.links.map((link, index) => (
             <li key={`${link.stage}-${index}`} className="flex items-start gap-3">
               <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-500 shrink-0" />
               <div className="text-sm">
-                <span className="font-semibold text-slate-700">
+                <span className="font-semibold text-ink">
                   {link.stage === "FormationRequest" ? t("fr.title") : link.stage}
                 </span>
                 {" · "}
@@ -378,14 +378,14 @@ export default function FormationRequestDetailPage() {
                 ) : (
                   <span className="ltr-nums">{link.reference}</span>
                 )}
-                {link.detail && <span className="text-gray-500"> · {link.detail}</span>}
-                {link.dateUtc && <span className="text-gray-400"> · {String(link.dateUtc).slice(0, 10)}</span>}
+                {link.detail && <span className="text-ink-muted"> · {link.detail}</span>}
+                {link.dateUtc && <span className="text-ink-subtle"> · {String(link.dateUtc).slice(0, 10)}</span>}
               </div>
             </li>
           ))}
         </ol>
         {(!traceability || traceability.links.length === 0) && (
-          <p className="text-sm text-gray-400">{t("common.empty")}</p>
+          <p className="text-sm text-ink-subtle">{t("common.empty")}</p>
         )}
       </Card>
 
@@ -402,8 +402,8 @@ export default function FormationRequestDetailPage() {
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-2xs text-slate-400 mb-0.5">{label}</div>
-      <div className="font-medium text-slate-700">{children}</div>
+      <div className="text-2xs text-ink-subtle mb-0.5">{label}</div>
+      <div className="font-medium text-ink">{children}</div>
     </div>
   );
 }

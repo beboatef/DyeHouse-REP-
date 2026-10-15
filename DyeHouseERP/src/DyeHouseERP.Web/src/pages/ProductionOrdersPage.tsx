@@ -192,15 +192,15 @@ export default function ProductionOrdersPage() {
       />
 
       {created && (
-        <Card className="p-4 mb-4 border-green-300 bg-green-50/50">
-          <span className="text-sm text-green-800">{t("jo.issueCreated")}: </span>
+        <Card className="card-pad mb-4 border-success/30 bg-success-soft/50">
+          <span className="text-sm text-success-ink">{t("jo.issueCreated")}: </span>
           <Link to={`/production-orders/${created.id}`} className="font-bold ltr-nums text-brand-600 hover:underline">
             {created.orderNumber}
           </Link>
         </Card>
       )}
 
-      <Card className="p-4 mb-4">
+      <Card className="card-pad mb-4">
         <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")} className="max-w-xs">
           <option value="">{t("common.all")} - {t("jo.type")}</option>
           <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
@@ -209,9 +209,9 @@ export default function ProductionOrdersPage() {
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
-          <h3 className="text-sm font-bold text-slate-800">{t("jo.issueRaw")}</h3>
-          <p className="text-2xs text-slate-500 mt-1">{t("jo.issueHint")}</p>
+        <Card className="card-pad mb-6">
+          <h3 className="card-title">{t("jo.issueRaw")}</h3>
+          <p className="text-2xs text-ink-muted mt-1">{t("jo.issueHint")}</p>
           <form
             className="space-y-4 mt-3"
             onSubmit={(e) => {
@@ -344,13 +344,13 @@ export default function ProductionOrdersPage() {
               <Button type="submit" disabled={!canSubmit}>
                 {issueMutation.isPending ? "جارٍ التنفيذ..." : t("jo.issueConfirm")}
               </Button>
-              <span className="text-2xs text-slate-400">{t("jo.issueActualHint")}</span>
+              <span className="text-2xs text-ink-subtle">{t("jo.issueActualHint")}</span>
             </div>
             {error && <p className="form-error">{error}</p>}
 
             {negativeStockDetail && (
-              <Card className="p-4 border-yellow-300 bg-yellow-50">
-                <p className="text-sm text-yellow-800">
+              <Card className="card-pad border-warning/30 bg-warning-soft">
+                <p className="text-sm text-warning-ink">
                   الرصيد المتاح من هذه الرسالة لا يكفي، والنقص بمقدار{" "}
                   <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
                   لا يتم تجاوز الرصيد السالب من نفس شاشة الصرف: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه
@@ -365,14 +365,14 @@ export default function ProductionOrdersPage() {
                     {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
                   </Button>
                 </div>
-                <p className="mt-2 text-2xs text-yellow-800">
+                <p className="mt-2 text-2xs text-warning-ink">
                   الاعتماد مرتبط بنفس الرسالة والصنف والعميل والكمية والوحدة وطلب التشكيل - أي تغيير يتطلب طلبًا جديدًا.
                 </p>
               </Card>
             )}
 
             {approvalRequested && (
-              <p className="text-sm text-green-700">
+              <p className="text-sm text-success-ink">
                 تم إرسال طلب اعتماد على الرسالة <span className="ltr-nums font-bold">{approvalRequested}</span>.
                 لن يُخصم المخزون ولن يُنشأ أمر التشغيل إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
               </p>
@@ -382,19 +382,19 @@ export default function ProductionOrdersPage() {
       )}
 
       <div className="space-y-3">
-        {isLoading && <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>}
-        {!isLoading && orders?.length === 0 && <Card className="p-6 text-center text-gray-400">لا توجد أوامر تشغيل بعد</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
+        {!isLoading && orders?.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد أوامر تشغيل بعد</Card>}
 
         {orders?.map((o) => (
           <Card key={o.id} className="p-4 hover:border-brand-300 transition-colors">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Link to={`/production-orders/${o.id}`} className="min-w-0">
                 <span className="font-bold ltr-nums">{o.orderNumber}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-sm text-gray-600">{o.customerCode} - {o.customerName}</span>
-                <span className="text-gray-400 mx-2">·</span>
-                <span className="text-sm text-gray-600">{o.itemCode} - {o.itemName}</span>
-                {o.color && <><span className="text-gray-400 mx-2">·</span><span className="text-sm text-gray-600">{o.color}</span></>}
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{o.customerCode} - {o.customerName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{o.itemCode} - {o.itemName}</span>
+                {o.color && <><span className="text-ink-subtle mx-2">·</span><span className="text-sm text-ink-muted">{o.color}</span></>}
               </Link>
               <div className="flex items-center gap-2">
                 <Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge>
@@ -403,7 +403,7 @@ export default function ProductionOrdersPage() {
               </div>
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-ink-subtle">
                 {o.stageExecutions.filter((s) => s.status === "Completed").length} / {o.stageExecutions.length} مراحل مكتملة
               </div>
               {/* The job-order card, not the detail screen, is where a supervisor

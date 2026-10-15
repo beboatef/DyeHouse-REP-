@@ -7,7 +7,7 @@ export default function RawMessagePrintPage() {
   const { id } = useParams<{ id: string }>();
   const { data: message, isLoading } = useQuery({ queryKey: ["raw-message-print", id], queryFn: () => RawMessagesApi.get(id!), enabled: !!id });
 
-  if (isLoading || !message) return <div className="p-10 text-center text-gray-400">جارٍ التحميل...</div>;
+  if (isLoading || !message) return <div className="p-10 text-center text-ink-subtle">جارٍ التحميل...</div>;
 
   return (
     <PrintPreviewLayout

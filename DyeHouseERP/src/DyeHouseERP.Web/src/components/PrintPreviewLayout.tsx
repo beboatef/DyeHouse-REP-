@@ -34,37 +34,38 @@ export default function PrintPreviewLayout<T>({
   const { data: settings } = useQuery({ queryKey: ["company-settings"], queryFn: () => SettingsApi.get() });
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="no-print sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
+    <div className="min-h-screen bg-surface-sunken">
+      <div className="no-print sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-6 py-3">
+        <button onClick={() => navigate(-1)} className="btn btn-ghost btn-sm">
           <ArrowRight size={16} />
           رجوع
         </button>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 rounded-lg bg-brand-600 text-white px-4 py-2 text-sm font-semibold hover:bg-brand-700"
-        >
+        <button onClick={() => window.print()} className="btn btn-primary">
           <Printer size={16} />
           طباعة
         </button>
       </div>
 
-      <div className="max-w-[210mm] mx-auto my-6 bg-white shadow-sm print:shadow-none print:my-0 print-page" dir="rtl">
+      {/* `paper` pins the LIGHT palette on this subtree, so the sheet is a white
+          page with near-black ink even when the app is in dark mode - a
+          document is a document in either theme, and printing from a dark app
+          must never produce a dark page. */}
+      <div className="paper max-w-[210mm] mx-auto my-6 bg-surface shadow-sm print:shadow-none print:my-0 print-page" dir="rtl">
         <div className="p-10 print:p-8">
-          <div className="flex items-start justify-between border-b-2 border-gray-800 pb-4 mb-6">
+          <div className="flex items-start justify-between border-b-2 border-ink pb-4 mb-6">
             <div className="flex items-center gap-3">
               {settings?.logoDataUrl ? (
                 <img src={settings.logoDataUrl} alt="" className="w-14 h-14 object-contain" />
               ) : null}
               <div>
                 <div className="text-lg font-bold">{settings?.companyNameAr || "DyeHouse ERP"}</div>
-                <div className="text-xs text-gray-500 ltr-nums">{settings?.companyNameEn || "DyeHouse ERP"}</div>
+                <div className="text-xs text-ink-muted ltr-nums">{settings?.companyNameEn || "DyeHouse ERP"}</div>
               </div>
             </div>
             {qrValue && (
               <div className="text-center">
                 <QRCodeSVG value={qrValue} size={64} />
-                <div className="text-[9px] text-gray-400 mt-1">امسح لعرض المستند</div>
+                <div className="mt-1 text-[9px] text-ink-subtle">امسح لعرض المستند</div>
               </div>
             )}
           </div>
@@ -72,18 +73,18 @@ export default function PrintPreviewLayout<T>({
           <div className="flex items-start justify-between mb-6">
             <div>
               <h1 className="text-xl font-bold">{title}</h1>
-              <div className="text-sm text-gray-500 ltr-nums mt-1">{documentNumber}</div>
+              <div className="mt-1 text-sm text-ink-muted ltr-nums">{documentNumber}</div>
             </div>
-            <div className="text-sm text-gray-600 space-y-0.5 text-left">
+            <div className="space-y-0.5 text-left text-sm text-ink-muted">
               {subtitleLines.map((l, i) => (
-                <div key={i}><span className="text-gray-400">{l.label}: </span><span className="font-medium">{l.value}</span></div>
+                <div key={i}><span className="text-ink-subtle">{l.label}: </span><span className="font-medium text-ink">{l.value}</span></div>
               ))}
             </div>
           </div>
 
           <table className="w-full text-sm border-collapse mb-6">
             <thead>
-              <tr className="bg-gray-50 border-y border-gray-200">
+              <tr className="border-y border-line-strong bg-surface-sunken">
                 {columns.map((c, i) => (
                   <th key={i} className={`px-3 py-2 font-semibold text-${c.align === "end" ? "end" : "start"}`}>{c.header}</th>
                 ))}
@@ -91,14 +92,14 @@ export default function PrintPreviewLayout<T>({
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={i} className="border-b border-gray-100">
+                <tr key={i} className="border-b border-line">
                   {columns.map((c, j) => (
                     <td key={j} className={`px-3 py-2 ${c.align === "end" ? "text-end ltr-nums" : ""}`}>{c.render(row)}</td>
                   ))}
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={columns.length} className="px-3 py-6 text-center text-gray-400">لا توجد بنود</td></tr>
+                <tr><td colSpan={columns.length} className="px-3 py-6 text-center text-ink-subtle">لا توجد بنود</td></tr>
               )}
             </tbody>
           </table>
@@ -109,7 +110,7 @@ export default function PrintPreviewLayout<T>({
                 <tbody>
                   {totals.map((t, i) => (
                     <tr key={i}>
-                      <td className="px-3 py-1 text-gray-500">{t.label}</td>
+                      <td className="px-3 py-1 text-ink-muted">{t.label}</td>
                       <td className="px-3 py-1 font-semibold ltr-nums">{t.value}</td>
                     </tr>
                   ))}
@@ -119,12 +120,12 @@ export default function PrintPreviewLayout<T>({
           )}
 
           {notes && (
-            <div className="text-sm text-gray-600 border-t border-gray-100 pt-4 mb-8">
-              <span className="text-gray-400">ملاحظات: </span>{notes}
+            <div className="mb-8 border-t border-line pt-4 text-sm text-ink-muted">
+              <span className="text-ink-subtle">ملاحظات: </span>{notes}
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-8 mt-16 pt-8 border-t border-gray-100 text-sm text-gray-500">
+          <div className="mt-16 grid grid-cols-2 gap-8 border-t border-line pt-8 text-sm text-ink-muted">
             <div>توقيع المستلم: ______________________</div>
             <div>توقيع المسؤول: ______________________</div>
           </div>

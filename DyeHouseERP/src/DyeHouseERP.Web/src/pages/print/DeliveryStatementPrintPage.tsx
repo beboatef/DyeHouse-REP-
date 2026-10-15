@@ -140,11 +140,11 @@ export default function DeliveryStatementPrintPage() {
     <>
       {/* Column chooser. Deliberately part of the page rather than the printed document - it is
           hidden by the print stylesheet, so a printed statement never carries the controls. */}
-      <div className="no-print mx-auto mt-4 max-w-[210mm] rounded-lg border border-gray-200 bg-white p-4" dir="rtl">
-        <div className="mb-2 text-sm font-semibold text-gray-700">
+      <div className="no-print mx-auto mt-4 max-w-[210mm] rounded-2xl border border-line bg-surface p-4" dir="rtl">
+        <div className="mb-2 text-sm font-semibold text-ink">
           {t("statement.columns", "الأعمدة الظاهرة في البيان")}
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-600">
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-ink-muted">
           {(
             [
               ["dates", t("statement.orderDate", "تاريخ الأمر الأصلي")],
@@ -165,7 +165,7 @@ export default function DeliveryStatementPrintPage() {
             </label>
           ))}
         </div>
-        <p className="mt-2 text-2xs text-gray-500">
+        <p className="mt-2 text-2xs text-ink-muted">
           {t("statement.unitHint", "الوحدات مستقلة: «—» تعني أن الوحدة غير مسجَّلة، والهالك لا يُحسب بين كجم والمتر.")}
         </p>
       </div>

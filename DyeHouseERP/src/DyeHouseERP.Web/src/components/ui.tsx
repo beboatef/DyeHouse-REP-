@@ -1,4 +1,5 @@
 import { PropsWithChildren, forwardRef } from "react";
+import { Search } from "lucide-react";
 import { AnimatedNumber, revealStyle, staggerDelay } from "./motion";
 
 /**
@@ -54,6 +55,48 @@ export function Card({
       {children}
     </div>
   );
+}
+
+/**
+ * The standard card heading: a title, an optional sub-line and an optional
+ * action slot on the trailing edge. Cards used to hand-write
+ * `<h3 className="card-title mb-3">`, which is how the
+ * heading size and margin drifted between modules.
+ */
+export function CardHeader({
+  title,
+  subtitle,
+  action,
+  className = ""
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`mb-4 flex items-start justify-between gap-3 ${className}`}>
+      <div className="min-w-0">
+        <h3 className="card-title">{title}</h3>
+        {subtitle && <p className="card-subtitle">{subtitle}</p>}
+      </div>
+      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+    </div>
+  );
+}
+
+/** The heading above a group of cards, matching the dashboard's treatment. */
+export function SectionTitle({ children, className = "" }: PropsWithChildren<{ className?: string }>) {
+  return <h2 className={`section-title ${className}`}>{children}</h2>;
+}
+
+/**
+ * The standard toolbar row above a list: search, filters, view actions. One
+ * definition means every list page's controls sit on the same card, with the
+ * same gap and the same wrapping on a narrow screen.
+ */
+export function Toolbar({ children, className = "" }: PropsWithChildren<{ className?: string }>) {
+  return <div className={`filter-bar ${className}`}>{children}</div>;
 }
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -115,7 +158,7 @@ export function Badge({
 
 /**
  * Page- and form-level message banner. Replaces the ad-hoc
- * `<p className="text-sm text-red-600 mt-3">` that appears ~40 times across the
+ * `<p className="text-sm text-danger-ink mt-3">` that appears ~40 times across the
  * pages, so every error in the app has one shape, one size and one colour.
  */
 /**
@@ -155,6 +198,22 @@ export function Alert({
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className = "", ...props }, ref) {
     return <input ref={ref} {...props} className={`input ${className}`} />;
+  }
+);
+
+/**
+ * The standard search field. Its own class owns the magnifier position, so the
+ * icon sits at the same offset and the text can never run underneath it - the
+ * pages used to place the icon by hand (or not at all).
+ */
+export const SearchInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  function SearchInput({ className = "", ...props }, ref) {
+    return (
+      <div className={`search-field ${className}`}>
+        <Search size={16} aria-hidden="true" className="search-icon" />
+        <input ref={ref} type="search" {...props} className="input" />
+      </div>
+    );
   }
 );
 
@@ -325,7 +384,7 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state motion-rise">
-      {icon && <div className="text-ink-subtle">{icon}</div>}
+      {icon && <div className="empty-state-icon">{icon}</div>}
       <div className="empty-state-title">{title}</div>
       {text && <div className="empty-state-text">{text}</div>}
       {action && <div className="mt-2">{action}</div>}

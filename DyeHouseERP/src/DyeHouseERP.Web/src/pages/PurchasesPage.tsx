@@ -82,11 +82,15 @@ export default function PurchasesPage() {
     <>
       <PageHeader title={t("pur.title")} subtitle={t("pur.subtitle")} />
 
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="tabs mb-5">
         {tabs.map((x) => (
-          <Button key={x.key} variant={tab === x.key ? "primary" : "secondary"} onClick={() => select(x.key)}>
+          <button
+            key={x.key}
+            onClick={() => select(x.key)}
+            className={`tab ${tab === x.key ? "tab-active" : ""}`}
+          >
             {t(x.labelKey)}
-          </Button>
+          </button>
         ))}
       </div>
 
@@ -250,7 +254,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
 
   return (
     <>
-      <Card className="p-4 mb-4 flex flex-wrap items-end gap-3">
+      <Card className="card-pad mb-4 flex flex-wrap items-end gap-3">
         <div className="w-52">
           <label className="field-label">{t("common.status")}</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "" | PurchaseOrderStatus)}>
@@ -268,7 +272,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -309,7 +313,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
               <label className="field-label">{t("pur.tab.orders")}</label>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end bg-gray-50 rounded-lg p-3">
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end bg-surface-sunken rounded-lg p-3">
                     <div className="sm:col-span-2">
                       <label className="field-label">{t("pur.material")}</label>
                       <Select
@@ -383,8 +387,8 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
       {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-4">
-        {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
-        {!isLoading && orders?.length === 0 && <Card className="p-6 text-center text-gray-400">{t("common.empty")}</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">{t("common.loading")}</Card>}
+        {!isLoading && orders?.length === 0 && <Card className="card-pad text-center text-ink-subtle">{t("common.empty")}</Card>}
 
         {orders?.map((o) => (
           <Card key={o.id} className="p-5">
@@ -392,11 +396,11 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-bold ltr-nums">{o.orderNumber}</span>
                 <Badge tone={orderTone[o.status]}>{t(`pur.status.${o.status}`)}</Badge>
-                <span className="text-sm text-gray-600">{o.supplierCode} - {o.supplierName}</span>
-                <span className="text-gray-400">·</span>
-                <span className="text-sm text-gray-600">{o.warehouseName}</span>
-                <span className="text-gray-400">·</span>
-                <span className="text-sm text-gray-500 ltr-nums">{new Date(o.orderDate).toLocaleDateString("en-GB")}</span>
+                <span className="text-sm text-ink-muted">{o.supplierCode} - {o.supplierName}</span>
+                <span className="text-ink-subtle">·</span>
+                <span className="text-sm text-ink-muted">{o.warehouseName}</span>
+                <span className="text-ink-subtle">·</span>
+                <span className="text-sm text-ink-muted ltr-nums">{new Date(o.orderDate).toLocaleDateString("en-GB")}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold ltr-nums">{money(o.totalValue)}</span>
@@ -432,8 +436,8 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
             {expanded === o.id && editError && <p className="form-error mt-3">{editError}</p>}
 
             {expanded === o.id && editing === o.id && (
-              <Card className="p-4 mt-4 bg-gray-50">
-                <h4 className="text-sm font-semibold mb-3">{t("pur.editOrder")}</h4>
+              <Card className="card-pad mt-4 bg-surface-sunken">
+                <h4 className="card-title mb-3">{t("pur.editOrder")}</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="field-label">{t("pur.expectedDelivery")}</label>
@@ -448,7 +452,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                   {saveHeader.isPending ? t("common.saving") : t("common.save")}
                 </Button>
                 {o.status === "Submitted" && (
-                  <p className="text-xs text-gray-500 mt-2">{t("pur.editSubmittedHint", "تعديل أمر مُرسل يُعيده إلى مسودة لاعتماده من جديد")}</p>
+                  <p className="text-xs text-ink-muted mt-2">{t("pur.editSubmittedHint", "تعديل أمر مُرسل يُعيده إلى مسودة لاعتماده من جديد")}</p>
                 )}
               </Card>
             )}
@@ -470,7 +474,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                   <tbody>
                     {o.lines.map((l) => (
                       <Fragment key={l.id}>
-                      <tr className="border-b border-gray-50 last:border-0">
+                      <tr className="border-b border-line last:border-0">
                         <td>{l.materialCode} - {l.materialName}</td>
                         <td className="ltr-nums">
                           {editing === o.id && canEditLine(o.status) && l.receivedQuantity === 0 ? (
@@ -513,7 +517,7 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                                 </button>
                               )}
                               <button
-                                className="text-red-600 hover:underline text-xs font-semibold"
+                                className="text-danger-ink hover:underline text-xs font-semibold"
                                 onClick={() => removeLine.mutate({ orderId: o.id, lineId: l.id })}
                               >
                                 {t("pur.removeLine")}
@@ -536,10 +540,10 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                         </td>
                       </tr>
                       {correctingLine === l.id && (
-                        <tr className="bg-amber-50 border-b border-amber-100">
+                        <tr className="bg-warning-soft border-b border-warning-soft">
                           <td colSpan={7} className="p-3">
                             <div className="flex flex-wrap items-end gap-3">
-                              <div className="text-xs text-gray-600 max-w-md">
+                              <div className="text-xs text-ink-muted max-w-md">
                                 {t("pur.correctQtyHint", "تصحيح الكمية المطلوبة لا يغيّر الكمية المستلمة أو حركات المخزون، ولا يمكن أن تقل عن الكمية المستلمة.")}
                               </div>
                               <div><label className="field-label">{t("pur.newQuantity")}</label>
@@ -670,7 +674,7 @@ function ReceiptsTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4">
+      <Card className="card-pad mb-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pur.newReceipt")}</Button>
           <ExportButtons
@@ -678,11 +682,11 @@ function ReceiptsTab() {
             onExport={(format) => PurchasesExports.receipts[format]({ supplierId: supplierId || undefined })}
           />
         </div>
-        <p className="text-xs text-gray-500 mt-2">{t("pur.receiptHint")}</p>
+        <p className="text-xs text-ink-muted mt-2">{t("pur.receiptHint")}</p>
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -739,7 +743,7 @@ function ReceiptsTab() {
               <label className="field-label">{t("common.item")}</label>
               <div className="space-y-3">
                 {lines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-gray-50 rounded-lg p-3">
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-surface-sunken rounded-lg p-3">
                     <div className="sm:col-span-2">
                       <label className="field-label">{t("pur.material")}</label>
                       <Select
@@ -797,7 +801,7 @@ function ReceiptsTab() {
                 {t("pur.addLine")}
               </Button>
               {selectedOrder && (
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-ink-muted mt-2">
                   {t("pur.orderNumber")}: <span className="ltr-nums">{selectedOrder.orderNumber}</span>
                 </p>
               )}
@@ -813,24 +817,24 @@ function ReceiptsTab() {
       {error && <p className="form-error mb-3">{error}</p>}
 
       <div className="space-y-4">
-        {isLoading && <Card className="p-6 text-center text-gray-400">{t("common.loading")}</Card>}
-        {!isLoading && receipts?.length === 0 && <Card className="p-6 text-center text-gray-400">{t("common.empty")}</Card>}
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">{t("common.loading")}</Card>}
+        {!isLoading && receipts?.length === 0 && <Card className="card-pad text-center text-ink-subtle">{t("common.empty")}</Card>}
 
         {receipts?.map((r) => (
           <Card key={r.id} className="p-5">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="font-bold ltr-nums">{r.receiptNumber}</span>
-              <span className="text-sm text-gray-600">{r.supplierCode} - {r.supplierName}</span>
-              <span className="text-gray-400">·</span>
-              <span className="text-sm text-gray-600">{r.warehouseName}</span>
+              <span className="text-sm text-ink-muted">{r.supplierCode} - {r.supplierName}</span>
+              <span className="text-ink-subtle">·</span>
+              <span className="text-sm text-ink-muted">{r.warehouseName}</span>
               {r.orderNumber && (
                 <>
-                  <span className="text-gray-400">·</span>
-                  <span className="text-sm text-gray-500 ltr-nums">{r.orderNumber}</span>
+                  <span className="text-ink-subtle">·</span>
+                  <span className="text-sm text-ink-muted ltr-nums">{r.orderNumber}</span>
                 </>
               )}
-              <span className="text-gray-400">·</span>
-              <span className="text-sm text-gray-500 ltr-nums">{new Date(r.receiptDate).toLocaleDateString("en-GB")}</span>
+              <span className="text-ink-subtle">·</span>
+              <span className="text-sm text-ink-muted ltr-nums">{new Date(r.receiptDate).toLocaleDateString("en-GB")}</span>
               <span className="text-sm font-semibold ltr-nums">{money(r.totalValue)}</span>
               <Button variant="ghost" onClick={() => PurchasesExports.receiptPdf(r.id)()}>
                 {t("common.pdf")}
@@ -847,7 +851,7 @@ function ReceiptsTab() {
               </thead>
               <tbody>
                 {r.lines.map((l) => (
-                  <tr key={l.id} className="border-b border-gray-50 last:border-0">
+                  <tr key={l.id} className="border-b border-line last:border-0">
                     <td>{l.materialCode} - {l.materialName}</td>
                     <td className="ltr-nums">{l.quantity} {l.unit}</td>
                     <td className="ltr-nums">{money(l.unitCost)}</td>
@@ -939,8 +943,8 @@ function InvoicesTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4 flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+      <Card className="card-pad mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-ink">
           <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
           {t("pur.overdueOnly")}
         </label>
@@ -949,11 +953,11 @@ function InvoicesTab() {
           labels={{ excel: t("pur.exportInvoices"), pdf: t("common.pdf") }}
           onExport={(format) => PurchasesExports.supplierInvoices[format]()}
         />
-        <span className="text-xs text-gray-500">{t("pur.invoiceHint")}</span>
+        <span className="text-xs text-ink-muted">{t("pur.invoiceHint")}</span>
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -987,7 +991,7 @@ function InvoicesTab() {
 
             <div className="space-y-3">
               {lines.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-gray-50 rounded-lg p-3">
+                <div key={idx} className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end bg-surface-sunken rounded-lg p-3">
                   <div className="sm:col-span-2">
                     <label className="field-label">{t("pur.material")}</label>
                     <Select
@@ -1094,16 +1098,16 @@ function InvoicesTab() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && invoices?.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {invoices?.map((i) => (
-              <tr key={i.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={i.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{i.invoiceNumber}</td>
                 <td>
                   <Button variant="ghost" onClick={() => PurchasesExports.supplierInvoicePdf(i.id)()}>
@@ -1128,7 +1132,7 @@ function InvoicesTab() {
                   )}
                   {i.status !== "Cancelled" && (
                     <button
-                      className="text-red-600 hover:underline text-xs font-semibold ms-3"
+                      className="text-danger-ink hover:underline text-xs font-semibold ms-3"
                       onClick={() => {
                         const reason = window.prompt(t("pur.cancelReason"));
                         if (reason) cancelMutation.mutate({ id: i.id, reason });
@@ -1190,12 +1194,12 @@ function PaymentsTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4">
+      <Card className="card-pad mb-4">
         <Button onClick={() => setShowForm((s) => !s)}>{showForm ? t("common.cancel") : t("pur.newPayment")}</Button>
       </Card>
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end"
             onSubmit={(e) => {
@@ -1246,7 +1250,7 @@ function PaymentsTab() {
 
       {error && <p className="form-error mb-3">{error}</p>}
 
-      <Card className="p-4 mb-4">
+      <Card className="card-pad mb-4">
         <ExportButtons
           labels={{ excel: t("pur.exportPayments"), pdf: t("common.pdf") }}
           onExport={(format) => PurchasesExports.supplierPayments[format]({ supplierId: supplierId || undefined, from: undefined, to: undefined })}
@@ -1268,16 +1272,16 @@ function PaymentsTab() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && payments?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {payments?.map((p) => (
-              <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{p.paymentNumber}</td>
                 <td>{p.supplierCode} - {p.supplierName}</td>
                 <td className="ltr-nums">{new Date(p.paymentDate).toLocaleDateString("en-GB")}</td>
@@ -1313,9 +1317,9 @@ function BalancesTab() {
 
   return (
     <>
-      <Card className="p-4 mb-4">
+      <Card className="card-pad mb-4">
         <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" checked={withBalanceOnly} onChange={(e) => setWithBalanceOnly(e.target.checked)} />
             {t("pur.withBalanceOnly")}
           </label>
@@ -1343,23 +1347,23 @@ function BalancesTab() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && balances?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {balances?.map((b) => (
-              <tr key={b.supplierId} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={b.supplierId} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{b.supplierCode}</td>
                 <td>{b.supplierName}</td>
                 <td className="ltr-nums">{money(b.totalInvoiced)}</td>
                 <td className="ltr-nums">{money(b.totalPaid)}</td>
                 <td className="ltr-nums font-semibold">{money(b.outstanding)}</td>
                 <td className="ltr-nums">{b.openInvoiceCount}</td>
-                <td className="ltr-nums text-red-600">{b.overdueAmount > 0 ? money(b.overdueAmount) : "—"}</td>
+                <td className="ltr-nums text-danger-ink">{b.overdueAmount > 0 ? money(b.overdueAmount) : "—"}</td>
                 <td>
                   <button
                     className="btn-link"
@@ -1375,8 +1379,8 @@ function BalancesTab() {
       </Card>
 
       {selected && (
-        <Card className="p-5">
-          <h3 className="font-semibold mb-3">{t("pur.ledger")}</h3>
+        <Card className="card-pad">
+          <h3 className="card-title mb-3">{t("pur.ledger")}</h3>
           <table className="table">
             <thead>
               <tr>
@@ -1390,15 +1394,15 @@ function BalancesTab() {
             <tbody>
               {ledger?.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-gray-400">{t("common.empty")}</td>
+                  <td colSpan={5} className="py-6 text-center text-ink-subtle">{t("common.empty")}</td>
                 </tr>
               )}
               {ledger?.map((e) => (
-                <tr key={e.id} className="border-b border-gray-50 last:border-0">
+                <tr key={e.id} className="border-b border-line last:border-0">
                   <td className="ltr-nums">{new Date(e.entryDate).toLocaleDateString("en-GB")}</td>
                   <td>
                     <span className="ltr-nums">{e.sourceDocumentNumber}</span>
-                    <span className="text-gray-400 text-xs ms-2">{e.description}</span>
+                    <span className="text-ink-subtle text-xs ms-2">{e.description}</span>
                   </td>
                   <td className="ltr-nums">{e.debit > 0 ? money(e.debit) : "—"}</td>
                   <td className="ltr-nums">{e.credit > 0 ? money(e.credit) : "—"}</td>

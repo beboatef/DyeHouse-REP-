@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CustomersApi, ItemsApi, ProductionFloorApi, ProductionFloorRow, ProductionStagesApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge, KpiCard, QuickTile, TableStateRow, TableWrap, fmt } from "@/components/ui";
+import { PageHeader, Card, Button, Select, Badge, KpiCard, QuickTile, TableStateRow, TableWrap, fmt, SearchInput } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
 /**
@@ -102,9 +102,9 @@ export default function ProductionFloorPage() {
         action={
           <div className="flex items-center gap-2">
             {isFetching && !isLoading && (
-              <span className="text-2xs text-slate-400">{t("floor.refreshing")}</span>
+              <span className="text-2xs text-ink-subtle">{t("floor.refreshing")}</span>
             )}
-            <span className="text-2xs text-slate-400">{t("floor.updatedAt")}: {fmt(new Date(dataUpdatedAt).toISOString())}</span>
+            <span className="text-2xs text-ink-subtle">{t("floor.updatedAt")}: {fmt(new Date(dataUpdatedAt).toISOString())}</span>
             <Button variant="secondary" onClick={() => refetch()}>{t("floor.refresh")}</Button>
           </div>
         }
@@ -123,10 +123,10 @@ export default function ProductionFloorPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-5 mb-5">
-        <Card className="xl:col-span-3 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="card-pad xl:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="field-label">{t("floor.search")}</label>
-            <Input
+            <SearchInput
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("floor.searchPlaceholder")}
@@ -188,10 +188,10 @@ export default function ProductionFloorPage() {
         </Card>
 
         {/* Where the work is right now - the busiest stages, from the same live rows. */}
-        <Card className="p-4">
-          <h3 className="text-sm font-bold text-slate-800 mb-3">{t("floor.busiestStages")}</h3>
+        <Card className="card-pad">
+          <h3 className="card-title mb-3">{t("floor.busiestStages")}</h3>
           {stageLoad.length === 0 ? (
-            <p className="text-xs text-slate-400">{t("common.empty")}</p>
+            <p className="text-xs text-ink-subtle">{t("common.empty")}</p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {stageLoad.map(([name, count], i) => (
@@ -240,7 +240,7 @@ export default function ProductionFloorPage() {
         </TableWrap>
       </Card>
 
-      <p className="text-2xs text-slate-400 mt-3">{t("floor.readOnlyHint")}</p>
+      <p className="text-2xs text-ink-subtle mt-3">{t("floor.readOnlyHint")}</p>
     </>
   );
 }
@@ -269,7 +269,7 @@ function FloorRow({ row, staleMinutes }: { row: ProductionFloorRow; staleMinutes
   const lossText = lossPct != null ? `${fmt(lossPct)}%` : qtyText(row.lossKg, row.lossMeter) ?? "—";
 
   return (
-    <tr className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${row.awaitingStart ? "bg-amber-50/40" : ""}`}>
+    <tr className={`border-b border-line last:border-0 hover:bg-surface-sunken ${row.awaitingStart ? "bg-warning-soft/40" : ""}`}>
       <td>
         <Link to={`/production-orders/${row.productionOrderId}`} className="ltr-nums font-medium text-brand-600 hover:underline">
           {row.orderNumber}
@@ -279,12 +279,12 @@ function FloorRow({ row, staleMinutes }: { row: ProductionFloorRow; staleMinutes
         </div>
       </td>
       <td>
-        <span className="ltr-nums text-gray-600">{row.customerCode}</span>
-        <span className="block text-2xs text-gray-400">{row.customerName}</span>
+        <span className="ltr-nums text-ink-muted">{row.customerCode}</span>
+        <span className="block text-2xs text-ink-subtle">{row.customerName}</span>
       </td>
       <td>
         <span className="ltr-nums">{row.itemCode}</span>
-        <span className="block text-2xs text-gray-400">
+        <span className="block text-2xs text-ink-subtle">
           {row.itemName}{row.color ? ` · ${row.color}` : ""}
         </span>
       </td>
@@ -294,19 +294,19 @@ function FloorRow({ row, staleMinutes }: { row: ProductionFloorRow; staleMinutes
         ) : (
           <>
             <span className="font-medium">{row.currentStageName}</span>
-            <span className="block text-2xs text-gray-400">
+            <span className="block text-2xs text-ink-subtle">
               {row.stageSequence != null ? `#${row.stageSequence}` : ""}{row.operator ? ` · ${row.operator}` : ""}
             </span>
           </>
         )}
       </td>
-      <td className={`px-4 py-3 ltr-nums ${isStale ? "font-bold text-red-600" : ""}`}>
+      <td className={`px-4 py-3 ltr-nums ${isStale ? "font-bold text-danger-ink" : ""}`}>
         {row.awaitingStart || minutes === 0 ? "—" : `${Math.round(minutes)}′`}
         {isStale && <span className="block text-[10px] font-normal">{t("floor.tooLong")}</span>}
       </td>
       <td className="ltr-nums">{inText}</td>
       <td className="ltr-nums">{outText}</td>
-      <td className="ltr-nums text-gray-600">{lossText}</td>
+      <td className="ltr-nums text-ink-muted">{lossText}</td>
       <td>
         <Badge tone={orderStatusTone[row.orderStatus] ?? "gray"}>{t(`prod.status.${row.orderStatus}`)}</Badge>
       </td>

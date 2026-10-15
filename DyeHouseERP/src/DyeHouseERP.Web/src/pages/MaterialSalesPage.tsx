@@ -152,7 +152,7 @@ export default function MaterialSalesPage() {
       />
 
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form
             className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end"
             onSubmit={(e) => {
@@ -219,7 +219,7 @@ export default function MaterialSalesPage() {
         </Card>
       )}
 
-      <Card className="p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-end">
+      <Card className="card-pad mb-4 flex flex-col sm:flex-row gap-3 sm:items-end">
         <div className="w-full sm:w-56">
           <label className="field-label">{t("common.status")}</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "" | MaterialSaleStatus)}>
@@ -229,7 +229,7 @@ export default function MaterialSalesPage() {
             <option value="Cancelled">{t("msale.cancelled")}</option>
           </Select>
         </div>
-        <p className="text-xs text-gray-400 sm:mb-2">{t("msale.postedNote")}</p>
+        <p className="text-xs text-ink-subtle sm:mb-2">{t("msale.postedNote")}</p>
       </Card>
 
       {error && <p className="form-error mb-3">{error}</p>}
@@ -251,17 +251,17 @@ export default function MaterialSalesPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.loading")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td>
               </tr>
             )}
             {!isLoading && sales?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">{t("common.empty")}</td>
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td>
               </tr>
             )}
             {sales?.map((sale: MaterialSale) => (
               <Fragment key={sale.id}>
-                <tr className="border-b border-gray-100 hover:bg-gray-50">
+                <tr className="border-b border-line hover:bg-surface-sunken">
                   <td className="font-medium ltr-nums">{sale.saleNumber}</td>
                   <td>
                     <Button variant="ghost" onClick={MaterialSalesExports.documentPdf(sale.id)}>
@@ -272,12 +272,12 @@ export default function MaterialSalesPage() {
                   <td>
                     <div>{sale.buyerName}</div>
                     {sale.customerId && (
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-ink-subtle">
                         {t("msale.customerAccount")} {sale.customerCode}
                       </div>
                     )}
                     {sale.treasuryAccountName && (
-                      <div className="text-xs text-emerald-600">{sale.treasuryAccountName}</div>
+                      <div className="text-xs text-success-ink">{sale.treasuryAccountName}</div>
                     )}
                   </td>
                   <td className="text-ink-muted">{sale.warehouseName}</td>
@@ -301,7 +301,7 @@ export default function MaterialSalesPage() {
                 </tr>
 
                 {expanded === sale.id && (
-                  <tr className="bg-gray-50/60">
+                  <tr className="bg-surface-sunken/60">
                     <td colSpan={8} className="px-4 py-4">
                       <table className="table mb-4">
                         <thead>
@@ -316,13 +316,13 @@ export default function MaterialSalesPage() {
                         <tbody>
                           {sale.lines.length === 0 && (
                             <tr>
-                              <td colSpan={5} className="py-3 text-center text-gray-400 text-xs">{t("common.empty")}</td>
+                              <td colSpan={5} className="py-3 text-center text-ink-subtle text-xs">{t("common.empty")}</td>
                             </tr>
                           )}
                           {sale.lines.map((l) => (
-                            <tr key={l.id} className="border-b border-gray-100 last:border-0">
+                            <tr key={l.id} className="border-b border-line last:border-0">
                               <td>
-                                <span className="ltr-nums text-gray-500 me-2">{l.materialCode}</span>
+                                <span className="ltr-nums text-ink-muted me-2">{l.materialCode}</span>
                                 {l.materialName}
                               </td>
                               <td className="ltr-nums">{l.quantity} {l.unit}</td>
@@ -331,7 +331,7 @@ export default function MaterialSalesPage() {
                               <td>
                                 {sale.isEditable && (
                                   <button
-                                    className="text-red-500 hover:underline text-xs font-semibold"
+                                    className="text-danger-ink hover:underline text-xs font-semibold"
                                     onClick={() => removeLine.mutate({ id: sale.id, lineId: l.id })}
                                   >
                                     {t("common.remove")}
@@ -376,11 +376,11 @@ export default function MaterialSalesPage() {
                         </form>
                       )}
 
-                      <div className="mt-4 text-sm text-gray-600">
+                      <div className="mt-4 text-sm text-ink-muted">
                         <div>{t("msale.subtotal")}: <span className="ltr-nums">{money(sale.subTotal)}</span></div>
                         <div>{t("msale.discount")}: <span className="ltr-nums">{money(sale.discount)}</span></div>
                         <div>{t("msale.tax")}: <span className="ltr-nums">{money(sale.tax)}</span></div>
-                        <div className="font-semibold text-gray-800">
+                        <div className="font-semibold text-ink">
                           {t("common.total")}: <span className="ltr-nums">{money(sale.total)}</span>
                         </div>
                       </div>

@@ -20,73 +20,100 @@
    than pure black, so elevation stays readable instead of crushing to #000.
    =========================================================================== */
 @layer base {
-  :root {
+  /* The light palette is declared for two scopes:
+       * :root            - the app itself (dark is opted into by a .dark class)
+       * .paper           - a printed document. A document is black-on-white in
+                            BOTH themes, so the paper scope re-declares the light
+                            values for its own subtree; that makes every
+                            token-based class inside a print layout render its
+                            light value even when the app is in dark mode. The
+                            element itself carries .paper, so the `.dark` rules
+                            (which apply to <html>) never reach it. */
+  :root,
+  .paper {
     /* -- surfaces ---------------------------------------------------------- */
     --surface: #ffffff;
-    --surface-sunken: #f7f8fa;
+    --surface-sunken: #f4f6fb;
     --surface-raised: #ffffff;
     --surface-overlay: #ffffff;
 
     /* -- ink --------------------------------------------------------------- */
-    --ink: #111827;
-    --ink-muted: #4b5563;
-    --ink-subtle: #6b7280;
-    --ink-inverse: #f9fafb;
+    --ink: #0f172a;
+    --ink-muted: #5b6579;
+    --ink-subtle: #8b95a7;
+    --ink-inverse: #ffffff;
 
     /* -- lines ------------------------------------------------------------- */
-    --line: #e5e7eb;
-    --line-strong: #d1d5db;
+    --line: #eaeef6;
+    --line-strong: #dbe2ee;
 
-    /* -- brand: calm industrial blue --------------------------------------- */
-    --brand-50: #eff5ff;
-    --brand-100: #dbe8fe;
-    --brand-200: #bfd7fe;
-    --brand-300: #93bbfd;
-    --brand-400: #609afa;
-    --brand-500: #3b82f6;
-    --brand-600: #2563eb;
-    --brand-700: #1d4ed8;
-    --brand-800: #1e40af;
-    --brand-900: #1e3a8a;
+    /* -- brand: the dashboard's vibrant blue -------------------------------
+       #2b5cff is the accent the reference design uses for the active menu
+       item, the primary button and every key figure. White on it is 5.1:1 and
+       it is 5.1:1 on white, so it is usable as both a fill and as text. */
+    --brand-50: #eef3ff;
+    --brand-100: #dee8ff;
+    --brand-200: #c2d4ff;
+    --brand-300: #97b3ff;
+    --brand-400: #6b8dff;
+    --brand-500: #4674ff;
+    --brand-600: #2b5cff;
+    --brand-700: #1f47e0;
+    --brand-800: #1c3ab5;
+    --brand-900: #1b348f;
 
-    /* -- status ----------------------------------------------------------- */
-    --success: #059669;
-    --success-soft: #ecfdf5;
-    --success-ink: #065f46;
+    /* -- status -----------------------------------------------------------
+       Pastel fill + dark ink pairs, exactly the badge treatment in the
+       reference: the fill is a near-white tint, the text carries the contrast
+       (every pair below is >= 4.8:1). */
+    --success: #12a06a;
+    --success-soft: #e7f7f0;
+    --success-ink: #0d7a52;
 
-    --warning: #d97706;
-    --warning-soft: #fffbeb;
-    --warning-ink: #92400e;
+    --warning: #d98307;
+    --warning-soft: #fdf4e4;
+    --warning-ink: #96550a;
 
-    --danger: #dc2626;
-    --danger-soft: #fef2f2;
-    --danger-ink: #991b1b;
+    --danger: #e03d3d;
+    --danger-soft: #fdecec;
+    --danger-ink: #b02525;
 
-    --info: #0891b2;
-    --info-soft: #ecfeff;
-    --info-ink: #155e75;
+    --info: #2f80ed;
+    --info-soft: #e9f1fe;
+    --info-ink: #1e5fc0;
 
-    /* -- shape ------------------------------------------------------------- */
-    --radius-sm: 6px;
-    --radius: 8px;
+    /* -- shape -------------------------------------------------------------
+       --radius-card is the 16px card corner (rounded-2xl) and --radius-lg the
+       12px control corner, so a card and a button can never drift apart. */
+    --radius-sm: 8px;
+    --radius: 10px;
     --radius-lg: 12px;
+    --radius-card: 16px;
+    --radius-pill: 9999px;
 
-    --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
-    --shadow-pop: 0 10px 15px -3px rgb(16 24 40 / 0.1), 0 4px 6px -4px rgb(16 24 40 / 0.1);
+    --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 6px 20px -14px rgb(15 23 42 / 0.12);
+    --shadow-pop: 0 18px 40px -18px rgb(15 23 42 / 0.28), 0 4px 12px -6px rgb(15 23 42 / 0.1);
+    /* The blue glow under the primary button and the active menu item. */
+    --shadow-primary: 0 10px 22px -12px rgb(43 92 255 / 0.75);
 
     /* -- dashboard tile strip -------------------------------------------------
-       The solid coloured quick-stat tiles from the reference design. Declared
-       as tokens (not literals in the component) so they are themeable and so
-       the same four colours can be reused on any module's summary strip. */
-    --tile-1: #2dce89;
-    --tile-2: #2f80ed;
-    --tile-3: #f5365c;
-    --tile-4: #fb6340;
+       The accent of each quick-stat slot: a pastel fill and a dark ink for the
+       icon badge inside the white tile (see .quick-tile). Declared as tokens,
+       not literals in the component, so the strip is themeable and the same
+       four accents can be reused on any module's summary strip. */
+    --tile-1-soft: #e7f7f0;
+    --tile-1-ink: #0d7a52;
+    --tile-2-soft: #eef3ff;
+    --tile-2-ink: #2b5cff;
+    --tile-3-soft: #fdecec;
+    --tile-3-ink: #b02525;
+    --tile-4-soft: #fdf4e4;
+    --tile-4-ink: #96550a;
 
     /* -- control sizing (the single source of truth for control heights) ---- */
-    --control-h-sm: 32px;
-    --control-h: 38px;
-    --control-h-lg: 44px;
+    --control-h-sm: 34px;
+    --control-h: 40px;
+    --control-h-lg: 46px;
 
     /* -- motion ------------------------------------------------------------
        The DyeHouse motion language. Deliberately fast and calm: an ERP is a
@@ -103,125 +130,132 @@
 
     /* -- channel mirrors (for Tailwind opacity modifiers) ------------------ */
     --surface-rgb: 255 255 255;
-    --surface-sunken-rgb: 247 248 250;
+    --surface-sunken-rgb: 244 246 251;
     --surface-raised-rgb: 255 255 255;
     --surface-overlay-rgb: 255 255 255;
-    --ink-rgb: 17 24 39;
-    --ink-muted-rgb: 75 85 99;
-    --ink-subtle-rgb: 107 114 128;
-    --ink-inverse-rgb: 249 250 251;
-    --line-rgb: 229 231 235;
-    --line-strong-rgb: 209 213 219;
-    --brand-50-rgb: 239 245 255;
-    --brand-100-rgb: 219 232 254;
-    --brand-200-rgb: 191 215 254;
-    --brand-300-rgb: 147 187 253;
-    --brand-400-rgb: 96 154 250;
-    --brand-500-rgb: 59 130 246;
-    --brand-600-rgb: 37 99 235;
-    --brand-700-rgb: 29 78 216;
-    --brand-800-rgb: 30 64 175;
-    --brand-900-rgb: 30 58 138;
-    --success-rgb: 5 150 105;
-    --success-soft-rgb: 236 253 245;
-    --success-ink-rgb: 6 95 70;
-    --warning-rgb: 217 119 6;
-    --warning-soft-rgb: 255 251 235;
-    --warning-ink-rgb: 146 64 14;
-    --danger-rgb: 220 38 38;
-    --danger-soft-rgb: 254 242 242;
-    --danger-ink-rgb: 153 27 27;
-    --info-rgb: 8 145 178;
-    --info-soft-rgb: 236 254 255;
-    --info-ink-rgb: 21 94 117;
+    --ink-rgb: 15 23 42;
+    --ink-muted-rgb: 91 101 121;
+    --ink-subtle-rgb: 139 149 167;
+    --ink-inverse-rgb: 255 255 255;
+    --line-rgb: 234 238 246;
+    --line-strong-rgb: 219 226 238;
+    --brand-50-rgb: 238 243 255;
+    --brand-100-rgb: 222 232 255;
+    --brand-200-rgb: 194 212 255;
+    --brand-300-rgb: 151 179 255;
+    --brand-400-rgb: 107 141 255;
+    --brand-500-rgb: 70 116 255;
+    --brand-600-rgb: 43 92 255;
+    --brand-700-rgb: 31 71 224;
+    --brand-800-rgb: 28 58 181;
+    --brand-900-rgb: 27 52 143;
+    --success-rgb: 18 160 106;
+    --success-soft-rgb: 231 247 240;
+    --success-ink-rgb: 13 122 82;
+    --warning-rgb: 217 131 7;
+    --warning-soft-rgb: 253 244 228;
+    --warning-ink-rgb: 150 85 10;
+    --danger-rgb: 224 61 61;
+    --danger-soft-rgb: 253 236 236;
+    --danger-ink-rgb: 176 37 37;
+    --info-rgb: 47 128 237;
+    --info-soft-rgb: 233 241 254;
+    --info-ink-rgb: 30 95 192;
 
     color-scheme: light;
   }
 
   .dark {
-    --surface: #111827;
-    --surface-sunken: #0f172a;
-    --surface-raised: #1f2937;
-    --surface-overlay: #1f2937;
+    --surface: #171e2e;
+    --surface-sunken: #0e1322;
+    --surface-raised: #1d2537;
+    --surface-overlay: #1d2537;
 
-    --ink: #f3f4f6;
-    --ink-muted: #cbd5e1;
-    --ink-subtle: #94a3b8;
-    --ink-inverse: #111827;
+    --ink: #f5f7fb;
+    --ink-muted: #aab4c6;
+    --ink-subtle: #7d8798;
+    --ink-inverse: #0f172a;
 
-    --line: #1f2937;
-    --line-strong: #334155;
+    --line: #232c40;
+    --line-strong: #33405c;
 
     /* Brand steps are lightened in dark mode so they keep their contrast
-       against #111827 instead of going muddy. */
-    --brand-50: #172554;
-    --brand-100: #1e3a8a;
-    --brand-200: #1e40af;
-    --brand-300: #2563eb;
-    --brand-400: #3b82f6;
-    --brand-500: #60a5fa;
-    --brand-600: #3b82f6;
-    --brand-700: #60a5fa;
-    --brand-800: #93c5fd;
-    --brand-900: #bfdbfe;
+       against #171e2e instead of going muddy. brand-600 stays the solid fill
+       (white on it is 4.7:1). */
+    --brand-50: #101838;
+    --brand-100: #16214a;
+    --brand-200: #1d2e6b;
+    --brand-300: #24409f;
+    --brand-400: #2d50d6;
+    --brand-500: #5b82ff;
+    --brand-600: #3b64ff;
+    --brand-700: #6b8dff;
+    --brand-800: #9ab7ff;
+    --brand-900: #c2d4ff;
 
-    --success: #10b981;
-    --success-soft: #052e26;
+    --success: #34d399;
+    --success-soft: #0b2f24;
     --success-ink: #6ee7b7;
 
-    --warning: #f59e0b;
-    --warning-soft: #2a1f05;
+    --warning: #fbbf24;
+    --warning-soft: #33240a;
     --warning-ink: #fcd34d;
 
-    --danger: #ef4444;
-    --danger-soft: #2a1113;
+    --danger: #f87171;
+    --danger-soft: #3a1416;
     --danger-ink: #fca5a5;
 
-    --info: #22d3ee;
-    --info-soft: #062a33;
-    --info-ink: #a5f3fc;
+    --info: #60a5fa;
+    --info-soft: #10233f;
+    --info-ink: #bfdbfe;
 
-    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.2);
-    --shadow-pop: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 8px 24px -16px rgb(0 0 0 / 0.55);
+    --shadow-pop: 0 18px 40px -18px rgb(0 0 0 / 0.6), 0 4px 12px -6px rgb(0 0 0 / 0.4);
+    --shadow-primary: 0 10px 22px -12px rgb(0 0 0 / 0.6);
 
-    /* Tiles are deepened in dark mode so white text keeps its contrast. */
-    --tile-1: #1f9d67;
-    --tile-2: #1f5fb8;
-    --tile-3: #c02a49;
-    --tile-4: #c9502f;
+    /* Tile accents in dark mode: a deep tint with a light ink, so the badge
+       keeps its contrast against the dark card. */
+    --tile-1-soft: #0c3428;
+    --tile-1-ink: #6ee7b7;
+    --tile-2-soft: #14265c;
+    --tile-2-ink: #9ab7ff;
+    --tile-3-soft: #3a1618;
+    --tile-3-ink: #fca5a5;
+    --tile-4-soft: #38280b;
+    --tile-4-ink: #fcd34d;
 
-    --surface-rgb: 17 24 39;
-    --surface-sunken-rgb: 15 23 42;
-    --surface-raised-rgb: 31 41 55;
-    --surface-overlay-rgb: 31 41 55;
-    --ink-rgb: 243 244 246;
-    --ink-muted-rgb: 203 213 225;
-    --ink-subtle-rgb: 148 163 184;
-    --ink-inverse-rgb: 17 24 39;
-    --line-rgb: 31 41 55;
-    --line-strong-rgb: 51 65 85;
-    --brand-50-rgb: 23 37 84;
-    --brand-100-rgb: 30 58 138;
-    --brand-200-rgb: 30 64 175;
-    --brand-300-rgb: 37 99 235;
-    --brand-400-rgb: 59 130 246;
-    --brand-500-rgb: 96 165 250;
-    --brand-600-rgb: 59 130 246;
-    --brand-700-rgb: 96 165 250;
-    --brand-800-rgb: 147 197 253;
-    --brand-900-rgb: 191 219 254;
-    --success-rgb: 16 185 129;
-    --success-soft-rgb: 5 46 38;
+    --surface-rgb: 23 30 46;
+    --surface-sunken-rgb: 14 19 34;
+    --surface-raised-rgb: 29 37 55;
+    --surface-overlay-rgb: 29 37 55;
+    --ink-rgb: 245 247 251;
+    --ink-muted-rgb: 170 180 198;
+    --ink-subtle-rgb: 125 135 152;
+    --ink-inverse-rgb: 15 23 42;
+    --line-rgb: 35 44 64;
+    --line-strong-rgb: 51 64 92;
+    --brand-50-rgb: 16 24 56;
+    --brand-100-rgb: 22 33 74;
+    --brand-200-rgb: 29 46 107;
+    --brand-300-rgb: 36 64 159;
+    --brand-400-rgb: 45 80 214;
+    --brand-500-rgb: 91 130 255;
+    --brand-600-rgb: 59 100 255;
+    --brand-700-rgb: 107 141 255;
+    --brand-800-rgb: 154 183 255;
+    --brand-900-rgb: 194 212 255;
+    --success-rgb: 52 211 153;
+    --success-soft-rgb: 11 47 36;
     --success-ink-rgb: 110 231 183;
-    --warning-rgb: 245 158 11;
-    --warning-soft-rgb: 42 31 5;
+    --warning-rgb: 251 191 36;
+    --warning-soft-rgb: 51 36 10;
     --warning-ink-rgb: 252 211 77;
-    --danger-rgb: 239 68 68;
-    --danger-soft-rgb: 42 17 19;
+    --danger-rgb: 248 113 113;
+    --danger-soft-rgb: 58 20 22;
     --danger-ink-rgb: 252 165 165;
-    --info-rgb: 34 211 238;
-    --info-soft-rgb: 6 42 51;
-    --info-ink-rgb: 165 243 252;
+    --info-rgb: 96 165 250;
+    --info-soft-rgb: 16 35 63;
+    --info-ink-rgb: 191 219 254;
 
     color-scheme: dark;
   }
@@ -274,13 +308,25 @@
    39 modules.
    =========================================================================== */
 @layer components {
-  /* -- Cards --------------------------------------------------------------- */
+  /* -- Cards ---------------------------------------------------------------
+     The reference design's surface: a white card, a 16px corner and a soft
+     low-contrast shadow. `rounded-2xl` is mapped to --radius-card in
+     tailwind.config.js, so the card corner is one token, not a literal.
+     ----------------------------------------------------------------------- */
   .card {
-    @apply rounded-lg border border-line bg-surface shadow-card
+    @apply rounded-2xl border border-line bg-surface shadow-card
            transition-[box-shadow,transform,border-color] duration-200 ease-out;
   }
   .card-pad {
-    @apply p-4 sm:p-5;
+    @apply p-5 sm:p-6;
+  }
+  /* One card heading and one card sub-heading, so a panel title is never an
+     ad-hoc `text-sm font-bold text-gray-800` again. */
+  .card-title {
+    @apply text-sm font-semibold text-ink;
+  }
+  .card-subtitle {
+    @apply mt-1 text-xs text-ink-muted;
   }
   /* Opt-in hover elevation. Kept off `.card` itself so a large static card
      (an activity table, a form panel) does not float when the pointer crosses
@@ -294,7 +340,7 @@
   /* Min-height 38px meets the comfortable touch-target floor; `sm` is 32px
      and reserved for dense toolbars, never for primary mobile actions. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl
            border border-transparent text-sm font-semibold
            transition-[color,background-color,border-color,box-shadow,transform]
            duration-150 ease-out
@@ -311,24 +357,30 @@
     height: var(--control-h-lg);
     @apply px-5;
   }
+  /* NOTE: the foreground of a filled button is literal #fff, not `text-white`.
+     tailwind.config.js remaps the `white` name onto --surface so the existing
+     pages theme automatically - which would make `text-white` render dark on a
+     dark theme. See .on-brand. */
   .btn-primary {
-    @apply bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+    @apply bg-brand-600 shadow-primary hover:bg-brand-700 active:bg-brand-800;
+    color: #ffffff;
   }
   .btn-secondary {
-    @apply border-line bg-surface text-ink hover:bg-surface-sunken;
+    @apply border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-sunken;
   }
   .btn-ghost {
     @apply text-ink-muted hover:bg-surface-sunken hover:text-ink;
   }
   .btn-danger {
-    @apply bg-danger text-white hover:opacity-90;
+    @apply bg-danger hover:opacity-90;
+    color: #ffffff;
   }
 
   /* -- Form controls -------------------------------------------------------- */
   .input,
   .select,
   .textarea {
-    @apply w-full rounded-lg border border-line-strong bg-surface text-sm text-ink
+    @apply w-full rounded-xl border border-line-strong bg-surface text-sm text-ink
            placeholder:text-ink-subtle
            transition-[color,background-color,border-color,box-shadow] duration-150 ease-out
            focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25
@@ -340,6 +392,13 @@
     @apply py-2;
     height: auto;
     min-height: 80px;
+  }
+  /* Compact control for an inline action row (e.g. a reason box inside a table
+     cell), so a dense row does not have to hand-write a height and padding. */
+  .input-sm,
+  .select-sm {
+    @apply px-3 text-xs;
+    height: var(--control-h-sm);
   }
   /* One label size for the whole system. This was the single biggest source of
      drift: 273 form labels across the app were hand-styled as either
@@ -401,11 +460,11 @@
     min-width: 640px;
   }
   .table thead th {
-    @apply sticky top-0 z-10 whitespace-nowrap border-b border-line bg-surface-sunken
-           px-4 py-2.5 text-start text-xs font-semibold uppercase tracking-wide text-ink-muted;
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-line bg-surface
+           px-4 py-3 text-start text-2xs font-semibold uppercase tracking-wide text-ink-subtle;
   }
   .table tbody td {
-    @apply border-b border-line px-4 py-2.5 align-middle text-ink;
+    @apply border-b border-line px-4 py-3 align-middle text-ink;
   }
   .table tbody tr {
     @apply transition-colors;
@@ -453,17 +512,52 @@
      The heading above a group of cards inside a page, matching the dashboard's
      `Section` treatment so every module reads the same way. */
   .section-title {
-    @apply mb-3 text-xs font-semibold uppercase tracking-wide text-ink-subtle;
+    @apply mb-3 text-sm font-semibold text-ink;
   }
 
   /* -- Filter / action bar --------------------------------------------------
      The single toolbar row used above every list: search, filters, view
      actions. Uniform gap and wrapping, so nothing is squeezed on a phone. */
   .filter-bar {
-    @apply mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3 shadow-card;
+    @apply mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card;
   }
   .filter-bar-item {
     @apply min-w-0 flex-1 basis-48;
+  }
+
+  /* -- Search field ---------------------------------------------------------
+     The reference's search bar: a filled field with a leading magnifier. The
+     wrapper owns the icon position, so every search box in the app has the
+     icon at the same offset and the text never runs under it. */
+  .search-field {
+    @apply relative w-full;
+  }
+  .search-field .search-icon {
+    @apply pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-subtle;
+    inset-inline-start: 0.75rem;
+  }
+  .search-field .input {
+    @apply bg-surface-sunken ps-10;
+  }
+  .search-field .input:focus {
+    @apply bg-surface;
+  }
+
+  /* A file picker styled like the rest of the form controls (the pages used to
+     hand-write this class list, six lines at a time). */
+  .file-input {
+    @apply block w-full cursor-pointer rounded-xl border border-line-strong bg-surface
+           text-sm text-ink
+           file:me-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-surface-sunken
+           file:px-3 file:py-2 file:text-xs file:font-semibold file:text-ink
+           hover:border-brand-500;
+    height: var(--control-h);
+  }
+
+  /* A checkbox/radio row: the label IS the tap target. */
+  .check-row {
+    @apply flex items-center gap-2 text-sm text-ink;
+    min-height: var(--control-h);
   }
 
   /* -- Status indicator ----------------------------------------------------- */
@@ -499,9 +593,11 @@
     }
   }
 
-  /* -- Badges --------------------------------------------------------------- */
+  /* -- Badges ---------------------------------------------------------------
+     The reference's status pill: tiny semibold text on a soft pastel fill.
+     ----------------------------------------------------------------------- */
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-semibold;
   }
   .badge-success { @apply bg-success-soft text-success-ink; }
   .badge-warning { @apply bg-warning-soft text-warning-ink; }
@@ -524,7 +620,7 @@
     @apply mt-1.5 text-2xs text-ink-subtle;
   }
   .kpi-icon {
-    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl;
   }
 
   /* -- Small chip (the compact pill used for deltas/footnotes) -------------- */
@@ -537,34 +633,34 @@
   .chip-info    { @apply bg-info-soft text-info-ink; }
   .chip-neutral { @apply bg-surface-sunken text-ink-muted; }
 
-  /* -- Quick-stat tiles (the solid coloured strip) -------------------------- */
-  /* NOTE: the tile text/overlay colours are literal whites, NOT Tailwind's
-     `text-white` / `bg-white/20`. tailwind.config.js deliberately remaps the
-     `white` and `black` NAMES onto --surface / --ink so the existing pages theme
-     automatically - which means `text-white` on these solid tiles would render
-     near-black in dark mode. Inside a solid coloured tile the foreground is
-     always white, so it is written out. */
+  /* -- Quick-stat tiles ----------------------------------------------------
+     The reference's summary card: a white card with one soft pastel icon
+     badge, a muted label and a bold figure. Each slot only sets the two accent
+     tokens (--tile-soft / --tile-ink), so the shape is shared and the colour
+     is the only thing that differs between the four tiles.
+
+     NOTE: the icon text/badge colours come from tokens, NOT from `text-white`.
+     tailwind.config.js remaps the `white` name onto --surface, so a literal
+     `text-white` would render dark in dark mode. */
   .quick-tile {
-    @apply flex items-center gap-3 rounded-lg border border-transparent p-4 shadow-card
+    @apply flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card
            transition-transform hover:-translate-y-0.5;
-    color: #ffffff;
   }
   .quick-tile-icon {
-    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full;
-    background: rgb(255 255 255 / 0.22);
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-xl;
+    background: var(--tile-soft);
+    color: var(--tile-ink);
   }
   .quick-tile-label {
-    @apply text-xs font-medium;
-    color: rgb(255 255 255 / 0.88);
+    @apply text-xs font-medium text-ink-muted;
   }
   .quick-tile-value {
-    @apply mt-0.5 text-lg font-bold leading-tight;
-    color: #ffffff;
+    @apply mt-0.5 text-lg font-bold leading-tight text-ink;
   }
-  .quick-tile-1 { background: var(--tile-1); }
-  .quick-tile-2 { background: var(--tile-2); }
-  .quick-tile-3 { background: var(--tile-3); }
-  .quick-tile-4 { background: var(--tile-4); }
+  .quick-tile-1 { --tile-soft: var(--tile-1-soft); --tile-ink: var(--tile-1-ink); }
+  .quick-tile-2 { --tile-soft: var(--tile-2-soft); --tile-ink: var(--tile-2-ink); }
+  .quick-tile-3 { --tile-soft: var(--tile-3-soft); --tile-ink: var(--tile-3-ink); }
+  .quick-tile-4 { --tile-soft: var(--tile-4-soft); --tile-ink: var(--tile-4-ink); }
 
   /* -- Chart legend dot ----------------------------------------------------- */
   .legend-dot {
@@ -575,28 +671,36 @@
   .seg-track {
     @apply h-2 w-full overflow-hidden rounded-full bg-surface-sunken;
   }
+
+  /* -- Sidebar filter pill (the reference's "All ⌄" control) ---------------- */
+  .nav-pill {
+    @apply inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2
+           text-xs font-semibold text-ink-muted transition-colors
+           hover:border-brand-200 hover:text-brand-700;
+  }
   .seg-fill {
     @apply h-full rounded-full transition-[width] duration-500;
   }
 
 
   /* -- Tabs -----------------------------------------------------------------
-     Horizontally scrollable on narrow screens instead of forcing the page to
-     scroll sideways.
+     A segmented pill track instead of the old underlined strip: it reads as one
+     control, matches the card language, and still scrolls horizontally on a
+     narrow screen instead of forcing the page sideways.
      ----------------------------------------------------------------------- */
   .tabs {
-    @apply flex gap-1 overflow-x-auto border-b border-line;
+    @apply flex gap-1 overflow-x-auto rounded-xl bg-surface-sunken p-1;
     scrollbar-width: none;
   }
   .tabs::-webkit-scrollbar {
     display: none;
   }
   .tab {
-    @apply whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm font-medium
+    @apply whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium
            text-ink-muted transition-colors hover:text-ink;
   }
   .tab-active {
-    @apply border-brand-600 text-brand-600;
+    @apply bg-surface text-brand-700 shadow-sm;
   }
 
   /* -- Page scaffolding ----------------------------------------------------- */
@@ -604,15 +708,26 @@
     @apply mx-auto w-full max-w-content;
   }
   .page-title {
-    @apply text-xl font-bold text-ink sm:text-2xl;
+    @apply text-2xl font-bold tracking-tight text-ink sm:text-[26px];
   }
   .page-subtitle {
     @apply mt-1 text-sm text-ink-muted;
   }
 
+  /* Literal white for a foreground that sits ON a solid brand/status fill.
+     tailwind.config.js remaps the `white` name onto --surface, so `text-white`
+     would turn dark under a dark theme; this class cannot. */
+  .on-brand {
+    color: #ffffff;
+  }
+
   /* -- States --------------------------------------------------------------- */
   .empty-state {
     @apply flex flex-col items-center justify-center gap-2 px-6 py-12 text-center;
+  }
+  .empty-state-icon {
+    @apply mb-1 flex h-12 w-12 items-center justify-center rounded-full
+           bg-surface-sunken text-ink-subtle;
   }
   .empty-state-title {
     @apply text-sm font-medium text-ink;
@@ -621,16 +736,49 @@
     @apply text-sm text-ink-subtle;
   }
 
-  /* -- Sidebar -------------------------------------------------------------- */
+  /* -- Sidebar --------------------------------------------------------------
+     The reference's navigation: a white rail, one vibrant blue pill for the
+     active item, and a muted label for everything else. Three shapes are
+     needed - a top-level link, a collapsible group header, and a nested item.
+     ----------------------------------------------------------------------- */
   .nav-link {
-    @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium
            text-ink-muted
-           transition-[color,background-color] duration-150 ease-out
+           transition-[color,background-color,box-shadow] duration-150 ease-out
            hover:bg-brand-50 hover:text-brand-700
            dark:hover:bg-brand-900/40 dark:hover:text-brand-200;
   }
+  /* The active tile: solid vibrant blue. `color: #fff` is literal (see
+     .on-brand) because the `white` name is remapped to a theme surface. */
   .nav-link-active {
-    @apply bg-brand-50 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200;
+    @apply bg-brand-600 shadow-primary hover:bg-brand-600;
+    color: #ffffff;
+  }
+  .nav-link-active:hover {
+    color: #ffffff;
+  }
+  /* Collapsible group header ("Logistics ⌄" in the reference). */
+  .nav-group-toggle {
+    @apply flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold
+           text-ink transition-colors duration-150 hover:bg-surface-sunken;
+  }
+  /* Nested item under an open group: indented, with a soft rail bar that turns
+     solid blue when the item is the active route. */
+  .nav-sub-link {
+    @apply flex items-center gap-2.5 rounded-xl py-2 pe-3 ps-9 text-sm
+           text-ink-muted transition-colors duration-150
+           hover:bg-brand-50 hover:text-brand-700
+           dark:hover:bg-brand-900/40 dark:hover:text-brand-200;
+  }
+  .nav-sub-link-active {
+    @apply bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/50 dark:text-brand-200;
+  }
+  .nav-sub-rail {
+    @apply pointer-events-none absolute bottom-0 top-0 w-px bg-line;
+    inset-inline-start: 1.05rem;
+  }
+  .nav-sub-rail-active {
+    @apply bg-brand-300;
   }
 }
 

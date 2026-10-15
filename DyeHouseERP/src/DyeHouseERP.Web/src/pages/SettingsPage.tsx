@@ -44,21 +44,21 @@ export default function SettingsPage() {
     reader.readAsDataURL(file);
   };
 
-  if (isLoading) return <Card className="p-6 text-center text-gray-400">جارٍ التحميل...</Card>;
+  if (isLoading) return <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>;
 
   return (
     <>
       <PageHeader title="إعدادات الشركة" subtitle="اسم الشركة والشعار - يظهران في شاشة الدخول والقائمة الجانبية وسيُستخدمان لاحقًا في رأس المستندات المطبوعة" />
 
-      <Card className="p-6 max-w-2xl">
+      <Card className="card-pad max-w-2xl">
         <div className="mb-6">
           <label className="field-label">شعار الشركة</label>
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-xl border border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden">
+            <div className="w-20 h-20 rounded-xl border border-dashed border-line-strong flex items-center justify-center bg-surface-sunken overflow-hidden">
               {logoDataUrl ? (
                 <img src={logoDataUrl} alt="شعار الشركة" className="w-full h-full object-contain" />
               ) : (
-                <span className="text-[10px] text-gray-400 text-center px-1">لا يوجد شعار</span>
+                <span className="text-[10px] text-ink-subtle text-center px-1">لا يوجد شعار</span>
               )}
             </div>
             <div className="flex flex-col gap-2">
@@ -73,7 +73,7 @@ export default function SettingsPage() {
                   إزالة الشعار
                 </button>
               )}
-              <p className="text-2xs text-gray-400">PNG أو SVG أو JPG، حتى 2 ميجا تقريبًا</p>
+              <p className="text-2xs text-ink-subtle">PNG أو SVG أو JPG، حتى 2 ميجا تقريبًا</p>
             </div>
           </div>
         </div>

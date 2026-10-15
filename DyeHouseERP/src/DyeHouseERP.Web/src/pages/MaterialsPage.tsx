@@ -24,12 +24,12 @@ export default function MaterialsPage() {
   return (
     <>
       <PageHeader title="المواد والكيماويات" subtitle="بيانات المواد، التحويل بين المخازن، الصرف لأوامر التشغيل، والإحلال (التحضير/التخفيف)" />
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
+      <div className="tabs mb-6">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`tab ${tab === t.key ? "tab-active" : ""}`}
           >
             {t.label}
           </button>
@@ -105,7 +105,7 @@ function MaterialMasterTab() {
         onDone={() => qc.invalidateQueries({ queryKey: ["materials"] })}
       />
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">الكود</label><Input value={code} onChange={(e) => setCode(e.target.value)} required /></div>
             <div><label className="field-label">الاسم</label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
@@ -127,9 +127,9 @@ function MaterialMasterTab() {
             <th>الوحدة</th><th>سعر الشراء</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {materials?.map((m) => (
-              <tr key={m.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={m.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{m.code}</td><td>{m.name}</td>
                 <td><Badge tone="blue">{m.unit}</Badge></td><td className="ltr-nums">{m.purchasePrice}</td>
               </tr>
@@ -164,7 +164,7 @@ function MaterialTransfersTab() {
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تحويل جديد"}</Button></div>
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">المادة</label>
               <Select value={materialId} onChange={(e) => setMaterialId(e.target.value)} required>
@@ -194,9 +194,9 @@ function MaterialTransfersTab() {
             <th>من</th><th>إلى</th><th>الكمية</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {transfers?.map((t) => (
-              <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td>{t.materialCode}</td>
                 <td>{t.fromWarehouseName}</td><td>{t.toWarehouseName}</td><td className="ltr-nums">{t.quantity}</td>
               </tr>
@@ -241,7 +241,7 @@ function MaterialIssuesTab() {
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ صرف جديد"}</Button></div>
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">المادة</label>
               <Select value={materialId} onChange={(e) => setMaterialId(e.target.value)} required><option value="">اختر...</option>{materials?.map((m) => <option key={m.id} value={m.id}>{m.code} - {m.name}</option>)}</Select>
@@ -267,15 +267,15 @@ function MaterialIssuesTab() {
             <th>أمر التشغيل</th><th>الكمية</th><th>التكلفة الإجمالية</th><th>الحالة</th><th>إجراءات</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {issues?.map((i) => (
-              <tr key={i.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={i.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{i.issueNumber}</td><td>{i.materialCode}</td>
                 <td className="ltr-nums">{i.productionOrderNumber}</td><td className="ltr-nums">{i.quantity}</td><td className="ltr-nums">{i.totalCost}</td>
                 <td>
                   <Badge tone={i.isCancelled ? "red" : "green"}>{i.isCancelled ? "ملغي" : "مُرحَّل"}</Badge>
                   {i.isCancelled && i.cancellationReason && (
-                    <div className="text-xs text-gray-400">{i.cancellationReason}</div>
+                    <div className="text-xs text-ink-subtle">{i.cancellationReason}</div>
                   )}
                 </td>
                 <td>
@@ -321,7 +321,7 @@ function MaterialPreparationsTab() {
     <>
       <div className="flex justify-end mb-4"><Button onClick={() => setShowForm((s) => !s)}>{showForm ? "إلغاء" : "+ تحضير جديد"}</Button></div>
       {showForm && (
-        <Card className="p-5 mb-6">
+        <Card className="card-pad mb-6">
           <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end" onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}>
             <div><label className="field-label">المادة الأصلية</label>
               <Select value={originalMaterialId} onChange={(e) => setOriginalMaterialId(e.target.value)} required><option value="">اختر...</option>{materials?.map((m) => <option key={m.id} value={m.id}>{m.code} - {m.name}</option>)}</Select>
@@ -344,9 +344,9 @@ function MaterialPreparationsTab() {
             <th>الأصلية</th><th>الماء</th><th>الناتج</th><th>التكلفة</th>
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">جارٍ التحميل...</td></tr>}
+            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {preparations?.map((p) => (
-              <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+              <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{p.preparationNumber}</td><td>{p.originalMaterialCode}</td>
                 <td className="ltr-nums">{p.originalQuantity}</td><td className="ltr-nums">{p.waterQuantity}</td>
                 <td className="ltr-nums">{p.resultingQuantity}</td><td className="ltr-nums">{p.cost ?? "-"}</td>

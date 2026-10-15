@@ -7,7 +7,7 @@ export default function ProductionOrderPrintPage() {
   const { id } = useParams<{ id: string }>();
   const { data: order, isLoading } = useQuery({ queryKey: ["production-order-print", id], queryFn: () => ProductionOrdersApi.get(id!), enabled: !!id });
 
-  if (isLoading || !order) return <div className="p-10 text-center text-gray-400">جارٍ التحميل...</div>;
+  if (isLoading || !order) return <div className="p-10 text-center text-ink-subtle">جارٍ التحميل...</div>;
 
   return (
     <PrintPreviewLayout
