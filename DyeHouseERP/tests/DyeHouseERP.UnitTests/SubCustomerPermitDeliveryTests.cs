@@ -577,19 +577,27 @@ public class SubCustomerPermitDeliveryTests
         }
 
         // ...and the rule itself is untouched everywhere a real movement is recorded: the very same item
-        // on an ORDINARY permit still requires both units.
-        using (var db = NewDb())
+        // on an ORDINARY permit still requires both units - in BOTH directions. The metre-only direction
+        // is the one that used to slip through (only the secondary unit was ever checked), so it is
+        // asserted here on the real delivery handler, not just on the pure rule.
+        foreach (var line in new[]
+                 {
+                     new DeliveryLineInput { ProductionOrderId = scene.OrderId, ItemId = scene.ItemId, QuantityKg = 500m },
+                     new DeliveryLineInput { ProductionOrderId = scene.OrderId, ItemId = scene.ItemId, QuantityMeter = 600m }
+                 })
         {
+            using var db = NewDb();
             var act = async () => await Creator(db).Handle(new CreateDeliveryCommand(
                 scene.PrimaryCustomerId, DateTime.UtcNow, null,
-                new List<DeliveryLineInput>
-                {
-                    new() { ProductionOrderId = scene.OrderId, ItemId = scene.ItemId, QuantityKg = 500m }
-                }), CancellationToken.None);
+                new List<DeliveryLineInput> { line }), CancellationToken.None);
 
             (await act.Should().ThrowAsync<DomainException>())
                 .Which.Message.Should().Contain("requires BOTH");
         }
+
+        using (var verify = NewDb())
+            (await verify.Deliveries.CountAsync()).Should().Be(2,
+                "the seeded primary permit and the one sub-permit: the two refused ordinary permits were never created");
     }
 
     // ------------------------------------------------------------------ the chain is enforced

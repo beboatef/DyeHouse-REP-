@@ -606,3 +606,99 @@ The SQL Server integration suite (no `DYEHOUSE_TEST_CONNECTION`) · the Puppetee
 neither of which exists in this workspace, and no browser automation is available here. The frontend
 evidence is the type-check, the production build and the lint run; **no browser/print interaction was
 verified**.
+
+---
+
+## Pass 4 - RequireBothUnits means BOTH units, and the permit print columns verified in a browser
+
+### Root cause (one expression)
+
+`ItemUnitRules.EnsureValidQuantities` (Domain) is the single gate every quantity write goes through -
+`ItemUnitGuard` wraps it and every posting handler calls that. Its `RequireBothUnits` branch computed
+**`secondaryProvided` and nothing else**:
+
+```csharp
+var secondaryProvided = secondaryUnit.Value == UnitOfMeasure.KG ? kgProvided : meterProvided;
+if (!secondaryProvided) throw ...
+```
+
+So the setting was enforced as *"the secondary unit is mandatory"* rather than the rule the flag, the DTO
+("every movement for this item must record BOTH units rather than one") and the refusal's own wording
+("requires BOTH of its units: a KG quantity AND a Meter quantity must be supplied") all describe. Because
+`requireAnyQuantity` had already guaranteed at least one figure, the practical effect was: **KG-only was
+refused while Meter-only - also missing one of the two units - was accepted and posted.** The same document
+passed or failed depending on which unit the operator happened to type.
+
+### The fix
+
+The branch now resolves **both** sides (`baseProvided` and `secondaryProvided`) and refuses when either is
+missing, naming the missing unit(s) in the message. Nothing else changed: unit selection, the no-conversion
+guarantee, the `requireAnyQuantity` precedence and the sub-customer permit exemption
+(`enforceRequireBothUnits: false`, a document that posts no movement of its own) are all untouched, and the
+message still contains `requires BOTH of its units` so existing assertions keep their meaning.
+
+### Affected operations reviewed
+
+All 26 call sites of `ItemUnitGuard`/`ItemUnitRules` were read. They divide into two groups and the fix
+applies identically to both because the parameter it depends on has one default (`true`):
+
+* **19 handlers that post a movement or record a production figure** - raw receipt, inspection rejections,
+  Job Order requested quantity, raw allocation, raw issue, pause release, resume re-issue, stage transfer
+  (output / input / separates / second grade), external release, ready-goods transfer, ready-goods-to-raw,
+  stock adjustment, customer transfer, customer return, delivery, reprocess-separate, plus their validators.
+  For these the old behaviour was already refusing the base-only case, so the change adds exactly one new
+  refusal: a secondary-only quantity.
+* **1 deliberate exemption** - `CreateDeliveryCommand` passes `enforceRequireBothUnits: false` for a
+  sub-customer permit (it is a slice of a permit that already recorded both units), which stays as is.
+* The `requireAnyQuantity: false` paths (pause release, separates, actual input, second grade) still allow an
+  empty figure; when the item demands both units they now require both in both directions, consistently.
+
+No other place enforces this rule - there is no duplicate check in a validator, an import reader or the UI.
+
+### Tests
+
+`ItemUnitConfigurationTests` +4: the missing-base direction on the pure rule **in both unit orderings**
+(`Missing: KG` / `Missing: Meter`), both-supplied passes in either ordering, the empty case keeps the
+pre-existing "quantity is required" precedence (and names both units when `requireAnyQuantity: false`), an
+item with no secondary unit is never asked for one, and a **handler-level** raw receipt that types only the
+Meter for a both-units item is refused and posts nothing.
+`SubCustomerPermitDeliveryTests` extended: on an ordinary permit **both** single-unit directions are now
+refused (the metre-only one being the case that used to slip through) while the sub-permit still accepts
+both single-unit lines - the exemption is proven, not assumed.
+
+**Non-vacuous:** restoring the old one-sided check makes exactly these four tests fail
+(`RequireBothUnits_MissingTheBaseUnit_IsRejected`, `RequireBothUnits_IsSatisfiedOnlyBySupplyingBothUnits`,
+`RawReceipt_RequiresBothUnits_EvenWhenOnlyTheSecondaryUnitWasTyped`,
+`SubCustomerPermit_MayCarryMetreAlone_EvenWhenTheItemRequiresBothUnits`) and nothing else.
+
+### Browser verification of the permit print columns (run for real this time)
+
+`tools/delivery-print-columns-check.cjs` (new) drives the real page in headless Chrome against the vite dev
+server with the API stubbed by request interception (there is still no SQL Server). It **passed with
+`failures: 0`**: all eight column combinations print exactly the chosen columns; every row keeps one cell per
+header; a hidden column is absent rather than zero-filled while a visible one keeps its recorded figure;
+drawing number, job order and item print in every format including "no quantity column at all"; the choice
+persists for the sub-customer permit and never writes the ordinary permit's key; the register's PDF download
+is requested with the same three flags (`includeKg=false&includeMeter=false&includeRolls=false` after hiding
+all three); and printing issued **no** write request and no console error. **Non-vacuous:** forcing the KG
+column to always print makes it fail eight times.
+
+Environment notes, so the next run does not rediscover them (they are also in the tool's header): the image
+has no root and no browser, so puppeteer came from npm into `/tmp/uitest` and Chrome's shared libraries from
+`.deb` files extracted to `/tmp/chromedeps` (`LD_LIBRARY_PATH`). **Full Chrome cannot start here** -
+`pthread_create: Resource temporarily unavailable`, only ~58 extra threads are grantable - which is the same
+ceiling that aborts `dotnet test` when it builds and tests in one command; `headless: "shell"`
+(chrome-headless-shell) starts and is what the tool uses.
+
+### Checks (real output)
+
+Release build of the API **0 errors** · unit suite **893 / 893** (was 889, +4) · frontend `tsc -b && vite
+build` **PASS** · eslint **0 errors** (9 pre-existing warnings) · browser print check **failures: 0** ·
+`git diff --check` **clean**.
+
+### Not verified
+
+The end-to-end HTTP + SQL Server path of the PDF (no database here): the column flags are verified at the
+request level in the browser and the server's projection is verified by
+`DeliveryPermitPdfColumnsTests` with the production export service rendering real bytes, but no request has
+been served by a live API in this environment.

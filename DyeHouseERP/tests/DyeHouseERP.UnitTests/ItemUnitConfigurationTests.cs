@@ -140,6 +140,63 @@ public class ItemUnitConfigurationTests
     }
 
     [Fact]
+    public void RequireBothUnits_MissingTheBaseUnit_IsRejected()
+    {
+        // The flag means BOTH of the item's units, so which one the operator left out must not change
+        // the verdict. Only the secondary used to be checked, which let a Meter-only quantity through
+        // for an item whose rule is "KG AND Meter" while the KG-only quantity was correctly refused.
+        var act = () => ItemUnitRules.EnsureValidQuantities(
+            UnitOfMeasure.KG, UnitOfMeasure.Meter, true, null, 1800m, "ITM-1");
+        (act.Should().Throw<DomainException>())
+            .WithMessage("*requires BOTH of its units*")
+            .And.Message.Should().Contain("Missing: KG");
+
+        // The mirrored configuration (Meter primary) is symmetrical: what is missing here is the base.
+        var mirrored = () => ItemUnitRules.EnsureValidQuantities(
+            UnitOfMeasure.Meter, UnitOfMeasure.KG, true, 500m, null, "ITM-2");
+        (mirrored.Should().Throw<DomainException>())
+            .WithMessage("*requires BOTH of its units*")
+            .And.Message.Should().Contain("Missing: Meter");
+    }
+
+    [Fact]
+    public void RequireBothUnits_IsSatisfiedOnlyBySupplyingBothUnits()
+    {
+        // Both supplied - in either unit order - is the only shape that passes.
+        var kgPrimary = () => ItemUnitRules.EnsureValidQuantities(
+            UnitOfMeasure.KG, UnitOfMeasure.Meter, true, 500m, 1800m, "ITM-1");
+        kgPrimary.Should().NotThrow();
+
+        var meterPrimary = () => ItemUnitRules.EnsureValidQuantities(
+            UnitOfMeasure.Meter, UnitOfMeasure.KG, true, 500m, 1800m, "ITM-2");
+        meterPrimary.Should().NotThrow();
+
+        // With neither quantity supplied, the more fundamental refusal wins: a workflow that needs a
+        // quantity says so first (pre-existing precedence, unchanged).
+        var neither = () => ItemUnitRules.EnsureValidQuantities(
+            UnitOfMeasure.KG, UnitOfMeasure.Meter, true, null, null, "ITM-1");
+        (neither.Should().Throw<DomainException>()).And.Message.Should().Contain("quantity is required");
+
+        // On a path that tolerates an empty figure (requireAnyQuantity: false, as the production-floor
+        // fields use), the both-units rule speaks instead, and it names BOTH units as missing.
+        var neitherOnAnEmptyTolerantPath = () => ItemUnitRules.EnsureValidQuantities(
+            UnitOfMeasure.KG, UnitOfMeasure.Meter, true, null, null, "ITM-1",
+            context: null, requireAnyQuantity: false);
+        (neitherOnAnEmptyTolerantPath.Should().Throw<DomainException>())
+            .And.Message.Should().Contain("Missing: KG and Meter");
+    }
+
+    [Fact]
+    public void AnItemWithoutASecondaryUnit_IsNeverAskedForOne()
+    {
+        // "Require both units" needs a second unit to speak of; an item that has one unit must not be
+        // handed a demand for a unit it does not use (and no quantity is ever converted to invent one).
+        var act = () => ItemUnitRules.EnsureValidQuantities(
+            UnitOfMeasure.KG, null, false, 500m, null, "ITM-1");
+        act.Should().NotThrow();
+    }
+
+    [Fact]
     public void WorkflowThatNeedsAQuantity_RejectsAnEmptyMovement()
     {
         var act = () => ItemUnitRules.EnsureValidQuantities(
@@ -273,6 +330,27 @@ public class ItemUnitConfigurationTests
 
         (await act.Should().ThrowAsync<DomainException>()).WithMessage("*BOTH*");
         (await db.RawMessages.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RawReceipt_RequiresBothUnits_EvenWhenOnlyTheSecondaryUnitWasTyped()
+    {
+        // The mirror image of the test above, at the handler level: typing the Meter alone is NOT
+        // "both units" either. Before the fix this receipt was accepted and posted a movement whose
+        // KG side was silently missing, while the KG-only receipt was refused.
+        using var db = NewDb();
+        var (customer, warehouse, item) = SeedMasterData(db, UnitOfMeasure.KG,
+            secondaryUnit: UnitOfMeasure.Meter, requireBothUnits: true);
+
+        var act = () => new CreateRawMessageCommandHandler(
+                db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new FixedClock(),
+                new OpenPeriod(), new RecordingStockLock(), new InventoryLedgerService(db))
+            .Handle(new CreateRawMessageCommand(DateTime.UtcNow, customer.Id, warehouse.Id, null,
+                new List<RawMessageLineInput> { new() { ItemId = item.Id, QuantityMeter = 1800m } }),
+                CancellationToken.None);
+
+        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*BOTH*");
+        (await db.RawMessages.CountAsync()).Should().Be(0, "a refused receipt posts nothing");
     }
 
     [Fact]

@@ -93,13 +93,26 @@ public static class ItemUnitRules
             throw new DomainException(
                 $"A quantity is required for item '{code}' in its configured unit(s): {Describe(configured)}{where}.");
 
+        // "Require both units" means BOTH of the item's units - the base one AND the secondary one.
+        // Checking only the secondary would silently turn the setting into "the secondary unit is
+        // mandatory, the base one is optional", which is a different rule than the one the item's
+        // flag, its DTO and its own refusal message describe (and it made the same document pass or
+        // fail depending on which unit the operator happened to type).
         if (requireBothUnits && enforceRequireBothUnits && secondaryUnit.HasValue)
         {
+            var baseProvided = baseUnit == UnitOfMeasure.KG ? kgProvided : meterProvided;
             var secondaryProvided = secondaryUnit.Value == UnitOfMeasure.KG ? kgProvided : meterProvided;
-            if (!secondaryProvided)
+
+            if (!baseProvided || !secondaryProvided)
+            {
+                var missing = !baseProvided && !secondaryProvided
+                    ? $"{UnitName(baseUnit)} and {UnitName(secondaryUnit.Value)}"
+                    : UnitName(!baseProvided ? baseUnit : secondaryUnit.Value);
+
                 throw new DomainException(
                     $"Item '{code}' requires BOTH of its units: a {UnitName(baseUnit)} quantity AND a " +
-                    $"{UnitName(secondaryUnit.Value)} quantity must be supplied{where}.");
+                    $"{UnitName(secondaryUnit.Value)} quantity must be supplied{where}. Missing: {missing}.");
+            }
         }
     }
 
