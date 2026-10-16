@@ -6,7 +6,7 @@ import {
   type StockScope, type StockTraceMovement, type StockTraceRow
 } from "@/api/client";
 import { Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
-import { downloadFile, InventoryTraceabilityExports } from "@/api/exports";
+import { downloadFile, InventoryTraceabilityExports, lotToken, type LotCardIdentity } from "@/api/exports";
 import { useI18n } from "@/i18n";
 
 /**
@@ -37,8 +37,14 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
     onlyWithBalance: false, includeDelivered: true
   });
 
-  /** The lot the user opened: the request is re-scoped so the screen shows that lot and its movements. */
-  const [lot, setLot] = useState<{ rawMessageId?: string; productionOrderId?: string; materialId?: string } | null>(null);
+  /**
+   * The lot the user opened: the request is re-scoped so the screen shows that lot and its movements.
+   * It is the FULL identity - the document (receipt message / job order / material) PLUS the item, or
+   * the warehouse for a material - because one receipt message can carry several items and one material
+   * can sit in several warehouses, each an independent balance. Opening "the message" would otherwise
+   * show, and print, several lots as if they were one.
+   */
+  const [lot, setLot] = useState<LotCardIdentity | null>(null);
 
   /**
    * The lots ticked for BATCH printing. Keyed by "scope:id" on purpose: the same component is reused
@@ -65,16 +71,17 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
     queryFn: () => InventoryTraceabilityApi.get({
       scope,
       customerId: filters.customerId || undefined,
-      itemId: filters.itemId || undefined,
+      // Drilling into a lot is an IDENTITY filter: the balances become that lot's own, item included, so
+      // a receipt message carrying two items shows ONE of them rather than both added together.
+      itemId: lot?.itemId ?? (filters.itemId || undefined),
       materialId: lot?.materialId ?? (filters.materialId || undefined),
-      warehouseId: filters.warehouseId || undefined,
+      warehouseId: lot?.warehouseId ?? (filters.warehouseId || undefined),
       documentNumber: filters.documentNumber.trim() || undefined,
       kind: filters.kind || undefined,
       from: filters.from || undefined,
       to: filters.to || undefined,
       onlyWithBalance: filters.onlyWithBalance || undefined,
       includeDelivered: filters.includeDelivered,
-      // Drilling into a lot is an IDENTITY filter: the balances become that lot's own.
       rawMessageId: lot?.rawMessageId,
       productionOrderId: lot?.productionOrderId
     }),
@@ -114,47 +121,55 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
       ? ["Received", "Issued", "IssuedExternal", "Returned", "TransferredIn", "TransferredOut", "AdjustedIn", "AdjustedOut"]
       : ["Produced", "Delivered", "Returned", "TransferredOut", "AdjustedIn", "AdjustedOut", "Reversal"];
 
-  const lotOf = (row: StockTraceRow) => (isMaterials
-    ? { materialId: row.materialId ?? undefined }
+  /**
+   * The FULL identity of one balance row - the very identity the card endpoint is given, so the screen,
+   * the batch-print URL and the downloaded PDF all name the same lot and no other.
+   */
+  const lotOf = (row: StockTraceRow): LotCardIdentity => (isMaterials
+    ? { materialId: row.materialId ?? undefined, warehouseId: row.warehouseId ?? undefined }
     : isRaw
-      ? { rawMessageId: row.rawMessageId ?? undefined }
-      : { productionOrderId: row.productionOrderId ?? undefined });
+      ? { rawMessageId: row.rawMessageId ?? undefined, itemId: row.itemId || undefined }
+      : { productionOrderId: row.productionOrderId ?? undefined, itemId: row.itemId || undefined });
 
   const openLot = (row: StockTraceRow) => setLot(lotOf(row));
 
-  const isOpen = (row: StockTraceRow) => lot !== null
-    && (isMaterials
-      ? lot.materialId === row.materialId
-      : isRaw
-        ? lot.rawMessageId === row.rawMessageId
-        : lot.productionOrderId === row.productionOrderId);
+  /** The opened lot as it travels in a print URL - the full identity, disambiguator included. */
+  const openLotToken = lot ? lotToken(scope, lot) : null;
 
-  /** The opened lot's id, whichever identity the current warehouse uses - what the print card is keyed by. */
-  const openLotId = lot ? (lot.rawMessageId ?? lot.productionOrderId ?? lot.materialId) : undefined;
-  const printLot = () => { if (openLotId) navigate(`/print/stock-traceability/${scope}?lots=${openLotId}`); };
+  const isOpen = (row: StockTraceRow) => {
+    const token = lotToken(scope, lotOf(row));
+    return token !== null && token === openLotToken;
+  };
+
+  const printLot = () => { if (openLotToken) navigate(`/print/stock-traceability/${scope}?lots=${openLotToken}`); };
 
   const openLotLabel = () => {
     if (!lot) return null;
     const row = rows[0];
     if (!row) return null;
-    return isMaterials ? `${row.materialCode} - ${row.materialName}` : isRaw ? row.messageNumber : row.orderNumber;
+    // The item is part of the label: two items of the same receipt message are two different lots.
+    return isMaterials
+      ? `${row.materialCode} - ${row.materialName}`
+      : `${isRaw ? row.messageNumber : row.orderNumber} · ${row.itemCode}`;
   };
 
   // ---- BATCH PRINTING: tick one or several lots and print their cards as one document ----------
-  // A row prints as the SAME identity the drill-down and the card use: a receipt message in the raw
-  // warehouse, a job order in the ready warehouse, a material lot in the materials warehouse.
-  const lotIdOf = (row: StockTraceRow) =>
-    (isMaterials ? row.materialId : isRaw ? row.rawMessageId : row.productionOrderId) ?? null;
+  /**
+   * A row's lot as the drill-down and the card name it, DISAMBIGUATOR INCLUDED: two items of one receipt
+   * message are two lots, so they are two tokens. Keying only by the message id would make ticking one
+   * item tick the other, and would collapse their two cards into one document.
+   */
+  const tokenOf = (row: StockTraceRow) => lotToken(scope, lotOf(row));
   const lotNumberOf = (row: StockTraceRow) =>
     (isMaterials ? row.materialCode : isRaw ? row.messageNumber : row.orderNumber) ?? undefined;
-  const selectionKeyOf = (row: StockTraceRow) => { const id = lotIdOf(row); return id ? `${scope}:${id}` : null; };
+  const selectionKeyOf = (row: StockTraceRow) => { const token = tokenOf(row); return token ? `${scope}:${token}` : null; };
 
   // Only rows that actually carry a lot identity can be printed - history rows with a NULL link have
   // nothing to name on a card, so their checkbox is disabled rather than printing an empty document.
   const selectableRows = rows.filter((row) => selectionKeyOf(row) !== null);
   const isSelected = (row: StockTraceRow) => { const key = selectionKeyOf(row); return key !== null && selected.has(key); };
-  const selectedLotIds = selectableRows.filter(isSelected).map((row) => lotIdOf(row)!);
-  const allSelected = selectableRows.length > 0 && selectedLotIds.length === selectableRows.length;
+  const selectedLotTokens = selectableRows.filter(isSelected).map((row) => tokenOf(row)!);
+  const allSelected = selectableRows.length > 0 && selectedLotTokens.length === selectableRows.length;
 
   const toggleRow = (row: StockTraceRow) => {
     const key = selectionKeyOf(row);
@@ -176,16 +191,18 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
   });
 
   const printSelected = () => {
-    if (selectedLotIds.length === 0) return;
-    navigate(`/print/stock-traceability/${scope}?lots=${selectedLotIds.join(",")}`);
+    if (selectedLotTokens.length === 0) return;
+    navigate(`/print/stock-traceability/${scope}?lots=${selectedLotTokens.join(",")}`);
   };
 
   const exportStock = (format: "excel" | "pdf") => downloadFile("/inventory/traceability/export", `stock-${scope}.${format === "pdf" ? "pdf" : "xlsx"}`, {
     scope,
     customerId: filters.customerId || undefined,
-    itemId: filters.itemId || undefined,
+    // The exported list is the SAME set the screen is showing, identity included: exporting while a lot
+    // is open exports that one lot, not every lot of its message.
+    itemId: lot?.itemId ?? (filters.itemId || undefined),
     materialId: lot?.materialId ?? (filters.materialId || undefined),
-    warehouseId: filters.warehouseId || undefined,
+    warehouseId: lot?.warehouseId ?? (filters.warehouseId || undefined),
     documentNumber: filters.documentNumber.trim() || undefined,
     kind: filters.kind || undefined,
     from: filters.from || undefined,
@@ -371,10 +388,10 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
           {t("stock.selectHint", "حدّد لوطًا أو أكثر ثم اطبع بطاقاتها كمستند واحد - بطاقة لكل لوط.")}
         </span>
         <div className="ms-auto flex items-center gap-2">
-          <Button variant="secondary" onClick={printSelected} disabled={selectedLotIds.length === 0}>
-            {t("stock.print.selected", "طباعة البطاقات المحددة")} ({selectedLotIds.length})
+          <Button variant="secondary" onClick={printSelected} disabled={selectedLotTokens.length === 0}>
+            {t("stock.print.selected", "طباعة البطاقات المحددة")} ({selectedLotTokens.length})
           </Button>
-          {selectedLotIds.length === 0
+          {selectedLotTokens.length === 0
             ? <span className="text-2xs text-ink-subtle">{t("stock.print.noneSelected", "حدد لوطًا واحدًا على الأقل للطباعة.")}</span>
             : <Button variant="ghost" onClick={() => setSelected(new Set())}>{t("stock.clearSelection", "إلغاء التحديد")}</Button>}
         </div>
@@ -397,7 +414,7 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
             )}
             {rows.map((row, index) => (
               <tr
-                key={`${row.rawMessageId ?? row.productionOrderId ?? row.materialId}-${row.itemId}-${row.warehouseId}-${index}`}
+                key={row.lotKey || `${row.itemId}-${row.warehouseId}-${index}`}
                 className={`border-b border-line last:border-0 hover:bg-surface-sunken ${isOpen(row) ? "bg-brand-50/40" : ""}`}
               >
                 <td>
@@ -485,13 +502,15 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
                     <button type="button" className="btn-link" onClick={() => (isOpen(row) ? setLot(null) : openLot(row))}>
                       {row.movementCount} {t("stock.movementsShort", "حركة")}
                     </button>
-                    {/* بطاقة اللوط as a server-rendered PDF - the same read the screen shows. */}
-                    {lotIdOf(row) && (
+                    {/* بطاقة اللوط as a server-rendered PDF - the same read the screen shows, for the
+                        same identity: a row's own item travels with the request, so a message carrying
+                        two items yields two cards rather than one card for whichever came first. */}
+                    {tokenOf(row) && (
                       <button
                         type="button"
                         className="btn-link"
                         title={t("stock.print.downloadPdf", "تنزيل PDF")}
-                        onClick={InventoryTraceabilityExports.lotCardPdf(scope, lotIdOf(row)!, lotNumberOf(row))}
+                        onClick={InventoryTraceabilityExports.lotCardPdf(scope, lotOf(row), lotNumberOf(row))}
                       >
                         PDF
                       </button>

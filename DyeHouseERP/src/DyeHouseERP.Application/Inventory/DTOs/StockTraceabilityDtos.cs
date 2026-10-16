@@ -14,6 +14,17 @@ public class StockTraceRowDto
     /// <summary>raw | ready | materials - which warehouse this row belongs to.</summary>
     public string Scope { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The identity of THIS balance row, and the one key that ties it to the movements it is made of: a
+    /// raw lot is (receipt message, item, customer), a ready lot is (job order, item), and a material
+    /// lot is (material, warehouse). No two rows share it, and every movement carries its own row's
+    /// value - so a screen, a report or a printed card can match a movement to its balance WITHOUT
+    /// re-deriving the rule, which is what keeps one item's stock from being reported under another
+    /// item's name. Format is the query's own and is not part of the contract: compare it, do not parse
+    /// it (the identity FIELDS below are the readable ones).
+    /// </summary>
+    public string LotKey { get; set; } = string.Empty;
+
     public Guid ItemId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
@@ -107,6 +118,15 @@ public class StockTraceMovementDto
 {
     public Guid Id { get; set; }
     public string Scope { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The balance row this movement belongs to - the same value as the matching
+    /// <see cref="StockTraceRowDto.LotKey"/>, and the running balance printed on this row is this lot's
+    /// balance, never a total of several lots. Two items inside one receipt message are two lots with
+    /// two different keys, so their movements are never mixed.
+    /// </summary>
+    public string LotKey { get; set; } = string.Empty;
+
     public DateTime Date { get; set; }
 
     public string DocumentType { get; set; } = string.Empty;

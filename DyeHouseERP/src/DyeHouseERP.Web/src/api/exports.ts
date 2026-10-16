@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { StockScope } from "./client";
 import type { DeliveryQuantityColumns } from "../deliveryPrintColumns";
 
 /**
@@ -246,25 +247,87 @@ const safeStem = (value: string | undefined, fallback: string) => {
   return cleaned.length > 0 ? cleaned : fallback;
 };
 
+/**
+ * The FULL identity of ONE lot, which is what the lot-card endpoint requires: the document that names
+ * the lot in its warehouse (a receipt message, a job order, a material) PLUS the dimension that makes
+ * it a single balance - the item inside that message or job order, or the warehouse a material is
+ * stocked in.
+ *
+ * Why the full identity and not just the document id: one receipt message can carry SEVERAL items and
+ * one material can sit in SEVERAL warehouses, and each of those is an independent balance with its own
+ * stock. Naming only the document leaves the server unable to tell which one is meant - which is how a
+ * card ends up showing one item's name beside a total of two items' stock.
+ */
+export interface LotCardIdentity {
+  rawMessageId?: string;
+  productionOrderId?: string;
+  materialId?: string;
+  /** Raw / ready: the item inside the message or job order - what makes the lot a single balance. */
+  itemId?: string;
+  /** Materials: the warehouse the material is stocked in - the other half of a materials lot. */
+  warehouseId?: string;
+}
+
+/**
+ * One lot's identity as the lot-card query string. Only the fields its own warehouse balances by are
+ * sent: the server REFUSES an identifier that does not belong to the scope (a job order on a raw card)
+ * instead of quietly ignoring it, so sending a meaningless one would turn a valid request into a 400.
+ */
+const lotCardParams = (scope: StockScope, lot: LotCardIdentity): QueryParams =>
+  scope === "raw"
+    ? { rawMessageId: lot.rawMessageId, itemId: lot.itemId }
+    : scope === "ready"
+      ? { productionOrderId: lot.productionOrderId, itemId: lot.itemId }
+      : { materialId: lot.materialId, warehouseId: lot.warehouseId };
+
+/**
+ * One lot as it travels in a print URL: `?lots=<document id>` or `?lots=<document id>@<disambiguator>`,
+ * where the disambiguator is the item id (raw/ready) or the warehouse id (materials). Null when the lot
+ * has no identity at all - a historical ledger row with no link cannot be named on a card.
+ *
+ * The disambiguator is what keeps two balance rows of the SAME document apart: with only the message
+ * id, selecting both items of one receipt would collapse into a single card for whichever came first.
+ */
+export const lotToken = (scope: StockScope, lot: LotCardIdentity): string | null => {
+  const [primary, extra] = scope === "raw"
+    ? [lot.rawMessageId, lot.itemId]
+    : scope === "ready"
+      ? [lot.productionOrderId, lot.itemId]
+      : [lot.materialId, lot.warehouseId];
+  if (!primary) return null;
+  return extra ? `${primary}@${extra}` : primary;
+};
+
+/**
+ * The identity a print URL names, back again. A token without a disambiguator stays valid (the server
+ * then answers, or refuses an ambiguous one explicitly) so old links and hand-typed URLs still work.
+ * A token that is not even a document id yields null rather than a request for some other lot.
+ */
+export const parseLotToken = (scope: StockScope, token: string): LotCardIdentity | null => {
+  const [primary, extra] = token.split("@");
+  if (!primary) return null;
+  if (scope === "raw") return { rawMessageId: primary, itemId: extra };
+  if (scope === "ready") return { productionOrderId: primary, itemId: extra };
+  return { materialId: primary, warehouseId: extra };
+};
+
 export const InventoryTraceabilityExports = {
   /** The balances + movements list, honouring the same filters the screen shows. */
   stock: (format: ExportFormat) => (params?: QueryParams) =>
     downloadFile("/inventory/traceability/export", `stock.${extension(format)}`, { ...params, format }),
 
   /**
-   * بطاقة تتبع اللوط as a SERVER-rendered PDF (spec sections 10/14/30): the lot identity, its ledger
-   * movements and the cumulative balance after each one, built by the same traceability read the
-   * screen uses. The lot is named by whichever identity its warehouse uses - a receipt message in the
-   * raw warehouse, a job order in the ready warehouse, a material lot in the materials warehouse.
+   * بطاقة تتبع اللوط as a SERVER-rendered PDF (spec sections 10/14/30): ONE lot's identity, its ledger
+   * movements - each row naming its item - and the cumulative balance after each one, built by the same
+   * traceability read the screen uses. The lot is named by its FULL identity, so the file can only ever
+   * contain the lot that was asked for: the server refuses a request that does not resolve to exactly
+   * one balance rather than printing the first one it finds.
    */
-  lotCardPdf: (scope: "raw" | "ready" | "materials", lotId: string, lotNumber?: string) => () =>
+  lotCardPdf: (scope: StockScope, lot: LotCardIdentity, lotNumber?: string) => () =>
     downloadFile(
       "/inventory/traceability/lot-card",
       `lot-card-${safeStem(lotNumber, scope)}.pdf`,
-      {
-        scope,
-        ...(scope === "raw" ? { rawMessageId: lotId } : scope === "ready" ? { productionOrderId: lotId } : { materialId: lotId })
-      }
+      { scope, ...lotCardParams(scope, lot) }
     )
 };
 

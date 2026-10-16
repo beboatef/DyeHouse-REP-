@@ -173,15 +173,19 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         }
 
         // ---- classify every row, then build the movement list with its running balance ----------
+        // The identity of a lot is computed in exactly ONE place and stamped on both the balance row and
+        // every movement of it, so the two can never disagree about which lot a movement belongs to.
+        string LotKeyOf(InventoryTransaction t) => isRaw
+            ? $"R|{t.RawMessageId}|{t.ItemId}|{t.CustomerId}"
+            : $"D|{t.ProductionOrderId}|{t.ItemId}";
+
         var ordered = rows.OrderBy(t => t.TransactionDate).ThenBy(t => t.CreatedAtUtc).ThenBy(t => t.Id).ToList();
         var running = new Dictionary<string, (decimal Kg, decimal Meter)>();
         var movements = new List<(StockTraceMovementDto Dto, string LotKey)>();
 
         foreach (var t in ordered)
         {
-            var lotKey = isRaw
-                ? $"R|{t.RawMessageId}|{t.ItemId}|{t.CustomerId}"
-                : $"D|{t.ProductionOrderId}|{t.ItemId}";
+            var lotKey = LotKeyOf(t);
 
             running.TryGetValue(lotKey, out var sofar);
             var sign = (int)t.Direction;
@@ -218,6 +222,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             {
                 Id = t.Id,
                 Scope = scope,
+                LotKey = lotKey,
                 Date = t.TransactionDate,
                 DocumentType = t.SourceDocumentType.ToString(),
                 DocumentNumber = t.SourceDocumentNumber,
@@ -254,9 +259,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         // ---- one balance row per lot, aggregated from the SAME ledger rows ----------------------
         var rowList = new List<StockTraceRowDto>();
 
-        foreach (var lot in ordered.GroupBy(t => isRaw
-                     ? $"R|{t.RawMessageId}|{t.ItemId}|{t.CustomerId}"
-                     : $"D|{t.ProductionOrderId}|{t.ItemId}"))
+        foreach (var lot in ordered.GroupBy(LotKeyOf))
         {
             var any = lot.First();
             items.TryGetValue(any.ItemId, out var item);
@@ -425,6 +428,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             rowList.Add(new StockTraceRowDto
             {
                 Scope = scope,
+                LotKey = LotKeyOf(any),
                 ItemId = any.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
                 ItemName = item?.Name ?? string.Empty,
@@ -478,9 +482,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             .ThenBy(r => r.ItemCode)
             .ToList();
 
-        var visibleLotKeys = rowList.Select(r => isRaw
-            ? $"R|{r.RawMessageId}|{r.ItemId}|{r.CustomerId}"
-            : $"D|{r.ProductionOrderId}|{r.ItemId}").ToHashSet();
+        var visibleLotKeys = rowList.Select(r => r.LotKey).ToHashSet();
 
         var visibleMovements = movements
             .Where(m => visibleLotKeys.Contains(m.LotKey))
@@ -552,6 +554,11 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         var purchaseOrders = purchaseOrderIds.Count == 0 ? new Dictionary<Guid, string>()
             : await _db.PurchaseOrders.AsNoTracking().Where(p => purchaseOrderIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.OrderNumber, cancellationToken);
 
+        // A materials lot is a (material, warehouse) pair, computed in ONE place and stamped on the row
+        // and on every movement of it - so two warehouses holding the same material are two lots whose
+        // movements are never mixed.
+        string LotKeyOfMaterial(MaterialTransaction t) => $"M|{t.MaterialId}|{t.WarehouseId}";
+
         var ordered = rows.OrderBy(t => t.TransactionDate).ThenBy(t => t.CreatedAtUtc).ThenBy(t => t.Id).ToList();
         var running = new Dictionary<string, decimal>();
         var movements = new List<(StockTraceMovementDto Dto, string LotKey)>();
@@ -560,7 +567,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
 
         foreach (var t in ordered)
         {
-            var lotKey = $"M|{t.MaterialId}|{t.WarehouseId}";
+            var lotKey = LotKeyOfMaterial(t);
             running.TryGetValue(lotKey, out var sofar);
             var signed = t.Quantity * (int)t.Direction;
             var after = sofar + signed;
@@ -590,6 +597,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             {
                 Id = t.Id,
                 Scope = StockScopes.Materials,
+                LotKey = lotKey,
                 Date = t.TransactionDate,
                 DocumentType = t.SourceDocumentType.ToString(),
                 DocumentNumber = t.SourceDocumentNumber,
@@ -615,7 +623,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         }
 
         var rowList = new List<StockTraceRowDto>();
-        foreach (var lot in ordered.GroupBy(t => $"M|{t.MaterialId}|{t.WarehouseId}"))
+        foreach (var lot in ordered.GroupBy(LotKeyOfMaterial))
         {
             var any = lot.First();
             var material = materials.GetValueOrDefault(any.MaterialId);
@@ -646,6 +654,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             rowList.Add(new StockTraceRowDto
             {
                 Scope = StockScopes.Materials,
+                LotKey = LotKeyOfMaterial(any),
                 ItemId = Guid.Empty, // materials are not fabric items - the material identity below is theirs
                 MaterialId = any.MaterialId,
                 MaterialCode = material?.Code,
@@ -671,7 +680,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             rowList = rowList.Where(r => (r.RemainingQuantity ?? 0m) != 0m).ToList();
 
         rowList = rowList.OrderBy(r => r.MaterialCode).ThenBy(r => r.WarehouseName).ToList();
-        var visibleLotKeys = rowList.Select(r => $"M|{r.MaterialId}|{r.WarehouseId}").ToHashSet();
+        var visibleLotKeys = rowList.Select(r => r.LotKey).ToHashSet();
         var visibleMovements = movements.Where(m => visibleLotKeys.Contains(m.LotKey)).Select(m => m.Dto)
             .OrderByDescending(m => m.Date).ThenByDescending(m => m.CreatedAtUtc).ToList();
 

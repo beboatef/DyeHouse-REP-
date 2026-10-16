@@ -3,23 +3,34 @@
  *
  * Why this exists as a browser test: selecting several lots and printing their cards as ONE document is
  * UI behaviour (selection state, the URL it builds, one sheet per lot, the page break between sheets),
- * so a server test cannot cover it. The server half - the same card as a downloaded PDF - is proven
- * separately by tests/DyeHouseERP.UnitTests/LotCardPdfTests.cs.
+ * so a server test cannot cover it. The server half - the same card as a downloaded PDF, and the refusal
+ * of a request that does not name exactly one lot - is proven separately by
+ * tests/DyeHouseERP.UnitTests/LotCardPdfTests.cs and StockTraceabilityLotIdentityTests.cs.
+ *
+ * ONE LOT IS ONE (MESSAGE, ITEM) PAIR. A receipt message carrying two items is TWO independent balances,
+ * so the checks below deliberately include two lots that share a message number: they must print as two
+ * separate cards, each naming its own item, and ticking one must never tick the other.
  *
  * What it drives, on the real React screens:
  *   PART A - the batch document (always run):
  *     1-3. the document holds ONE independent card per lot, each naming its own lot and carrying only its
  *          own movements, and every card but the last starts a new sheet;
  *     4.   the batch has a single toolbar (not one per card);
- *     5.   each card's PDF button asks the server for THAT lot on the existing lot-card endpoint;
+ *     5.   each card's PDF button asks the server for THAT lot on the existing lot-card endpoint, naming
+ *          the item as well as the message;
  *     6.   the same lot listed twice prints ONE card;
- *     7.   an empty selection prints a clear message and NO card at all;
- *     8.   a lot that cannot be resolved fails in ITS OWN place - the other cards still print;
- *     9.   KG and Meter stay independent: a lot whose ledger never recorded a meter prints no meter;
- *     10.  printing writes nothing - no non-GET request reaches the API.
+ *     7-8. two items of the SAME message print as two independent cards, each naming its own item and
+ *          none of the other's numbers;
+ *     9.   a lot that cannot be resolved fails in ITS OWN place - the other cards still print;
+ *     10.  a link that names only the message (two items behind it) prints NO card and says why, rather
+ *          than printing whichever item came first;
+ *     11.  an empty selection prints a clear message and NO card at all;
+ *     12.  KG and Meter stay independent: a lot whose ledger never recorded a meter prints no meter;
+ *     13.  printing writes nothing - no non-GET request reaches the API.
  *   PART B - the balances screen (SKIPPED when the environment cannot render it, see below):
- *     11-14. a checkbox per lot, the print action disabled until something is ticked and counting the
- *            selection, and pressing it opening the document for exactly the ticked lots.
+ *     14-16. a checkbox per lot, the print action disabled until something is ticked and counting the
+ *            selection, and pressing it opening the document for exactly the ticked lots - including two
+ *            items of one message, which travel as two distinct tokens.
  *
  * There is no SQL Server in this environment, so the API is stubbed with request interception (the same
  * approach as tools/printing-ui-check.cjs and tools/delivery-print-columns-check.cjs): this test
@@ -53,72 +64,93 @@ const puppeteer = require("/tmp/uitest/node_modules/puppeteer");
 
 const BASE = process.env.SMOKE_BASE || "http://127.0.0.1:4173";
 
-const LOT_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
-const LOT_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
+const LOT_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"; // message CODE_A, item 1
+const LOT_D = "dddddddd-4444-4444-8444-dddddddddddd"; // the SAME message CODE_A, item 2
+const LOT_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"; // message CODE_B, item 1
 const LOT_C = "cccccccc-3333-4333-8333-cccccccccccc"; // a lot the API cannot resolve
 
 const CODE_A = "MSG-2026-000001";
 const CODE_B = "MSG-2026-000002";
 
-/** A balance row as the traceability read returns it: one row per LOT, not per item. */
-const row = (rawMessageId, messageNumber, extra = {}) => ({
-  scope: "raw",
-  itemId: "11111111-1111-4111-8111-111111111111",
-  itemCode: "IT-1",
-  itemName: "Fabric",
-  baseUnit: "KG",
-  secondaryUnit: "Meter",
-  rawMessageId,
-  messageNumber,
-  messageDate: "2026-10-01T00:00:00Z",
-  messageStatus: "Accepted",
-  productionOrderId: null,
-  orderNumber: null,
-  orderNumbers: null,
-  orderDate: null,
-  orderStatus: null,
-  color: "Red",
-  producedPieceCount: null,
-  materialId: null, materialCode: null, materialName: null, materialUnit: null, materialKind: null,
-  warehouseId: "99999999-9999-4999-8999-999999999999",
-  warehouseName: "Raw WH",
-  customerId: "22222222-2222-4222-8222-222222222222",
-  customerCode: "C-1",
-  customerName: "Buyer One",
-  supplierName: null, purchaseOrderNumber: null,
-  receivedKg: 200, receivedMeter: 600, receivedQuantity: null,
-  issuedToProductionKg: 100, issuedToProductionMeter: 300, issuedToProductionQuantity: null,
-  underProductionKg: 0, underProductionMeter: 0,
-  returnedKg: 0, returnedMeter: 0, returnedQuantity: null,
-  producedKg: null, producedMeter: null,
-  deliveredKg: 0, deliveredMeter: 0, deliveredPieceCount: null,
-  deliveryNumbers: null, lastDeliveryDate: null,
-  remainingKg: 100, remainingMeter: 300, remainingQuantity: null,
-  movementCount: 2,
-  ...extra
-});
+const ITEM_1 = "11111111-1111-4111-8111-111111111111"; // IT-1 Fabric
+const ITEM_2 = "33333333-3333-4333-8333-333333333333"; // IT-2 Voile
+const CUSTOMER = "22222222-2222-4222-8222-222222222222";
+const WAREHOUSE = "99999999-9999-4999-8999-999999999999";
+
+/**
+ * A lot's identity as the query stamps it on the row and on every movement of it - a raw lot is
+ * (message, item, customer). The card and the print URL both carry it, which is why the two items of
+ * one message never collapse into one card.
+ */
+const lotKeyOf = (messageId, itemId) => `R|${messageId}|${itemId}|${CUSTOMER}`;
+
+/** One lot as it travels in the print URL: the message, then "@" and the item that makes it a balance. */
+const tokenOf = (messageId, itemId) => `${messageId}@${itemId}`;
+
+/** A balance row as the traceability read returns it: one row per LOT, not per message. */
+const row = (rawMessageId, messageNumber, extra = {}) => {
+  const merged = {
+    scope: "raw",
+    itemId: ITEM_1,
+    itemCode: "IT-1",
+    itemName: "Fabric",
+    baseUnit: "KG",
+    secondaryUnit: "Meter",
+    rawMessageId,
+    messageNumber,
+    messageDate: "2026-10-01T00:00:00Z",
+    messageStatus: "Accepted",
+    productionOrderId: null,
+    orderNumber: null,
+    orderNumbers: null,
+    orderDate: null,
+    orderStatus: null,
+    color: "Red",
+    producedPieceCount: null,
+    materialId: null, materialCode: null, materialName: null, materialUnit: null, materialKind: null,
+    warehouseId: WAREHOUSE,
+    warehouseName: "Raw WH",
+    customerId: CUSTOMER,
+    customerCode: "C-1",
+    customerName: "Buyer One",
+    supplierName: null, purchaseOrderNumber: null,
+    receivedKg: 200, receivedMeter: 600, receivedQuantity: null,
+    issuedToProductionKg: 100, issuedToProductionMeter: 300, issuedToProductionQuantity: null,
+    underProductionKg: 0, underProductionMeter: 0,
+    returnedKg: 0, returnedMeter: 0, returnedQuantity: null,
+    producedKg: null, producedMeter: null,
+    deliveredKg: 0, deliveredMeter: 0, deliveredPieceCount: null,
+    deliveryNumbers: null, lastDeliveryDate: null,
+    remainingKg: 100, remainingMeter: 300, remainingQuantity: null,
+    movementCount: 2,
+    ...extra
+  };
+  merged.lotKey = lotKeyOf(rawMessageId, merged.itemId);
+  return merged;
+};
 
 /**
  * A ledger movement. A null metre means the movement recorded no metre at all, and the movement carries
  * the lot it BELONGS to - a lot's card must only ever show its own movements' documents.
  */
 const movement = (id, date, kind, direction, quantityKg, meter, balanceKg, balanceMeter,
-  lot = { id: LOT_A, number: CODE_A }) => ({
+  lot = { id: LOT_A, number: CODE_A, itemId: ITEM_1, itemCode: "IT-1", itemName: "Fabric" }) => ({
   id,
   scope: "raw",
+  lotKey: lotKeyOf(lot.id, lot.itemId),
   date,
   documentType: kind === "Received" ? "RawReceiptMessage" : "ProductionOrder",
   documentNumber: kind === "Received" ? lot.number : "PRD-1",
-  documentId: "33333333-3333-4333-8333-333333333333",
+  documentId: "44444444-4444-4444-8444-444444444444",
   kind,
   direction,
   isReversal: false,
   rawMessageId: lot.id,
   messageNumber: lot.number,
   productionOrderId: null, orderNumber: null, materialId: null, materialCode: null,
-  itemId: "11111111-1111-4111-8111-111111111111", itemCode: "IT-1", itemName: "Fabric",
-  warehouseId: "99999999-9999-4999-8999-999999999999", warehouseName: "Raw WH",
-  customerId: "22222222-2222-4222-8222-222222222222", customerCode: "C-1",
+  itemId: lot.itemId, itemCode: lot.itemCode, itemName: lot.itemName,
+  warehouseId: WAREHOUSE, warehouseName: "Raw WH",
+  customerId: CUSTOMER, customerCode: "C-1",
   deliveryId: null, supplierName: null, purchaseOrderNumber: null,
   quantityKg, quantityMeter: meter, quantity: null, unit: null,
   balanceAfterKg: balanceKg, balanceAfterMeter: balanceMeter, balanceAfter: null,
@@ -132,7 +164,7 @@ const trace = (rows, movements, extra = {}) => ({
   movements,
   generatedAtUtc: "2026-10-16T10:00:00Z",
   totalRemainingKg: rows.reduce((s, r) => s + (r.remainingKg ?? 0), 0),
-  totalRemainingMeter: rows.some((r) => r.remainingMeter != null) ? 300 : null,
+  totalRemainingMeter: rows.some((r) => r.remainingMeter != null) ? rows.reduce((s, r) => s + (r.remainingMeter ?? 0), 0) : null,
   totalRemainingQuantity: null,
   totalUnderProductionKg: 0, totalUnderProductionMeter: null,
   totalReceivedKg: 200, totalReceivedMeter: 600, totalReceivedQuantity: null,
@@ -142,16 +174,51 @@ const trace = (rows, movements, extra = {}) => ({
   ...extra
 });
 
-/** Lot A recorded metres, lot B never did, lot C does not exist. */
-const dataFor = (rawMessageId) => {
-  if (rawMessageId === LOT_A)
-    return trace(
-      [row(LOT_A, CODE_A)],
-      [
-        movement("m1", "2026-10-01", "Received", "In", 200, 600, 200, 600),
-        movement("m2", "2026-10-05", "Issued", "Out", 100, 300, 100, 300)
-      ]
-    );
+const lotOf = (rawMessageId) => rawMessageId === LOT_D
+  ? { id: LOT_D, number: CODE_A, itemId: ITEM_2, itemCode: "IT-2", itemName: "Voile" }
+  : { id: LOT_B, number: CODE_B, itemId: ITEM_1, itemCode: "IT-1", itemName: "Fabric" };
+
+/** The second item of message A: a lot in its own right, with its own stock and its own movements. */
+const itemTwoOfMessageA = () => {
+  const lot = lotOf(LOT_D);
+  return trace(
+    [row(LOT_D, CODE_A, {
+      itemId: ITEM_2, itemCode: "IT-2", itemName: "Voile", color: "Green",
+      receivedKg: 40, receivedMeter: null, issuedToProductionKg: 0, issuedToProductionMeter: null,
+      underProductionKg: 0, underProductionMeter: null, remainingKg: 40, remainingMeter: null,
+      movementCount: 1
+    })],
+    [movement("m4", "2026-10-01", "Received", "In", 40, null, 40, null, lot)]
+  );
+};
+
+/**
+ * What the API answers for the identity it was asked about. A request that names only the message (no
+ * item) gets BOTH lots of that message, which is what the print screen has to refuse instead of drawing
+ * a card for whichever came first.
+ */
+const dataFor = (rawMessageId, itemId) => {
+  // A lot is named by the message AND the item: a pair the ledger does not have resolves to nothing, the
+  // same way the real query answers for an identity that matches no balance.
+  const namesItem = (expected) => itemId === null || itemId === expected;
+  if (rawMessageId === LOT_D && namesItem(ITEM_2)) return itemTwoOfMessageA();
+  if (rawMessageId === LOT_A && namesItem(ITEM_1))
+    return itemId === null
+      ? trace(
+        [row(LOT_A, CODE_A), row(LOT_D, CODE_A, { itemId: ITEM_2, itemCode: "IT-2", itemName: "Voile", color: "Green", receivedKg: 40, remainingKg: 40, remainingMeter: null, movementCount: 1 })],
+        [
+          movement("m1", "2026-10-01", "Received", "In", 200, 600, 200, 600),
+          movement("m2", "2026-10-05", "Issued", "Out", 100, 300, 100, 300),
+          movement("m4", "2026-10-01", "Received", "In", 40, null, 40, null, lotOf(LOT_D))
+        ]
+      )
+      : trace(
+        [row(LOT_A, CODE_A)],
+        [
+          movement("m1", "2026-10-01", "Received", "In", 200, 600, 200, 600),
+          movement("m2", "2026-10-05", "Issued", "Out", 100, 300, 100, 300)
+        ]
+      );
   if (rawMessageId === LOT_B)
     return trace(
       [row(LOT_B, CODE_B, {
@@ -159,13 +226,18 @@ const dataFor = (rawMessageId) => {
         deliveredMeter: null, returnedMeter: null, underProductionMeter: null,
         color: "Blue", movementCount: 1
       })],
-      [movement("m3", "2026-10-02", "Received", "In", 50, null, 50, null, { id: LOT_B, number: CODE_B })]
+      [movement("m3", "2026-10-02", "Received", "In", 50, null, 50, null, lotOf(LOT_B))]
     );
   return trace([], []); // LOT_C: no such lot (or no permission)
 };
 
-/** The three lots the balances list offers. */
-const listRows = [row(LOT_A, CODE_A), row(LOT_B, CODE_B, { color: "Blue" }), row(LOT_C, "MSG-2026-000003", { color: "Green" })];
+/** The four lots the balances list offers: two of them belong to the SAME receipt message. */
+const listRows = [
+  row(LOT_A, CODE_A),
+  row(LOT_D, CODE_A, { itemId: ITEM_2, itemCode: "IT-2", itemName: "Voile", color: "Green", receivedKg: 40, receivedMeter: null, remainingKg: 40, remainingMeter: null, movementCount: 1 }),
+  row(LOT_B, CODE_B, { color: "Blue" }),
+  row(LOT_C, "MSG-2026-000003", { color: "Green" })
+];
 
 const failures = [];
 const skipped = [];
@@ -259,12 +331,13 @@ function bindStubs() {
     if (method !== "GET" && method !== "HEAD") writes.push(`${method} ${url}`);
 
     if (pathName === "/api/inventory/traceability") {
-      const id = new URL(url).searchParams.get("rawMessageId");
+      const query = new URL(url).searchParams;
+      const id = query.get("rawMessageId");
       return request.respond({
         status: 200,
         contentType: "application/json",
         // No lot filter = the balances LIST; a lot filter = that one lot's card data.
-        body: JSON.stringify(id === null ? trace(listRows, []) : dataFor(id))
+        body: JSON.stringify(id === null ? trace(listRows, []) : dataFor(id, query.get("itemId")))
       });
     }
 
@@ -314,7 +387,7 @@ async function open(url) {
 async function partA() {
   console.log("\nPART A - THE BATCH DOCUMENT (one independent card per lot)");
 
-  await open(`${BASE}/print/stock-traceability/raw?lots=${LOT_A},${LOT_B}`);
+  await open(`${BASE}/print/stock-traceability/raw?lots=${tokenOf(LOT_A, ITEM_1)},${tokenOf(LOT_B, ITEM_1)}`);
   await page.waitForFunction(() => document.querySelectorAll(".paper").length === 2, { timeout: 20000 });
 
   let doc = await readSheets();
@@ -331,7 +404,7 @@ async function partA() {
   );
   check(doc.toolbarButtons === 1, "the batch has ONE toolbar, not one per card", `toolbars: ${doc.toolbarButtons}`);
 
-  console.log("\n  PDF DOWNLOAD - each card asks for its own lot");
+  console.log("\n  PDF DOWNLOAD - each card asks for its own lot, item included");
   await page.evaluate(() => {
     const buttons = Array.from(document.querySelectorAll(".no-print button"))
       .filter((b) => b.textContent.includes("Download PDF"));
@@ -342,13 +415,35 @@ async function partA() {
   const cardQuery = new URL(cardUrl || "http://x/").searchParams;
   check(
     new URL(cardUrl || "http://x/").pathname === "/api/inventory/traceability/lot-card" &&
-      cardQuery.get("scope") === "raw" && cardQuery.get("rawMessageId") === LOT_B,
-    "the card's PDF button requests THAT lot on the existing lot-card endpoint",
+      cardQuery.get("scope") === "raw" && cardQuery.get("rawMessageId") === LOT_B &&
+      cardQuery.get("itemId") === ITEM_1,
+    "the card's PDF button requests THAT lot (message AND item) on the existing lot-card endpoint",
     cardUrl
   );
 
-  console.log("\n  EDGE CASES - repeats, an empty choice, a lot that cannot be resolved");
-  await open(`${BASE}/print/stock-traceability/raw?lots=${LOT_A},${LOT_A},${LOT_B}`);
+  console.log("\n  TWO ITEMS OF ONE MESSAGE - two independent balances, two cards");
+  await open(`${BASE}/print/stock-traceability/raw?lots=${tokenOf(LOT_A, ITEM_1)},${tokenOf(LOT_D, ITEM_2)}`);
+  await page.waitForFunction(() => document.querySelectorAll(".paper").length === 2, { timeout: 20000 });
+  doc = await readSheets();
+  check(
+    doc.count === 2,
+    "the two items of one receipt message print as TWO cards, not one",
+    `cards: ${doc.count}`
+  );
+  check(
+    doc.text[0].includes("IT-1") && doc.text[0].includes("Fabric") && !doc.text[0].includes("Voile") &&
+      doc.text[1].includes("IT-2") && doc.text[1].includes("Voile") && !doc.text[1].includes("Fabric"),
+    "each of those cards names its own item and none of the other's",
+    JSON.stringify(doc.text.map((t) => t.slice(0, 80)))
+  );
+  check(
+    doc.text[1].includes("40") && !doc.text[1].includes("600") && !doc.text[1].includes("300"),
+    "the second item's card carries its own stock, not its sibling's",
+    doc.text[1].slice(0, 160)
+  );
+
+  console.log("\n  EDGE CASES - repeats, an empty choice, an unresolvable lot, an ambiguous link");
+  await open(`${BASE}/print/stock-traceability/raw?lots=${tokenOf(LOT_A, ITEM_1)},${tokenOf(LOT_A, ITEM_1)},${tokenOf(LOT_B, ITEM_1)}`);
   await page.waitForFunction(() => document.querySelectorAll(".paper").length === 2, { timeout: 20000 });
   doc = await readSheets();
   check(
@@ -365,7 +460,7 @@ async function partA() {
   }));
   check(empty.sheets === 0 && empty.message, "no selection prints a clear message and no card at all", JSON.stringify(empty));
 
-  await open(`${BASE}/print/stock-traceability/raw?lots=${LOT_A},${LOT_C}`);
+  await open(`${BASE}/print/stock-traceability/raw?lots=${tokenOf(LOT_A, ITEM_1)},${tokenOf(LOT_C, ITEM_1)}`);
   await page.waitForFunction(() => document.querySelectorAll(".paper").length === 1, { timeout: 20000 });
   const mixed = await page.evaluate(() => ({
     sheets: document.querySelectorAll(".paper").length,
@@ -378,8 +473,26 @@ async function partA() {
     JSON.stringify(mixed)
   );
 
+  // A link that names only the message: two items answer to it, so the screen must refuse rather than
+  // draw a card for whichever item came first.
+  await open(`${BASE}/print/stock-traceability/raw?lots=${LOT_A}`);
+  await page.waitForFunction(
+    () => document.body.textContent.includes("more than one independent lot"),
+    { timeout: 20000 }
+  );
+  const ambiguous = await page.evaluate(() => ({
+    sheets: document.querySelectorAll(".paper").length,
+    notice: document.body.textContent.includes("more than one independent lot"),
+    claimedItem: document.body.textContent.includes("Fabric")
+  }));
+  check(
+    ambiguous.sheets === 0 && ambiguous.notice && !ambiguous.claimedItem,
+    "a message-only link prints NO card and says why, instead of printing the first item",
+    JSON.stringify(ambiguous)
+  );
+
   console.log("\n  KG AND METER - a unit the lot never recorded does not print");
-  await open(`${BASE}/print/stock-traceability/raw?lots=${LOT_A},${LOT_B}`);
+  await open(`${BASE}/print/stock-traceability/raw?lots=${tokenOf(LOT_A, ITEM_1)},${tokenOf(LOT_B, ITEM_1)}`);
   await page.waitForFunction(() => document.querySelectorAll(".paper").length === 2, { timeout: 20000 });
   doc = await readSheets();
   check(doc.text[0].includes("Closing balance M"), "a lot that recorded metres closes with a metre total");
@@ -399,7 +512,7 @@ async function partB() {
     await page.waitForFunction(() => !!document.querySelector("table tbody tr"), { timeout: 20000 });
 
     const rowCheckboxes = await page.$$("table tbody input[type=checkbox]");
-    check(rowCheckboxes.length === 3, "the list offers a checkbox per lot", `found ${rowCheckboxes.length}`);
+    check(rowCheckboxes.length === 4, "the list offers a checkbox per lot", `found ${rowCheckboxes.length}`);
 
     const printButtonState = () =>
       page.evaluate(() => {
@@ -412,6 +525,7 @@ async function partB() {
     check(!!before && before.disabled, "printing is refused while nothing is ticked", JSON.stringify(before));
     check(!!before && before.text.includes("(0)"), "the action shows how many cards it will print", before && before.text);
 
+    // The two items of the SAME receipt message: two lots, so two independent ticks and two cards.
     await rowCheckboxes[0].click();
     await rowCheckboxes[1].click();
     await page.waitForFunction(() => {
@@ -420,7 +534,7 @@ async function partB() {
     }, { timeout: 10000 });
 
     const after = await printButtonState();
-    check(!after.disabled && after.text.includes("(2)"), "ticking two lots arms the batch for those two", after.text);
+    check(!after.disabled && after.text.includes("(2)"), "ticking the two items of one message arms TWO cards", after.text);
 
     await page.evaluate(() => {
       Array.from(document.querySelectorAll("button"))
@@ -429,8 +543,8 @@ async function partB() {
     });
     await page.waitForFunction(() => document.querySelectorAll(".paper").length === 2, { timeout: 20000 });
     check(
-      page.url().includes(`/print/stock-traceability/raw?lots=${LOT_A},${LOT_B}`),
-      "the batch opens the existing card document for exactly the ticked lots",
+      page.url().includes(`/print/stock-traceability/raw?lots=${tokenOf(LOT_A, ITEM_1)},${tokenOf(LOT_D, ITEM_2)}`),
+      "the batch opens the card document for exactly the ticked lots, each with its own item",
       page.url()
     );
   } catch (error) {

@@ -134,11 +134,31 @@ public class InventoryTraceabilityController : ControllerBase
     /// The LOT TRACEABILITY CARD (بطاقة تتبع اللوط) as a PDF - the official document for ONE lot: its
     /// identity, its ledger movements and the CUMULATIVE balance the lot reached after each one.
     ///
-    /// It renders the SAME read the screen renders (one query, the same rules), so nothing is re-summed
-    /// or re-derived here and the file can never disagree with the screen: KG and Meter stay independent
-    /// ("—" for a unit the lot never recorded), the rows are the lot's own ledger movements, and the
-    /// closing balance is the same live total. Arabic renders through the embedded Noto Naskh Arabic
-    /// font the report service already registers, so the document is readable on any host.
+    /// ONE LOT, NAMED BY THE CALLER. A lot is the unit its warehouse balances per - a raw receipt
+    /// message TOGETHER WITH the item it carried, the job order AND item in the ready warehouse, a
+    /// material IN a warehouse - so a request that does not resolve to exactly one of those is REFUSED
+    /// rather than guessed at:
+    ///   * no identifier for the scope, or an identifier that belongs to another warehouse's lot (a
+    ///     material on a raw card, a job order on a receipt card) -> 400, and the identifier is never
+    ///     silently dropped, because a dropped filter is how a caller downloads a card for a lot it
+    ///     never asked for;
+    ///   * an identifier that still matches several independent balances (one receipt message carrying
+    ///     two items, one material stocked in two warehouses) -> 400, listing what is on file so the
+    ///     caller can say WHICH one: the item (or the warehouse, for materials) is what makes the
+    ///     identity unique;
+    ///   * an identifier that matches nothing the caller may see -> 404.
+    ///
+    /// Picking the first row of whatever the filter happened to return - and then printing the whole
+    /// result's balance next to that one row's item name - is exactly what this closes: a card could
+    /// name item A while reporting the combined stock of items A and B, with no row on the page saying
+    /// which movement belonged to which item.
+    ///
+    /// It renders the SAME read the screen renders (one query, the same rules) and then keeps ONLY the
+    /// resolved lot's own movements and its OWN closing balance, so nothing is re-summed, re-derived or
+    /// borrowed from a sibling lot: KG and Meter stay independent ("—" for a unit the lot never
+    /// recorded), every movement row repeats the lot's item so no row can be read against another
+    /// article, and the closing balance is that lot's live ledger total. Arabic renders through the
+    /// embedded Noto Naskh Arabic font the report service already registers.
     ///
     /// READ-ONLY: generating the card posts nothing and moves no stock. Only the lot's IDENTITY is
     /// accepted - the date / kind / document-number filters are deliberately not, because they shorten
@@ -148,27 +168,104 @@ public class InventoryTraceabilityController : ControllerBase
     [HttpGet("traceability/lot-card")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ExportLotCard(
-        [FromQuery] string scope = "raw",
+        [FromQuery] string scope = StockScopes.Raw,
         [FromQuery] Guid? rawMessageId = null,
         [FromQuery] Guid? productionOrderId = null,
         [FromQuery] Guid? materialId = null,
+        [FromQuery] Guid? itemId = null,
+        [FromQuery] Guid? warehouseId = null,
+        [FromQuery] Guid? customerId = null,
         [FromServices] IReportExportService export = null!)
     {
-        // The same permission that guards the traceability screen guards this file: a user who cannot see
-        // the lot's data cannot download it either.
-        var data = await _mediator.Send(new GetStockTraceabilityQuery(
-            Scope: scope, MaterialId: materialId, RawMessageId: rawMessageId,
-            ProductionOrderId: productionOrderId, OnlyWithBalance: false, IncludeDelivered: true));
+        var resolvedScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
+        if (resolvedScope is not (StockScopes.Raw or StockScopes.Ready or StockScopes.Materials))
+            return BadRequest(new
+            {
+                error = "INVALID_SCOPE",
+                message = $"A lot lives in one of three warehouses: {StockScopes.Raw}, {StockScopes.Ready} or {StockScopes.Materials}."
+            });
 
-        var lot = data.Rows.FirstOrDefault();
-        if (lot is null)
+        // Which identifiers NAME a lot in this warehouse, and which ones are meaningless for it. An
+        // identifier the scope does not use is refused instead of ignored: the query would drop it and
+        // answer about some other lot entirely.
+        var identifies = resolvedScope switch
+        {
+            StockScopes.Raw => new[] { "rawMessageId", "itemId", "customerId" },
+            StockScopes.Ready => new[] { "productionOrderId", "itemId" },
+            _ => new[] { "materialId", "warehouseId" }
+        };
+        var supplied = new (string Name, Guid? Value)[]
+        {
+            ("rawMessageId", rawMessageId), ("productionOrderId", productionOrderId), ("materialId", materialId),
+            ("itemId", itemId), ("warehouseId", warehouseId), ("customerId", customerId)
+        };
+        var conflicting = supplied.Where(x => x.Value.HasValue && !identifies.Contains(x.Name)).Select(x => x.Name).ToList();
+        if (conflicting.Count > 0)
+            return BadRequest(new
+            {
+                error = "IDENTIFIER_SCOPE_MISMATCH",
+                message = $"A {resolvedScope} lot is not identified by: {string.Join(", ", conflicting)}.",
+                allowed = identifies
+            });
+
+        var requiredName = resolvedScope switch
+        {
+            StockScopes.Raw => "rawMessageId",
+            StockScopes.Ready => "productionOrderId",
+            _ => "materialId"
+        };
+        if (supplied.Single(x => x.Name == requiredName).Value is null)
+            return BadRequest(new
+            {
+                error = "LOT_IDENTIFIER_REQUIRED",
+                message = $"A {resolvedScope} lot is named by {requiredName}; without it there is no lot to print.",
+                allowed = identifies
+            });
+
+        // The same permission that guards the traceability screen guards this file: a user who cannot see
+        // the lot's data cannot download it either. A lot the caller may not see simply does not exist
+        // for them, which is why an out-of-reach lot answers 404 rather than disclosing that it exists.
+        var data = await _mediator.Send(new GetStockTraceabilityQuery(
+            Scope: resolvedScope, ItemId: itemId, MaterialId: materialId, CustomerId: customerId,
+            RawMessageId: rawMessageId, ProductionOrderId: productionOrderId, WarehouseId: warehouseId,
+            OnlyWithBalance: false, IncludeDelivered: true));
+
+        if (data.Rows.Count == 0)
             return NotFound(new
             {
                 error = "LOT_NOT_FOUND",
                 message = "No lot matches this identifier, or you do not have access to its data."
             });
 
+        // More than one independent balance still answers to this identifier. Printing the first one
+        // would be a card for a lot the caller did not name, so the request is refused with the list of
+        // lots on file - each with the disambiguator that picks it.
+        if (data.Rows.Count > 1)
+            return BadRequest(new
+            {
+                error = "AMBIGUOUS_LOT",
+                message = "This identifier matches more than one independent lot; name the one you want.",
+                disambiguateBy = resolvedScope == StockScopes.Materials ? "warehouseId" : "itemId",
+                lots = data.Rows.Select(r => new
+                {
+                    lotKey = r.LotKey,
+                    itemCode = r.ItemCode,
+                    itemName = r.ItemName,
+                    materialCode = r.MaterialCode,
+                    materialName = r.MaterialName,
+                    warehouseId = r.WarehouseId,
+                    warehouseName = r.WarehouseName,
+                    remainingKg = r.RemainingKg,
+                    remainingMeter = r.RemainingMeter,
+                    remainingQuantity = r.RemainingQuantity
+                })
+            });
+
+        // ONE lot from here on: its own identity, its own movements, its own closing balance.
+        var lot = data.Rows[0];
         var isMaterials = data.Scope == StockScopes.Materials;
 
         string Number(decimal? value) =>
@@ -177,13 +274,17 @@ public class InventoryTraceabilityController : ControllerBase
         string JoinUnits(string kg, string? meter) => meter is null ? kg : $"{kg} / {meter}";
 
         // Chronological (oldest first), the order a running-balance ledger is read in, so the cumulative
-        // column accumulates down the page. The figures are the query's own - nothing is recomputed.
+        // column accumulates down the page. The figures are the query's own - nothing is recomputed. The
+        // movements are matched to THIS lot by the lot key the query stamps on the row and on every one
+        // of its movements, so a sibling lot's rows - another item of the same receipt message - can
+        // never appear on this card, and the running balance printed on a row is this lot's own.
         var movements = data.Movements
+            .Where(m => m.LotKey == lot.LotKey)
             .OrderBy(m => m.Date).ThenBy(m => m.CreatedAtUtc).ThenBy(m => m.Id)
             .ToList();
 
         var hasMeter = movements.Any(m => m.QuantityMeter is not null || m.BalanceAfterMeter is not null)
-            || data.Rows.Any(r => r.RemainingMeter is not null);
+            || lot.RemainingMeter is not null;
 
         // A unit is shown for a movement only when THAT movement recorded it ("—" otherwise), exactly as
         // the on-screen card does: printing a meter the row never had would read as a real measurement.
@@ -195,9 +296,15 @@ public class InventoryTraceabilityController : ControllerBase
             ? Number(m.BalanceAfter)
             : JoinUnits(Number(m.BalanceAfterKg), hasMeter ? Number(m.BalanceAfterMeter) : null);
 
+        // Every movement row repeats the lot's own item/material, so a row printed on paper cannot be
+        // read against a different article than the one on the card's header.
+        string ItemCell(StockTraceMovementDto m) => isMaterials
+            ? (m.MaterialCode ?? lot.MaterialCode ?? "—")
+            : $"{m.ItemCode ?? lot.ItemCode} - {m.ItemName ?? lot.ItemName}".Trim(' ', '-');
+
         var headers = new List<string>
         {
-            "التاريخ", "نوع الحركة", "المستند", "الاتجاه",
+            "التاريخ", "نوع الحركة", isMaterials ? "المادة" : "الصنف", "المستند", "الاتجاه",
             isMaterials ? "الكمية" : "الكمية (كجم / متر)",
             "الرصيد التراكمي", "المستخدم"
         };
@@ -206,6 +313,7 @@ public class InventoryTraceabilityController : ControllerBase
         {
             m.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             MovementKindLabels.TryGetValue(m.Kind, out var label) ? label : m.Kind,
+            ItemCell(m),
             m.DocumentNumber,
             m.Direction == "Out" ? "صادر" : "وارد",
             QuantityCell(m),
@@ -223,9 +331,12 @@ public class InventoryTraceabilityController : ControllerBase
         var itemLabel = isMaterials
             ? $"{lot.MaterialCode} - {lot.MaterialName}"
             : $"{lot.ItemCode} - {lot.ItemName}";
+
+        // The closing balance is THIS lot's own live ledger balance - the same figure the movements above
+        // add up to - never a total of everything the filter happened to return.
         var closingBalance = isMaterials
-            ? Number(data.TotalRemainingQuantity)
-            : JoinUnits(Number(data.TotalRemainingKg), hasMeter ? Number(data.TotalRemainingMeter) : null);
+            ? Number(lot.RemainingQuantity)
+            : JoinUnits(Number(lot.RemainingKg), hasMeter ? Number(lot.RemainingMeter) : null);
 
         var subtitle = string.Join("   |   ", new[]
         {
@@ -233,8 +344,10 @@ public class InventoryTraceabilityController : ControllerBase
             isMaterials ? $"المادة: {itemLabel}" : $"الصنف: {itemLabel}",
             isMaterials ? null : $"العميل: {lot.CustomerCode} - {lot.CustomerName}",
             $"اللوط: {lotNumber}",
+            string.IsNullOrWhiteSpace(lot.WarehouseName) ? null : $"مخزن الرصيد: {lot.WarehouseName}",
             $"الحالة: {lot.OrderStatus ?? lot.MessageStatus ?? lot.MaterialKind ?? "—"}",
             $"الرصيد الختامي: {closingBalance}",
+            $"عدد الحركات: {movements.Count.ToString(CultureInfo.InvariantCulture)}",
             $"تاريخ الطباعة: {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
         }.Where(part => !string.IsNullOrWhiteSpace(part)));
 

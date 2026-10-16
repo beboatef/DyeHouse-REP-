@@ -1854,6 +1854,13 @@ export type StockScope = "raw" | "ready" | "materials";
 
 export interface StockTraceRow {
   scope: StockScope;
+  /**
+   * The identity of THIS balance row, and the key that ties it to its own movements (every movement
+   * carries its row's value). Two rows never share it: a raw lot is (receipt message, item, customer),
+   * a ready lot is (job order, item), a material lot is (material, warehouse). Opaque - compare it,
+   * do not parse it; the readable identity is in the fields below.
+   */
+  lotKey: string;
   itemId: string;
   itemCode: string;
   itemName: string;
@@ -1909,6 +1916,8 @@ export interface StockTraceRow {
 export interface StockTraceMovement {
   id: string;
   scope: StockScope;
+  /** The balance row this movement belongs to - the same value as the matching row's `lotKey`. */
+  lotKey: string;
   date: string;
   documentType: string;
   documentNumber: string;
