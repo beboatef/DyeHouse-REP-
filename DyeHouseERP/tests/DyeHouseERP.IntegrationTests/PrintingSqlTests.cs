@@ -24,8 +24,7 @@ public class PrintingSqlTests : SqlServerConcurrencyTestBase
             await db.SaveChangesAsync();
         }
         var message = await ReceiveAndAcceptAsync(customer, item, raw, 100m);
-        var orderId = await CreateOrderAsync(customer, item, 100m);
-        await AllocateAsync(orderId, item, message, 100m);
+        var orderId = await IssueOrderAsync(customer, item, message, 100m);
         var order = (await Client.GetFromJsonAsync<ProductionOrderDto>($"/api/production-orders/{orderId}", Json))!;
         var stage = order.StageExecutions.Single();
         Guid printingId;

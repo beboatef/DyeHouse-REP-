@@ -119,7 +119,11 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
 
         foreach (var line in request.Lines ?? new List<PurchaseReceiptLineInput>())
         {
-            await PurchaseRules.EnsureMaterialExists(_db, line.MaterialId, cancellationToken);
+            // The receipt is the STOCK MOVEMENT of a material, so its line is recorded in the material's
+            // OWN registered unit (KG / Gram / Litre) - never a unit the material does not have. A
+            // different purchasing unit belongs on the purchase order, not on the movement.
+            await PurchaseRules.EnsureMaterialUnitMatchesStockAsync(
+                _db, line.MaterialId, line.Unit, cancellationToken);
 
             if (line.PurchaseOrderLineId.HasValue && order is null)
                 throw new DomainException("A receipt line cannot reference a purchase order line when the receipt is not against an order.");

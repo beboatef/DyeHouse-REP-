@@ -273,8 +273,11 @@ public class ReadyGoodsStageTraceabilityTests
         var handler = new TransferToNextStageCommandHandler(
             db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
 
+        // The FINAL capture on the last operation before the warehouse: the original raw it started from
+        // (input), the ready weight it produced (output) and the final metres. The waste is derived from them.
         await handler.Handle(new TransferToNextStageCommand(
-            f.Stage.Id, f.ReadyGoodsStage.Id, 480m, 115m, null, null, "final transfer"), CancellationToken.None);
+            f.Stage.Id, f.ReadyGoodsStage.Id, 480m, 115m, null, null, "final transfer",
+            InputKg: 520m, InputMeter: 120m), CancellationToken.None);
 
         var transfer = await db.ReadyGoodsTransfers.SingleAsync();
         transfer.StageExecutionId.Should().Be(f.Stage.Id);

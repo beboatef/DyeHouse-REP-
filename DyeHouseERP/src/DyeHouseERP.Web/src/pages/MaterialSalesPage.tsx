@@ -114,14 +114,20 @@ export default function MaterialSalesPage() {
 
   const post = useMutation({
     mutationFn: (id: string) => MaterialSalesApi.post(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["material-sales"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-sales"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+    },
     onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
 
   const cancel = useMutation({
     mutationFn: (id: string) => MaterialSalesApi.cancel(id, window.prompt(t("common.reason")) || ""),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["material-sales"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-sales"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+    },
     onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });

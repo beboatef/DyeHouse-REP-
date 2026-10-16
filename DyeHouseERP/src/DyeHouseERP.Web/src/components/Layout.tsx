@@ -55,6 +55,10 @@ const navGroups: NavGroup[] = [
     icon: <Warehouse size={18} />,
     items: [
       { to: "/warehouse", labelKey: "nav.warehouseHub", icon: <Warehouse size={16} /> },
+      // المنفصلات sits with the warehouses: a separate is MATERIAL HELD ON SITE, tracked by the
+      // warehouse register (it is reprocessed into a new job or scrapped), not a production stage -
+      // and the register is where the floor looks for the material it set aside.
+      { to: "/separates", labelKey: "nav.separates", icon: <GitBranch size={16} /> },
       // Customer returns are a raw-material receipt (spec section 32), so they sit
       // with the warehouse module rather than with deliveries.
       { to: "/customer-returns", labelKey: "nav.customerReturns", icon: <PackageOpen size={16} /> }
@@ -73,7 +77,6 @@ const navGroups: NavGroup[] = [
     icon: <Factory size={18} />,
     items: [
       { to: "/production-orders", labelKey: "nav.jobOrders", icon: <ClipboardList size={16} /> },
-      { to: "/separates", labelKey: "nav.production", icon: <GitBranch size={16} /> },
       { to: "/ready-goods", labelKey: "nav.readyGoods", icon: <PackageCheck size={16} /> }
     ]
   },
@@ -84,7 +87,7 @@ const navGroups: NavGroup[] = [
       { to: "/materials", labelKey: "nav.materials", icon: <FlaskConical size={16} /> },
       { to: "/supplies", labelKey: "nav.supplies", icon: <LifeBuoy size={16} /> },
       { to: "/material-sales", labelKey: "nav.materialSales", icon: <BadgeDollarSign size={16} /> },
-      { to: "/warehouse?tab=master", labelKey: "nav.operatingSupplies", icon: <Warehouse size={16} /> }
+      { to: "/warehouse?tab=materials", labelKey: "nav.operatingSupplies", icon: <Warehouse size={16} /> }
     ]
   },
   {

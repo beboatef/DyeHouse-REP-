@@ -282,26 +282,31 @@ public class IssueRawMaterialWorkflowTests
     // ----------------------------------------------- no duplicate deduction
 
     [Fact]
-    public async Task The_Old_Create_Then_Allocate_Path_Cannot_Deduct_The_Same_Material_Twice()
+    public async Task AnIssuedOrder_IsDeductedExactlyOnce_AndNoAllocationStepExistsToDeductItAgain()
     {
         using var db = NewDb();
         var scene = Seed(db);
 
-        var dto = await Handler(db).Handle(new IssueRawMaterialCommand(
+        await Handler(db).Handle(new IssueRawMaterialCommand(
             scene.Customer.Id, scene.Item.Id, scene.Message.Id, DateTime.UtcNow,
             ActualQuantityKg: 108m, ActualQuantityMeter: null), CancellationToken.None);
 
-        // A follow-up allocation against an order created by an issue would be a SECOND OUT.
-        var act = () => new AllocateRawCommandHandler(
-                db, new StubCurrentUser("operator"), new InventoryLedgerService(db), new FixedClock(),
-                new OpenPeriod(), new RecordingStockLock())
-            .Handle(new AllocateRawCommand(dto.Id, scene.Message.Id, scene.Item.Id, 50m, null), CancellationToken.None);
-
-        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*created by issuing raw material*");
-
+        // The issue IS the allocation: exactly one OUT row and one allocation row, committed together.
         (await db.InventoryTransactions.CountAsync(t => t.Direction == TransactionDirection.Out))
             .Should().Be(1, "the material is deducted exactly once");
+        (await db.RawAllocations.CountAsync()).Should().Be(1, "the issue records the order's single allocation");
         LotBalanceKg(db, scene).Should().Be(LotReceivedKg - 108m);
+
+        // The old order-first-then-allocate route is REMOVED, not merely hidden: with no allocation command,
+        // validator or handler left in the application layer there is no code path that could post a SECOND
+        // deduction for material this order has already been debited for - which is exactly what the old
+        // endpoint allowed on a legacy order that carried no issue link.
+        var applicationTypeNames = typeof(IssueRawMaterialCommand).Assembly.GetTypes()
+            .Select(t => t.Name).ToList();
+
+        applicationTypeNames.Should().NotContain("AllocateRawCommand");
+        applicationTypeNames.Should().NotContain("AllocateRawCommandValidator");
+        applicationTypeNames.Should().NotContain("AllocateRawCommandHandler");
     }
 
     // ------------------------------------------------------------- concurrency

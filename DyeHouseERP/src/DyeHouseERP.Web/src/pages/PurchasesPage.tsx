@@ -13,6 +13,7 @@ import { PurchaseDocumentsApi } from "@/api/documents";
 import { PurchasesExports } from "@/api/exports";
 import SupplierStatementPanel from "./purchases/SupplierStatementPanel";
 import AttachmentsPanel from "@/components/AttachmentsPanel";
+import StockTraceability from "@/components/StockTraceability";
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
@@ -37,11 +38,12 @@ function ExportButtons({ onExport, labels }: { onExport: (format: "excel" | "pdf
  *     posted invoice posts an equal-and-opposite ledger row instead of deleting.
  */
 
-type TabKey = "orders" | "receipts" | "invoices" | "payments" | "balances";
+type TabKey = "orders" | "receipts" | "stock" | "invoices" | "payments" | "balances";
 
 const tabs: { key: TabKey; labelKey: string }[] = [
   { key: "orders", labelKey: "pur.tab.orders" },
   { key: "receipts", labelKey: "pur.tab.receipts" },
+  { key: "stock", labelKey: "pur.tab.stock" },
   { key: "invoices", labelKey: "pur.tab.invoices" },
   { key: "payments", labelKey: "pur.tab.payments" },
   { key: "balances", labelKey: "pur.tab.balances" }
@@ -96,6 +98,7 @@ export default function PurchasesPage() {
 
       {tab === "orders" && <OrdersTab onChanged={() => qc.invalidateQueries()} />}
       {tab === "receipts" && <ReceiptsTab />}
+      {tab === "stock" && <StockTraceability scope="materials" />}
       {tab === "invoices" && <InvoicesTab />}
       {tab === "payments" && <PaymentsTab />}
       {tab === "balances" && (
@@ -318,7 +321,10 @@ function OrdersTab({ onChanged }: { onChanged: () => void }) {
                       <label className="field-label">{t("pur.material")}</label>
                       <Select
                         value={line.materialId}
-                        onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, materialId: e.target.value } : l)))}
+                        onChange={(e) => {
+                          const mat = materials?.find((m) => m.id === e.target.value);
+                          setLines((p) => p.map((l, i) => (i === idx ? { ...l, materialId: e.target.value, unit: mat?.unit ?? l.unit } : l)));
+                        }}
                         required
                       >
                         <option value="">{t("common.select")}</option>
@@ -643,6 +649,8 @@ function ReceiptsTab() {
       qc.invalidateQueries({ queryKey: ["purchase-receipts"] });
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       qc.invalidateQueries({ queryKey: ["material-balances"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setShowForm(false);
       setLines([{ materialId: "", quantity: "", unit: "KG", unitCost: "", orderLineId: "" }]);
       setNotes("");
@@ -748,7 +756,10 @@ function ReceiptsTab() {
                       <label className="field-label">{t("pur.material")}</label>
                       <Select
                         value={line.materialId}
-                        onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, materialId: e.target.value } : l)))}
+                        onChange={(e) => {
+                          const mat = materials?.find((m) => m.id === e.target.value);
+                          setLines((p) => p.map((l, i) => (i === idx ? { ...l, materialId: e.target.value, unit: mat?.unit ?? l.unit } : l)));
+                        }}
                         required
                       >
                         <option value="">{t("common.select")}</option>
@@ -768,6 +779,7 @@ function ReceiptsTab() {
                       <label className="field-label">{t("common.unit")}</label>
                       <Select
                         value={line.unit}
+                        disabled={!!line.materialId}
                         onChange={(e) => setLines((p) => p.map((l, i) => (i === idx ? { ...l, unit: e.target.value as MaterialUnit } : l)))}
                       >
                         {units.map((u) => (

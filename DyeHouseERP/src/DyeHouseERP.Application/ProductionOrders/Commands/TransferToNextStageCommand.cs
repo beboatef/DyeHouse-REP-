@@ -55,11 +55,19 @@ public class TransferToNextStageCommandValidator : AbstractValidator<TransferToN
         RuleFor(x => x.StageExecutionId).NotEmpty();
         RuleFor(x => x.DrawingNumber).MaximumLength(100);
         RuleFor(x => x.NextStageDefinitionId).NotEmpty();
-        RuleFor(x => x)
-            .Must(x => x.OutputKg is > 0 || x.OutputMeter is > 0)
-            .WithMessage("Enter the final output quantity for this stage - the loss is measured from it.");
+        // The output is deliberately NOT required by the validator any more: choosing the operation the job
+        // moves to is a ROUTE step, and a route step records no production figure at all (see the handler).
+        // It IS required where production is genuinely recorded - closing an operation with figures, and the
+        // final capture that moves the output into the Ready Goods warehouse - and the handler enforces both,
+        // because only it knows which operation was chosen and what that operation's item is configured for.
         RuleFor(x => x.OutputKg).GreaterThanOrEqualTo(0).When(x => x.OutputKg.HasValue);
         RuleFor(x => x.OutputMeter).GreaterThanOrEqualTo(0).When(x => x.OutputMeter.HasValue);
+        RuleFor(x => x.InputKg).GreaterThanOrEqualTo(0).When(x => x.InputKg.HasValue);
+        RuleFor(x => x.InputMeter).GreaterThanOrEqualTo(0).When(x => x.InputMeter.HasValue);
+        RuleFor(x => x.SeparatesKg).GreaterThanOrEqualTo(0).When(x => x.SeparatesKg.HasValue);
+        RuleFor(x => x.SeparatesMeter).GreaterThanOrEqualTo(0).When(x => x.SeparatesMeter.HasValue);
+        RuleFor(x => x.SecondGradeKg).GreaterThanOrEqualTo(0).When(x => x.SecondGradeKg.HasValue);
+        RuleFor(x => x.SecondGradeMeter).GreaterThanOrEqualTo(0).When(x => x.SecondGradeMeter.HasValue);
     }
 }
 
@@ -164,26 +172,67 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
         // document + IN movement and completes the order (spec section 17).
         await RawAllocationGuard.EnsureCompleteAsync(_db, order, cancellationToken);
 
-        // Spec sections 5-6: the stage output (and any separates) may only be recorded
-        // in the units configured on the order's item, with both required when the item
-        // asks for both. Never converted, never inferred.
-        await ItemUnitGuard.EnsureValidQuantitiesAsync(
-            _db, order.ItemId, request.OutputKg, request.OutputMeter,
-            cancellationToken, "as this stage's output");
+        // ---- Is this a route step, a recording close, or the FINAL capture? --------------
+        // Choosing the operation the job moves to is a ROUTE decision: the stage is closed with no
+        // production figure and NOTHING is posted - no output, no loss, no separates, no stock movement
+        // (spec: "selecting an operation records no production and no inventory movement"). Production is
+        // recorded when the operation is closed WITH figures, and the one place figures are mandatory is the
+        // LAST operation before the Ready Goods warehouse, whose capture is what posts ready-goods stock.
+        var nextIsReadyGoods = nextStage.IsReadyGoodsStage;
+        var hasReadyWeight = request.OutputKg is > 0 || request.OutputMeter is > 0;
+        var hasOtherFigures = request.InputKg is > 0 || request.InputMeter is > 0
+            || request.SeparatesKg is > 0 || request.SeparatesMeter is > 0
+            || request.SecondGradeKg is > 0 || request.SecondGradeMeter is > 0;
+        var isRouteStep = !nextIsReadyGoods && !hasReadyWeight;
+
+        if (isRouteStep && hasOtherFigures)
+            throw new DomainException(
+                "This transfer records no production: pass the operation's OUTPUT (the ready weight) together with " +
+                "its input, separates and second grade, or pass none of them to simply move the job on. " +
+                "لتسجيل بيانات التشغيل أدخل وزن الخارج مع باقي القيم، أو اتركها كلها للانتقال إلى المرحلة التالية فقط.");
+
+        if (nextIsReadyGoods)
+        {
+            // The FINAL CAPTURE on the last operation before the Ready Goods warehouse (see the class
+            // documentation): the ready weight and the original raw weight are BOTH required, because the
+            // waste is derived from them - and separates stay OPTIONAL, so an operation with none completes
+            // without inventing a zero.
+            if (!hasReadyWeight)
+                throw new DomainException(
+                    "Enter the ready weight of this last operation before the Ready Goods warehouse " +
+                    "(وزن الجاهز بالكيلوجرام) - it is what the ready-goods stock is posted from. " +
+                    "لا يمكن إدخال الجاهز إلى المخزن دون تسجيل وزنه.");
+
+            if (request.InputKg is not > 0 && request.InputMeter is not > 0)
+                throw new DomainException(
+                    "Enter the ORIGINAL RAW weight this last operation started from (أصل الخام): the waste is " +
+                    "calculated as original raw - ready weight - separates. أصل الخام مطلوب في المرحلة الأخيرة قبل مخزن الجاهز.");
+        }
+
+        // Spec sections 5-6: any recorded figure may only use the units configured on the order's item, with
+        // both required when the item asks for both. Never converted, never inferred. A route step records
+        // nothing at all, so it has nothing to validate (and must not be asked for a quantity it does not have).
+        if (!isRouteStep)
+        {
+            await ItemUnitGuard.EnsureValidQuantitiesAsync(
+                _db, order.ItemId, request.OutputKg, request.OutputMeter,
+                cancellationToken, "as this stage's output");
+
+            // The recorded input and second-grade quantity obey the SAME unit rules: an operation may only
+            // report the units its item is configured for. That is what keeps a waste figure from ever being
+            // computed between incompatible units - the KG waste is a KG subtraction and the Meter waste is a
+            // Meter subtraction, and neither is converted into the other (spec sections 20-21).
+            await ItemUnitGuard.EnsureValidQuantitiesAsync(
+                _db, order.ItemId, request.InputKg, request.InputMeter,
+                cancellationToken, "as this operation's actual input", requireAnyQuantity: false);
+            await ItemUnitGuard.EnsureValidQuantitiesAsync(
+                _db, order.ItemId, request.SecondGradeKg, request.SecondGradeMeter,
+                cancellationToken, "as this operation's second-grade quantity", requireAnyQuantity: false);
+        }
+
         await ItemUnitGuard.EnsureValidQuantitiesAsync(
             _db, order.ItemId, request.SeparatesKg, request.SeparatesMeter,
             cancellationToken, "as separates", requireAnyQuantity: false);
-
-        // The recorded input and second-grade quantity obey the SAME unit rules: an operation may only
-        // report the units its item is configured for. That is what keeps a waste figure from ever being
-        // computed between incompatible units - the KG waste is a KG subtraction and the Meter waste is a
-        // Meter subtraction, and neither is converted into the other (spec sections 20-21).
-        await ItemUnitGuard.EnsureValidQuantitiesAsync(
-            _db, order.ItemId, request.InputKg, request.InputMeter,
-            cancellationToken, "as this operation's actual input", requireAnyQuantity: false);
-        await ItemUnitGuard.EnsureValidQuantitiesAsync(
-            _db, order.ItemId, request.SecondGradeKg, request.SecondGradeMeter,
-            cancellationToken, "as this operation's second-grade quantity", requireAnyQuantity: false);
 
         // Machine suitability/availability and the execution shift.
         await EnsureMachineAndShiftAreUsableAsync(request, stage.StageDefinitionId, cancellationToken);
@@ -210,14 +259,36 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
         var previousOutputKg = stage.OutputKg;
         var previousOutputMeter = stage.OutputMeter;
 
-        // Steps 1-4: close, record what the operation consumed and produced (input, output, separates,
-        // second-grade), derive the waste from the immutable baseline, and lock. The machine and shift
-        // this operation ran on are recorded on the SAME row, as historical references.
-        stage.CloseWithOutput(request.OutputKg, request.OutputMeter,
-            request.SeparatesKg, request.SeparatesMeter, request.Notes, _currentUser.UserName,
-            inputKg: request.InputKg, inputMeter: request.InputMeter,
-            secondGradeKg: request.SecondGradeKg, secondGradeMeter: request.SecondGradeMeter,
-            machineId: request.MachineId, productionShiftId: request.ProductionShiftId);
+        if (isRouteStep)
+        {
+            // A route step: close the operation without inventing a single figure. The material is unchanged,
+            // so the chosen operation starts from THIS operation's own baseline.
+            stage.CloseAsRouteStep(request.Notes, _currentUser.UserName);
+        }
+        else
+        {
+            // The waste the floor states for the last operation before the ready-goods warehouse is
+            // "original raw - ready weight - separates", checked per unit BEFORE anything is written, so an
+            // impossible figure is refused rather than stored (separates are optional and simply count as
+            // zero when they were not recorded).
+            if (nextIsReadyGoods)
+            {
+                // The waste is a WEIGHT and is therefore checked in KILOGRAMS only. The metre figures
+                // recorded on the same operation stay a length: they are never converted into a weight
+                // and they form no part of the waste equation, so they are not passed here at all.
+                stage.EnsureWasteIsPossible(
+                    request.InputKg, request.OutputKg, request.SeparatesKg);
+            }
+
+            // Steps 1-4: close, record what the operation consumed and produced (input, output, separates,
+            // second-grade), derive the waste from the immutable baseline, and lock. The machine and shift
+            // this operation ran on are recorded on the SAME row, as historical references.
+            stage.CloseWithOutput(request.OutputKg, request.OutputMeter,
+                request.SeparatesKg, request.SeparatesMeter, request.Notes, _currentUser.UserName,
+                inputKg: request.InputKg, inputMeter: request.InputMeter,
+                secondGradeKg: request.SecondGradeKg, secondGradeMeter: request.SecondGradeMeter,
+                machineId: request.MachineId, productionShiftId: request.ProductionShiftId);
+        }
 
         // Spec sections 22-23: the separates quantity a closing operation records ENTERS the separates
         // register here, in the same transaction. A Separate is the record the register, the reprocessing
@@ -253,6 +324,11 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 secondGradeMeter = request.SecondGradeMeter,
                 machineId = request.MachineId,
                 productionShiftId = request.ProductionShiftId,
+                // A route step records no production figure, and the waste the LAST operation before the ready
+                // goods warehouse derived (original raw KG - ready weight KG - separates KG) is captured with
+                // it. The metre figure is a length and is deliberately not turned into a "metre waste".
+                routeStep = isRouteStep,
+                wasteKg = stage.WasteKg,
                 nextStage = nextStage.Name
             }),
             ipAddress: null,
@@ -302,13 +378,18 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
         }
         else
         {
-            // Step 5: activate ONLY the chosen stage, baselined on this stage's output.
-            var activated = order.ActivateNextStage(
-                nextStage, request.OutputKg, request.OutputMeter, _currentUser.UserName, drawingNumber);
+            // Step 5: activate ONLY the chosen stage, baselined on this stage's output - or, on a route step
+            // that recorded no output at all, on this stage's OWN baseline: the material was not weighed at
+            // this stop, so it is exactly what the previous operation handed over, and inventing an output
+            // here would fabricate production.
+            var baselineKg = isRouteStep ? stage.BaselineKg : request.OutputKg;
+            var baselineMeter = isRouteStep ? stage.BaselineMeter : request.OutputMeter;
 
-            // Added explicitly, exactly like a new RawAllocation (AllocateRawCommand) or a
-            // resumed cycle's allocation: EF change detection finds an entity whose
-            // client-generated key is already set and treats it as an EXISTING row, so
+            var activated = order.ActivateNextStage(
+                nextStage, baselineKg, baselineMeter, _currentUser.UserName, drawingNumber);
+
+            // Added explicitly, exactly like a resumed cycle's allocation: EF change detection finds an entity
+            // whose client-generated key is already set and treats it as an EXISTING row, so
             // without this Add the new stage would be saved as an UPDATE against a row that
             // was never inserted and every stage transfer would fail on SaveChanges.
             _db.ProductionOrderStageExecutions.Add(activated);

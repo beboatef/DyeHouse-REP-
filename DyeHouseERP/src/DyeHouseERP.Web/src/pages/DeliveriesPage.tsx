@@ -72,6 +72,21 @@ export default function DeliveriesPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["deliveries"] });
 
+  /**
+   * The ready-goods lots the "new delivery" form can draw from are a LIVE balance, so every action that
+   * changes it has to refresh them - otherwise the screen silently keeps an out-of-date list.
+   *
+   * This is the bug behind "a cancelled permit stops me issuing a new one": delivering emptied the lot
+   * (the list refreshed and the lot vanished), and CANCELLING put the stock back but never refreshed the
+   * list, so the lot the user needed to deliver again was simply not offered. The same applies to an
+   * after-approval correction, which also moves ready stock.
+   */
+  const refreshReadyBalance = () => {
+    qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
+    qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+    qc.invalidateQueries({ queryKey: ["production-floor"] });
+  };
+
   // The primary permit being sliced, when one was chosen. On a sub-customer permit the item and the
   // colour are taken from THIS permit's own lines - they are never independent master data, so the
   // screen never lets a line name goods the primary permit does not carry.
@@ -200,12 +215,14 @@ export default function DeliveriesPage() {
     }),
     onSuccess: () => {
       invalidate();
+      refreshReadyBalance();
       setShowForm(false); setLines([emptyLine()]); setError(null); setPrimaryDeliveryId(""); setCustomerId("");
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? err?.response?.data?.detail ?? "حدث خطأ أثناء الحفظ")
   });
 
   const prepareMutation = useMutation({ mutationFn: DeliveriesApi.prepare, onSuccess: invalidate });
+
 
   /**
    * Posts the delivery. The token is minted once per permit and reused on a retry, so a double click
@@ -216,13 +233,17 @@ export default function DeliveriesPage() {
     mutationFn: (id: string) => DeliveriesApi.deliver(id, tokenFor(id)),
     onSuccess: (_data, id) => {
       invalidate();
-      qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
+      refreshReadyBalance();
       setDeliverTokens((prev) => ({ ...prev, [id]: crypto.randomUUID() }));
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? err?.response?.data?.detail ?? "تعذر التسليم")
   });
   const cancelMutation = useMutation({
-    mutationFn: (vars: { id: string; reason: string }) => DeliveriesApi.cancel(vars.id, vars.reason), onSuccess: invalidate
+    mutationFn: (vars: { id: string; reason: string }) => DeliveriesApi.cancel(vars.id, vars.reason),
+    // Cancelling reverses the delivery's OUT rows, so the lot is back on the balance the moment this
+    // succeeds - and the screen must offer it again (see refreshReadyBalance).
+    onSuccess: () => { invalidate(); refreshReadyBalance(); },
+    onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? err?.response?.data?.detail ?? "تعذر إلغاء الإذن")
   });
 
   /**
@@ -235,6 +256,8 @@ export default function DeliveriesPage() {
       DeliveriesApi.correctApprovedLines(vars.id, vars),
     onSuccess: () => {
       invalidate();
+      // A correction posts compensating movements too, so the ready-goods balance has moved as well.
+      refreshReadyBalance();
       setCorrectingId(null);
       setCorrectQty({});
       setCorrectReason("");

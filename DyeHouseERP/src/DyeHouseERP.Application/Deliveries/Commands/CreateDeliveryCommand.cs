@@ -165,13 +165,10 @@ public class CreateDeliveryCommandHandler : IRequestHandler<CreateDeliveryComman
     {
         if (!request.PrimaryDeliveryId.HasValue) return null;
 
-        var primary = await _db.Deliveries.AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == request.PrimaryDeliveryId.Value, cancellationToken)
-            ?? throw new NotFoundException("Delivery", request.PrimaryDeliveryId.Value);
-
-        if (primary.Status == DeliveryStatus.Cancelled)
-            throw new DomainException(
-                $"Primary permit {primary.DeliveryNumber} is cancelled, so no sub-customer permit can be issued against it.");
+        // The shared rule: the named primary permit must exist and must not be cancelled (see
+        // SubCustomerPermitGuard - the same guard the DELIVERY of a sub-permit runs).
+        var primary = (await SubCustomerPermitGuard.ResolvePrimaryAsync(
+            _db, request.PrimaryDeliveryId, cancellationToken))!;
 
         if (primary.CustomerId == request.CustomerId)
             throw new DomainException(
@@ -191,81 +188,20 @@ public class CreateDeliveryCommandHandler : IRequestHandler<CreateDeliveryComman
     }
 
     /// <summary>
-    /// Bounds a sub-customer permit by the primary permit it is issued against (spec section 31): the
-    /// quantities a sub-permit claims, per (Job Order, Item), may never exceed what the primary permit
-    /// delivered for that same Job Order, and the total already claimed by earlier sub-permits counts
-    /// against the same allowance. A line naming the SUB-customer's own Job Order has no primary line to
-    /// measure against, so it is not bounded here - only the primary customer's own job is.
-    ///
-    /// This is a DOCUMENT rule: it posts no stock and changes no balance, it only stops a sub-permit
-    /// from promising goods the primary permit never delivered.
+    /// Bounds a sub-customer permit by the primary permit it is issued against - the SHARED rule in
+    /// <see cref="SubCustomerPermitGuard.EnsureWithinPrimaryAsync"/>, which the delivery of a sub-permit runs
+    /// again against the figures stored at that moment. Nothing about the rule lives here any more, so the two
+    /// entry points cannot drift: one formula, one refusal message, one allowance. It is a DOCUMENT rule - it
+    /// posts no stock and changes no balance.
     /// </summary>
-    private static async Task EnsureSubPermitWithinPrimaryAsync(
+    private static Task EnsureSubPermitWithinPrimaryAsync(
         IApplicationDbContext db, CreateDeliveryCommand request, Delivery? primary, CancellationToken cancellationToken)
-    {
-        if (primary is null) return;
-
-        var primaryLines = await db.DeliveryLines.AsNoTracking()
-            .Where(l => l.DeliveryId == primary.Id)
-            .Select(l => new { l.ProductionOrderId, l.ItemId, l.QuantityKg, l.QuantityMeter })
-            .ToListAsync(cancellationToken);
-
-        if (primaryLines.Count == 0) return;
-
-        // Every other NON-cancelled sub-permit already issued against this primary has already claimed
-        // its share, so it is subtracted from what is still available.
-        var siblingSubPermitIds = await db.Deliveries.AsNoTracking()
-            .Where(d => d.PrimaryDeliveryId == primary.Id && d.Status != DeliveryStatus.Cancelled)
-            .Select(d => d.Id)
-            .ToListAsync(cancellationToken);
-
-        var siblingSubPermitLines = siblingSubPermitIds.Count == 0
-            ? new List<SubPermitClaim>()
-            : (await db.DeliveryLines.AsNoTracking()
-                .Where(l => siblingSubPermitIds.Contains(l.DeliveryId))
-                .Select(l => new { l.ProductionOrderId, l.ItemId, l.QuantityKg, l.QuantityMeter })
-                .ToListAsync(cancellationToken))
-            .Select(l => new SubPermitClaim(l.ProductionOrderId, l.ItemId, l.QuantityKg ?? 0m, l.QuantityMeter ?? 0m))
-            .ToList();
-
-        const decimal tolerance = 0.001m;
-
-        foreach (var group in request.Lines
-            .Where(l => primaryLines.Any(p => p.ProductionOrderId == l.ProductionOrderId))
-            .GroupBy(l => new { l.ProductionOrderId, l.ItemId }))
-        {
-            var allowedKg = primaryLines
-                .Where(p => p.ProductionOrderId == group.Key.ProductionOrderId && p.ItemId == group.Key.ItemId)
-                .Sum(p => p.QuantityKg ?? 0m);
-            var allowedMeter = primaryLines
-                .Where(p => p.ProductionOrderId == group.Key.ProductionOrderId && p.ItemId == group.Key.ItemId)
-                .Sum(p => p.QuantityMeter ?? 0m);
-
-            var claimedKg = siblingSubPermitLines
-                .Where(c => c.ProductionOrderId == group.Key.ProductionOrderId && c.ItemId == group.Key.ItemId)
-                .Sum(c => c.QuantityKg);
-            var claimedMeter = siblingSubPermitLines
-                .Where(c => c.ProductionOrderId == group.Key.ProductionOrderId && c.ItemId == group.Key.ItemId)
-                .Sum(c => c.QuantityMeter);
-
-            var requestedKg = group.Sum(l => l.QuantityKg ?? 0m);
-            var requestedMeter = group.Sum(l => l.QuantityMeter ?? 0m);
-
-            if (requestedKg > 0 && claimedKg + requestedKg > allowedKg + tolerance)
-                throw new DomainException(
-                    $"This sub-customer permit exceeds the primary permit {primary.DeliveryNumber}: it delivered " +
-                    $"{allowedKg} KG for this Job Order, {claimedKg} KG is already covered by other sub-customer permits " +
-                    $"and {requestedKg} KG more was requested.");
-            if (requestedMeter > 0 && claimedMeter + requestedMeter > allowedMeter + tolerance)
-                throw new DomainException(
-                    $"This sub-customer permit exceeds the primary permit {primary.DeliveryNumber}: it delivered " +
-                    $"{allowedMeter} Meter for this Job Order, {claimedMeter} Meter is already covered by other " +
-                    $"sub-customer permits and {requestedMeter} Meter more was requested.");
-        }
-    }
-
-    /// <summary>One quantity a sub-customer permit already claims against its primary permit.</summary>
-    private sealed record SubPermitClaim(Guid ProductionOrderId, Guid ItemId, decimal QuantityKg, decimal QuantityMeter);
+        => primary is null
+            ? Task.CompletedTask
+            : SubCustomerPermitGuard.EnsureWithinPrimaryAsync(
+                db, primary,
+                request.Lines.Select(l => (l.ProductionOrderId, l.ItemId, l.QuantityKg ?? 0m, l.QuantityMeter ?? 0m)).ToList(),
+                cancellationToken);
 
     /// <summary>
     /// Works out the ITEM and the COLOUR of every line of a sub-customer permit from the primary permit

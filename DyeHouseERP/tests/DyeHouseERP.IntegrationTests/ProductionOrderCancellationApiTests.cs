@@ -48,6 +48,31 @@ public class ProductionOrderCancellationApiTests : IntegrationTestBase
         var warehouseResponse = await Client.PostAsJsonAsync("/api/warehouses", new { code = warehouseCode, name = "Cancel Raw WH", kind = WarehouseKind.RawMaterial });
         var warehouse = await warehouseResponse.Content.ReadFromJsonAsync<WarehouseDto>(Json);
 
+        var readyWhCode = $"R{Guid.NewGuid():N}"[..10];
+        await Client.PostAsJsonAsync("/api/warehouses", new { code = readyWhCode, name = "Cancel Ready WH", kind = WarehouseKind.ReadyGoods });
+
+        var stageDefinitions = await Client.GetFromJsonAsync<List<ProductionStageDefinitionDto>>("/api/production-stages", Json);
+        if (stageDefinitions is null || !stageDefinitions.Any(s => s.IsFormationStage))
+        {
+            await Client.PostAsJsonAsync("/api/production-stages", new
+            {
+                code = $"F{Guid.NewGuid():N}"[..8], name = "Formation", sequence = 1,
+                requiresInputQuantity = true, requiresOutputQuantity = true, notes = (string?)null,
+                isFormationStage = true
+            });
+        }
+        if (stageDefinitions is null || !stageDefinitions.Any(s => s.IsReadyGoodsStage))
+        {
+            var readyStage = (await (await Client.PostAsJsonAsync("/api/production-stages", new
+            {
+                code = $"G{Guid.NewGuid():N}"[..8], name = "Ready Goods", sequence = 2,
+                requiresInputQuantity = true, requiresOutputQuantity = true, notes = (string?)null,
+                isFormationStage = false
+            })).Content.ReadFromJsonAsync<ProductionStageDefinitionDto>(Json))!;
+            (await Client.PostAsync($"/api/production-stages/{readyStage.Id}/ready-goods-stage", null))
+                .EnsureSuccessStatusCode();
+        }
+
         return (customer!.Id, item!.Id, warehouse!.Id);
     }
 
@@ -70,22 +95,13 @@ public class ProductionOrderCancellationApiTests : IntegrationTestBase
         return message;
     }
 
-    private async Task<ProductionOrderDto> CreateOrderAsync(Guid customerId, Guid itemId, decimal quantityKg)
+    private async Task<ProductionOrderDto> IssueOrderAsync(Guid customerId, Guid itemId, Guid rawMessageId, decimal quantityKg)
     {
-        var response = await Client.PostAsJsonAsync("/api/production-orders", new
+        var response = await Client.PostAsJsonAsync("/api/production-orders/issue", new
         {
-            customerId, itemId, orderDate = DateTime.UtcNow, requestedQuantityKg = quantityKg,
-            priority = ProductionPriority.Normal
-        });
-        response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
-    }
-
-    private async Task<ProductionOrderDto> AllocateAsync(Guid orderId, Guid rawMessageId, Guid itemId, decimal quantityKg)
-    {
-        var response = await Client.PostAsJsonAsync($"/api/production-orders/{orderId}/raw-allocations", new
-        {
-            rawMessageId, itemId, quantityKg, overrideNegativeStock = false, overrideReason = (string?)null
+            customerId, itemId, rawMessageId, orderDate = DateTime.UtcNow,
+            actualQuantityKg = quantityKg, priority = ProductionPriority.Normal,
+            overrideNegativeStock = false, overrideReason = (string?)null
         });
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
@@ -105,8 +121,7 @@ public class ProductionOrderCancellationApiTests : IntegrationTestBase
     {
         var (customerId, itemId, warehouseId) = await SeedMasterDataAsync();
         var message = await ReceiveAndAcceptRawMessageAsync(customerId, itemId, warehouseId, quantityKg: 1000m);
-        var order = await CreateOrderAsync(customerId, itemId, quantityKg: 600m);
-        await AllocateAsync(order.Id, message.Id, itemId, quantityKg: 600m);
+        var order = await IssueOrderAsync(customerId, itemId, message.Id, quantityKg: 600m);
 
         (await RemainingKgAsync(customerId, message.Id)).Should().Be(400m, "600 was issued to the job");
 
@@ -127,8 +142,7 @@ public class ProductionOrderCancellationApiTests : IntegrationTestBase
     {
         var (customerId, itemId, warehouseId) = await SeedMasterDataAsync();
         var message = await ReceiveAndAcceptRawMessageAsync(customerId, itemId, warehouseId, quantityKg: 1000m);
-        var order = await CreateOrderAsync(customerId, itemId, quantityKg: 600m);
-        await AllocateAsync(order.Id, message.Id, itemId, quantityKg: 600m);
+        var order = await IssueOrderAsync(customerId, itemId, message.Id, quantityKg: 600m);
 
         var first = await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/cancel",
             new { reason = "first" });
@@ -149,8 +163,7 @@ public class ProductionOrderCancellationApiTests : IntegrationTestBase
     {
         var (customerId, itemId, warehouseId) = await SeedMasterDataAsync();
         var message = await ReceiveAndAcceptRawMessageAsync(customerId, itemId, warehouseId, quantityKg: 500m);
-        var order = await CreateOrderAsync(customerId, itemId, quantityKg: 200m);
-        await AllocateAsync(order.Id, message.Id, itemId, quantityKg: 200m);
+        var order = await IssueOrderAsync(customerId, itemId, message.Id, quantityKg: 200m);
 
         var response = await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/cancel",
             new { reason = "" });
@@ -164,8 +177,7 @@ public class ProductionOrderCancellationApiTests : IntegrationTestBase
     {
         var (customerId, itemId, warehouseId) = await SeedMasterDataAsync();
         var message = await ReceiveAndAcceptRawMessageAsync(customerId, itemId, warehouseId, quantityKg: 1000m);
-        var order = await CreateOrderAsync(customerId, itemId, quantityKg: 600m);
-        order = await AllocateAsync(order.Id, message.Id, itemId, quantityKg: 600m);
+        var order = await IssueOrderAsync(customerId, itemId, message.Id, quantityKg: 600m);
 
         // Drive the order to Completed. Spec sections 22-23: an order that
         // produced anything is completed by transferring its stage to the
@@ -181,6 +193,7 @@ public class ProductionOrderCancellationApiTests : IntegrationTestBase
             $"/api/production-orders/stage-executions/{stage.Id}/transfer", new
         {
             nextStageDefinitionId = readyGoodsStage.Id,
+            inputKg = 600m,
             outputKg = 580m, outputMeter = (decimal?)null,
             separatesKg = (decimal?)null, separatesMeter = (decimal?)null,
             notes = (string?)null

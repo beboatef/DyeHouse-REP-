@@ -5,6 +5,7 @@ using DyeHouseERP.Application.Materials.DTOs;
 using DyeHouseERP.Application.Materials.Queries;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -37,10 +38,11 @@ public class CancelMaterialIssueCommandHandler : IRequestHandler<CancelMaterialI
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CancelMaterialIssueCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock,
-        IPeriodCloseService periodClose)
-    { _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose; }
+        IPeriodCloseService periodClose, IAllocationLockService stockLock)
+    { _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose; _stockLock = stockLock; }
 
     public async Task<MaterialIssueDto> Handle(CancelMaterialIssueCommand request, CancellationToken cancellationToken)
     {
@@ -50,24 +52,49 @@ public class CancelMaterialIssueCommandHandler : IRequestHandler<CancelMaterialI
         var postingDate = _clock.UtcNow;
         await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
 
-        var issue = await _db.MaterialIssues.FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
+        var snapshot = await _db.MaterialIssues.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("MaterialIssue", request.Id);
 
-        // The reversal is a brand-new IN row, so the warehouse must still be active for it. Checked
-        // BEFORE the document is touched, so a refusal leaves the issue and the ledger exactly as
-        // they were. (An already-cancelled issue never reaches here: Cancel() refuses below.)
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, issue.WarehouseId, cancellationToken, "to reverse its stock movements");
+        if (snapshot.IsCancelled)
+            throw new DomainException("This material issue is already cancelled.");
 
-        issue.Cancel(request.Reason, _currentUser.UserName);
+        // H6: cancelling a material issue appends a compensating IN row on the same
+        // (warehouse, material) dimension that CreateMaterialIssueCommandHandler and
+        // other material movements lock. Acquiring the same StockLockKey.MaterialLot
+        // lock and re-reading the live status inside the lock serializes the reversal
+        // with concurrent issues and prevents a duplicate concurrent cancellation from
+        // crediting the stock twice.
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.MaterialLot(snapshot.WarehouseId, snapshot.MaterialId), cancellationToken))
+        {
+            var issue = await _db.MaterialIssues.FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
+                ?? throw new NotFoundException("MaterialIssue", request.Id);
 
-        _db.MaterialTransactions.Add(new MaterialTransaction(
-            DocumentType.MaterialIssue, issue.IssueNumber, issue.Id, postingDate,
-            issue.MaterialId, issue.WarehouseId, issue.ProductionOrderId,
-            issue.Quantity, MaterialTransactionDirection.In, issue.UnitCost, _currentUser.UserName));
+            var liveStatus = await _db.MaterialIssues.AsNoTracking()
+                .Where(i => i.Id == issue.Id)
+                .Select(i => (MaterialIssueStatus?)i.Status)
+                .FirstOrDefaultAsync(cancellationToken);
 
-        await _db.SaveChangesAsync(cancellationToken);
+            if (liveStatus == MaterialIssueStatus.Cancelled)
+                throw new DomainException("This material issue is already cancelled.");
 
-        return (await GetMaterialIssuesQueryHandler.BuildManyAsync(_db, new[] { issue }, cancellationToken))[0];
+            // The reversal is a brand-new IN row, so the warehouse must still be active for it. Checked
+            // BEFORE the document is touched, so a refusal leaves the issue and the ledger exactly as
+            // they were. (An already-cancelled issue never reaches here: Cancel() refuses below.)
+            await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                _db, issue.WarehouseId, cancellationToken, "to reverse its stock movements");
+
+            issue.Cancel(request.Reason, _currentUser.UserName);
+
+            _db.MaterialTransactions.Add(new MaterialTransaction(
+                DocumentType.MaterialIssue, issue.IssueNumber, issue.Id, postingDate,
+                issue.MaterialId, issue.WarehouseId, issue.ProductionOrderId,
+                issue.Quantity, MaterialTransactionDirection.In, issue.UnitCost, _currentUser.UserName));
+
+            await _db.SaveChangesAsync(cancellationToken);
+
+            return (await GetMaterialIssuesQueryHandler.BuildManyAsync(_db, new[] { issue }, cancellationToken))[0];
+        }
     }
 }

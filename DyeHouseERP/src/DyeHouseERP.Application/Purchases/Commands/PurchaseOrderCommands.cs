@@ -5,6 +5,7 @@ using DyeHouseERP.Application.Purchases.DTOs;
 using DyeHouseERP.Application.Purchases.Queries;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -319,7 +320,7 @@ public class CancelPurchaseOrderCommandHandler : IRequestHandler<CancelPurchaseO
 }
 
 /// <summary>Shared existence checks so no command can post against a missing supplier/material/warehouse.</summary>
-internal static class PurchaseRules
+public static class PurchaseRules
 {
     public static async Task EnsureSupplierExists(IApplicationDbContext db, Guid supplierId, CancellationToken ct)
     {
@@ -339,6 +340,29 @@ internal static class PurchaseRules
     {
         if (!await db.Materials.AnyAsync(m => m.Id == materialId, ct))
             throw new NotFoundException("Material", materialId);
+    }
+
+    /// <summary>
+    /// A STOCK movement of a material/chemical is recorded in the material's OWN registered unit.
+    ///
+    /// The unit is a property of the material (KG / Gram / Litre), not of the document: receiving 5 litres
+    /// of a material that is stocked in kilograms, or booking kilos of one stocked in litres, would create a
+    /// balance no warehouse could reconcile - and there is no conversion between those units anywhere in
+    /// this system, so nothing could repair it later. A receipt may therefore only state the unit the
+    /// material is actually stocked in; a genuinely different purchasing unit belongs on the PURCHASE ORDER
+    /// (how the material is bought), never on the stock movement.
+    /// </summary>
+    public static async Task EnsureMaterialUnitMatchesStockAsync(
+        IApplicationDbContext db, Guid materialId, MaterialUnit unit, CancellationToken ct)
+    {
+        var material = await db.Materials.AsNoTracking().FirstOrDefaultAsync(m => m.Id == materialId, ct)
+            ?? throw new NotFoundException("Material", materialId);
+
+        if (material.Unit != unit)
+            throw new DomainException(
+                $"Material '{material.Code}' is stocked in {material.Unit}, so its stock movement cannot be recorded in {unit}. " +
+                "Record the quantity in the unit the material is registered with. " +
+                $"الصنف «{material.Code}» مسجل بوحدة {material.Unit}، فلا يمكن تسجيل حركته المخزنية بوحدة {unit}.");
     }
 
     public static async Task EnsureTreasuryAccountExists(IApplicationDbContext db, Guid accountId, CancellationToken ct)

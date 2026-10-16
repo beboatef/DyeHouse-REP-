@@ -140,8 +140,12 @@ public class DeliveryStatementRowDto
     /// SEPARATELY for KG and for Meter and never mixing them (see the query for the exact rule).
     /// Null when the unit has no original raw figure to measure against.
     /// </summary>
+    /// <summary>
+    /// The waste of the line's job order - original raw minus ready goods minus scraps minus second
+    /// grade. A WEIGHT, so it exists in KILOGRAMS ONLY: the metre figures stay a length and are never
+    /// converted into a weight.
+    /// </summary>
     public decimal? CalculatedWasteKg { get; set; }
-    public decimal? CalculatedWasteMeter { get; set; }
 
     /// <summary>The drawing number(s) of the order's printing operations, when it passed Printing.</summary>
     public List<string> DrawingNumbers { get; set; } = new();

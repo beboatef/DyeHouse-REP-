@@ -115,6 +115,8 @@ export default function ProductionOrdersPage() {
     onSuccess: (order) => {
       qc.invalidateQueries({ queryKey: ["production-orders"] });
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+      qc.invalidateQueries({ queryKey: ["production-floor"] });
       // Show the created order (number + link) - the issue produced it.
       setCreated({ id: order.id, orderNumber: order.orderNumber });
       setColor(""); setActualKg(""); setActualMeter(""); setCustomerReference(""); setNotes("");

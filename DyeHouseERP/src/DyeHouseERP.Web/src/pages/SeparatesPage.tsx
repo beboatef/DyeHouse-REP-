@@ -45,8 +45,8 @@ export default function SeparatesPage() {
   return (
     <>
       <PageHeader
-        title="المنفصلات وإعادة التشغيل"
-        subtitle="المنفصلات ليست فاقدًا - يتم تتبعها بشكل مستقل، وإعادة تشغيلها ينشئ أمر تشغيل جديد دون المساس بتاريخ الأمر الأصلي"
+        title={t("nav.separates", "المنفصلات")}
+        subtitle="المنفصلات ليست فاقدًا - يتم تتبعها بشكل مستقل داخل المخازن، وإعادة تشغيلها ينشئ أمر تشغيل جديد دون المساس بتاريخ الأمر الأصلي"
       />
       <div className="space-y-3">
         {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}

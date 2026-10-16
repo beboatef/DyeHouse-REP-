@@ -147,12 +147,12 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
                 ScrapsMeter = scrapsMeter,
                 SecondGradeKg = secondKg,
                 SecondGradeMeter = secondMeter,
-                // Calculated waste, per unit and per unit only. Null (never a made-up number) when the
-                // unit has no original-raw figure to measure against, and null when the recorded streams
-                // would make it negative - that means the figures overlap or the original quantity is
-                // understated, which is a data problem and not a waste figure to print on a permit.
-                CalculatedWasteKg = Waste(originalKg, producedKg, scrapsKg, secondKg),
-                CalculatedWasteMeter = Waste(originalMeter, producedMeter, scrapsMeter, secondMeter),
+                // Calculated waste: a WEIGHT, so it is computed in KILOGRAMS ONLY (see Waste below). Null
+                // (never a made-up number) when the KG stream has no original-raw figure to measure
+                // against, and null when the recorded streams would make it negative - that means the
+                // figures overlap or the original quantity is understated, which is a data problem and not
+                // a waste figure to print on a permit.
+                CalculatedWasteKg = WasteKg(originalKg, producedKg, scrapsKg, secondKg),
                 DrawingNumbers = stages.Where(s => s.RequiresDrawingNumber && s.DrawingNumber != null)
                     .Select(s => s.DrawingNumber!).Distinct().ToList(),
                 LineNotes = line.Notes
@@ -184,11 +184,14 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
     }
 
     /// <summary>
-    /// original raw - ready goods - scraps/separates - second grade, within ONE unit. Null when the
-    /// streams needed for the unit are missing, or when the difference would be negative (an
-    /// impossible "waste" is not printed - see the class documentation).
+    /// waste = original raw KG - ready goods KG - scraps/separates KG - second grade KG.
+    ///
+    /// KILOGRAMS ONLY, deliberately: the waste is a weight, the metre figures on the same lines are a
+    /// length, and there is no conversion between the two anywhere in this system - so there is no
+    /// "metre waste" and nothing is inferred to produce one. Null when the KG streams are missing, or when
+    /// the difference would be negative (an impossible "waste" is not printed - see the class documentation).
     /// </summary>
-    private static decimal? Waste(decimal? original, decimal? readyGoods, decimal? scraps, decimal? secondGrade)
+    private static decimal? WasteKg(decimal? original, decimal? readyGoods, decimal? scraps, decimal? secondGrade)
     {
         if (original is null || readyGoods is null) return null;
 

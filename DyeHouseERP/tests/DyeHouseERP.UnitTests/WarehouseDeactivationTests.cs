@@ -248,7 +248,7 @@ public class WarehouseDeactivationTests
         await PostAsync(db, issueId);
         await DeactivateAsync(db, warehouseId);
 
-        var act = () => new CancelSupplyIssueCommandHandler(db, User(), new FixedClock(), new OpenPeriod())
+        var act = () => new CancelSupplyIssueCommandHandler(db, User(), new FixedClock(), new OpenPeriod(), new RecordingStockLock())
             .Handle(new CancelSupplyIssueCommand(issueId, "typist error"), CancellationToken.None);
 
         await act.Should().ThrowAsync<DomainException>();
@@ -269,7 +269,7 @@ public class WarehouseDeactivationTests
 
         // A draft was never posted, so cancelling it writes no ledger row at all - the
         // warehouse has been retired, not the work. Refusing this would strand the document.
-        var cancelled = await new CancelSupplyIssueCommandHandler(db, User(), new FixedClock(), new OpenPeriod())
+        var cancelled = await new CancelSupplyIssueCommandHandler(db, User(), new FixedClock(), new OpenPeriod(), new RecordingStockLock())
             .Handle(new CancelSupplyIssueCommand(issueId, "no longer required"), CancellationToken.None);
 
         cancelled.Id.Should().Be(issueId);

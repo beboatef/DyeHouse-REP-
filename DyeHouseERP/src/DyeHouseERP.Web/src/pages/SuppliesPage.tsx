@@ -108,7 +108,10 @@ export default function SuppliesPage() {
 
   const post = useMutation({
     mutationFn: (id: string) => SuppliesApi.post(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["supply-issues"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["supply-issues"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+    },
     onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });
@@ -118,7 +121,10 @@ export default function SuppliesPage() {
       const reason = window.prompt(t("common.reason"));
       return SuppliesApi.cancel(id, reason || "");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["supply-issues"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["supply-issues"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+    },
     onError: (err: ApiErrorLike) =>
       setError(err?.response?.data?.detail ?? err?.response?.data?.title ?? t("common.error"))
   });

@@ -233,6 +233,41 @@ export const ReportsExports = {
   }
 };
 
+/**
+ * A file-name-safe stem. Letters, digits, '.', '-' and '_' survive; anything else (an Arabic
+ * character, a slash, a space) becomes '-', runs collapse and the ends are trimmed, so a download
+ * name can never carry a path separator or come out empty.
+ */
+const safeStem = (value: string | undefined, fallback: string) => {
+  const cleaned = (value ?? "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "");
+  return cleaned.length > 0 ? cleaned : fallback;
+};
+
+export const InventoryTraceabilityExports = {
+  /** The balances + movements list, honouring the same filters the screen shows. */
+  stock: (format: ExportFormat) => (params?: QueryParams) =>
+    downloadFile("/inventory/traceability/export", `stock.${extension(format)}`, { ...params, format }),
+
+  /**
+   * بطاقة تتبع اللوط as a SERVER-rendered PDF (spec sections 10/14/30): the lot identity, its ledger
+   * movements and the cumulative balance after each one, built by the same traceability read the
+   * screen uses. The lot is named by whichever identity its warehouse uses - a receipt message in the
+   * raw warehouse, a job order in the ready warehouse, a material lot in the materials warehouse.
+   */
+  lotCardPdf: (scope: "raw" | "ready" | "materials", lotId: string, lotNumber?: string) => () =>
+    downloadFile(
+      "/inventory/traceability/lot-card",
+      `lot-card-${safeStem(lotNumber, scope)}.pdf`,
+      {
+        scope,
+        ...(scope === "raw" ? { rawMessageId: lotId } : scope === "ready" ? { productionOrderId: lotId } : { materialId: lotId })
+      }
+    )
+};
+
 export const JobOrderCostingExports = {
   file: (format: ExportFormat) => (productionOrderId: string, number: string) =>
     downloadFile(`/production-orders/${productionOrderId}/cost/export`, `costing-${number}.${extension(format)}`, {

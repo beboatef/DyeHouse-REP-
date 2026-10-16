@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CustomersApi, ItemsApi, ProductionFloorApi, ProductionFloorRow, ProductionStagesApi } from "@/api/client";
+import { CustomersApi, ItemsApi, ProductionFloorApi, ProductionFloorRow, ProductionFloorView, ProductionStagesApi } from "@/api/client";
 import { PageHeader, Card, Button, Select, Badge, KpiCard, QuickTile, TableStateRow, TableWrap, fmt, SearchInput } from "@/components/ui";
 import { useI18n } from "@/i18n";
 
@@ -42,6 +42,7 @@ export default function ProductionFloorPage() {
   const [stageId, setStageId] = useState("");
   const [priority, setPriority] = useState("");
   const [status, setStatus] = useState("");
+  const [view, setView] = useState<ProductionFloorView>("open");
 
   const { data: customers } = useQuery({
     queryKey: ["customers", "active"], queryFn: () => CustomersApi.list({ activeOnly: true })
@@ -54,7 +55,7 @@ export default function ProductionFloorPage() {
   });
 
   const { data: rows, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ["production-floor", { customerId, itemId, stageId, priority, status, search }],
+    queryKey: ["production-floor", { customerId, itemId, stageId, priority, status, search, view }],
     queryFn: () =>
       ProductionFloorApi.get({
         customerId: customerId || undefined,
@@ -62,7 +63,8 @@ export default function ProductionFloorPage() {
         stageDefinitionId: stageId || undefined,
         priority: priority || undefined,
         status: status || undefined,
-        search: search.trim() || undefined
+        search: search.trim() || undefined,
+        view
       }),
     refetchInterval: 30000
   });
@@ -133,6 +135,15 @@ export default function ProductionFloorPage() {
             />
           </div>
           <div>
+            <label className="field-label">{t("floor.view")}</label>
+            <Select value={view} onChange={(e) => setView(e.target.value as ProductionFloorView)}>
+              <option value="open">{t("floor.viewOpen")}</option>
+              <option value="delivered">{t("floor.viewDelivered")}</option>
+              <option value="closed">{t("floor.viewClosed")}</option>
+              <option value="all">{t("floor.viewAll")}</option>
+            </Select>
+          </div>
+          <div>
             <label className="field-label">{t("floor.stage")}</label>
             <Select value={stageId} onChange={(e) => setStageId(e.target.value)}>
               <option value="">{t("common.all")}</option>
@@ -145,9 +156,12 @@ export default function ProductionFloorPage() {
             <label className="field-label">{t("floor.orderStatus")}</label>
             <Select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">{t("common.all")}</option>
+              <option value="Draft">{t("prod.status.Draft")}</option>
               <option value="RawAllocated">{t("floor.awaitingStart")}</option>
               <option value="InProduction">{t("floor.running")}</option>
               <option value="Paused">{t("prod.status.Paused")}</option>
+              <option value="Completed">{t("prod.status.Completed")}</option>
+              <option value="Cancelled">{t("prod.status.Cancelled")}</option>
             </Select>
           </div>
           <div>
@@ -178,12 +192,13 @@ export default function ProductionFloorPage() {
               ))}
             </Select>
           </div>
-          <div className="sm:col-span-2 flex items-end">
+          <div className="sm:col-span-2 flex flex-wrap items-end justify-between gap-2">
             <Button variant="ghost" onClick={() => {
-              setSearch(""); setCustomerId(""); setItemId(""); setStageId(""); setPriority(""); setStatus("");
+              setSearch(""); setCustomerId(""); setItemId(""); setStageId(""); setPriority(""); setStatus(""); setView("open");
             }}>
               {t("common.clearFilters")}
             </Button>
+            <span className="text-2xs text-ink-subtle">{t("floor.deliveredHint")}</span>
           </div>
         </Card>
 
@@ -308,7 +323,23 @@ function FloorRow({ row, staleMinutes }: { row: ProductionFloorRow; staleMinutes
       <td className="ltr-nums">{outText}</td>
       <td className="ltr-nums text-ink-muted">{lossText}</td>
       <td>
-        <Badge tone={orderStatusTone[row.orderStatus] ?? "gray"}>{t(`prod.status.${row.orderStatus}`)}</Badge>
+        <div className="flex flex-wrap items-center gap-1">
+          <Badge tone={orderStatusTone[row.orderStatus] ?? "gray"}>{t(`prod.status.${row.orderStatus}`)}</Badge>
+          {row.isDelivered && <Badge tone="green">{t("floor.delivered")}</Badge>}
+        </div>
+        {row.isDelivered && (
+          <div className="mt-1 text-2xs text-ink-subtle ltr-nums">
+            {row.deliveryNumbers && <span>{row.deliveryNumbers}</span>}
+            {row.lastDeliveryDate && <span> · {row.lastDeliveryDate.slice(0, 10)}</span>}
+            {(row.deliveredQuantityKg != null || row.deliveredQuantityMeter != null) && (
+              <span className="block">
+                {row.deliveredQuantityKg != null ? `${fmt(row.deliveredQuantityKg)} KG` : ""}
+                {row.deliveredQuantityKg != null && row.deliveredQuantityMeter != null ? " · " : ""}
+                {row.deliveredQuantityMeter != null ? `${fmt(row.deliveredQuantityMeter)} M` : ""}
+              </span>
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );

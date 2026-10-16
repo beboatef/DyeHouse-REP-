@@ -75,6 +75,7 @@ export default function RawMessagesPage() {
     mutationFn: RawMessagesApi.create,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setShowForm(false);
       setLines([emptyLine()]);
       setNotes("");
@@ -93,6 +94,7 @@ export default function RawMessagesPage() {
     }) => RawMessagesApi.recordInspection(input.id, { result: input.result, notes: input.notes, rejections: input.rejections }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setInspectionFor(null);
       setInspectionError(null);
     },
@@ -103,6 +105,7 @@ export default function RawMessagesPage() {
     mutationFn: (input: { id: string; reason: string }) => RawMessagesApi.cancel(input.id, input.reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setCancelFor(null);
       setCancelReason("");
       setCancelError(null);

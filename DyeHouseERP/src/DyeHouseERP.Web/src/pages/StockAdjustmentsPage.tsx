@@ -39,6 +39,7 @@ export default function StockAdjustmentsPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-adjustments"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setShowForm(false);
       setQtyKg(""); setQtyMeter(""); setReason(""); setNotes(""); setError(null); setNegativeStockDetail(null);
       setApprovalRequested(null);

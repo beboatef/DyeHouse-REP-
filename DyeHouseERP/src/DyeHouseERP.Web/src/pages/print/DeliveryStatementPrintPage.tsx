@@ -36,6 +36,7 @@ export default function DeliveryStatementPrintPage() {
   // Which optional columns this print-out shows. The identifying columns (job order, item, quantity
   // handed over) are always printed - the rest can be switched off for a given document format.
   const [optional, setOptional] = useState({
+    color: true,
     originalRaw: true,
     settled: true,
     remaining: true,
@@ -62,10 +63,21 @@ export default function DeliveryStatementPrintPage() {
       });
     }
 
+    // The item NAME the statement is about, with its code: the same line read by the warehouse and by
+    // the customer has to name the same fabric, so the name is printed rather than only the code.
     cells.push({
-      header: t("statement.item", "الصنف"),
-      render: (r: DeliveryStatementRow) => `${r.itemCode}${r.color ? ` (${r.color})` : ""}`
+      header: t("statement.item", "اسم الصنف"),
+      render: (r: DeliveryStatementRow) => (r.itemName ? `${r.itemCode} · ${r.itemName}` : r.itemCode)
     });
+
+    // The colour is a COLUMN of its own (not a suffix hidden on the item cell), because the statement is
+    // read down a column: "what did we deliver in this colour?".
+    if (optional.color) {
+      cells.push({
+        header: t("statement.color", "اللون"),
+        render: (r: DeliveryStatementRow) => r.color ?? "—"
+      });
+    }
 
     if (optional.originalRaw) {
       cells.push(
@@ -112,9 +124,9 @@ export default function DeliveryStatementPrintPage() {
     }
 
     if (optional.waste) {
+      // الهالك وزن، فيُطبع بالكيلو فقط: المتر طول ولا يوجد تحويل بينه وبين الوزن، فلا يُطبع «هالك متر».
       cells.push(
-        { header: t("statement.wasteKg", "الهالك كجم"), render: (r: DeliveryStatementRow) => r.calculatedWasteKg ?? "—", align: "end" },
-        { header: t("statement.wasteM", "الهالك متر"), render: (r: DeliveryStatementRow) => r.calculatedWasteMeter ?? "—", align: "end" }
+        { header: t("statement.wasteKg", "الهالك كجم"), render: (r: DeliveryStatementRow) => r.calculatedWasteKg ?? "—", align: "end" }
       );
     }
 
@@ -148,6 +160,7 @@ export default function DeliveryStatementPrintPage() {
           {(
             [
               ["dates", t("statement.orderDate", "تاريخ الأمر الأصلي")],
+              ["color", t("statement.color", "اللون")],
               ["originalRaw", t("statement.originalRaw", "الخام الأصلي")],
               ["settled", t("statement.settled", "المُسوَّى في هذا التسليم")],
               ["remaining", t("statement.remaining", "المتبقي")],

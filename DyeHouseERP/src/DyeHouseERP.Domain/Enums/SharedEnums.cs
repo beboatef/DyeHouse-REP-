@@ -439,6 +439,16 @@ public enum MaterialIssueStatus
 /// </summary>
 public enum ApprovalRequestType
 {
+    /// <summary>
+    /// RETIRED - allocating raw material to an EXISTING Job Order (a reserved quantity with no actual issue).
+    /// The operation was removed from the system: the raw deduction is made exactly once, by the raw issue
+    /// that creates the order (<see cref="RawIssue"/>), which also records the single allocation row. The
+    /// member is deliberately NOT renumbered or deleted, because rows already stored under it (a pending or
+    /// decided request from before the removal) must keep reading back exactly as they were recorded. Any
+    /// attempt to SUBMIT or EXECUTE one now explains why instead of failing cryptically - it can only be
+    /// rejected. The numeric value is therefore frozen forever. (No [Obsolete] attribute: the member is
+    /// still legitimately READ when historical rows are listed, so marking it would only produce noise.)
+    /// </summary>
     AllocateRaw = 1,
     ResumeProduction = 2,
     CustomerTransfer = 3,

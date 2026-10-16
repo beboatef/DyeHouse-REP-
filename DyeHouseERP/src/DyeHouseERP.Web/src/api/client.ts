@@ -254,7 +254,7 @@ export const ItemImportApi = {
 };
 
 export const WarehousesApi = {
-  list: (params?: { kind?: string; search?: string }) =>
+  list: (params?: { kind?: string; activeOnly?: boolean; search?: string }) =>
     api.get<Warehouse[]>("/warehouses", { params }).then((r) => r.data),
   create: (body: { code: string; name: string; kind: string }) =>
     api.post<Warehouse>("/warehouses", body).then((r) => r.data),
@@ -651,6 +651,13 @@ export interface StageExecution {
   /** Second-grade material produced by this operation - its own quantity, neither output nor waste. */
   secondGradeKg: number | null;
   secondGradeMeter: number | null;
+  /**
+   * Derived WASTE (الهالك) for the last operation before the Ready Goods warehouse:
+   * original raw (input) - ready weight (output) - separates, per unit and never between units.
+   * Null while the unit has no recorded input/output, and null when the result would be negative.
+   */
+  wasteKg: number | null;
+
   operator: string | null;
   notes: string | null;
   startedAtUtc: string | null;
@@ -753,10 +760,8 @@ export const ProductionOrdersApi = {
       jobOrderType: JobOrderType;
     }
   ) => api.put<ProductionOrder>(`/production-orders/${id}`, body).then((r) => r.data),
-  allocateRaw: (
-    id: string,
-    body: { rawMessageId: string; itemId: string; quantityKg?: number; quantityMeter?: number }
-  ) => api.post<ProductionOrder>(`/production-orders/${id}/raw-allocations`, body).then((r) => r.data),
+  // `allocateRaw` was removed with the endpoint it called: raw material is no longer allocated to an
+  // existing Job Order. The deduction is made once, by the raw issue that creates the order (`issue`).
   startStage: (stageExecutionId: string) =>
     api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/start`).then((r) => r.data),
   completeStage: (
@@ -1185,7 +1190,8 @@ export interface DeliveryStatementRow {
   baleCount: number | null;
   scrapsKg: number | null; scrapsMeter: number | null;
   secondGradeKg: number | null; secondGradeMeter: number | null;
-  calculatedWasteKg: number | null; calculatedWasteMeter: number | null;
+  /** The waste of the line's job order - a WEIGHT, so it exists in KG only (never a metre waste). */
+  calculatedWasteKg: number | null;
   drawingNumbers: string[];
   lineNotes: string | null;
 }
@@ -1734,12 +1740,25 @@ export interface ProductionFloorRow {
   awaitingStart: boolean;
   customerReference: string | null;
   notes: string | null;
+
+  /** The job has been DELIVERED to the customer - it is no longer work waiting on the floor. */
+  isDelivered: boolean;
+  deliveryNumbers: string | null;
+  lastDeliveryDate: string | null;
+  deliveredQuantityKg: number | null;
+  deliveredQuantityMeter: number | null;
 }
+
+/**
+ * Which slice of the production cycle the floor is showing. `open` is the ordinary view and never
+ * contains a delivered job; `delivered` is the jobs that have already left the building.
+ */
+export type ProductionFloorView = "open" | "delivered" | "closed" | "all";
 
 export const ProductionFloorApi = {
   get: (params?: {
     customerId?: string; itemId?: string; stageDefinitionId?: string;
-    status?: string; priority?: string; search?: string;
+    status?: string; priority?: string; search?: string; view?: ProductionFloorView;
   }) => api.get<ProductionFloorRow[]>("/production-floor", { params }).then((r) => r.data)
 };
 
@@ -1821,6 +1840,160 @@ export interface InventoryMovement {
   createdAtUtc: string;
   reversesTransactionId: string | null;
 }
+
+// ===================================================================
+// Stock traceability: balances WITH the movements behind them.
+//
+// One shape for all three warehouses (raw material, ready goods, materials/chemicals): each row is a LOT
+// - a receipt message, a job order, or a material in a warehouse - and every quantity sits in its OWN
+// field. KG and Meter are never merged into a single number, and a figure that was never recorded is
+// null rather than a zero that would read as a real measurement.
+// ===================================================================
+
+export type StockScope = "raw" | "ready" | "materials";
+
+export interface StockTraceRow {
+  scope: StockScope;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  baseUnit: string;
+  secondaryUnit: string | null;
+  rawMessageId: string | null;
+  messageNumber: string | null;
+  messageDate: string | null;
+  messageStatus: string | null;
+  productionOrderId: string | null;
+  orderNumber: string | null;
+  orderNumbers: string | null;
+  orderDate: string | null;
+  orderStatus: string | null;
+  color: string | null;
+  producedPieceCount: number | null;
+  materialId: string | null;
+  materialCode: string | null;
+  materialName: string | null;
+  materialUnit: string | null;
+  materialKind: string | null;
+  warehouseId: string | null;
+  warehouseName: string | null;
+  customerId: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  supplierName: string | null;
+  purchaseOrderNumber: string | null;
+  receivedKg: number | null;
+  receivedMeter: number | null;
+  receivedQuantity: number | null;
+  issuedToProductionKg: number | null;
+  issuedToProductionMeter: number | null;
+  issuedToProductionQuantity: number | null;
+  underProductionKg: number | null;
+  underProductionMeter: number | null;
+  returnedKg: number | null;
+  returnedMeter: number | null;
+  returnedQuantity: number | null;
+  producedKg: number | null;
+  producedMeter: number | null;
+  deliveredKg: number | null;
+  deliveredMeter: number | null;
+  deliveredPieceCount: number | null;
+  deliveryNumbers: string | null;
+  lastDeliveryDate: string | null;
+  remainingKg: number | null;
+  remainingMeter: number | null;
+  remainingQuantity: number | null;
+  movementCount: number;
+}
+
+export interface StockTraceMovement {
+  id: string;
+  scope: StockScope;
+  date: string;
+  documentType: string;
+  documentNumber: string;
+  documentId: string;
+  kind: string;
+  direction: string;
+  isReversal: boolean;
+  rawMessageId: string | null;
+  messageNumber: string | null;
+  productionOrderId: string | null;
+  orderNumber: string | null;
+  materialId: string | null;
+  materialCode: string | null;
+  itemId: string | null;
+  itemCode: string | null;
+  itemName: string | null;
+  warehouseId: string | null;
+  warehouseName: string | null;
+  customerId: string | null;
+  customerCode: string | null;
+  deliveryId: string | null;
+  supplierName: string | null;
+  purchaseOrderNumber: string | null;
+  quantityKg: number | null;
+  quantityMeter: number | null;
+  quantity: number | null;
+  unit: string | null;
+  balanceAfterKg: number | null;
+  balanceAfterMeter: number | null;
+  balanceAfter: number | null;
+  createdBy: string;
+  createdAtUtc: string;
+}
+
+export interface StockTraceability {
+  scope: StockScope;
+  rows: StockTraceRow[];
+  movements: StockTraceMovement[];
+  totalRemainingKg: number | null;
+  totalRemainingMeter: number | null;
+  totalRemainingQuantity: number | null;
+  totalUnderProductionKg: number | null;
+  totalUnderProductionMeter: number | null;
+  totalReceivedKg: number | null;
+  totalReceivedMeter: number | null;
+  totalReceivedQuantity: number | null;
+  totalIssuedKg: number | null;
+  totalIssuedMeter: number | null;
+  totalIssuedQuantity: number | null;
+  totalReturnedKg: number | null;
+  totalReturnedMeter: number | null;
+  totalReturnedQuantity: number | null;
+  totalProducedKg: number | null;
+  totalProducedMeter: number | null;
+  totalDeliveredKg: number | null;
+  totalDeliveredMeter: number | null;
+  movementCount: number;
+  generatedAtUtc: string;
+}
+
+/**
+ * Traceability filters. The IDENTITY filters select WHICH lots are shown; the date, document-number and
+ * movement-kind filters narrow only the MOVEMENT LIST, so a filtered screen can never report a balance
+ * that never existed - the balance stays the real, current one.
+ */
+export interface StockTraceabilityFilters {
+  scope: StockScope;
+  itemId?: string;
+  materialId?: string;
+  customerId?: string;
+  rawMessageId?: string;
+  productionOrderId?: string;
+  warehouseId?: string;
+  documentNumber?: string;
+  kind?: string;
+  from?: string;
+  to?: string;
+  onlyWithBalance?: boolean;
+  includeDelivered?: boolean;
+}
+
+export const InventoryTraceabilityApi = {
+  get: (filters: StockTraceabilityFilters) =>
+    api.get<StockTraceability>("/inventory/traceability", { params: filters }).then((r) => r.data)
+};
 
 export const InventoryLedgerApi = {
   movements: (params?: {

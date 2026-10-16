@@ -46,6 +46,16 @@ public class StageExecutionDto
     /// <summary>The machine and the execution shift this operation actually ran on (historical references).</summary>
     public Guid? MachineId { get; set; }
     public Guid? ProductionShiftId { get; set; }
+
+    /// <summary>
+    /// The operation's WASTE (الهالك), as the floor states it for the last operation before the Ready Goods
+    /// warehouse: original raw KG minus the ready weight KG minus the separates KG. The waste is a WEIGHT,
+    /// so it exists in KILOGRAMS ONLY - the operation's metre figure is a length and is never converted into
+    /// a weight, and there is therefore no "metre waste" figure anywhere in the system. Null (never a
+    /// fabricated zero) when the KG input/output was not recorded or when the subtraction would go negative.
+    /// See <c>ProductionOrderStageExecution.WasteKg</c>.
+    /// </summary>
+    public decimal? WasteKg { get; set; }
 }
 
 public class ProductionOrderDto

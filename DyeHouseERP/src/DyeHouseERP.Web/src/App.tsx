@@ -35,6 +35,7 @@ import DeliveryPrintPage from "@/pages/print/DeliveryPrintPage";
 import DeliveryStatementPrintPage from "@/pages/print/DeliveryStatementPrintPage";
 import ProductionOrderPrintPage from "@/pages/print/ProductionOrderPrintPage";
 import RawMessagePrintPage from "@/pages/print/RawMessagePrintPage";
+import StockTraceabilityPrintPage from "@/pages/print/StockTraceabilityPrintPage";
 import ScanViewPage from "@/pages/scan/ScanViewPage";
 import ReportBuilderPage from "@/pages/ReportBuilderPage";
 import PeriodClosingPage from "@/pages/PeriodClosingPage";
@@ -109,6 +110,11 @@ export default function App() {
         <Route path="/print/delivery-statement/:id" element={<DeliveryStatementPrintPage />} />
         <Route path="/print/production-order/:id" element={<ProductionOrderPrintPage />} />
         <Route path="/print/raw-message/:id" element={<RawMessagePrintPage />} />
+        {/* بطاقة تتبع اللوط - the lot's ledger movements with the cumulative balance after each one,
+            as an official document. The :scope switch names the lot's identity the way the screen does
+            (raw = receipt message, ready = job order, materials = material lot), and ?lots=id,id,id
+            prints SEVERAL lots as independent cards, one per sheet. */}
+        <Route path="/print/stock-traceability/:scope" element={<StockTraceabilityPrintPage />} />
         <Route path="/scan/:type/:id" element={<ScanViewPage />} />
       </Route>
 

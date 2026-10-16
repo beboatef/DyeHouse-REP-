@@ -176,7 +176,7 @@ public class NegativeStockPermissionAlignmentTests
 {
     public static IEnumerable<object[]> NegativeStockHandlers => new List<object[]>
     {
-        new object[] { "AllocateRawCommand" },
+        new object[] { "IssueRawMaterialCommand" },
         new object[] { "CreateCustomerTransferCommand" },
         new object[] { "CreateRawExternalReleaseCommand" },
         new object[] { "CreateStockAdjustmentCommand" }

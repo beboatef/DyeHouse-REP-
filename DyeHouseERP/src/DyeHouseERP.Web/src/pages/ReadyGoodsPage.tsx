@@ -4,6 +4,7 @@ import { ProductionOrdersApi, RawMessagesApi, ReadyGoodsApi, WarehousesApi } fro
 import { PageHeader, Card, Button, Input, Select } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ReadyGoodsExports } from "@/api/exports";
+import StockTraceability from "@/components/StockTraceability";
 
 export default function ReadyGoodsPage() {
   const qc = useQueryClient();
@@ -53,6 +54,7 @@ export default function ReadyGoodsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
       qc.invalidateQueries({ queryKey: ["ready-goods-transfers"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setShowForm(false); setQtyKg(""); setQtyMeter(""); setPieceCount("");
       setStageExecutionId(""); setError(null);
     },
@@ -73,6 +75,7 @@ export default function ReadyGoodsPage() {
       qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
       qc.invalidateQueries({ queryKey: ["ready-goods-raw-returns"] });
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setRawFormFor(null);
       setRawDraft({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "" });
       setRawError(null);
@@ -149,6 +152,11 @@ export default function ReadyGoodsPage() {
           {error && <p className="form-error mt-2">{error}</p>}
         </Card>
       )}
+
+      <h2 className="card-title mb-3">تتبع أرصدة وحركات الجاهز لكل أمر تشغيل</h2>
+      <div className="mb-8">
+        <StockTraceability scope="ready" />
+      </div>
 
       <h2 className="card-title mb-3">الرصيد الجاهز الحالي</h2>
       <Card className="mb-8">

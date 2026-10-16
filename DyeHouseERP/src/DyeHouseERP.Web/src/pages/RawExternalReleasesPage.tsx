@@ -50,7 +50,10 @@ function ExternalProcessingActions({ release }: { release: RawExternalRelease })
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => { setPanel(null); setError(null); };
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["raw-external-releases"] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["raw-external-releases"] });
+    qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+  };
 
   const returnMutation = useMutation({
     mutationFn: () => RawExternalReleasesApi.recordReturn(release.id, {
@@ -185,6 +188,7 @@ export default function RawExternalReleasesPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["raw-external-releases"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setShowForm(false);
       setQtyKg(""); setQtyMeter(""); setExternalParty(""); setStage(""); setCost("");
       setExpectedReturnDate(""); setNotes(""); setError(null); setNegativeStockDetail(null);

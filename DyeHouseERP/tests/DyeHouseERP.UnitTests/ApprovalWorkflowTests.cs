@@ -98,6 +98,11 @@ public class ApprovalWorkflowTests
             requestedQuantityKg: 500m);
         db.ProductionOrders.Add(order);
 
+        // The raw ISSUE is the canonical negative-stock path this fixture now exercises, so the route it
+        // snapshots when it creates the order must exist: one explicit formation stage.
+        db.ProductionStageDefinitions.Add(
+            new ProductionStageDefinition("PS001", "التشكيل", 1, "seed", isFormationStage: true));
+
         db.SaveChanges();
 
         return new Fixture { Customer = customer, Item = item, Warehouse = warehouse, Message = message, Order = order };
@@ -114,16 +119,26 @@ public class ApprovalWorkflowTests
         db.SaveChanges();
     }
 
+    /// <summary>
+    /// The override being requested: a raw ISSUE of more material than the lot still holds.
+    ///
+    /// This used to be raised as an "allocate raw to an existing Job Order" request. That operation was
+    /// removed (the raw deduction is made once, by the issue that creates the order), so the same
+    /// separation-of-duties workflow is exercised through the issue that REPLACED it - the mechanism under
+    /// test (submit -> a different user decides -> the module's own command runs -> the approval is consumed
+    /// with the posting) is unchanged.
+    /// </summary>
     private static SubmitApprovalRequestCommand SubmitFor(Fixture f, string quantityKg = "500")
         => new(
-            ApprovalRequestType.AllocateRaw,
+            ApprovalRequestType.RawIssue,
             "balance will go negative while the job runs",
             $$"""
             {
-              "productionOrderId": "{{f.Order.Id}}",
-              "rawMessageId": "{{f.Message.Id}}",
+              "customerId": "{{f.Customer.Id}}",
               "itemId": "{{f.Item.Id}}",
-              "quantityKg": {{quantityKg}},
+              "rawMessageId": "{{f.Message.Id}}",
+              "orderDate": "2026-03-01T00:00:00Z",
+              "actualQuantityKg": {{quantityKg}},
               "overrideNegativeStock": true,
               "overrideReason": "stale client value that must be overwritten"
             }
@@ -160,7 +175,7 @@ public class ApprovalWorkflowTests
 
         dto.RequestedBy.Should().Be("operator", "the requester is the authenticated caller, not a body field");
         dto.Status.Should().Be(nameof(ApprovalRequestStatus.Pending));
-        dto.DocumentNumber.Should().Be(f.Order.OrderNumber, "the subject's number is resolved server-side");
+        dto.DocumentNumber.Should().Be(f.Message.MessageNumber, "the subject's number is resolved server-side");
         dto.RequiredPermission.Should().Be(Permissions.InventoryApproveNegativeStock);
         dto.DecidedBy.Should().BeNull();
 
@@ -439,7 +454,7 @@ public class ApprovalWorkflowTests
     private static ISender BuildSender(ApplicationDbContext db, ICurrentUserService user)
     {
         var services = new ServiceCollection();
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<AllocateRawCommand>());
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<IssueRawMaterialCommand>());
         services.AddSingleton<IApplicationDbContext>(db);
         services.AddSingleton(user);
         services.AddSingleton<ICurrentUserService>(user);

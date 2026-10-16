@@ -118,8 +118,30 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
         // permit is a LINKED document: confirming it records the document's own state and posts
         // nothing at all. Without this, confirming it would deduct the very same ready lot a second
         // time - the primary permit's OUT rows are the only ones that may exist for that delivery.
+        //
+        // It is still validated exactly like any other permit at the moment it takes effect - the same
+        // discipline the primary permit follows when its ready balance is checked here and only here:
+        // the permit it slices must itself have been DELIVERED, and the quantity it hands over must still
+        // fit inside what that permit delivered (a sibling may have claimed the rest, or the primary may
+        // have been corrected downward since this one was drafted).
         if (delivery.IsSubCustomerPermit)
         {
+            var primary = (await SubCustomerPermitGuard.ResolvePrimaryAsync(
+                _db, delivery.PrimaryDeliveryId, cancellationToken))!;
+            SubCustomerPermitGuard.EnsurePrimaryIsDelivered(primary);
+
+            var ownLines = await _db.DeliveryLines.AsNoTracking()
+                .Where(l => l.DeliveryId == delivery.Id)
+                .Select(l => new { l.ProductionOrderId, l.ItemId, l.QuantityKg, l.QuantityMeter })
+                .ToListAsync(cancellationToken);
+
+            await SubCustomerPermitGuard.EnsureWithinPrimaryAsync(
+                _db, primary,
+                ownLines.Select(l => (l.ProductionOrderId, l.ItemId, l.QuantityKg ?? 0m, l.QuantityMeter ?? 0m)).ToList(),
+                cancellationToken,
+                // This permit's own stored lines are not a "sibling" claim against itself.
+                excludeSubPermitId: delivery.Id);
+
             delivery.MarkDelivered(request.RequestId);
             await _db.SaveChangesAsync(cancellationToken);
             return await GetDeliveriesQueryHandler.LoadDtoAsync(_db, delivery.Id, cancellationToken);
@@ -240,6 +262,26 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
 
         var delivery = await _db.Deliveries.FirstOrDefaultAsync(d => d.Id == request.DeliveryId, cancellationToken)
             ?? throw new NotFoundException("Delivery", request.DeliveryId);
+
+        // The chain stays consistent in one direction: a PRIMARY permit with live sub-customer permits may
+        // not be cancelled, because cancelling it reverses the one physical movement those sub-permits are a
+        // slice of - they would then describe goods that were never handed over. The refusal names them, and
+        // the user cancels them first (each of those is a document action with its own audit trail, so no
+        // cascade silently rewrites other people's documents).
+        if (!delivery.IsSubCustomerPermit)
+        {
+            var liveSubPermits = await _db.Deliveries.AsNoTracking()
+                .Where(d => d.PrimaryDeliveryId == delivery.Id && d.Status != DeliveryStatus.Cancelled)
+                .Select(d => d.DeliveryNumber)
+                .ToListAsync(cancellationToken);
+
+            if (liveSubPermits.Count > 0)
+                throw new DomainException(
+                    $"Permit {delivery.DeliveryNumber} has sub-customer permits issued against it " +
+                    $"({string.Join(", ", liveSubPermits)}), so it cannot be cancelled: cancelling it would reverse the " +
+                    "stock movement those permits are a slice of. Cancel the sub-customer permits first. " +
+                    "لا يمكن إلغاء الإذن الأساسي قبل إلغاء الأذون الفرعية الصادرة عنه.");
+        }
 
         var wasDelivered = delivery.Status == DeliveryStatus.Delivered;
 

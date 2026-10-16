@@ -39,6 +39,7 @@ export default function CustomerTransfersPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customer-transfers"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setShowForm(false);
       setQtyKg(""); setQtyMeter(""); setReason(""); setNotes(""); setError(null); setNegativeStockDetail(null);
       setApprovalRequested(null);

@@ -148,6 +148,7 @@ export default function CustomerReturnsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customer-returns"] });
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       qc.invalidateQueries({ queryKey: ["dashboard-summary"] });
       resetForm();
     },
@@ -159,6 +160,7 @@ export default function CustomerReturnsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customer-returns"] });
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       qc.invalidateQueries({ queryKey: ["dashboard-summary"] });
       setCancelFor(null);
       setCancelReason("");
@@ -189,6 +191,7 @@ export default function CustomerReturnsPage() {
       qc.invalidateQueries({ queryKey: ["customer-returns"] });
       qc.invalidateQueries({ queryKey: ["production-orders"] });
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setOrderFor(null);
       setOrderLine({ itemId: "", rawMessageId: "", quantityKg: "", quantityMeter: "", color: "", notes: "" });
       setOrderCostBearer("");

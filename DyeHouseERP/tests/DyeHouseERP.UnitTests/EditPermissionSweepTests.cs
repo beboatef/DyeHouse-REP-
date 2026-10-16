@@ -117,9 +117,13 @@ public class EditPermissionSweepTests
             foreach (var action in MutatingActions(controller))
             {
                 foreach (var policy in action.GetCustomAttributes<AuthorizeAttribute>(inherit: true)
-                             .Select(a => a.Policy).Where(p => p is not null))
+                             .Select(a => a.Policy))
                 {
-                    policy!.Should().StartWith(PermissionPolicy.Prefix);
+                    // A permission policy must be present and prefixed; an unpolicied action is
+                    // covered by a different test, so a null policy is simply skipped here.
+                    if (policy is null) continue;
+
+                    policy.Should().StartWith(PermissionPolicy.Prefix);
                     var permission = policy[PermissionPolicy.Prefix.Length..];
 
                     if (!known.Contains(permission))

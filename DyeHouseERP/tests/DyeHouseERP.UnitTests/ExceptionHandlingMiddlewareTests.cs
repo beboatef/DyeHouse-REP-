@@ -141,6 +141,7 @@ public class ExceptionHandlingMiddlewareTests
             new[] { typeof(SqlErrorCollection), typeof(string) },
             modifiers: null)!;
 
-        return (SqlException)create.Invoke(null, new object?[] { collection, "16.0.1000" });
+        return create.Invoke(null, new object?[] { collection, "16.0.1000" }) as SqlException
+            ?? throw new InvalidOperationException("Could not construct the test SqlException.");
     }
 }

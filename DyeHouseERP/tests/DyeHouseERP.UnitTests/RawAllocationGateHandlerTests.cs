@@ -186,8 +186,12 @@ public class RawAllocationGateHandlerTests
         var order = CreateOrder(db, scene, allocatedKg: 1000m);
         var stage = order.StageExecutions.Single();
 
+        // The last operation before the Ready Goods warehouse records the FINAL capture: the original raw
+        // weight it started from (input) plus the ready weight (output). The waste is derived from them.
         var dto = await TransferHandler(db).Handle(
-            new TransferToNextStageCommand(stage.Id, scene.ReadyStage.Id, 900m, null, null, null, "final transfer"),
+            new TransferToNextStageCommand(
+                stage.Id, scene.ReadyStage.Id, 900m, null, null, null, "final transfer",
+                InputKg: 1000m),
             CancellationToken.None);
 
         dto.Status.Should().Be(ProductionOrderStatus.Completed);

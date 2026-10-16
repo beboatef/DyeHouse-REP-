@@ -35,6 +35,10 @@ export default function StageRow({ stage }: { stage: StageExecution }) {
   const input = stage.inputKg != null ? `${stage.inputKg} كجم` : stage.inputMeter != null ? `${stage.inputMeter} متر` : null;
   const separates = stage.separatesKg != null ? `${stage.separatesKg} كجم` : stage.separatesMeter != null ? `${stage.separatesMeter} متر` : null;
   const secondGrade = stage.secondGradeKg != null ? `${stage.secondGradeKg} كجم` : stage.secondGradeMeter != null ? `${stage.secondGradeMeter} متر` : null;
+  // الهالك وزن: أصل الخام بالكيلو − وزن الجاهز بالكيلو − المنفصلات بالكيلو، محسوب على الخادم. يُعرض فقط
+  // عندما تكون الأرقام التي يعتمد عليها مسجلة فعلًا - لا يُختلق صفر ولا تُعرض قيمة سالبة، ولا يوجد
+  // «هالك بالمتر» لأن المتر طول وليس وزنًا.
+  const waste = stage.wasteKg != null ? `${stage.wasteKg} كجم` : null;
 
   return (
     <div className="rounded-lg border border-line p-3">
@@ -73,6 +77,12 @@ export default function StageRow({ stage }: { stage: StageExecution }) {
           <div>
             <span className="text-ink-subtle">{t("stage.secondGradeKg")}: </span>
             <span className="ltr-nums">{secondGrade}</span>
+          </div>
+        )}
+        {waste && (
+          <div>
+            <span className="text-ink-subtle">{t("stage.waste")}: </span>
+            <span className="ltr-nums">{waste}</span>
           </div>
         )}
         {loss && (

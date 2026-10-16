@@ -163,6 +163,9 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
                     SeparatesMeter = s.SeparatesMeter,
                     SecondGradeKg = s.SecondGradeKg,
                     SecondGradeMeter = s.SecondGradeMeter,
+                    // Derived, never stored: waste = original raw KG - ready weight KG - separates KG.
+                    // A weight figure, so it exists in kilograms only.
+                    WasteKg = s.WasteKg,
                     MachineId = s.MachineId,
                     ProductionShiftId = s.ProductionShiftId,
                     Operator = s.Operator,

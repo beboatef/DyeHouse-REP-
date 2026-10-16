@@ -47,9 +47,16 @@ public static class ApprovalPayload
 /// </summary>
 public static class ApprovalRequestKinds
 {
+    /// <summary>
+    /// The permission a requester must hold for each type.
+    ///
+    /// <see cref="ApprovalRequestType.AllocateRaw"/> is RETIRED (see <see cref="RetiredOperationMessage"/>) and
+    /// deliberately keeps no permission: the whole operation it authorised no longer exists, so nothing may
+    /// raise a new request for it. The member itself is kept so a historical approval row still reads back.
+    /// </summary>
     public static string ActionPermission(ApprovalRequestType type) => type switch
     {
-        ApprovalRequestType.AllocateRaw => Permissions.RawConsume,
+        ApprovalRequestType.AllocateRaw => throw new DomainException(RetiredOperations.AllocateRawMessage),
         ApprovalRequestType.ResumeProduction => Permissions.ProductionResume,
         ApprovalRequestType.CustomerTransfer => Permissions.RawTransfer,
         ApprovalRequestType.RawExternalRelease => Permissions.RawExternalRelease,
@@ -85,6 +92,21 @@ public static class ApprovalRequestKinds
         RequiredPermission = Permissions.InventoryApproveNegativeStock,
         LinkPath = LinkPath(request.Type, request.DocumentId)
     };
+}
+
+/// <summary>
+/// The message a RETIRED operation returns. "Allocate raw material to a Job Order" (a reserved quantity with
+/// no actual issue) was removed from the system: the raw deduction happens exactly once, in the raw issue
+/// that CREATES the order. Any historical approval request of that type can still be read and rejected in the
+/// Approval Center; it can never be submitted or executed again, and it says why instead of failing cryptically.
+/// </summary>
+public static class RetiredOperations
+{
+    /// <summary>The refusal a retired operation returns, explaining what replaced it.</summary>
+    public const string AllocateRawMessage =
+        "Allocating raw material to an existing Job Order (a reserved quantity with no actual issue) has been " +
+        "removed. The raw material is deducted exactly once, by issuing it - a raw issue creates the Job Order " +
+        "and records its single allocation in the same step.";
 }
 
 /// <summary>
@@ -141,27 +163,10 @@ public class SubmitApprovalRequestCommandHandler : IRequestHandler<SubmitApprova
 
         switch (request.Type)
         {
+            // Retired operation (see RetiredOperations.AllocateRawMessage): the command it used to carry no
+            // longer exists, so no new request of this type may be raised. Historical rows still read back.
             case ApprovalRequestType.AllocateRaw:
-            {
-                var cmd = ApprovalPayload.Deserialize<AllocateRawCommand>(request.PayloadJson) with
-                {
-                    OverrideNegativeStock = true,
-                    OverrideReason = reason,
-                    // Placeholder for validation: an override must reference an
-                    // approval request. The real id is attached only when this
-                    // request is approved.
-                    ApprovalRequestId = Guid.NewGuid()
-                };
-                documentId = cmd.ProductionOrderId;
-                if (!new AllocateRawCommandValidator().Validate(cmd).IsValid)
-                    throw new DomainException("The allocation stored on this request is not valid.");
-                var order = await _db.ProductionOrders.AsNoTracking()
-                    .FirstOrDefaultAsync(o => o.Id == documentId, cancellationToken)
-                    ?? throw new NotFoundException("ProductionOrder", documentId);
-                documentNumber = order.OrderNumber;
-                normalized = cmd with { ApprovalRequestId = null };
-                break;
-            }
+                throw new DomainException(RetiredOperations.AllocateRawMessage);
             case ApprovalRequestType.ResumeProduction:
             {
                 var cmd = ApprovalPayload.Deserialize<ResumeProductionOrderCommand>(request.PayloadJson) with
@@ -307,10 +312,11 @@ public class ApproveApprovalRequestCommandHandler : IRequestHandler<ApproveAppro
         // the same change tracker, so the decision commits with the posting.
         switch (approval.Type)
         {
+            // Retired operation (see RetiredOperations.AllocateRawMessage): a request of this type that is
+            // still pending from before the removal can be REJECTED, but never executed - the operation it
+            // asked for no longer exists.
             case ApprovalRequestType.AllocateRaw:
-                await _sender.Send(ApprovalPayload.Deserialize<AllocateRawCommand>(approval.PayloadJson)
-                    with { ApprovalRequestId = approval.Id }, cancellationToken);
-                break;
+                throw new DomainException(RetiredOperations.AllocateRawMessage);
             case ApprovalRequestType.ResumeProduction:
                 await _sender.Send(ApprovalPayload.Deserialize<ResumeProductionOrderCommand>(approval.PayloadJson)
                     with { ApprovalRequestId = approval.Id }, cancellationToken);

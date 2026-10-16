@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApprovalsApi, ProductionOrdersApi, RawMessagesApi, CostAccountingApi, CostCategory, ProductionStagesApi, type ProductionOrder, type ProductionPriority, type JobOrderType, type UnitOfMeasure } from "@/api/client";
+import { ProductionOrdersApi, RawMessagesApi, CostAccountingApi, CostCategory, ProductionStagesApi, type ProductionOrder, type ProductionPriority, type JobOrderType, type UnitOfMeasure } from "@/api/client";
 
 /**
  * The cost-line categories a user can add (spec section 35). Order matters - it
@@ -36,19 +36,9 @@ export default function ProductionOrderDetailPage() {
     enabled: !!id
   });
 
-  const { data: candidateMessages } = useQuery({
-    queryKey: ["raw-messages", "for-allocation", order?.customerId],
-    queryFn: () => RawMessagesApi.list({ customerId: order!.customerId, onlyWithBalance: true }),
-    enabled: !!order?.customerId
-  });
-
-  const [selectedMessageId, setSelectedMessageId] = useState("");
-  const [selectedLineItemId, setSelectedLineItemId] = useState("");
-  const [allocKg, setAllocKg] = useState("");
-  const [allocMeter, setAllocMeter] = useState("");
-  const [allocError, setAllocError] = useState<string | null>(null);
-  const [negativeStockDetail, setNegativeStockDetail] = useState<{ shortage: number; reason: string } | null>(null);
-  const [approvalRequested, setApprovalRequested] = useState<string | null>(null);
+  // The raw-allocation form (and the approval request it raised) is GONE: raw material is no longer
+  // allocated to an existing Job Order. The deduction is made once, by the raw issue that CREATES the
+  // order, which also records the order's single allocation row - see the read-only "الخام المصروف" card.
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -59,58 +49,12 @@ export default function ProductionOrderDetailPage() {
     priority: "Normal" as ProductionPriority, jobOrderType: "ClosedLine" as JobOrderType
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["production-orders", id] });
-
-  const allocateMutation = useMutation({
-    mutationFn: () =>
-      ProductionOrdersApi.allocateRaw(id!, {
-        rawMessageId: selectedMessageId,
-        itemId: selectedLineItemId,
-        quantityKg: allocKg ? Number(allocKg) : undefined,
-        quantityMeter: allocMeter ? Number(allocMeter) : undefined
-      }),
-    onSuccess: () => {
-      invalidate();
-      setSelectedMessageId(""); setSelectedLineItemId(""); setAllocKg(""); setAllocMeter(""); setAllocError(null); setNegativeStockDetail(null);
-      setApprovalRequested(null);
-    },
-    onError: (err: ApiErrorLike) => {
-      if (err?.response?.data?.code === "NEGATIVE_STOCK") {
-        setNegativeStockDetail({ shortage: err.response?.data?.shortage ?? 0, reason: "" });
-      } else {
-        setAllocError(err?.response?.data?.title ?? "حدث خطأ أثناء التخصيص");
-      }
-    }
-  });
-
-  /**
-   * Spec section 24: the shortage is not "overridden" by the person allocating.
-   * The screen submits the allocation as an approval request; a DIFFERENT user
-   * with inventory.approve_negative_stock decides it in the Approval Center, and
-   * only their approval executes the movement - bound to this Job Order, lot,
-   * item and quantity.
-   */
-  const requestApprovalMutation = useMutation({
-    mutationFn: (approvalReason: string) =>
-      ApprovalsApi.submit({
-        type: "AllocateRaw",
-        reason: approvalReason,
-        payloadJson: JSON.stringify({
-          productionOrderId: id,
-          rawMessageId: selectedMessageId,
-          itemId: selectedLineItemId,
-          quantityKg: allocKg ? Number(allocKg) : undefined,
-          quantityMeter: allocMeter ? Number(allocMeter) : undefined
-        })
-      }),
-    onSuccess: (request) => {
-      setNegativeStockDetail(null);
-      setApprovalRequested(request.documentNumber);
-      invalidate();
-      qc.invalidateQueries({ queryKey: ["approval-requests"] });
-    },
-    onError: (err: ApiErrorLike) => setAllocError(err?.response?.data?.title ?? "تعذر إرسال طلب الاعتماد")
-  });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["production-orders", id] });
+    qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+    qc.invalidateQueries({ queryKey: ["production-floor"] });
+    qc.invalidateQueries({ queryKey: ["separates"] });
+  };
 
   const editMutation = useMutation({
     mutationFn: (order: ProductionOrder) =>
@@ -158,9 +102,6 @@ export default function ProductionOrderDetailPage() {
     setEditError(null);
     setEditOpen(true);
   };
-  const selectedMessage = candidateMessages?.find((m) => m.id === selectedMessageId);
-  const selectedLine = selectedMessage?.lines.find((l) => l.itemId === selectedLineItemId);
-
   return (
     <>
       <PageHeader
@@ -265,17 +206,16 @@ export default function ProductionOrderDetailPage() {
         </Card>
       )}
 
-      {/* Raw allocation - manual message picker, NO FIFO */}
+      {/* Raw material ledger for THIS order - READ ONLY. Material is issued ONCE, by the raw issue that
+          created the order (POST /production-orders/issue); that issue posts the OUT movement and records the
+          order's single allocation row in the same transaction. There is deliberately no allocation form
+          here any more: a reserved quantity that deducted nothing was a second, conflicting way to claim
+          raw material, and it is what allowed the same lot to be deducted twice. Pausing releases material
+          and resuming issues it again, each through its own real ledger movement. */}
       <Card className="card-pad mb-6">
-        <h2 className="card-title mb-1">تخصيص الخام</h2>
-        <p className="text-xs text-ink-muted mb-4">
-          يتم اختيار الرسالة (المرسال) يدويًا من قبل المستخدم - لا يوجد اختيار تلقائي (لا FIFO). يمكن التخصيص من أكثر من رسالة.
-        </p>
+        <h2 className="card-title mb-1">{t("po.rawIssue", "الخام المصروف")}</h2>
+        <p className="text-xs text-ink-muted mb-4">{t("po.rawIssueHint")}</p>
 
-        {/* Required / allocated / remaining / allocation status (spec section 13).
-            "Required" is the order's own requested quantity; completeness is the server's own
-            rule (the same one every production-start path runs), so the screen can never
-            promise a start the backend would refuse. */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="rounded-lg bg-surface-sunken px-3 py-2">
             <div className="text-2xs text-ink-muted">{t("po.alloc.required")}</div>
@@ -309,15 +249,15 @@ export default function ProductionOrderDetailPage() {
             </div>
           </div>
         </div>
-        <p className="text-2xs text-ink-subtle mb-4">{t("po.alloc.note")}</p>
 
-        {order.rawAllocations.length > 0 && (
-          <table className="table mb-4">
+        {order.rawAllocations.length > 0 ? (
+          <table className="table">
             <thead>
               <tr>
-                <th>رقم الرسالة</th>
-                <th>الكمية المخصصة</th>
-                <th>بواسطة</th>
+                <th>{t("po.rawIssueLot")}</th>
+                <th>{t("po.rawIssueQuantity")}</th>
+                <th>{t("po.rawIssueDate", "التاريخ")}</th>
+                <th>{t("po.rawIssueBy")}</th>
               </tr>
             </thead>
             <tbody>
@@ -329,106 +269,19 @@ export default function ProductionOrderDetailPage() {
                     {a.quantityKg != null && a.quantityMeter != null && " / "}
                     {a.quantityMeter != null && `${a.quantityMeter} م`}
                   </td>
+                  <td className="ltr-nums text-ink-muted">
+                    {a.allocatedAtUtc ? new Date(a.allocatedAtUtc).toLocaleDateString("en-GB") : "—"}
+                  </td>
                   <td className="text-ink-muted">{a.allocatedBy}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        ) : (
+          <p className="text-sm text-ink-subtle">{t("po.rawIssueNone")}</p>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end bg-surface-sunken rounded-lg p-3">
-          <div className="sm:col-span-2">
-            <label className="field-label">اختر الرسالة</label>
-            <Select
-              value={selectedMessageId}
-              onChange={(e) => {
-                setSelectedMessageId(e.target.value);
-                setSelectedLineItemId("");
-              }}
-            >
-              <option value="">اختر رسالة استلام...</option>
-              {candidateMessages?.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.messageNumber} - {m.lines.map((l) => `${l.itemCode}: ${l.remainingKg ?? l.remainingMeter ?? 0}`).join(", ")}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="field-label">اختر الصنف (سطر الرسالة)</label>
-            <Select value={selectedLineItemId} onChange={(e) => setSelectedLineItemId(e.target.value)} disabled={!selectedMessage}>
-              <option value="">اختر الصنف...</option>
-              {selectedMessage?.lines.map((l) => (
-                <option key={l.id} value={l.itemId}>
-                  {l.itemCode} - {l.itemName} ({l.remainingKg != null ? `${l.remainingKg} كجم` : `${l.remainingMeter} م`})
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <label className="field-label">كمية (كجم)</label>
-            <Input type="number" step="0.001" min="0" value={allocKg} onChange={(e) => setAllocKg(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label">كمية (متر)</label>
-            <Input type="number" step="0.001" min="0" value={allocMeter} onChange={(e) => setAllocMeter(e.target.value)} />
-          </div>
-        </div>
-
-        {selectedLine && (
-          <p className="text-xs text-ink-muted mt-2">
-            الرصيد المتاح للصنف المحدد في هذه الرسالة:{" "}
-            <span className="ltr-nums font-medium">
-              {selectedLine.remainingKg != null && `${selectedLine.remainingKg} كجم `}
-              {selectedLine.remainingMeter != null && `${selectedLine.remainingMeter} م`}
-            </span>
-          </p>
-        )}
-
-        <div className="mt-3">
-          <Button
-            disabled={!selectedMessageId || !selectedLineItemId || (!allocKg && !allocMeter) || allocateMutation.isPending}
-            onClick={() => { setApprovalRequested(null); allocateMutation.mutate(); }}
-          >
-            تخصيص
-          </Button>
-        </div>
-
-        {allocError && <p className="form-error mt-2">{allocError}</p>}
-
-        {negativeStockDetail && (
-          <Card className="card-pad mt-3 border-warning/30 bg-warning-soft">
-            <p className="text-sm text-warning-ink">
-              الكمية المطلوبة تتجاوز الرصيد المتاح بمقدار <span className="ltr-nums font-bold">{negativeStockDetail.shortage}</span>.
-              لا يتم تجاوز الرصيد السالب هنا: يُرسل الطلب إلى مركز الاعتمادات، ولا ينفّذه إلا مستخدم آخر يملك
-              صلاحية اعتماد تجاوز الرصيد السالب - ولا يمكن لمقدّم الطلب اعتماده بنفسه.
-            </p>
-            <div className="flex gap-2 mt-2">
-              <Input
-                placeholder="سبب طلب الاعتماد..."
-                value={negativeStockDetail.reason}
-                onChange={(e) => setNegativeStockDetail({ ...negativeStockDetail, reason: e.target.value })}
-              />
-              <Button
-                variant="secondary"
-                disabled={!negativeStockDetail.reason || requestApprovalMutation.isPending}
-                onClick={() => { setAllocError(null); requestApprovalMutation.mutate(negativeStockDetail.reason); }}
-              >
-                {requestApprovalMutation.isPending ? "جارٍ الإرسال..." : "طلب اعتماد"}
-              </Button>
-            </div>
-            <p className="mt-2 text-2xs text-warning-ink">
-              الاعتماد مرتبط بنفس أمر التشغيل ونفس الرسالة والصنف والكمية والوحدة - أي تغيير يتطلب طلبًا جديدًا.
-            </p>
-          </Card>
-        )}
-
-        {approvalRequested && (
-          <p className="mt-2 text-sm text-success-ink">
-            تم إرسال طلب اعتماد على أمر التشغيل <span className="ltr-nums font-bold">{approvalRequested}</span>.
-            لن يتم الصرف إلا بعد موافقة مستخدم آخر من مركز الاعتمادات.
-          </p>
-        )}
+        <p className="mt-3 text-2xs text-ink-subtle">{t("po.rawIssueFootnote")}</p>
       </Card>
 
       {/* Stage timeline */}
@@ -479,7 +332,9 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   const { t } = useI18n();
   const qc = useQueryClient();
 
-  const [nextStageId, setNextStageId] = useState("");
+  // Off by default: ticking an operation MOVES the job there and records nothing. Switching this on says
+  // "and record what this operation consumed and produced" as well.
+  const [recordFigures, setRecordFigures] = useState(false);
   const [drawingNumber, setDrawingNumber] = useState("");
   const [drawingReason, setDrawingReason] = useState("");
   const [inputKg, setInputKg] = useState("");
@@ -513,32 +368,43 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
     enabled: resumeMessageId !== "" || order.status === "Paused"
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["production-orders", order.id] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["production-orders", order.id] });
+    qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+    qc.invalidateQueries({ queryKey: ["production-floor"] });
+    qc.invalidateQueries({ queryKey: ["separates"] });
+  };
 
   const current = order.stageExecutions.find((s) => s.status === "InProgress") ?? null;
 
+  /**
+   * Moves the job to the chosen operation - ticking its box IS the move.
+   *
+   * `recordFigures` is false for the ordinary case, which makes the transfer a ROUTE step: the operation is
+   * closed with no output, no loss and no stock movement at all (the server refuses to invent production
+   * from a selection). It is true only when the operator explicitly asked to record this operation's figures,
+   * or when the chosen operation is the Ready Goods stop - whose final weights are exactly what posts the
+   * ready-goods stock and are therefore mandatory. Every figure sent is validated server-side against the
+   * item's own units and is never converted between KG and Meter.
+   */
   const transferMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (input: { nextStageDefinitionId: string; recordFigures: boolean }) =>
       ProductionOrdersApi.transferStage(current!.id, {
-        nextStageDefinitionId: nextStageId,
+        nextStageDefinitionId: input.nextStageDefinitionId,
         drawingNumber: drawingNumber.trim() || undefined,
-        // Everything below belongs to the operation being CLOSED: what it actually consumed,
-        // what it actually produced, its separates and its second-grade quantity. Each is
-        // optional here because a stage may legitimately record none of them - and the units
-        // are validated server-side against the item's own configuration, never converted.
-        inputKg: inputKg ? Number(inputKg) : undefined,
-        inputMeter: inputMeter ? Number(inputMeter) : undefined,
-        outputKg: outputKg ? Number(outputKg) : undefined,
-        outputMeter: outputMeter ? Number(outputMeter) : undefined,
-        separatesKg: separatesKg ? Number(separatesKg) : undefined,
-        separatesMeter: separatesMeter ? Number(separatesMeter) : undefined,
-        secondGradeKg: secondGradeKg ? Number(secondGradeKg) : undefined,
-        secondGradeMeter: secondGradeMeter ? Number(secondGradeMeter) : undefined,
+        inputKg: input.recordFigures && inputKg ? Number(inputKg) : undefined,
+        inputMeter: input.recordFigures && inputMeter ? Number(inputMeter) : undefined,
+        outputKg: input.recordFigures && outputKg ? Number(outputKg) : undefined,
+        outputMeter: input.recordFigures && outputMeter ? Number(outputMeter) : undefined,
+        separatesKg: input.recordFigures && separatesKg ? Number(separatesKg) : undefined,
+        separatesMeter: input.recordFigures && separatesMeter ? Number(separatesMeter) : undefined,
+        secondGradeKg: input.recordFigures && secondGradeKg ? Number(secondGradeKg) : undefined,
+        secondGradeMeter: input.recordFigures && secondGradeMeter ? Number(secondGradeMeter) : undefined,
         notes: notes.trim() || undefined
       }),
     onSuccess: () => {
       invalidate();
-      setNextStageId("");
+      setRecordFigures(false);
       setDrawingNumber("");
       setInputKg("");
       setInputMeter("");
@@ -617,14 +483,11 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
     onSuccess: () => { invalidate(); setDrawingFixFor(null); setDrawingFixValue(""); setDrawingFixReason(""); setFlowError(null); },
     onError: (err) => setFlowError(errorMessage(err, t("common.error")))
   });
-  const nextRequiresDrawing = stages?.find((s) => s.id === nextStageId)?.requiresDrawingNumber ?? false;
-  const existingDrawing = order.stageExecutions.find((s) => s.stageDefinitionId === nextStageId && s.drawingNumber)?.drawingNumber;
-  const nextIsReadyGoods = stages?.find((s) => s.id === nextStageId)?.isReadyGoodsStage ?? false;
-  // A printing stage may run MORE THAN ONCE on the same Job Order - one execution per drawing,
-  // each with its own drawing number and quantities (spec sections 19-22). The stage currently in
-  // progress is therefore offered again as "another print run" when it requires a drawing number.
-  // Every other stage keeps the original rule: choose a different next stage.
-  const isAnotherPrintRun = nextStageId !== "" && nextStageId === current?.stageDefinitionId;
+  // A printing operation may run MORE THAN ONCE on the same Job Order - one execution per drawing, each
+  // with its own drawing number (spec sections 19-22). The operation currently in progress is therefore
+  // offered again as "another print run" when it requires a drawing number; every other operation keeps the
+  // original rule, so no repeat route is invented anywhere else. The list itself stays DYNAMIC: it is the
+  // configured, active operations, minus the one already running (unless it may run again), minus formation.
   const currentStageOption = (stages ?? []).filter(
     (s) => s.isActive && current?.requiresDrawingNumber && s.id === current?.stageDefinitionId
   );
@@ -632,6 +495,54 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
     ...(stages ?? []).filter((s) => s.isActive && s.id !== current?.stageDefinitionId && !s.isFormationStage),
     ...currentStageOption
   ];
+
+  const stageById = (id: string) => candidateStages.find((s) => s.id === id);
+  const nextRequiresDrawingFor = (id: string) => stageById(id)?.requiresDrawingNumber ?? false;
+  const existingDrawingFor = (id: string) =>
+    order.stageExecutions.find((s) => s.stageDefinitionId === id && s.drawingNumber)?.drawingNumber;
+
+  // The Ready Goods stop is the one operation whose weights are mandatory: it is the LAST operation before
+  // the warehouse, and the figures entered for it are what the ready-goods stock is posted from.
+  const readyGoodsTarget = candidateStages.some((s) => s.isReadyGoodsStage);
+  const num = (v: string) => (v.trim() === "" ? null : Number(v));
+  const finalRawKg = num(inputKg);
+  const finalRawMeter = num(inputMeter);
+  const finalReadyKg = num(outputKg);
+  const finalReadyMeter = num(outputMeter);
+  const finalSeparatesKg = num(separatesKg);
+  // الهالك وزن، فيُحسب بالكيلو فقط: أصل الخام بالكيلو − وزن الجاهز بالكيلو − المنفصلات بالكيلو. The metre
+  // figures entered on the same operation stay a LENGTH and are never turned into a "metre waste" -
+  // nothing is shown until the two KG figures it needs exist, and a negative result is reported as an
+  // error rather than printed as a "waste".
+  const wasteKg = finalRawKg != null && finalReadyKg != null ? finalRawKg - finalReadyKg - (finalSeparatesKg ?? 0) : null;
+  const finalWasteKg = wasteKg != null && wasteKg >= 0 ? wasteKg : null;
+  const finalWasteNegativeKg = wasteKg != null && wasteKg < 0;
+  // The final capture is complete when the ready weight AND the original raw weight it is measured against
+  // are both recorded - in the unit the operation is actually running in. Separates are deliberately absent.
+  const finalCaptureComplete = (finalReadyKg != null || finalReadyMeter != null) && (finalRawKg != null || finalRawMeter != null);
+  const isAnotherPrintRunHintShown = candidateStages.some((s) => s.id === current?.stageDefinitionId);
+
+  /** Ticking an operation moves the job there at once - and records production only when asked to. */
+  const tickStage = (stageDefinitionId: string) => {
+    setFlowError(null);
+    const isReady = stageById(stageDefinitionId)?.isReadyGoodsStage ?? false;
+
+    if (isReady && !finalCaptureComplete) {
+      setFlowError(t("stage.finalCaptureRequired"));
+      return;
+    }
+    if (isReady && finalWasteNegativeKg) {
+      setFlowError(t("stage.wasteNegative"));
+      return;
+    }
+    if (!isReady && recordFigures && !outputKg && !outputMeter) {
+      setFlowError(t("stage.outputRequiredForRecording"));
+      return;
+    }
+
+    transferMutation.mutate({ nextStageDefinitionId: stageDefinitionId, recordFigures: isReady || recordFigures });
+  };
+
   const resumeLines = messages?.find((m) => m.id === resumeMessageId)?.lines ?? [];
 
   return (
@@ -805,94 +716,154 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
               )}
             </div>
           ))}
-          {(nextRequiresDrawing || current.requiresDrawingNumber) && (
+          {/* The drawing number a printing operation must name before it can be left - either because the
+              operation being CLOSED requires one, or because the operation being moved to does. */}
+          {(current.requiresDrawingNumber || candidateStages.some((s) => s.requiresDrawingNumber)) && (
             <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label={t("printing.drawingNumber")}>
                 <Input maxLength={100} value={drawingNumber} onChange={(e) => setDrawingNumber(e.target.value)} placeholder={t("printing.required")} />
               </Field>
-              {current.requiresDrawingNumber && !nextRequiresDrawing && <>
+              {current.requiresDrawingNumber && <>
                 <Field label={t("pause.reason")}><Input value={drawingReason} onChange={(e) => setDrawingReason(e.target.value)} /></Field>
                 <Button disabled={!drawingNumber.trim() || !drawingReason.trim() || drawingMutation.isPending} onClick={() => drawingMutation.mutate()}>{t("printing.correct")}</Button>
               </>}
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-            <Field label={t("stage.nextStage")}>
-              <Select value={nextStageId} onChange={(e) => setNextStageId(e.target.value)}>
-                <option value="">{t("stage.selectNext")}</option>
-                {candidateStages.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}{s.isReadyGoodsStage ? " (الجاهز)" : ""}
-                    {s.id === current?.stageDefinitionId ? ` — ${t("stage.anotherPrintRun")}` : ""}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t("stage.outputKg")}>
-              <Input type="number" min={0} step="0.01" value={outputKg} onChange={(e) => setOutputKg(e.target.value)} />
-            </Field>
-            <Field label={t("stage.outputMeter")}>
-              <Input type="number" min={0} step="0.01" value={outputMeter} onChange={(e) => setOutputMeter(e.target.value)} />
-            </Field>
+          {/* The LAST operation before the Ready Goods warehouse records the final weights: the original
+              raw it started from, the ready weight in KG and the final metres, with the separates optional.
+              The waste is DERIVED from them - original raw - ready weight - separates - per unit, never
+              converted between KG and Meter, and shown here before the move is made. */}
+          {readyGoodsTarget && (
+            <div className="mb-4 rounded-lg border border-success/30 bg-success-soft/40 p-3">
+              <p className="mb-1 text-sm font-medium text-success-ink">{t("stage.finalCapture")}</p>
+              <p className="mb-3 text-2xs text-ink-subtle">{t("stage.finalCaptureHint")}</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Field label={t("stage.originalRawKg")}>
+                  <Input type="number" min={0} step="0.01" value={inputKg} onChange={(e) => setInputKg(e.target.value)} />
+                </Field>
+                <Field label={t("stage.readyWeightKg")}>
+                  <Input type="number" min={0} step="0.01" value={outputKg} onChange={(e) => setOutputKg(e.target.value)} />
+                </Field>
+                <Field label={t("stage.finalMeter")}>
+                  <Input type="number" min={0} step="0.01" value={outputMeter} onChange={(e) => setOutputMeter(e.target.value)} />
+                </Field>
+                {/* Separates are OPTIONAL on purpose: with none, the operator completes the operation
+                    without entering them and the waste is simply original raw - ready weight. */}
+                <Field label={t("stage.separatesKgOptional")}>
+                  <Input type="number" min={0} step="0.01" value={separatesKg} onChange={(e) => setSeparatesKg(e.target.value)} />
+                </Field>
+                <Field label={t("stage.separatesMeterOptional")}>
+                  <Input type="number" min={0} step="0.01" value={separatesMeter} onChange={(e) => setSeparatesMeter(e.target.value)} />
+                </Field>
+                <div className="rounded-lg bg-surface px-3 py-2">
+                  <div className="text-2xs text-ink-muted">{t("stage.waste")}</div>
+                  <div className="ltr-nums font-semibold">
+                    {/* الوزن فقط: لا يوجد هالك بالمتر */}
+                    {finalWasteKg != null ? `${finalWasteKg} ${t("common.kg")}` : "—"}
+                  </div>
+                </div>
+              </div>
+              {finalWasteNegativeKg && (
+                <p className="mt-2 text-sm text-danger-ink">{t("stage.wasteNegative")}</p>
+              )}
+            </div>
+          )}
+
+          {/* The operations the job can move to - ONE checkbox each, the dynamic stage list unchanged.
+              Ticking one MOVES the order there immediately and saves the move: that IS the transfer, and
+              there is no separate "end stage" step. By default the move records NO production and posts NO
+              stock - a selection is a routing decision, not a weighing - and the server refuses to invent an
+              output for it. The single exception is the Ready Goods stop, which demands the final weights
+              above because that is what posts the ready-goods stock. */}
+          <p className="mb-1 text-2xs text-ink-subtle">{t("stage.chooseNext")}</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {candidateStages.map((s) => {
+              const isReady = s.isReadyGoodsStage;
+              const isCurrentAgain = s.id === current?.stageDefinitionId;
+              const needsFinalCapture = isReady && !finalCaptureComplete;
+              const blocked =
+                transferMutation.isPending ||
+                needsFinalCapture ||
+                (nextRequiresDrawingFor(s.id) && isCurrentAgain && !drawingNumber.trim()) ||
+                (nextRequiresDrawingFor(s.id) && !isCurrentAgain && !drawingNumber.trim() && !existingDrawingFor(s.id));
+              return (
+                <label
+                  key={s.id}
+                  className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
+                    needsFinalCapture ? "border-warning/40 bg-warning-soft/40" : "border-line bg-surface"
+                  } ${blocked ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-surface-sunken"}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={false}
+                    disabled={blocked}
+                    onChange={() => tickStage(s.id)}
+                  />
+                  <span>
+                    <span className="font-medium">{s.name}</span>
+                    {isReady && <span className="text-ink-subtle"> ({t("stage.readyGoods")})</span>}
+                    {isCurrentAgain && <span className="text-ink-subtle"> — {t("stage.anotherPrintRun")}</span>}
+                    {isReady && (
+                      <span className="block text-2xs text-ink-subtle">
+                        {finalCaptureComplete ? t("stage.readyGoodsReady") : t("stage.finalCaptureRequired")}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Recording the operation's own figures is an EXPLICIT, off-by-default choice: ticking a stage
+              moves the job (and records nothing), while this switch says "and record what this operation
+              consumed and produced". The units are validated server-side against the item's own
+              configuration and are never converted. */}
+          {!readyGoodsTarget && (
+            <label className="mt-3 flex items-center gap-2 text-sm text-ink-muted">
+              <input type="checkbox" checked={recordFigures} onChange={(e) => setRecordFigures(e.target.checked)} />
+              {t("stage.recordFigures")}
+            </label>
+          )}
+
+          {recordFigures && !readyGoodsTarget && (
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label={t("stage.outputKg")}>
+                <Input type="number" min={0} step="0.01" value={outputKg} onChange={(e) => setOutputKg(e.target.value)} />
+              </Field>
+              <Field label={t("stage.outputMeter")}>
+                <Input type="number" min={0} step="0.01" value={outputMeter} onChange={(e) => setOutputMeter(e.target.value)} />
+              </Field>
+              <Field label={t("stage.inputKg")}>
+                <Input type="number" min={0} step="0.01" value={inputKg} onChange={(e) => setInputKg(e.target.value)} />
+              </Field>
+              <Field label={t("stage.inputMeter")}>
+                <Input type="number" min={0} step="0.01" value={inputMeter} onChange={(e) => setInputMeter(e.target.value)} />
+              </Field>
+              <Field label={t("stage.separatesKg")}>
+                <Input type="number" min={0} step="0.01" value={separatesKg} onChange={(e) => setSeparatesKg(e.target.value)} />
+              </Field>
+              <Field label={t("stage.separatesMeter")}>
+                <Input type="number" min={0} step="0.01" value={separatesMeter} onChange={(e) => setSeparatesMeter(e.target.value)} />
+              </Field>
+              <Field label={t("stage.secondGradeKg")}>
+                <Input type="number" min={0} step="0.01" value={secondGradeKg} onChange={(e) => setSecondGradeKg(e.target.value)} />
+              </Field>
+              <Field label={t("stage.secondGradeMeter")}>
+                <Input type="number" min={0} step="0.01" value={secondGradeMeter} onChange={(e) => setSecondGradeMeter(e.target.value)} />
+              </Field>
+            </div>
+          )}
+
+          <div className="mt-3">
             <Field label={t("common.notes", "ملاحظات")}>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
             </Field>
           </div>
 
-          {/*
-            The rest of what the CLOSED operation recorded. All of it is optional and none of it is
-            derived: the actual input is what the operator entered (never the order's requested
-            quantity), separates are reprocessable material tracked separately from waste, and second
-            grade is a quantity of its own. The server validates every field against the item's own
-            unit configuration and refuses a unit the item does not use - KG and Meter are never
-            converted into one another here.
-          */}
-          <p className="mt-4 mb-1 text-2xs text-ink-subtle">{t("stage.floorCaptureHint")}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
-            <Field label={t("stage.inputKg")}>
-              <Input type="number" min={0} step="0.01" value={inputKg} onChange={(e) => setInputKg(e.target.value)} />
-            </Field>
-            <Field label={t("stage.inputMeter")}>
-              <Input type="number" min={0} step="0.01" value={inputMeter} onChange={(e) => setInputMeter(e.target.value)} />
-            </Field>
-            <div />
-            <Field label={t("stage.separatesKg")}>
-              <Input type="number" min={0} step="0.01" value={separatesKg} onChange={(e) => setSeparatesKg(e.target.value)} />
-            </Field>
-            <Field label={t("stage.separatesMeter")}>
-              <Input type="number" min={0} step="0.01" value={separatesMeter} onChange={(e) => setSeparatesMeter(e.target.value)} />
-            </Field>
-            <div />
-            <Field label={t("stage.secondGradeKg")}>
-              <Input type="number" min={0} step="0.01" value={secondGradeKg} onChange={(e) => setSecondGradeKg(e.target.value)} />
-            </Field>
-            <Field label={t("stage.secondGradeMeter")}>
-              <Input type="number" min={0} step="0.01" value={secondGradeMeter} onChange={(e) => setSecondGradeMeter(e.target.value)} />
-            </Field>
-          </div>
-
-          {nextIsReadyGoods && (
-            <p className="mt-2 text-2xs text-success-ink">{t("stage.readyGoodsHint")}</p>
-          )}
-
-          {isAnotherPrintRun && (
+          {isAnotherPrintRunHintShown && (
             <p className="mt-2 text-2xs text-brand-700">{t("stage.anotherPrintRunHint")}</p>
           )}
-
-          <div className="mt-3">
-            <Button
-              disabled={!nextStageId || (!outputKg && !outputMeter)
-                // An additional print run must name its OWN drawing: a previous run's number is never
-                // silently reused. Revisiting a printing stage later in the route may still carry the
-                // order's recorded drawing forward, exactly as before.
-                || (nextRequiresDrawing && isAnotherPrintRun && !drawingNumber.trim())
-                || (nextRequiresDrawing && !isAnotherPrintRun && !drawingNumber.trim() && !existingDrawing)
-                || transferMutation.isPending}
-              onClick={() => transferMutation.mutate()}
-            >
-              {t("stage.transfer")}
-            </Button>
-          </div>
         </div>
       ) : (
         <p className="text-sm text-ink-subtle">{t("stage.locked")}</p>

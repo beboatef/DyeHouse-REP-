@@ -498,28 +498,32 @@ public class ItemUnitConfigurationTests
     }
 
     [Fact]
-    public async Task Allocation_RefusesAQuantityInAnUnconfiguredUnit()
+    public async Task RawIssue_RefusesAQuantityInAnUnconfiguredUnit()
     {
+        // The raw ISSUE is now the only way raw material is taken out of a customer's lot (the separate
+        // "allocate to an existing order" step was removed), so the unit gate is pinned on that path: a
+        // Meter quantity may never be issued for a KG-only item, and nothing at all is posted when it is.
         using var db = NewDb();
         var (customer, warehouse, item) = SeedMasterData(db, UnitOfMeasure.KG);
 
-        var message = new RawMessage("RMSG-ALLOC", DateTime.UtcNow, customer.Id, warehouse.Id, "seed", "seed");
+        var message = new RawMessage("RMSG-ISSUE", DateTime.UtcNow, customer.Id, warehouse.Id, "seed", "seed");
         message.AddLine(item.Id, null, 1800m, null, null);
         db.RawMessages.Add(message);
-        var order = new ProductionOrder("PRD-ALLOC", customer.Id, item.Id, DateTime.UtcNow, "seed",
-            requestedQuantityMeter: 1000m);
-        db.ProductionOrders.Add(order);
+        db.ProductionStageDefinitions.Add(
+            new ProductionStageDefinition("PS001", "التشكيل", 1, "seed", isFormationStage: true));
         await db.SaveChangesAsync();
 
-        var act = () => new AllocateRawCommandHandler(
-                db, new StubCurrentUser("operator"), new InventoryLedgerService(db), new FixedClock(),
-                new OpenPeriod(), new RecordingStockLock())
-            .Handle(new AllocateRawCommand(order.Id, message.Id, item.Id,
-                QuantityKg: null, QuantityMeter: 500m), CancellationToken.None);
+        var act = () => new IssueRawMaterialCommandHandler(
+                db, new StubCurrentUser("operator"), new InventoryLedgerService(db), new FixedNumberGenerator(),
+                new FixedClock(), new OpenPeriod(), new RecordingStockLock())
+            .Handle(new IssueRawMaterialCommand(customer.Id, item.Id, message.Id, DateTime.UtcNow,
+                ActualQuantityKg: null, ActualQuantityMeter: 500m), CancellationToken.None);
 
         (await act.Should().ThrowAsync<DomainException>())
             .WithMessage("*not configured to use Meter*");
-        (await db.RawAllocations.CountAsync()).Should().Be(0, "a refused allocation posts nothing");
+        (await db.ProductionOrders.CountAsync()).Should().Be(0, "a refused issue creates no order");
+        (await db.RawAllocations.CountAsync()).Should().Be(0, "a refused issue records no allocation");
+        (await db.InventoryTransactions.CountAsync(t => t.Direction == TransactionDirection.Out)).Should().Be(0);
     }
 
     private sealed class StubExcelReader : IExcelImportReader

@@ -54,13 +54,21 @@ public class FullHappyPathTests : IntegrationTestBase
         var readyWarehouse = (await (await Client.PostAsJsonAsync("/api/warehouses", new { code = $"W{Guid.NewGuid():N}"[..10], name = "Ready WH", kind = WarehouseKind.ReadyGoods }))
             .Content.ReadFromJsonAsync<WarehouseDto>(Json))!;
 
-        // One active stage keeps the happy path short - the stage engine itself is covered by domain unit tests.
+        // Formation stage + ready-goods stage keep the happy path short - the stage engine itself is covered by domain unit tests.
         await Client.PostAsJsonAsync("/api/production-stages", new
         {
-            code = $"S{Guid.NewGuid():N}"[..8], name = "Dyeing", sequence = 1,
-            requiresInputQuantity = true, requiresOutputQuantity = true, requiresApproval = false,
-            allowSkip = false, allowRepeat = false, allowRework = true, allowReturn = false, notes = (string?)null
+            code = $"S{Guid.NewGuid():N}"[..8], name = "Formation", sequence = 1,
+            requiresInputQuantity = true, requiresOutputQuantity = true, notes = (string?)null,
+            isFormationStage = true
         });
+        var readyStage = (await (await Client.PostAsJsonAsync("/api/production-stages", new
+        {
+            code = $"R{Guid.NewGuid():N}"[..8], name = "Ready Goods", sequence = 2,
+            requiresInputQuantity = true, requiresOutputQuantity = true, notes = (string?)null,
+            isFormationStage = false
+        })).Content.ReadFromJsonAsync<ProductionStageDefinitionDto>(Json))!;
+        (await Client.PostAsync($"/api/production-stages/{readyStage.Id}/ready-goods-stage", null))
+            .EnsureSuccessStatusCode();
 
         // ---- Raw receipt + inspection ----
         var message = (await (await Client.PostAsJsonAsync("/api/raw-messages", new
@@ -71,36 +79,27 @@ public class FullHappyPathTests : IntegrationTestBase
 
         await Client.PostAsJsonAsync($"/api/raw-messages/{message.Id}/inspection", new { result = InspectionStatus.Accepted, notes = (string?)null });
 
-        // ---- Production order + raw allocation ----
-        var order = (await (await Client.PostAsJsonAsync("/api/production-orders", new
+        // ---- Issue raw material -> creates the Production Order + allocation atomically ----
+        var issueResponse = await Client.PostAsJsonAsync("/api/production-orders/issue", new
         {
-            customerId = customer.Id, itemId = item.Id, orderDate = DateTime.UtcNow,
-            requestedQuantityKg = 1000m, priority = ProductionPriority.Normal
-        })).Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
+            customerId = customer.Id, itemId = item.Id, rawMessageId = message.Id,
+            orderDate = DateTime.UtcNow, actualQuantityKg = 1000m, priority = ProductionPriority.Normal,
+            overrideNegativeStock = false, overrideReason = (string?)null
+        });
+        issueResponse.EnsureSuccessStatusCode();
+        var order = (await issueResponse.Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
 
-        order = (await (await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/raw-allocations", new
-        {
-            rawMessageId = message.Id, itemId = item.Id, quantityKg = 1000m, overrideNegativeStock = false, overrideReason = (string?)null
-        })).Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
-
-        // ---- Complete the single stage ----
+        // ---- Transfer the formation stage to Ready Goods (completes stage, posts ready-goods transfer + IN movement, completes order) ----
         var stage = order.StageExecutions.Single();
-        await Client.PostAsync($"/api/production-orders/stage-executions/{stage.Id}/start", null);
-        var completeResponse = await Client.PostAsJsonAsync($"/api/production-orders/stage-executions/{stage.Id}/complete", new
-        {
-            inputKg = 1000m, outputKg = 950m, lossKg = 50m, notes = (string?)null, approvedBy = (string?)null
-        });
-        completeResponse.EnsureSuccessStatusCode();
+        var transferResponse = await Client.PostAsJsonAsync(
+            $"/api/production-orders/stage-executions/{stage.Id}/transfer", new
+            {
+                nextStageDefinitionId = readyStage.Id,
+                inputKg = 1000m, outputKg = 950m, notes = (string?)null
+            });
+        transferResponse.EnsureSuccessStatusCode();
 
-        await Client.PostAsync($"/api/production-orders/{order.Id}/complete", null);
-
-        // ---- Ready goods transfer ----
-        var readyTransferResponse = await Client.PostAsJsonAsync("/api/ready-goods/transfers", new
-        {
-            productionOrderId = order.Id, warehouseId = readyWarehouse.Id, quantityKg = 950m
-        });
-        readyTransferResponse.EnsureSuccessStatusCode();
-
+        _ = readyWarehouse;
         var balance = await Client.GetFromJsonAsync<List<ReadyGoodsBalanceDto>>($"/api/ready-goods/balance?customerId={customer.Id}", Json);
         balance!.Single(b => b.ProductionOrderId == order.Id).RemainingKg.Should().Be(950m);
 

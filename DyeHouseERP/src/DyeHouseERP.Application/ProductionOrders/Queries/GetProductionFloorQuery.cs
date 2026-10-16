@@ -59,22 +59,63 @@ public class ProductionFloorRowDto
 
     public string? CustomerReference { get; set; }
     public string? Notes { get; set; }
+
+    // ---- delivered slice (spec section 37) ----
+
+    /// <summary>
+    /// True when this job order has actually been DELIVERED to the customer (a delivered permit
+    /// exists for it). A delivered job is not work waiting on the floor, so the ordinary view hides
+    /// it - it is shown only when the user asks for the delivered orders.
+    /// </summary>
+    public bool IsDelivered { get; set; }
+
+    /// <summary>The permits the order was delivered on, so the row can be followed into the delivery.</summary>
+    public string? DeliveryNumbers { get; set; }
+    public DateTime? LastDeliveryDate { get; set; }
+
+    /// <summary>What the deliveries actually handed over, per unit - never merged into one figure.</summary>
+    public decimal? DeliveredQuantityKg { get; set; }
+    public decimal? DeliveredQuantityMeter { get; set; }
 }
 
 /// <summary>
-/// The factory floor feed (spec section 37): one row per LIVE Job Order.
+/// Which SLICE of the production cycle the floor screen is showing.
 ///
-/// "Live" means every order still physically on the floor - running, waiting for
-/// its first stage, or paused. A paused job is not gone: the material is still
-/// allocated to it and the supervisor has to see it, so it is listed and clearly
-/// marked rather than silently dropped.
+/// The default is <see cref="Open"/>: the jobs physically on the floor. A job that has been DELIVERED
+/// to the customer is finished work - it stays out of that view (otherwise the supervisor keeps
+/// chasing jobs that already left the building) and is shown only when this slice asks for it.
+/// </summary>
+public enum ProductionFloorView
+{
+    /// <summary>Still on the floor: not delivered, and not closed. The ordinary view.</summary>
+    Open = 1,
+
+    /// <summary>Jobs that have been delivered to the customer (including their final stage).</summary>
+    Delivered = 2,
+
+    /// <summary>Closed jobs that were never delivered: completed, or cancelled.</summary>
+    Closed = 3,
+
+    /// <summary>Everything, whatever its state.</summary>
+    All = 4
+}
+
+/// <summary>
+/// The factory floor feed (spec section 37): one row per Job Order in the requested slice.
 ///
-/// Stage names are resolved from the configurable stage definitions; nothing about
-/// the route is hard-coded here.
+/// "On the floor" means every order still physically there - running, waiting for its first stage, or
+/// paused. A paused job is not gone: the material is still allocated to it and the supervisor has to
+/// see it, so it is listed and clearly marked rather than silently dropped. A DELIVERED job is not on
+/// the floor any more, so it belongs to the delivered slice and not to the ordinary one.
+///
+/// The stage filter reads the order's REAL stage execution (its identity, not the stage's name), so an
+/// order can never appear under a stage it has not reached, and stage names are resolved from the
+/// configurable stage definitions - nothing about the route is hard-coded here.
 /// </summary>
 public record GetProductionFloorQuery(
     Guid? StageDefinitionId = null, ProductionOrderStatus? Status = null, Guid? CustomerId = null,
-    Guid? ItemId = null, ProductionPriority? Priority = null, string? Search = null) : IRequest<List<ProductionFloorRowDto>>;
+    Guid? ItemId = null, ProductionPriority? Priority = null, string? Search = null,
+    ProductionFloorView View = ProductionFloorView.Open) : IRequest<List<ProductionFloorRowDto>>;
 
 public class GetProductionFloorQueryHandler : IRequestHandler<GetProductionFloorQuery, List<ProductionFloorRowDto>>
 {
@@ -83,35 +124,107 @@ public class GetProductionFloorQueryHandler : IRequestHandler<GetProductionFloor
 
     public async Task<List<ProductionFloorRowDto>> Handle(GetProductionFloorQuery request, CancellationToken cancellationToken)
     {
-        var ordersQuery = _db.ProductionOrders.AsNoTracking()
-            .Where(o => o.Status == ProductionOrderStatus.InProduction
-                || o.Status == ProductionOrderStatus.RawAllocated
-                || o.Status == ProductionOrderStatus.Paused);
+        // ---- the delivered slice, from the delivery documents themselves ----------------------
+        // "Delivered" is a fact about the ORDERS' PERMITS, not a status somebody has to remember to
+        // set: an order counts as delivered exactly when a permit for one of its lines has been
+        // delivered. Cancelling that permit puts the job straight back into the open slice, which is
+        // the behaviour a floor supervisor expects.
+        var deliveredDocs = await _db.Deliveries.AsNoTracking()
+            .Where(d => d.Status == DeliveryStatus.Delivered)
+            .Select(d => new { d.Id, d.DeliveryNumber, d.DeliveryDate })
+            .ToListAsync(cancellationToken);
 
-        if (request.Status.HasValue) ordersQuery = ordersQuery.Where(o => o.Status == request.Status);
+        var deliveredDocIds = deliveredDocs.Select(d => d.Id).ToList();
+        var deliveredLines = deliveredDocIds.Count == 0
+            ? new List<DeliveryLine>()
+            : await _db.DeliveryLines.AsNoTracking()
+                .Where(l => deliveredDocIds.Contains(l.DeliveryId)).ToListAsync(cancellationToken);
+
+        var deliveriesByOrder = deliveredLines
+            .GroupBy(l => l.ProductionOrderId)
+            .ToDictionary(g => g.Key, g => g.Select(l => l.DeliveryId).Distinct().ToList());
+        var deliveredOrderIds = deliveriesByOrder.Keys.ToHashSet();
+
+        var ordersQuery = _db.ProductionOrders.AsNoTracking().AsQueryable();
+
+        // An explicit status filter is the user's own choice and wins: asking for "Completed" must show
+        // completed jobs even though the ordinary floor view would never list them.
+        if (request.Status.HasValue)
+            ordersQuery = ordersQuery.Where(o => o.Status == request.Status.Value);
+        else
+            ordersQuery = request.View switch
+            {
+                ProductionFloorView.Open => ordersQuery.Where(o =>
+                    o.Status == ProductionOrderStatus.InProduction
+                    || o.Status == ProductionOrderStatus.RawAllocated
+                    || o.Status == ProductionOrderStatus.Paused),
+                ProductionFloorView.Closed => ordersQuery.Where(o =>
+                    o.Status == ProductionOrderStatus.Completed
+                    || o.Status == ProductionOrderStatus.Cancelled),
+                // The delivered and "everything" slices are decided by the delivery link below, so no
+                // status is excluded here: a delivered job may legitimately still read "Completed".
+                _ => ordersQuery
+            };
+
         if (request.CustomerId.HasValue) ordersQuery = ordersQuery.Where(o => o.CustomerId == request.CustomerId);
         if (request.ItemId.HasValue) ordersQuery = ordersQuery.Where(o => o.ItemId == request.ItemId);
         if (request.Priority.HasValue) ordersQuery = ordersQuery.Where(o => o.Priority == request.Priority);
 
         var orders = await ordersQuery.ToListAsync(cancellationToken);
+
+        orders = request.View switch
+        {
+            // A delivered job has left the floor: it is NOT part of the ordinary view, whether or not
+            // its own status was ever advanced.
+            ProductionFloorView.Open or ProductionFloorView.Closed
+                => orders.Where(o => !deliveredOrderIds.Contains(o.Id)).ToList(),
+            ProductionFloorView.Delivered
+                => orders.Where(o => deliveredOrderIds.Contains(o.Id)).ToList(),
+            _ => orders
+        };
+
         if (orders.Count == 0) return new List<ProductionFloorRowDto>();
 
         var orderIds = orders.Select(o => o.Id).ToList();
 
-        // Only the OPEN stages matter here: the one being worked on, or the one waiting to start.
-        var stageExecs = await _db.ProductionOrderStageExecutions.AsNoTracking()
-            .Where(s => orderIds.Contains(s.ProductionOrderId)
-                && (s.Status == StageExecutionStatus.Pending || s.Status == StageExecutionStatus.InProgress))
+        // Only the OPEN stages matter for running jobs. When a job has already finished (Delivered or Closed),
+        // it has no open stage, so we also read its last COMPLETED stage so the row can show the final stage
+        // it finished on — while a stage filter still requires the job to be in that stage right now.
+        var allStageExecs = await _db.ProductionOrderStageExecutions.AsNoTracking()
+            .Where(s => orderIds.Contains(s.ProductionOrderId))
             .ToListAsync(cancellationToken);
 
-        var currentStageByOrder = stageExecs
+        var openStageByOrder = allStageExecs
+            .Where(s => s.Status == StageExecutionStatus.Pending || s.Status == StageExecutionStatus.InProgress)
             .GroupBy(s => s.ProductionOrderId)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.Sequence).First());
 
+        var lastCompletedStageByOrder = allStageExecs
+            .Where(s => s.Status == StageExecutionStatus.Completed)
+            .GroupBy(s => s.ProductionOrderId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.Sequence).ThenByDescending(s => s.CompletedAtUtc).First());
+
+        var currentStageByOrder = new Dictionary<Guid, ProductionOrderStageExecution>();
+        foreach (var o in orders)
+        {
+            if (openStageByOrder.TryGetValue(o.Id, out var openStage))
+                currentStageByOrder[o.Id] = openStage;
+            else if (lastCompletedStageByOrder.TryGetValue(o.Id, out var completedStage))
+                currentStageByOrder[o.Id] = completedStage;
+        }
+
         if (request.StageDefinitionId.HasValue)
-            currentStageByOrder = currentStageByOrder
-                .Where(kv => kv.Value.StageDefinitionId == request.StageDefinitionId)
-                .ToDictionary(kv => kv.Key, kv => kv.Value);
+        {
+            // When the user picks a specific production stage, ONLY orders that are currently in that stage
+            // (or finished on that stage in the delivered/closed slice) may appear — never an order that
+            // has not reached it or has already moved past it.
+            var matchingOrderIds = currentStageByOrder
+                .Where(kv => kv.Value.StageDefinitionId == request.StageDefinitionId.Value)
+                .Select(kv => kv.Key)
+                .ToHashSet();
+            orders = orders.Where(o => matchingOrderIds.Contains(o.Id)).ToList();
+            if (orders.Count == 0) return new List<ProductionFloorRowDto>();
+        }
 
         var stageDefIds = currentStageByOrder.Values.Select(s => s.StageDefinitionId).Distinct().ToList();
         var stageDefs = await _db.ProductionStageDefinitions.AsNoTracking()
@@ -127,6 +240,30 @@ public class GetProductionFloorQueryHandler : IRequestHandler<GetProductionFloor
             .ToDictionaryAsync(i => i.Id, cancellationToken);
 
         var now = DateTime.UtcNow;
+
+        // The delivery history of one order: what it was handed over on, when, and how much. KG and
+        // Meter are summed separately - a delivery of 100 KG and 40 M is not "140" of anything.
+        string? DeliveryNumbersOf(Guid orderId) => deliveriesByOrder.TryGetValue(orderId, out var ids)
+            ? string.Join(", ", ids.Select(id => deliveredDocs.FirstOrDefault(d => d.Id == id)?.DeliveryNumber)
+                .Where(n => n is not null).Distinct())
+            : null;
+
+        DateTime? LastDeliveryDateOf(Guid orderId) => deliveriesByOrder.TryGetValue(orderId, out var ids)
+            ? ids.Select(id => deliveredDocs.FirstOrDefault(d => d.Id == id)?.DeliveryDate)
+                .Where(d => d.HasValue).Max()
+            : null;
+
+        decimal? DeliveredKgOf(Guid orderId) => deliveriesByOrder.TryGetValue(orderId, out var ids)
+            ? deliveredLines
+                .Where(l => ids.Contains(l.DeliveryId) && l.ProductionOrderId == orderId && l.QuantityKg.HasValue)
+                .Sum(l => l.QuantityKg!.Value)
+            : null;
+
+        decimal? DeliveredMeterOf(Guid orderId) => deliveriesByOrder.TryGetValue(orderId, out var ids)
+            ? deliveredLines
+                .Where(l => ids.Contains(l.DeliveryId) && l.ProductionOrderId == orderId && l.QuantityMeter.HasValue)
+                .Sum(l => l.QuantityMeter!.Value)
+            : null;
 
         var rows = orders.Select(o =>
         {
@@ -157,7 +294,9 @@ public class GetProductionFloorQueryHandler : IRequestHandler<GetProductionFloor
                 OrderStatus = o.Status,
                 Priority = o.Priority,
                 StageStartedAtUtc = stage?.StartedAtUtc,
-                MinutesInStage = stage?.StartedAtUtc is null ? null : (now - stage.StartedAtUtc.Value).TotalMinutes,
+                MinutesInStage = stage?.Status == StageExecutionStatus.InProgress && stage.StartedAtUtc.HasValue
+                    ? (now - stage.StartedAtUtc.Value).TotalMinutes
+                    : null,
                 BaselineKg = stage?.BaselineKg,
                 BaselineMeter = stage?.BaselineMeter,
                 InputKg = stage?.InputKg,
@@ -169,16 +308,22 @@ public class GetProductionFloorQueryHandler : IRequestHandler<GetProductionFloor
                 LossPercentKg = stage?.LossPercentKg,
                 LossPercentMeter = stage?.LossPercentMeter,
                 Operator = stage?.Operator,
-                AwaitingStart = stage is null,
+                AwaitingStart = stage is null && o.Status is ProductionOrderStatus.RawAllocated or ProductionOrderStatus.InProduction or ProductionOrderStatus.Draft,
                 CustomerReference = o.CustomerReference,
-                Notes = o.Notes
+                Notes = o.Notes,
+                IsDelivered = deliveriesByOrder.ContainsKey(o.Id),
+                DeliveryNumbers = DeliveryNumbersOf(o.Id),
+                LastDeliveryDate = LastDeliveryDateOf(o.Id),
+                DeliveredQuantityKg = DeliveredKgOf(o.Id),
+                DeliveredQuantityMeter = DeliveredMeterOf(o.Id)
             };
         }).ToList();
 
         // An order with no stage at all is waiting for the floor to start it - it belongs on this
-        // screen, so it is kept rather than filtered away.
+        // screen, so it is kept rather than filtered away; delivered/closed orders are also kept in their view.
         rows = rows
-            .Where(r => !string.IsNullOrEmpty(r.CurrentStageName) || r.AwaitingStart)
+            .Where(r => !string.IsNullOrEmpty(r.CurrentStageName) || r.AwaitingStart || r.IsDelivered
+                        || r.OrderStatus is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
             .ToList();
 
         if (!string.IsNullOrWhiteSpace(request.Search))

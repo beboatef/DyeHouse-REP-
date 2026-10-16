@@ -209,6 +209,84 @@ public class ProductionOrderStageExecution : BaseEntity
     }
 
     /// <summary>
+    /// Closes the operation as a ROUTE STEP ONLY: the Job Order moves on to the operation the user chose,
+    /// and this one records no production figure at all - no output, no loss, no separates, no second grade.
+    ///
+    /// This is what makes "select the next operation" a routing decision rather than a production entry: a
+    /// stage the floor simply passed through must not invent a weight, a waste percentage or a stock movement.
+    /// Everything the operation already recorded earlier (an output edited while it was open, a drawing
+    /// number, its machine and shift) is LEFT EXACTLY AS IT IS - this never clears a recorded figure - and the
+    /// next operation inherits the material as this one received it (the caller passes this stage's baseline).
+    ///
+    /// Guessing an output here would fabricate production and, at the ready-goods stop, stock: that is why the
+    /// transfer into the Ready Goods warehouse refuses to use this route and demands the final weights instead.
+    /// </summary>
+    public void CloseAsRouteStep(string? notes, string closedBy)
+    {
+        if (Status == StageExecutionStatus.Completed)
+            throw new DomainException(
+                "This stage is already closed and locked. A finished stage is corrected with a compensating movement, never by re-entering its figures.");
+
+        // A printing operation must still name its drawing before it can be left, exactly as it must when
+        // it records an output: the number identifies the run, not how much it produced.
+        EnsureDrawingNumber();
+
+        // Loss stays derived and therefore stays NULL: there is no final output to measure it against, and
+        // a zero would read as "nothing was lost" instead of "nothing was recorded".
+        Notes = notes;
+        Operator = closedBy;
+        Status = StageExecutionStatus.Completed;
+        CompletedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// The operation's WASTE (الهالك) - the figure the LAST operation before the Ready Goods warehouse is
+    /// required to produce, derived exactly as the floor states it:
+    ///
+    ///     waste = original raw (KG) - ready weight (KG) - separates (KG)
+    ///
+    /// It is a WEIGHT, so it is computed in KILOGRAMS ONLY. The metre figure of the same operation is
+    /// deliberately NOT turned into a "metre waste": a metre is a length, not a weight, and there is no
+    /// conversion between the two anywhere in this system. Separates enter the equation only when they
+    /// themselves were recorded in KG - if they were recorded in metres they stay a metre quantity and
+    /// change nothing here (see <see cref="SeparatesKg"/>).
+    ///
+    /// Null (never a fabricated zero) while the KG input or output was not recorded, and null when the
+    /// subtraction would go negative - produced material that outweighs its raw plus what was kept aside
+    /// means the figures overlap or the raw figure is understated, which is a data problem and not a waste
+    /// figure. Second grade is NOT subtracted, because it is a quantity of its own and is reported in its
+    /// own column.
+    /// </summary>
+    public decimal? WasteKg
+    {
+        get
+        {
+            if (InputKg is null || OutputKg is null) return null;
+
+            var waste = InputKg.Value - OutputKg.Value - (SeparatesKg ?? 0m);
+            return waste < 0m ? null : waste;
+        }
+    }
+
+    /// <summary>
+    /// Guards the FINAL capture on the last operation before the Ready Goods warehouse: the waste may not be
+    /// negative, which is the caller's check that "أصل الخام" (KG) is not smaller than the ready weight plus
+    /// what was kept aside. The check is in KILOGRAMS, because the waste is a weight (see
+    /// <see cref="WasteKg"/>): the metre figures the same operation may also record are a length, they form
+    /// no part of the waste equation, and they therefore impose nothing here.
+    ///
+    /// Called by the transfer that moves the output into Ready Goods, where the original raw and ready
+    /// weight are required in the first place.
+    /// </summary>
+    public void EnsureWasteIsPossible(decimal? rawKg, decimal? producedKg, decimal? separatesKg)
+    {
+        if (rawKg is > 0 && producedKg is > 0 && rawKg.Value - producedKg.Value - (separatesKg ?? 0m) < 0m)
+            throw new DomainException(
+                $"The original raw weight ({rawKg} KG) cannot be smaller than the ready weight ({producedKg} KG) plus the separates ({separatesKg ?? 0m} KG). " +
+                "وزن أصل الخام لا يمكن أن يقل عن وزن الجاهز مضافًا إليه المنفصلات.");
+    }
+
+    /// <summary>
     /// Edits the stage's output WHILE it is still open (spec section 16). No
     /// approval is needed for this, but the baseline is untouched and the caller
     /// records the previous/new figures in the audit log. Once the stage is

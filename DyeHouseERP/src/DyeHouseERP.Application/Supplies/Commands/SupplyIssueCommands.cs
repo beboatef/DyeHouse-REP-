@@ -237,10 +237,11 @@ public class CancelSupplyIssueCommandHandler : IRequestHandler<CancelSupplyIssue
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
+    private readonly IAllocationLockService _stockLock;
 
     public CancelSupplyIssueCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser, IDateTime clock,
-        IPeriodCloseService periodClose)
-    { _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose; }
+        IPeriodCloseService periodClose, IAllocationLockService stockLock)
+    { _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose; _stockLock = stockLock; }
 
     public async Task<SupplyIssueDto> Handle(CancelSupplyIssueCommand request, CancellationToken cancellationToken)
     {
@@ -248,37 +249,71 @@ public class CancelSupplyIssueCommandHandler : IRequestHandler<CancelSupplyIssue
         // covers today blocks it - historical corrections remain possible.
         await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
 
-        var issue = await _db.SupplyIssues.Include(i => i.Lines)
+        var snapshot = await _db.SupplyIssues.AsNoTracking()
+            .Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("SupplyIssue", request.Id);
 
-        var wasPosted = issue.Status == SupplyIssueStatus.Posted;
+        if (snapshot.Status == SupplyIssueStatus.Cancelled)
+            throw new DomainException("This supply issue is already cancelled.");
 
-        if (wasPosted)
+        // H6: lock every material line on the issue in deterministic order (via AcquireManyAsync)
+        // using StockLockKey.MaterialLot(WarehouseId, MaterialId) - the exact same lock keys and
+        // ordering that PostSupplyIssueCommandHandler uses. Re-reading the live status inside the
+        // locks serializes cancellation with concurrent posts/issues and prevents a duplicate
+        // concurrent cancellation from crediting the stock twice.
+        var lockKeys = snapshot.Lines
+            .Select(l => StockLockKey.MaterialLot(snapshot.WarehouseId, l.MaterialId))
+            .Distinct()
+            .ToList();
+
+        await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
         {
-            // Only a POSTED issue is reversed, and the reversal is a brand-new IN row, so the
-            // warehouse must still be active for it. Checked BEFORE the document is touched, so
-            // a refusal leaves the aggregate and the ledger exactly as they were. Cancelling a
-            // draft writes no row at all, which is why that case needs no check.
-            await WarehouseGuard.EnsureUsableForNewMovementAsync(
-                _db, issue.WarehouseId, cancellationToken, "to reverse its stock movements");
-        }
+            var issue = await _db.SupplyIssues.Include(i => i.Lines)
+                .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken)
+                ?? throw new NotFoundException("SupplyIssue", request.Id);
 
-        issue.Cancel(request.Reason, _currentUser.UserName);
+            var liveStatus = await _db.SupplyIssues.AsNoTracking()
+                .Where(i => i.Id == issue.Id)
+                .Select(i => (SupplyIssueStatus?)i.Status)
+                .FirstOrDefaultAsync(cancellationToken);
 
-        if (wasPosted)
-        {
-            foreach (var line in issue.Lines)
+            if (liveStatus == SupplyIssueStatus.Cancelled)
+                throw new DomainException("This supply issue is already cancelled.");
+            if (liveStatus is null)
+                throw new NotFoundException("SupplyIssue", issue.Id);
+
+            var wasPosted = liveStatus.Value == SupplyIssueStatus.Posted;
+
+            if (wasPosted)
             {
-                _db.MaterialTransactions.Add(new MaterialTransaction(
-                    DocumentType.SupplyIssue, issue.IssueNumber, issue.Id, _clock.UtcNow,
-                    line.MaterialId, issue.WarehouseId, null,
-                    line.Quantity, MaterialTransactionDirection.In, line.UnitCost, _currentUser.UserName));
+                // Only a POSTED issue is reversed, and the reversal is a brand-new IN row, so the
+                // warehouse must still be active for it. Checked BEFORE the document is touched, so
+                // a refusal leaves the aggregate and the ledger exactly as they were. Cancelling a
+                // draft writes no row at all, which is why that case needs no check.
+                await WarehouseGuard.EnsureUsableForNewMovementAsync(
+                    _db, issue.WarehouseId, cancellationToken, "to reverse its stock movements");
             }
+
+            // The tracked entity was loaded inside the lock (the pre-lock read above is
+            // AsNoTracking, so nothing stale can be cached from it), so its Status is the
+            // live row the guard just read - Cancel() operates on the latest persisted state.
+            issue.Cancel(request.Reason, _currentUser.UserName);
+
+            if (wasPosted)
+            {
+                foreach (var line in issue.Lines)
+                {
+                    _db.MaterialTransactions.Add(new MaterialTransaction(
+                        DocumentType.SupplyIssue, issue.IssueNumber, issue.Id, _clock.UtcNow,
+                        line.MaterialId, issue.WarehouseId, null,
+                        line.Quantity, MaterialTransactionDirection.In, line.UnitCost, _currentUser.UserName));
+                }
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+
+            return (await SupplyIssueDtoBuilder.BuildManyAsync(_db, new[] { issue }, cancellationToken))[0];
         }
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        return (await SupplyIssueDtoBuilder.BuildManyAsync(_db, new[] { issue }, cancellationToken))[0];
     }
 }

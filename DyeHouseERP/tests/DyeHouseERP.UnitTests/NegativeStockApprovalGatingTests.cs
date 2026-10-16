@@ -593,7 +593,7 @@ public class NegativeStockApprovalGatingTests
     private static ISender BuildSender(ApplicationDbContext db, ICurrentUserService user)
     {
         var services = new ServiceCollection();
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<AllocateRawCommand>());
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<IssueRawMaterialCommand>());
         services.AddSingleton<IApplicationDbContext>(db);
         services.AddSingleton(user);
         services.AddSingleton<ICurrentUserService>(user);

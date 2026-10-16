@@ -9,6 +9,7 @@ using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Application.Invoices.DTOs;
 using DyeHouseERP.Application.Items.DTOs;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
+using DyeHouseERP.Application.ProductionStages.DTOs;
 using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Application.ReadyGoods.DTOs;
 using DyeHouseERP.Application.Treasury.DTOs;
@@ -68,13 +69,21 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
-        // One active production stage so completed orders can transfer to ready goods.
+        // One active formation stage + one ready-goods stage so orders can be issued and transferred to ready goods.
         await Client.PostAsJsonAsync("/api/production-stages", new
         {
-            code = $"S{Guid.NewGuid():N}"[..8], name = "Dyeing", sequence = Interlocked.Increment(ref _stageSequence),
-            requiresInputQuantity = true, requiresOutputQuantity = true, requiresApproval = false,
-            allowSkip = false, allowRepeat = false, allowRework = true, allowReturn = false, notes = (string?)null
+            code = $"S{Guid.NewGuid():N}"[..8], name = "Formation", sequence = Interlocked.Increment(ref _stageSequence),
+            requiresInputQuantity = true, requiresOutputQuantity = true, notes = (string?)null,
+            isFormationStage = true
         });
+        var readyStage = (await (await Client.PostAsJsonAsync("/api/production-stages", new
+        {
+            code = $"R{Guid.NewGuid():N}"[..8], name = "Ready Goods", sequence = Interlocked.Increment(ref _stageSequence),
+            requiresInputQuantity = true, requiresOutputQuantity = true, notes = (string?)null,
+            isFormationStage = false
+        })).Content.ReadFromJsonAsync<ProductionStageDefinitionDto>(Json))!;
+        (await Client.PostAsync($"/api/production-stages/{readyStage.Id}/ready-goods-stage", null))
+            .EnsureSuccessStatusCode();
 
         var customer = (await (await Client.PostAsJsonAsync("/api/customers", new { code = $"{prefix}C{suffix}", name = "Conc Customer" }))
             .Content.ReadFromJsonAsync<CustomerDto>(Json))!;
@@ -99,40 +108,43 @@ public abstract class SqlServerConcurrencyTestBase : IntegrationTestBase
         return message.Id;
     }
 
-    protected async Task<Guid> CreateOrderAsync(Guid customerId, Guid itemId, decimal requestedKg)
-    {
-        var order = (await (await Client.PostAsJsonAsync("/api/production-orders", new
+    protected async Task<HttpResponseMessage> PostIssueAsync(Guid customerId, Guid itemId, Guid messageId, decimal kg)
+        => await Client.PostAsJsonAsync("/api/production-orders/issue", new
         {
-            customerId, itemId, orderDate = DateTime.UtcNow,
-            requestedQuantityKg = requestedKg, priority = ProductionPriority.Normal
-        })).Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
+            customerId, itemId, rawMessageId = messageId, orderDate = DateTime.UtcNow,
+            actualQuantityKg = kg, priority = ProductionPriority.Normal,
+            overrideNegativeStock = false, overrideReason = (string?)null
+        });
+
+    protected async Task<Guid> IssueOrderAsync(Guid customerId, Guid itemId, Guid messageId, decimal kg)
+    {
+        var response = await PostIssueAsync(customerId, itemId, messageId, kg);
+        response.EnsureSuccessStatusCode();
+        var order = (await response.Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
         return order.Id;
     }
 
-    protected async Task AllocateAsync(Guid orderId, Guid itemId, Guid messageId, decimal kg)
-    {
-        (await Client.PostAsJsonAsync($"/api/production-orders/{orderId}/raw-allocations", new
-        { rawMessageId = messageId, itemId, quantityKg = kg, overrideNegativeStock = false, overrideReason = (string?)null }))
-            .EnsureSuccessStatusCode();
-    }
-
-    /// <summary>Completes all stages and posts the ready-goods transfer; returns (orderId, transferId).</summary>
+    /// <summary>Transfers the order's active stage to the ready-goods stage; returns (orderId, transferId).</summary>
     protected async Task<(Guid OrderId, Guid TransferId)> ProduceAndTransferAsync(Guid orderId, Guid readyWarehouseId, decimal inputKg, decimal outputKg)
     {
+        _ = readyWarehouseId;
         var order = await Client.GetFromJsonAsync<ProductionOrderDto>($"/api/production-orders/{orderId}", Json);
-        foreach (var stage in order!.StageExecutions)
-        {
-            await Client.PostAsync($"/api/production-orders/stage-executions/{stage.Id}/start", null);
-            (await Client.PostAsJsonAsync($"/api/production-orders/stage-executions/{stage.Id}/complete", new
-            { inputKg, outputKg, lossKg = inputKg - outputKg, notes = (string?)null, approvedBy = (string?)null })).EnsureSuccessStatusCode();
-        }
-        (await Client.PostAsync($"/api/production-orders/{orderId}/complete", null)).EnsureSuccessStatusCode();
+        var stage = order!.StageExecutions.Single(s => s.Status == StageExecutionStatus.InProgress);
 
-        var transferResponse = await Client.PostAsJsonAsync("/api/ready-goods/transfers", new
-        { productionOrderId = orderId, warehouseId = readyWarehouseId, quantityKg = outputKg });
+        var stageDefinitions = await Client.GetFromJsonAsync<List<ProductionStageDefinitionDto>>("/api/production-stages", Json);
+        var readyGoodsStage = stageDefinitions!.Single(s => s.IsReadyGoodsStage);
+
+        var transferResponse = await Client.PostAsJsonAsync(
+            $"/api/production-orders/stage-executions/{stage.Id}/transfer", new
+            {
+                nextStageDefinitionId = readyGoodsStage.Id,
+                inputKg, outputKg, notes = (string?)null
+            });
         transferResponse.EnsureSuccessStatusCode();
-        var transfer = await transferResponse.Content.ReadFromJsonAsync<ReadyGoodsTransferDto>(Json);
-        return (orderId, transfer!.Id);
+
+        var transfers = await Client.GetFromJsonAsync<List<ReadyGoodsTransferDto>>("/api/ready-goods/transfers", Json);
+        var transfer = transfers!.Single(t => t.ProductionOrderId == orderId);
+        return (orderId, transfer.Id);
     }
 
     protected async Task<DeliveryDto> CreatePreparedDeliveryAsync(Guid customerId, Guid orderId, Guid itemId, decimal kg)
@@ -167,17 +179,12 @@ public class AllocateVersusExternalReleaseRaceTests : SqlServerConcurrencyTestBa
         var (customerId, itemId, rawWarehouseId, _) = await SeedMasterDataAsync("t1");
         var messageId = await ReceiveAndAcceptAsync(customerId, itemId, rawWarehouseId, kg: 1000m);
 
-        // Order backing the external-processing stage movement (no allocation yet).
-        var epOrderId = await CreateOrderAsync(customerId, itemId, requestedKg: 600m);
-
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var allocateTask = Task.Run(async () =>
         {
             await ReadyAsync;
-            var order2 = await CreateOrderAsync(customerId, itemId, requestedKg: 600m);
-            var response = await Client.PostAsJsonAsync($"/api/production-orders/{order2}/raw-allocations", new
-            { rawMessageId = messageId, itemId, quantityKg = 600m, overrideNegativeStock = false, overrideReason = (string?)null });
+            var response = await PostIssueAsync(customerId, itemId, messageId, 600m);
             return response.StatusCode;
         });
 
@@ -189,7 +196,7 @@ public class AllocateVersusExternalReleaseRaceTests : SqlServerConcurrencyTestBa
                 customerId, itemId, rawMessageId = messageId, quantityKg = 600m,
                 reason = RawReleaseReason.ExternalProcessing, externalParty = "Processor Co",
                 overrideNegativeStock = false, overrideReason = (string?)null,
-                productionOrderId = epOrderId, externalProcessingStage = "Dyeing",
+                productionOrderId = (Guid?)null, externalProcessingStage = "Dyeing",
                 externalProcessingCost = (decimal?)50m, expectedReturnDate = (DateTime?)null
             });
             return response.StatusCode;
@@ -198,7 +205,7 @@ public class AllocateVersusExternalReleaseRaceTests : SqlServerConcurrencyTestBa
         start.SetResult();
         var statuses = await Task.WhenAll(allocateTask, releaseTask);
 
-        statuses.Count(s => s == HttpStatusCode.OK).Should().Be(1, "stock covers only one 600 KG operation");
+        statuses.Count(s => s is HttpStatusCode.OK or HttpStatusCode.Created).Should().Be(1, "stock covers only one 600 KG operation");
         statuses.Count(s => s == HttpStatusCode.Conflict).Should().Be(1, "the loser fails with NEGATIVE_STOCK (409)");
 
         var messages = await Client.GetFromJsonAsync<List<RawMessageDto>>($"/api/raw-messages?customerId={customerId}", Json);
@@ -217,23 +224,18 @@ public class TenParallelAllocationTests : SqlServerConcurrencyTestBase
         var (customerId, itemId, rawWarehouseId, _) = await SeedMasterDataAsync("t2");
         var messageId = await ReceiveAndAcceptAsync(customerId, itemId, rawWarehouseId, kg: 300m);
 
-        var orders = new List<Guid>();
-        for (var i = 0; i < 10; i++)
-            orders.Add(await CreateOrderAsync(customerId, itemId, requestedKg: 100m));
-
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var tasks = orders.Select(o => Task.Run(async () =>
+        var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(async () =>
         {
             await ReadyAsync;
-            var response = await Client.PostAsJsonAsync($"/api/production-orders/{o}/raw-allocations", new
-            { rawMessageId = messageId, itemId, quantityKg = 100m, overrideNegativeStock = false, overrideReason = (string?)null });
+            var response = await PostIssueAsync(customerId, itemId, messageId, 100m);
             return response.StatusCode;
         })).ToList();
 
         start.SetResult();
         var statuses = await Task.WhenAll(tasks);
 
-        statuses.Count(s => s == HttpStatusCode.OK).Should().Be(3, "stock of 300 covers exactly three 100 KG allocations");
+        statuses.Count(s => s == HttpStatusCode.Created).Should().Be(3, "stock of 300 covers exactly three 100 KG issues");
         statuses.Count(s => s == HttpStatusCode.Conflict).Should().Be(7, "the rest fail with NEGATIVE_STOCK");
 
         var messages = await Client.GetFromJsonAsync<List<RawMessageDto>>($"/api/raw-messages?customerId={customerId}", Json);
@@ -251,8 +253,7 @@ public class TwoDeliveriesRaceTests : SqlServerConcurrencyTestBase
     {
         var (customerId, itemId, rawWarehouseId, readyWarehouseId) = await SeedMasterDataAsync("t3");
         var messageId = await ReceiveAndAcceptAsync(customerId, itemId, rawWarehouseId, kg: 500m);
-        var orderId = await CreateOrderAsync(customerId, itemId, 500m);
-        await AllocateAsync(orderId, itemId, messageId, 500m);
+        var orderId = await IssueOrderAsync(customerId, itemId, messageId, 500m);
         await ProduceAndTransferAsync(orderId, readyWarehouseId, inputKg: 500m, outputKg: 400m);
 
         var d1 = await CreatePreparedDeliveryAsync(customerId, orderId, itemId, kg: 400m);
@@ -284,8 +285,7 @@ public class DuplicateLineDeliveryTests : SqlServerConcurrencyTestBase
     {
         var (customerId, itemId, rawWarehouseId, readyWarehouseId) = await SeedMasterDataAsync("t4");
         var messageId = await ReceiveAndAcceptAsync(customerId, itemId, rawWarehouseId, kg: 500m);
-        var orderId = await CreateOrderAsync(customerId, itemId, 500m);
-        await AllocateAsync(orderId, itemId, messageId, 500m);
+        var orderId = await IssueOrderAsync(customerId, itemId, messageId, 500m);
         await ProduceAndTransferAsync(orderId, readyWarehouseId, inputKg: 500m, outputKg: 400m);
 
         // Same (order, item) twice: 300 + 300 = 600 > 400 available.
@@ -317,8 +317,7 @@ public class DoubleCancellationTests : SqlServerConcurrencyTestBase
     {
         var (customerId, itemId, rawWarehouseId, readyWarehouseId) = await SeedMasterDataAsync("t5");
         var messageId = await ReceiveAndAcceptAsync(customerId, itemId, rawWarehouseId, kg: 500m);
-        var orderId = await CreateOrderAsync(customerId, itemId, 500m);
-        await AllocateAsync(orderId, itemId, messageId, 500m);
+        var orderId = await IssueOrderAsync(customerId, itemId, messageId, 500m);
         var (_, transferId) = await ProduceAndTransferAsync(orderId, readyWarehouseId, inputKg: 500m, outputKg: 500m);
 
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -349,8 +348,7 @@ public class DeliveryVersusCancellationTests : SqlServerConcurrencyTestBase
     {
         var (customerId, itemId, rawWarehouseId, readyWarehouseId) = await SeedMasterDataAsync("t6");
         var messageId = await ReceiveAndAcceptAsync(customerId, itemId, rawWarehouseId, kg: 500m);
-        var orderId = await CreateOrderAsync(customerId, itemId, 500m);
-        await AllocateAsync(orderId, itemId, messageId, 500m);
+        var orderId = await IssueOrderAsync(customerId, itemId, messageId, 500m);
         var (_, transferId) = await ProduceAndTransferAsync(orderId, readyWarehouseId, inputKg: 500m, outputKg: 500m);
 
         var delivery = await CreatePreparedDeliveryAsync(customerId, orderId, itemId, kg: 500m);
@@ -368,9 +366,9 @@ public class DeliveryVersusCancellationTests : SqlServerConcurrencyTestBase
         });
 
         start.SetResult();
-        await Task.WhenAll(deliveryTask, cancelTask);
-        var deliveryStatus = deliveryTask.Result;
-        var cancelStatus = cancelTask.Result;
+        var statuses = await Task.WhenAll(deliveryTask, cancelTask);
+        var deliveryStatus = statuses[0];
+        var cancelStatus = statuses[1];
 
         (deliveryStatus == HttpStatusCode.OK || cancelStatus == HttpStatusCode.NoContent).Should().BeTrue("one operation wins");
         (deliveryStatus == HttpStatusCode.OK && cancelStatus == HttpStatusCode.NoContent).Should().BeFalse("they must serialize on the same lot");
@@ -435,8 +433,7 @@ public class DoubleDeliveryTests : SqlServerConcurrencyTestBase
     {
         var (customerId, itemId, rawWarehouseId, readyWarehouseId) = await SeedMasterDataAsync("t8");
         var messageId = await ReceiveAndAcceptAsync(customerId, itemId, rawWarehouseId, kg: 500m);
-        var orderId = await CreateOrderAsync(customerId, itemId, 500m);
-        await AllocateAsync(orderId, itemId, messageId, 500m);
+        var orderId = await IssueOrderAsync(customerId, itemId, messageId, 500m);
         await ProduceAndTransferAsync(orderId, readyWarehouseId, inputKg: 500m, outputKg: 500m);
 
         var delivery = await CreatePreparedDeliveryAsync(customerId, orderId, itemId, kg: 500m);

@@ -46,6 +46,8 @@ export default function ApprovalCenterPage() {
       setError(null);
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
       qc.invalidateQueries({ queryKey: ["approval-center"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+      qc.invalidateQueries({ queryKey: ["raw-messages"] });
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? t("approvals.sod.actionFailed"))
   });
@@ -58,6 +60,8 @@ export default function ApprovalCenterPage() {
       setRejectReason("");
       qc.invalidateQueries({ queryKey: ["approval-requests"] });
       qc.invalidateQueries({ queryKey: ["approval-center"] });
+      qc.invalidateQueries({ queryKey: ["stock-traceability"] });
+      qc.invalidateQueries({ queryKey: ["raw-messages"] });
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? t("approvals.sod.actionFailed"))
   });

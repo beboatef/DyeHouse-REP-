@@ -347,7 +347,6 @@ public class Phase5DeliveryStatementTests : Phase5TestBase
         // Ready goods (the produced figure) are unknown here, so the waste cannot be computed - null,
         // not a zero that would read as a real measurement.
         row.CalculatedWasteKg.Should().BeNull();
-        row.CalculatedWasteMeter.Should().BeNull();
     }
 
     [Fact]
@@ -369,10 +368,8 @@ public class Phase5DeliveryStatementTests : Phase5TestBase
         row.SecondGradeKg.Should().Be(10m);
         row.SecondGradeMeter.Should().Be(2m);
 
-        // KG: 600 original - 520 produced - 20 scraps - 10 second grade = 50.
+        // KG: 600 original - 520 produced - 20 scraps - 10 second grade = 50 (waste is calculated in KG only).
         row.CalculatedWasteKg.Should().Be(50m);
-        // Meter: 100 original - 85 produced - 5 scraps - 2 second grade = 8. Never mixed with KG.
-        row.CalculatedWasteMeter.Should().Be(8m);
     }
 
     [Fact]

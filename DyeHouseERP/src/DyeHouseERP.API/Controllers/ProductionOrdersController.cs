@@ -117,21 +117,13 @@ public class ProductionOrdersController : ControllerBase
             id, request.OrderDate, request.Color, request.RawOrigin, request.CustomerReference,
             request.Notes, request.Priority, request.JobOrderType)));
 
-    /// <summary>
-    /// Allocates raw material from a specific, user-chosen RawMessage
-    /// (spec section 13 - manual selection, no FIFO). Call once per message
-    /// being drawn from.
-    /// </summary>
-    [HttpPost("{id:guid}/raw-allocations")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawConsume)]
-    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ProductionOrderDto>> AllocateRaw(Guid id, [FromBody] AllocateRawRequest request)
-    {
-        var result = await _mediator.Send(new AllocateRawCommand(
-            id, request.RawMessageId, request.ItemId, request.QuantityKg, request.QuantityMeter,
-            request.OverrideNegativeStock, request.OverrideReason));
-        return Ok(result);
-    }
+    // THE RAW-ALLOCATION ENDPOINT (POST {id}/raw-allocations) WAS DELETED: allocating raw material to an
+    // EXISTING Job Order (a reserved quantity with no actual issue) is no longer a reachable operation.
+    // The raw deduction is made exactly ONCE, by the raw issue that CREATES the order (POST /issue), which
+    // already records the matching allocation row - so an order created that way can never be deducted twice,
+    // and the old order-first-then-allocate route no longer exists alongside it. Historical RawAllocation
+    // rows, their ledger movements and the orders they belong to stay readable and unchanged, and
+    // pause/resume still posts its own real, ledger-backed issue through the same command as any other issue.
 
     // The legacy stage endpoints (POST stage-executions/{id}/start, /complete and /skip) were DELETED in
     // Phase 4: they could advance or close a stage outside the single official production transaction,
@@ -267,7 +259,4 @@ public record ResumeProductionOrderRequest(
     Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,
     bool OverrideNegativeStock = false, string? OverrideReason = null);
 
-public record AllocateRawRequest(
-    Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,
-    bool OverrideNegativeStock, string? OverrideReason);
 

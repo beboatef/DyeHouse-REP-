@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using DyeHouseERP.API.Controllers;
 using DyeHouseERP.Application.Items.DTOs;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
+using DyeHouseERP.Application.ProductionStages.DTOs;
 using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
@@ -46,6 +47,17 @@ public class RawAllocationAndNegativeStockTests : IntegrationTestBase
         var warehouseResponse = await Client.PostAsJsonAsync("/api/warehouses", new { code = warehouseCode, name = "Main Raw Warehouse", kind = WarehouseKind.RawMaterial });
         var warehouse = await warehouseResponse.Content.ReadFromJsonAsync<WarehouseDto>(Json);
 
+        var stageDefinitions = await Client.GetFromJsonAsync<List<ProductionStageDefinitionDto>>("/api/production-stages", Json);
+        if (stageDefinitions is null || !stageDefinitions.Any(s => s.IsFormationStage))
+        {
+            await Client.PostAsJsonAsync("/api/production-stages", new
+            {
+                code = $"F{Guid.NewGuid():N}"[..8], name = "Formation", sequence = 1,
+                requiresInputQuantity = true, requiresOutputQuantity = true, notes = (string?)null,
+                isFormationStage = true
+            });
+        }
+
         return (customer!.Id, item!.Id, warehouse!.Id);
     }
 
@@ -74,20 +86,15 @@ public class RawAllocationAndNegativeStockTests : IntegrationTestBase
         var (customerId, itemId, warehouseId) = await SeedMasterDataAsync();
         var message = await ReceiveAndAcceptRawMessageAsync(customerId, itemId, warehouseId, quantityKg: 1000m);
 
-        var orderResponse = await Client.PostAsJsonAsync("/api/production-orders", new
+        var issueResponse = await Client.PostAsJsonAsync("/api/production-orders/issue", new
         {
-            customerId, itemId, orderDate = DateTime.UtcNow, requestedQuantityKg = 600m, priority = ProductionPriority.Normal
-        });
-        orderResponse.EnsureSuccessStatusCode();
-        var order = (await orderResponse.Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
-
-        var allocateResponse = await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/raw-allocations", new
-        {
-            rawMessageId = message.Id, itemId, quantityKg = 600m, overrideNegativeStock = false, overrideReason = (string?)null
+            customerId, itemId, rawMessageId = message.Id, orderDate = DateTime.UtcNow,
+            actualQuantityKg = 600m, priority = ProductionPriority.Normal,
+            overrideNegativeStock = false, overrideReason = (string?)null
         });
 
-        allocateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var updatedOrder = await allocateResponse.Content.ReadFromJsonAsync<ProductionOrderDto>(Json);
+        issueResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var updatedOrder = await issueResponse.Content.ReadFromJsonAsync<ProductionOrderDto>(Json);
         updatedOrder!.RawAllocations.Should().ContainSingle(a => a.RawMessageId == message.Id && a.QuantityKg == 600m);
         updatedOrder.Status.Should().Be(ProductionOrderStatus.RawAllocated);
 
@@ -103,25 +110,21 @@ public class RawAllocationAndNegativeStockTests : IntegrationTestBase
         var (customerId, itemId, warehouseId) = await SeedMasterDataAsync();
         var message = await ReceiveAndAcceptRawMessageAsync(customerId, itemId, warehouseId, quantityKg: 500m);
 
-        var orderResponse = await Client.PostAsJsonAsync("/api/production-orders", new
-        {
-            customerId, itemId, orderDate = DateTime.UtcNow, requestedQuantityKg = 550m, priority = ProductionPriority.Normal
-        });
-        var order = (await orderResponse.Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
-
         // Requesting 550 KG from a message that only received 500 KG - spec section 17 example exactly.
-        var allocateResponse = await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/raw-allocations", new
+        var issueResponse = await Client.PostAsJsonAsync("/api/production-orders/issue", new
         {
-            rawMessageId = message.Id, itemId, quantityKg = 550m, overrideNegativeStock = false, overrideReason = (string?)null
+            customerId, itemId, rawMessageId = message.Id, orderDate = DateTime.UtcNow,
+            actualQuantityKg = 550m, priority = ProductionPriority.Normal,
+            overrideNegativeStock = false, overrideReason = (string?)null
         });
 
-        allocateResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        var body = await allocateResponse.Content.ReadAsStringAsync();
+        issueResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await issueResponse.Content.ReadAsStringAsync();
         body.Should().Contain("NEGATIVE_STOCK");
     }
 
     [Fact]
-    public async Task AllocateRaw_FromUninspectedMessage_IsRejected()
+    public async Task AllocateRaw_FromCancelledMessage_IsRejected()
     {
         var (customerId, itemId, warehouseId) = await SeedMasterDataAsync();
 
@@ -130,21 +133,23 @@ public class RawAllocationAndNegativeStockTests : IntegrationTestBase
             receiptDate = DateTime.UtcNow, customerId, warehouseId,
             lines = new[] { new { itemId, quantityKg = 300m } }
         });
+        createResponse.EnsureSuccessStatusCode();
         var message = (await createResponse.Content.ReadFromJsonAsync<RawMessageDto>(Json))!;
-        // Deliberately NOT calling the inspection endpoint - message stays PendingInspection.
 
-        var orderResponse = await Client.PostAsJsonAsync("/api/production-orders", new
+        var cancelResponse = await Client.PostAsJsonAsync($"/api/raw-messages/{message.Id}/cancel", new
         {
-            customerId, itemId, orderDate = DateTime.UtcNow, requestedQuantityKg = 100m, priority = ProductionPriority.Normal
+            reason = "received in error"
         });
-        var order = (await orderResponse.Content.ReadFromJsonAsync<ProductionOrderDto>(Json))!;
+        cancelResponse.EnsureSuccessStatusCode();
 
-        var allocateResponse = await Client.PostAsJsonAsync($"/api/production-orders/{order.Id}/raw-allocations", new
+        var issueResponse = await Client.PostAsJsonAsync("/api/production-orders/issue", new
         {
-            rawMessageId = message.Id, itemId, quantityKg = 100m, overrideNegativeStock = false, overrideReason = (string?)null
+            customerId, itemId, rawMessageId = message.Id, orderDate = DateTime.UtcNow,
+            actualQuantityKg = 100m, priority = ProductionPriority.Normal,
+            overrideNegativeStock = false, overrideReason = (string?)null
         });
 
         // DomainException path (not NegativeStock) -> mapped to 422 by ExceptionHandlingMiddleware.
-        allocateResponse.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        issueResponse.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
 }
