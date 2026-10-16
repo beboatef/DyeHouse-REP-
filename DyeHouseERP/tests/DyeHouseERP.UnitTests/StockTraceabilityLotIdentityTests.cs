@@ -246,11 +246,21 @@ public class StockTraceabilityLotIdentityTests
         cardA.Rows.Select(r => (string)r[1]!).Should().ContainInOrder("استلام", "صرف للتشغيل", "مرتجع");
 
         // The named lot's card is a REAL file from the production renderer, not just a captured shape.
-        var file = (FileContentResult)await controller.ExportLotCard(
+        var fileB = (FileContentResult)await controller.ExportLotCard(
             StockScopes.Raw, message.Id, null, null, itemB.Id, null, null,
             new ReportExportService(new TestCompanyIdentityProvider("شركة تجريبية", "Test Co")));
-        System.Text.Encoding.ASCII.GetString(file.FileContents, 0, 5).Should().Be("%PDF-");
-        file.FileContents.Length.Should().BeGreaterThan(1000);
-        file.FileDownloadName.Should().Be("lot-card-MSG-L1.pdf");
+        System.Text.Encoding.ASCII.GetString(fileB.FileContents, 0, 5).Should().Be("%PDF-");
+        fileB.FileContents.Length.Should().BeGreaterThan(1000);
+        fileB.FileDownloadName.Should().Be("lot-card-MSG-L1-IT-B.pdf",
+            "the name carries the item, so the sibling lot cannot overwrite this file");
+
+        // The other item of the SAME message is a different lot, so it is a different file with a
+        // different name - naming both after the message alone is how one overwrote the other.
+        var fileA = (FileContentResult)await controller.ExportLotCard(
+            StockScopes.Raw, message.Id, null, null, itemA.Id, null, null,
+            new ReportExportService(new TestCompanyIdentityProvider("شركة تجريبية", "Test Co")));
+        fileA.FileDownloadName.Should().Be("lot-card-MSG-L1-IT-A.pdf");
+        fileA.FileDownloadName.Should().NotBe(fileB.FileDownloadName,
+            "two items of one receipt message must never download under one name");
     }
 }

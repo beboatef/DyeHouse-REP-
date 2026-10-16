@@ -162,6 +162,16 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
   const tokenOf = (row: StockTraceRow) => lotToken(scope, lotOf(row));
   const lotNumberOf = (row: StockTraceRow) =>
     (isMaterials ? row.materialCode : isRaw ? row.messageNumber : row.orderNumber) ?? undefined;
+  /**
+   * The row's OWN disambiguator: the item inside the message or job order, or the warehouse a material
+   * sits in. It is the half of the identity that makes the row ONE lot, so it is also what keeps two
+   * lots of one document (two items of a receipt, one material in two warehouses) from downloading
+   * under a single name.
+   */
+  const lotDisambiguatorOf = (row: StockTraceRow) =>
+    isMaterials
+      ? (row.warehouseCode ?? row.warehouseName ?? undefined)
+      : (row.itemCode || undefined);
   const selectionKeyOf = (row: StockTraceRow) => { const token = tokenOf(row); return token ? `${scope}:${token}` : null; };
 
   // Only rows that actually carry a lot identity can be printed - history rows with a NULL link have
@@ -510,7 +520,7 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
                         type="button"
                         className="btn-link"
                         title={t("stock.print.downloadPdf", "تنزيل PDF")}
-                        onClick={InventoryTraceabilityExports.lotCardPdf(scope, lotOf(row), lotNumberOf(row))}
+                        onClick={InventoryTraceabilityExports.lotCardPdf(scope, lotOf(row), lotNumberOf(row), lotDisambiguatorOf(row))}
                       >
                         PDF
                       </button>

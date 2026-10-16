@@ -106,8 +106,10 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             .ToDictionaryAsync(i => i.Id, cancellationToken);
         var customers = await _db.Customers.AsNoTracking().Where(c => customerIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => (c.Code, c.Name), cancellationToken);
+        // Code AND name: the code is the stable identity a machine-readable label (such as a download
+        // file name) needs, the name is what a user reads.
         var warehouses = await _db.Warehouses.AsNoTracking().Where(w => warehouseIds.Contains(w.Id))
-            .ToDictionaryAsync(w => w.Id, w => w.Name, cancellationToken);
+            .ToDictionaryAsync(w => w.Id, w => (w.Code, w.Name), cancellationToken);
         var messages = messageIds.Count == 0 ? new Dictionary<Guid, RawMessage>()
             : await _db.RawMessages.AsNoTracking().Where(m => messageIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, cancellationToken);
         var orders = orderIds.Count == 0 ? new Dictionary<Guid, ProductionOrder>()
@@ -238,7 +240,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
                 ItemCode = item?.Code,
                 ItemName = item?.Name,
                 WarehouseId = t.WarehouseId,
-                WarehouseName = warehouses.GetValueOrDefault(t.WarehouseId),
+                WarehouseName = warehouses.GetValueOrDefault(t.WarehouseId).Name,
                 CustomerId = t.CustomerId,
                 CustomerCode = customer.Code,
                 DeliveryId = t.SourceDocumentType == DocumentType.Delivery ? t.SourceDocumentId.ToString() : null,
@@ -446,7 +448,8 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
                 Color = order?.Color,
                 ProducedPieceCount = producedPieces,
                 WarehouseId = any.WarehouseId,
-                WarehouseName = warehouses.GetValueOrDefault(any.WarehouseId),
+                WarehouseName = warehouses.GetValueOrDefault(any.WarehouseId).Name,
+                WarehouseCode = warehouses.GetValueOrDefault(any.WarehouseId).Code,
                 CustomerId = any.CustomerId,
                 CustomerCode = customer.Code,
                 CustomerName = customer.Name,
@@ -539,7 +542,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         var materials = await _db.Materials.AsNoTracking().Where(m => materialIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, cancellationToken);
         var warehouses = await _db.Warehouses.AsNoTracking().Where(w => warehouseIds.Contains(w.Id))
-            .ToDictionaryAsync(w => w.Id, w => w.Name, cancellationToken);
+            .ToDictionaryAsync(w => w.Id, w => (w.Code, w.Name), cancellationToken);
         var orders = orderIds.Count == 0 ? new Dictionary<Guid, ProductionOrder>()
             : await _db.ProductionOrders.AsNoTracking().Where(o => orderIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, cancellationToken);
 
@@ -610,7 +613,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
                 ProductionOrderId = t.ProductionOrderId,
                 OrderNumber = order?.OrderNumber,
                 WarehouseId = t.WarehouseId,
-                WarehouseName = warehouses.GetValueOrDefault(t.WarehouseId),
+                WarehouseName = warehouses.GetValueOrDefault(t.WarehouseId).Name,
                 Quantity = t.Quantity,
                 Unit = material?.Unit.ToString(),
                 BalanceAfter = after,
@@ -668,7 +671,8 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
                 ReturnedQuantity = returned,
                 RemainingQuantity = balance,
                 WarehouseId = any.WarehouseId,
-                WarehouseName = warehouses.GetValueOrDefault(any.WarehouseId),
+                WarehouseName = warehouses.GetValueOrDefault(any.WarehouseId).Name,
+                WarehouseCode = warehouses.GetValueOrDefault(any.WarehouseId).Code,
                 SupplierName = lastReceiptDoc is null ? null : suppliers.GetValueOrDefault(lastReceiptDoc.SupplierId),
                 PurchaseOrderNumber = lastReceiptDoc?.PurchaseOrderId is null ? null
                     : purchaseOrders.GetValueOrDefault(lastReceiptDoc.PurchaseOrderId.Value),

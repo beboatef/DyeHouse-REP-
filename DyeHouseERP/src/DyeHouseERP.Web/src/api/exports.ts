@@ -237,14 +237,26 @@ export const ReportsExports = {
 /**
  * A file-name-safe stem. Letters, digits, '.', '-' and '_' survive; anything else (an Arabic
  * character, a slash, a space) becomes '-', runs collapse and the ends are trimmed, so a download
- * name can never carry a path separator or come out empty.
+ * name can never carry a path separator. A value nothing usable survives in comes back EMPTY rather
+ * than as a fallback word, because the callers here JOIN parts and have to be able to drop an empty
+ * one - a placeholder is exactly what must never stand where an identity belongs.
  */
-const safeStem = (value: string | undefined, fallback: string) => {
-  const cleaned = (value ?? "")
+const safeStem = (value: string | undefined | null) =>
+  (value ?? "")
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "");
-  return cleaned.length > 0 ? cleaned : fallback;
+
+/**
+ * The download name for ONE lot's card: the lot number followed by the SAME disambiguator that makes
+ * the card one lot - the item inside a receipt message or a job order, the warehouse a material sits
+ * in. Two lots of one document (the two items of one receipt message, one material stocked in two
+ * warehouses) therefore never save under one name. This mirrors the server's own stem, which is the
+ * name the browser would fall back to if the client did not set one.
+ */
+const lotCardFileName = (lotNumber: string | undefined, disambiguator: string | undefined, scope: StockScope) => {
+  const parts = [safeStem(lotNumber), safeStem(disambiguator)].filter((part) => part.length > 0);
+  return `lot-card-${parts.length > 0 ? parts.join("-") : scope}.pdf`;
 };
 
 /**
@@ -323,10 +335,10 @@ export const InventoryTraceabilityExports = {
    * contain the lot that was asked for: the server refuses a request that does not resolve to exactly
    * one balance rather than printing the first one it finds.
    */
-  lotCardPdf: (scope: StockScope, lot: LotCardIdentity, lotNumber?: string) => () =>
+  lotCardPdf: (scope: StockScope, lot: LotCardIdentity, lotNumber?: string, disambiguator?: string) => () =>
     downloadFile(
       "/inventory/traceability/lot-card",
-      `lot-card-${safeStem(lotNumber, scope)}.pdf`,
+      lotCardFileName(lotNumber, disambiguator, scope),
       { scope, ...lotCardParams(scope, lot) }
     )
 };

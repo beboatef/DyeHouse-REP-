@@ -61,6 +61,14 @@ public class StockTraceRowDto
     // ---- warehouse, customer and supplier ----
     public Guid? WarehouseId { get; set; }
     public string? WarehouseName { get; set; }
+
+    /// <summary>
+    /// The warehouse CODE - the stable, immutable identity of the warehouse the balance sits in (a
+    /// warehouse can be renamed, its code never changes). It is what tells two warehouses holding the
+    /// SAME material apart in a machine-readable label such as a download file name, where an Arabic
+    /// name would be reduced to separators.
+    /// </summary>
+    public string? WarehouseCode { get; set; }
     public Guid? CustomerId { get; set; }
     public string? CustomerCode { get; set; }
     public string? CustomerName { get; set; }

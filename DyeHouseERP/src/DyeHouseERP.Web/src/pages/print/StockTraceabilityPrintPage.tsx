@@ -146,6 +146,12 @@ function LotTraceabilityCard({ scope, token, pageBreakAfter }: {
     (v === null || v === undefined ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 3 }));
 
   const lotNumber = lot?.messageNumber ?? lot?.orderNumber ?? lot?.materialCode ?? token;
+  // The same disambiguator the balances screen names this lot by - the item, or the warehouse a material
+  // sits in - so the file this button saves carries an identity: two items of one receipt message never
+  // save under one name.
+  const lotDisambiguator = isMaterials
+    ? (lot?.warehouseCode ?? lot?.warehouseName ?? undefined)
+    : (lot?.itemCode || undefined);
   const lotStatus = lot?.orderStatus ?? lot?.messageStatus ?? lot?.materialKind ?? "—";
   const lotDate = lot?.messageDate ?? lot?.orderDate;
 
@@ -291,7 +297,7 @@ function LotTraceabilityCard({ scope, token, pageBreakAfter }: {
         <button
           type="button"
           className="btn btn-ghost btn-sm"
-          onClick={InventoryTraceabilityExports.lotCardPdf(scope, identity ?? {}, lotNumber)}
+          onClick={InventoryTraceabilityExports.lotCardPdf(scope, identity ?? {}, lotNumber, lotDisambiguator)}
         >
           <FileDown size={14} />
           {t("stock.print.downloadPdf", "تنزيل PDF")}

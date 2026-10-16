@@ -1884,6 +1884,8 @@ export interface StockTraceRow {
   materialKind: string | null;
   warehouseId: string | null;
   warehouseName: string | null;
+  /** The warehouse's stable, immutable code - what tells two warehouses holding the same material apart in a file name. */
+  warehouseCode: string | null;
   customerId: string | null;
   customerCode: string | null;
   customerName: string | null;

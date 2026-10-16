@@ -220,7 +220,8 @@ public class LotCardPdfTests
         {
             Scope = StockScopes.Materials, LotKey = MaterialLotKey(LotId, WarehouseId), MaterialId = LotId,
             MaterialCode = "MAT-1", MaterialName = "Dye", MaterialUnit = "KG", MaterialKind = "Chemical",
-            WarehouseId = WarehouseId, WarehouseName = "Chemicals", RemainingQuantity = 70m
+            WarehouseId = WarehouseId, WarehouseCode = "WH-CHEM", WarehouseName = "Chemicals",
+            RemainingQuantity = 70m
         });
         dto.Movements.Add(new StockTraceMovementDto
         {
@@ -243,16 +244,17 @@ public class LotCardPdfTests
             GeneratedAtUtc = new DateTime(2026, 10, 16, 9, 30, 0, DateTimeKind.Utc),
             TotalRemainingQuantity = 140m, MovementCount = 2
         };
-        foreach (var (warehouseId, warehouseName, quantity) in new[]
+        foreach (var (warehouseId, warehouseCode, warehouseName, quantity) in new[]
                  {
-                     (WarehouseId, "Chemicals 1", 100m), (OtherWarehouseId, "Chemicals 2", 40m)
+                     (WarehouseId, "WH-C1", "Chemicals 1", 100m), (OtherWarehouseId, "WH-C2", "Chemicals 2", 40m)
                  })
         {
             dto.Rows.Add(new StockTraceRowDto
             {
                 Scope = StockScopes.Materials, LotKey = MaterialLotKey(LotId, warehouseId), MaterialId = LotId,
                 MaterialCode = "MAT-1", MaterialName = "Dye", MaterialUnit = "KG",
-                WarehouseId = warehouseId, WarehouseName = warehouseName, RemainingQuantity = quantity
+                WarehouseId = warehouseId, WarehouseCode = warehouseCode, WarehouseName = warehouseName,
+                RemainingQuantity = quantity
             });
             dto.Movements.Add(new StockTraceMovementDto
             {
@@ -582,7 +584,8 @@ public class LotCardPdfTests
             "the response is a genuine PDF, never HTML or JSON wearing a .pdf name");
         file.FileContents.Length.Should().BeGreaterThan(1000);
         file.ContentType.Should().Be("application/pdf");
-        file.FileDownloadName.Should().Be("lot-card-MSG-2026-000007.pdf");
+        file.FileDownloadName.Should().Be("lot-card-MSG-2026-000007-FAB-1.pdf",
+            "the name carries the identity that makes the card ONE lot: the message AND its item");
     }
 
     [Fact]
@@ -596,9 +599,68 @@ public class LotCardPdfTests
         var file = (FileContentResult)await controller.ExportLotCard(
             StockScopes.Raw, LotId, null, null, null, null, null, export);
 
-        file.FileDownloadName.Should().Be("lot-card-MSG-2026-000007.pdf",
+        file.FileDownloadName.Should().Be("lot-card-MSG-2026-000007-FAB-1.pdf",
             "a path separator or control character can never reach the download name");
         file.FileDownloadName.Should().NotContain("/").And.NotContain("\\");
+    }
+
+    [Fact]
+    public async Task TwoItemsOfOneReceiptMessage_DownloadUnderTwoDifferentFileNames()
+    {
+        // The two items of ONE receipt message are two lots. Naming the file after the message alone made
+        // both download as "lot-card-MSG-2026-000007.pdf", so the second silently replaced the first in the
+        // user's Downloads folder. The item is half of the lot's identity, so it is half of its name.
+        var (controller, _) = BuildController(RawMessageWithTwoItems());
+        var exportA = new ReportExportService(new TestCompanyIdentityProvider("شركة", "Co"));
+        var exportB = new ReportExportService(new TestCompanyIdentityProvider("شركة", "Co"));
+
+        var cardA = (FileContentResult)await controller.ExportLotCard(
+            StockScopes.Raw, LotId, null, null, ItemId, null, null, exportA);
+        var cardB = (FileContentResult)await controller.ExportLotCard(
+            StockScopes.Raw, LotId, null, null, OtherItemId, null, null, exportB);
+
+        cardA.FileDownloadName.Should().Be("lot-card-MSG-2026-000007-IT-A.pdf");
+        cardB.FileDownloadName.Should().Be("lot-card-MSG-2026-000007-IT-B.pdf");
+        cardA.FileDownloadName.Should().NotBe(cardB.FileDownloadName,
+            "one message carrying two items is two lots, and two cards must never share one file name");
+    }
+
+    [Fact]
+    public async Task OneMaterialInTwoWarehouses_DownloadsUnderTwoDifferentFileNames()
+    {
+        // A materials lot is (material, warehouse). The material code is the same on both cards, so the
+        // warehouse is what has to tell the two file names apart.
+        var (controller, _) = BuildController(MaterialInTwoWarehouses());
+        var exportFirst = new ReportExportService(new TestCompanyIdentityProvider("شركة", "Co"));
+        var exportSecond = new ReportExportService(new TestCompanyIdentityProvider("شركة", "Co"));
+
+        var first = (FileContentResult)await controller.ExportLotCard(
+            StockScopes.Materials, null, null, LotId, null, WarehouseId, null, exportFirst);
+        var second = (FileContentResult)await controller.ExportLotCard(
+            StockScopes.Materials, null, null, LotId, null, OtherWarehouseId, null, exportSecond);
+
+        first.FileDownloadName.Should().Be("lot-card-MAT-1-WH-C1.pdf");
+        second.FileDownloadName.Should().Be("lot-card-MAT-1-WH-C2.pdf");
+        first.FileDownloadName.Should().NotBe(second.FileDownloadName,
+            "one material in two warehouses is two lots, not one file name for both");
+    }
+
+    [Fact]
+    public async Task ALotWithNoUsableDisambiguator_DropsThatPartInsteadOfPrintingAPlaceholder()
+    {
+        // Nothing usable survives sanitizing here (an Arabic-only item name and no code): the disambiguator
+        // part is DROPPED, so the name never ends in a separator and never carries a word that is not the
+        // lot's identity.
+        var data = RawLot(withMeter: true);
+        data.Rows[0].ItemCode = string.Empty;
+        data.Rows[0].ItemName = "قطن";
+        var (controller, _) = BuildController(data);
+        var export = new ReportExportService(new TestCompanyIdentityProvider("شركة", "Co"));
+
+        var file = (FileContentResult)await controller.ExportLotCard(
+            StockScopes.Raw, LotId, null, null, null, null, null, export);
+
+        file.FileDownloadName.Should().Be("lot-card-MSG-2026-000007.pdf");
     }
 
     // ------------------------------------------------------- the permission

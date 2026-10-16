@@ -351,8 +351,20 @@ public class InventoryTraceabilityController : ControllerBase
             $"تاريخ الطباعة: {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
         }.Where(part => !string.IsNullOrWhiteSpace(part)));
 
-        return ExportFileHelper.ToPdf(export, "بطاقة تتبع اللوط", subtitle, headers, rows,
-            $"lot-card-{SafeFileStem(lotNumber)}");
+        // ONE card is ONE lot, and a lot is the document PLUS the dimension that makes it a single
+        // balance - the item inside a receipt message or a job order, the warehouse a material sits in.
+        // The download name carries that same disambiguator, so the two items of one receipt message (or
+        // one material stocked in two warehouses) no longer arrive as two files under one name. It is a
+        // LABEL only: the lot's real identity is the one printed on the card.
+        var disambiguator = isMaterials
+            ? lot.WarehouseCode ?? lot.WarehouseName
+            : lot.ItemCode ?? lot.ItemName;
+        var disambiguatorStem = SafeFileStemOrEmpty(disambiguator);
+        var fileStem = disambiguatorStem.Length == 0
+            ? $"lot-card-{SafeFileStem(lotNumber)}"
+            : $"lot-card-{SafeFileStem(lotNumber)}-{disambiguatorStem}";
+
+        return ExportFileHelper.ToPdf(export, "بطاقة تتبع اللوط", subtitle, headers, rows, fileStem);
     }
 
     /// <summary>
@@ -385,9 +397,20 @@ public class InventoryTraceabilityController : ControllerBase
     /// </summary>
     private static string SafeFileStem(string value)
     {
-        var cleaned = new string(value.Select(ch =>
-            char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '-').ToArray());
-        cleaned = Regex.Replace(cleaned, "-{2,}", "-").Trim('-', '.', ' ');
+        var cleaned = SafeFileStemOrEmpty(value);
         return cleaned.Length == 0 ? "lot" : cleaned;
+    }
+
+    /// <summary>
+    /// The same sanitizing as <see cref="SafeFileStem"/>, except that "nothing usable survived" stays
+    /// EMPTY instead of becoming a word. A caller that JOINS parts - the lot number and the
+    /// disambiguator that makes it unique - has to be able to drop an empty part, and a placeholder is
+    /// one thing it must never print where a real identity belongs.
+    /// </summary>
+    private static string SafeFileStemOrEmpty(string? value)
+    {
+        var cleaned = new string((value ?? string.Empty).Select(ch =>
+            char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '-').ToArray());
+        return Regex.Replace(cleaned, "-{2,}", "-").Trim('-', '.', ' ');
     }
 }
