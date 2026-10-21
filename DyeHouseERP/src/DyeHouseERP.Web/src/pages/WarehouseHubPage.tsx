@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { InventoryLedgerApi } from "@/api/client";
-import { PageHeader, Card, Button, Input } from "@/components/ui";
+import { InventoryLedgerApi, WarehousesApi } from "@/api/client";
+import { PageHeader, Card, Button, Input, Select } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ReportsExports } from "@/api/exports";
 import StockTraceability from "@/components/StockTraceability";
@@ -100,6 +100,10 @@ export default function WarehouseHubPage() {
 function MovementsTab() {
   const { t } = useI18n();
   const [filters, setFilters] = useState({ from: "", to: "", warehouseId: "" });
+  const { data: warehouses } = useQuery({
+    queryKey: ["warehouses", "active"],
+    queryFn: () => WarehousesApi.list({ activeOnly: true })
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["inventory-movements", filters],
@@ -114,7 +118,7 @@ function MovementsTab() {
 
   return (
     <>
-      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
         <div>
           <label className="field-label">{t("common.from")}</label>
           <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
@@ -122,6 +126,18 @@ function MovementsTab() {
         <div>
           <label className="field-label">{t("common.to")}</label>
           <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+        </div>
+        <div>
+          <label className="field-label">{t("wh.tab.master")}</label>
+          <Select
+            value={filters.warehouseId}
+            onChange={(e) => setFilters({ ...filters, warehouseId: e.target.value })}
+          >
+            <option value="">{t("common.all", "الكل")}</option>
+            {warehouses?.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
+            ))}
+          </Select>
         </div>
         <div className="flex flex-wrap gap-2">
           <ExportButtons
@@ -148,6 +164,7 @@ function MovementsTab() {
           <thead>
             <tr>
               <th>{t("common.date")}</th>
+              <th>{t("wh.tab.master")}</th>
               <th>{t("fr.rawMessage")} / {t("fr.jobOrder")}</th>
               <th>{t("common.customer")}</th>
               <th>{t("common.item")}</th>
@@ -158,14 +175,18 @@ function MovementsTab() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {!isLoading && (data?.length ?? 0) === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {data?.map((m) => (
               <tr key={m.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="ltr-nums text-ink-muted">{m.transactionDate.slice(0, 10)}</td>
+                <td>
+                  <div className="font-medium">{m.warehouseName}</div>
+                  <div className="text-2xs text-ink-subtle">{warehouses?.find((w) => w.id === m.warehouseId)?.code ?? ""}</div>
+                </td>
                 <td>
                   <div className="ltr-nums font-medium">{m.sourceDocumentNumber}</div>
                   <div className="text-2xs text-ink-subtle">{m.sourceDocumentType}</div>
