@@ -16,6 +16,7 @@ public class DeliveryLineDto
     public DateTime? ProductionOrderDate { get; set; }
 
     public Guid ItemId { get; set; }
+    public string Category { get; set; } = "FirstGrade";
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string? Color { get; set; }
@@ -71,6 +72,7 @@ public class DeliveryDto
 
 public class DeliveryLineInput
 {
+    public ReadyGoodsCategory Category { get; set; } = ReadyGoodsCategory.FirstGrade;
     public Guid ProductionOrderId { get; set; }
     public Guid ItemId { get; set; }
     public string? Color { get; set; }
