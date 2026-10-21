@@ -18,6 +18,7 @@ public class ReadyGoodsRawReturnDto
     public string CustomerCode { get; set; } = string.Empty;
 
     public Guid ItemId { get; set; }
+    public string Category { get; set; } = "FirstGrade";
     public string ItemCode { get; set; } = string.Empty;
 
     /// <summary>The Ready Goods warehouse the stock left.</summary>
