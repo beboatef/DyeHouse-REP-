@@ -26,6 +26,7 @@ public class ReadyGoodsTransfer : AuditableEntity
     public Guid CustomerId { get; private set; }
     public Guid ItemId { get; private set; }
     public Guid WarehouseId { get; private set; }
+    public ReadyGoodsCategory Category { get; private set; } = ReadyGoodsCategory.FirstGrade;
     public decimal? QuantityKg { get; private set; }
     public decimal? QuantityMeter { get; private set; }
 
@@ -54,7 +55,8 @@ public class ReadyGoodsTransfer : AuditableEntity
     public ReadyGoodsTransfer(
         string transferNumber, DateTime transferDate, Guid productionOrderId, Guid customerId, Guid itemId,
         Guid warehouseId, decimal? quantityKg, decimal? quantityMeter, string createdBy,
-        int? pieceCount = null, string? notes = null, Guid? stageExecutionId = null)
+        int? pieceCount = null, string? notes = null, Guid? stageExecutionId = null,
+        ReadyGoodsCategory category = ReadyGoodsCategory.FirstGrade)
     {
         if (quantityKg is null && quantityMeter is null)
             throw new ArgumentException("A ready goods transfer must specify a KG and/or Meter quantity.");
@@ -68,6 +70,8 @@ public class ReadyGoodsTransfer : AuditableEntity
         QuantityKg = quantityKg;
         QuantityMeter = quantityMeter;
         StageExecutionId = stageExecutionId;
+        if (category == ReadyGoodsCategory.Waste) throw new ArgumentException("Waste is a production loss and cannot be received into deliverable ready stock.", nameof(category));
+        Category = category;
         PieceCount = pieceCount;
         Notes = notes;
         CreatedBy = createdBy;
