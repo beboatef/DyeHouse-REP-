@@ -16,6 +16,7 @@ export default function ReadyGoodsPage() {
   const [qtyKg, setQtyKg] = useState("");
   const [qtyMeter, setQtyMeter] = useState("");
   const [pieceCount, setPieceCount] = useState("");
+  const [category, setCategory] = useState<"FirstGrade" | "SecondGrade" | "Separates">("FirstGrade");
   const [error, setError] = useState<string | null>(null);
 
   // ---- Ready goods back to RAW stock (spec section 29) ----
@@ -70,7 +71,7 @@ export default function ReadyGoodsPage() {
 
   const createMutation = useMutation({
     mutationFn: () => ReadyGoodsApi.createTransfer({
-      productionOrderId, warehouseId, stageExecutionId,
+      productionOrderId, warehouseId, stageExecutionId, category,
       quantityKg: qtyKg ? Number(qtyKg) : undefined,
       quantityMeter: qtyMeter ? Number(qtyMeter) : undefined,
       pieceCount: pieceCount ? Number(pieceCount) : undefined
@@ -79,7 +80,7 @@ export default function ReadyGoodsPage() {
       qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
       qc.invalidateQueries({ queryKey: ["ready-goods-transfers"] });
       qc.invalidateQueries({ queryKey: ["stock-traceability"] });
-      setShowForm(false); setQtyKg(""); setQtyMeter(""); setPieceCount("");
+      setShowForm(false); setQtyKg(""); setQtyMeter(""); setPieceCount(""); setCategory("FirstGrade");
       setStageExecutionId(""); setError(null);
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
@@ -148,6 +149,12 @@ export default function ReadyGoodsPage() {
               </Select>
             </div>
             <div>
+              <label className="field-label">تصنيف الناتج</label>
+              <Select value={category} onChange={(e) => setCategory(e.target.value as "FirstGrade" | "SecondGrade" | "Separates")} required>
+                <option value="FirstGrade">درجة أولى</option><option value="SecondGrade">درجة ثانية</option><option value="Separates">منفصلات</option>
+              </Select>
+            </div>
+            <div>
               <label className="field-label">المرحلة المنتِجة</label>
               <Select value={stageExecutionId} onChange={(e) => {
                 const stage = closedStages.find((s) => s.id === e.target.value);
@@ -197,16 +204,16 @@ export default function ReadyGoodsPage() {
       <Card className="mb-8">
         <table className="table">
           <thead><tr>
-            <th>أمر التشغيل</th><th>العميل</th>
+            <th>أمر التشغيل</th><th>التصنيف</th><th>العميل</th>
             <th>الصنف</th><th>اللون</th><th className="text-end">الرصيد (كجم)</th>
             <th className="text-end">الرصيد (متر)</th><th className="text-end">إجراء</th>
           </tr></thead>
           <tbody>
-            {balanceLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {balanceLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {!balanceLoading && balance?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
             {visibleBalance.map((b) => (
-              <tr key={`${b.productionOrderId}-${b.itemId}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
-                <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td><div className="font-medium">{b.customerName || b.customerCode}</div><div className="text-xs text-ink-subtle ltr-nums">{b.customerCode}</div></td>
+              <tr key={`${b.productionOrderId}-${b.itemId}-${b.category}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
+                <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{({ FirstGrade: "درجة أولى", SecondGrade: "درجة ثانية", Separates: "منفصلات", Waste: "هالك" } as const)[b.category]}</td><td><div className="font-medium">{b.customerName || b.customerCode}</div><div className="text-xs text-ink-subtle ltr-nums">{b.customerCode}</div></td>
                 <td><div className="font-medium">{b.itemName || b.itemCode}</div><div className="text-xs text-ink-subtle ltr-nums">{b.itemCode}</div></td><td>{b.color ?? "-"}</td>
                 <td className="text-end ltr-nums font-semibold">{b.remainingKg > 0 ? b.remainingKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
                 <td className="text-end ltr-nums font-semibold">{b.remainingMeter > 0 ? b.remainingMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
@@ -313,7 +320,7 @@ export default function ReadyGoodsPage() {
         <table className="table">
           <thead><tr>
             <th>الرقم</th><th>أمر التشغيل</th>
-            <th>المرحلة المنتِجة</th><th>العميل</th><th>مخزن الجاهز</th>
+            <th>التصنيف</th><th>المرحلة المنتِجة</th><th>العميل</th><th>مخزن الجاهز</th>
             <th className="text-end">المستلم (كجم)</th><th className="text-end">المستلم (متر)</th>
             <th className="text-end">المتاح (كجم)</th><th className="text-end">المتاح (متر)</th>
           </tr></thead>
@@ -322,6 +329,7 @@ export default function ReadyGoodsPage() {
             {visibleTransfers.map((t) => (
               <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td className="ltr-nums">{t.productionOrderNumber}</td>
+                <td>{({ FirstGrade: "درجة أولى", SecondGrade: "درجة ثانية", Separates: "منفصلات", Waste: "هالك" } as const)[t.category]}</td>
                 <td>{t.stageSequence != null ? `#${t.stageSequence} ${t.stageName ?? ""}` : "—"}</td>
                 <td><div className="font-medium">{t.customerName || t.customerCode}</div><div className="text-xs text-ink-subtle ltr-nums">{t.customerCode}</div></td>
                 <td>{t.warehouseName}</td>
