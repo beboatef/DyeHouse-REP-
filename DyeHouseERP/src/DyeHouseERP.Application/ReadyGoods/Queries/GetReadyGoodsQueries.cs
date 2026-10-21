@@ -55,6 +55,7 @@ public class GetReadyGoodsRawReturnsQueryHandler : IRequestHandler<GetReadyGoods
         {
             Id = m.Id,
             MovementNumber = m.MovementNumber,
+            Category = m.Category.ToString(),
             MovementDate = m.MovementDate,
             ProductionOrderId = m.ProductionOrderId,
             ProductionOrderNumber = orders.GetValueOrDefault(m.ProductionOrderId) ?? string.Empty,
