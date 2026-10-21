@@ -105,7 +105,7 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
             .Where(t => t.RawMessageId == null && t.ProductionOrderId != null
                      && orderIdsForLots.Contains(t.ProductionOrderId!.Value)
                      && itemIdsForLots.Contains(t.ItemId))
-            .Select(t => new { t.ProductionOrderId, t.ItemId, t.QuantityKg, t.QuantityMeter, t.Direction })
+            .Select(t => new { t.ProductionOrderId, t.ItemId, t.ReadyGoodsCategory, t.QuantityKg, t.QuantityMeter, t.Direction })
             .ToListAsync(cancellationToken);
 
         // The register reads each transfer's stage back with its IDENTITY (sequence and
@@ -140,9 +140,9 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
                 ItemName = items.GetValueOrDefault(t.ItemId)?.Name ?? "",
                 WarehouseId = t.WarehouseId,
                 WarehouseName = warehouses.GetValueOrDefault(t.WarehouseId) ?? "",
-                AvailableQuantityKg = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId)
+                AvailableQuantityKg = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId && (r.ReadyGoodsCategory ?? DyeHouseERP.Domain.Enums.ReadyGoodsCategory.FirstGrade) == t.Category)
                     .Sum(r => (r.QuantityKg ?? 0) * (int)r.Direction),
-                AvailableQuantityMeter = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId)
+                AvailableQuantityMeter = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId && (r.ReadyGoodsCategory ?? DyeHouseERP.Domain.Enums.ReadyGoodsCategory.FirstGrade) == t.Category)
                     .Sum(r => (r.QuantityMeter ?? 0) * (int)r.Direction),
                 Color = orders.GetValueOrDefault(t.ProductionOrderId)?.Color,
                 QuantityKg = t.QuantityKg, QuantityMeter = t.QuantityMeter, PieceCount = t.PieceCount,
@@ -177,10 +177,10 @@ public class GetReadyGoodsBalanceQueryHandler : IRequestHandler<GetReadyGoodsBal
         if (request.CustomerId.HasValue) query = query.Where(t => t.CustomerId == request.CustomerId);
 
         var grouped = await query
-            .GroupBy(t => new { ProductionOrderId = t.ProductionOrderId!.Value, t.ItemId, t.CustomerId })
+            .GroupBy(t => new { ProductionOrderId = t.ProductionOrderId!.Value, t.ItemId, t.CustomerId, Category = t.ReadyGoodsCategory ?? DyeHouseERP.Domain.Enums.ReadyGoodsCategory.FirstGrade })
             .Select(g => new
             {
-                g.Key.ProductionOrderId, g.Key.ItemId, g.Key.CustomerId,
+                g.Key.ProductionOrderId, g.Key.ItemId, g.Key.CustomerId, g.Key.Category,
                 Kg = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityKg ?? 0) : -(t.QuantityKg ?? 0)),
                 Meter = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityMeter ?? 0) : -(t.QuantityMeter ?? 0))
             })
@@ -198,6 +198,7 @@ public class GetReadyGoodsBalanceQueryHandler : IRequestHandler<GetReadyGoodsBal
             ProductionOrderId = g.ProductionOrderId, ProductionOrderNumber = orders.GetValueOrDefault(g.ProductionOrderId)?.OrderNumber ?? "",
             CustomerId = g.CustomerId, CustomerCode = customers.GetValueOrDefault(g.CustomerId)?.Code ?? "", CustomerName = customers.GetValueOrDefault(g.CustomerId)?.Name ?? "",
             ItemId = g.ItemId, ItemCode = items.GetValueOrDefault(g.ItemId)?.Code ?? "", ItemName = items.GetValueOrDefault(g.ItemId)?.Name ?? "",
+            Category = g.Category.ToString(),
             Color = orders.GetValueOrDefault(g.ProductionOrderId)?.Color,
             RemainingKg = g.Kg, RemainingMeter = g.Meter
         }).ToList();
