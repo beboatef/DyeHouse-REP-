@@ -22,7 +22,7 @@ public record CreateReadyGoodsTransferCommand(
     Guid ProductionOrderId, Guid WarehouseId, decimal? QuantityKg, decimal? QuantityMeter, int? PieceCount, string? Notes,
     // Spec section 23: the stage execution whose output is being moved. A NULL link is legal only on
     // historical rows - every transfer posted from now on must name the stage that produced it.
-    Guid? StageExecutionId = null)
+    Guid? StageExecutionId = null, ReadyGoodsCategory Category = ReadyGoodsCategory.FirstGrade)
     : IRequest<ReadyGoodsTransferDto>;
 
 public class CreateReadyGoodsTransferCommandValidator : AbstractValidator<CreateReadyGoodsTransferCommand>
@@ -33,6 +33,7 @@ public class CreateReadyGoodsTransferCommandValidator : AbstractValidator<Create
         RuleFor(x => x.WarehouseId).NotEmpty();
         RuleFor(x => x).Must(x => x.QuantityKg is > 0 || x.QuantityMeter is > 0)
             .WithMessage("Specify the transferred quantity in KG and/or Meter.");
+        RuleFor(x => x.Category).Must(c => c != ReadyGoodsCategory.Waste).WithMessage("Waste is recorded as production loss and cannot be transferred to deliverable stock.");
         RuleFor(x => x.StageExecutionId).NotNull()
             .WithMessage("Name the stage execution whose output is being moved - an untraceable ready-goods transfer is refused.");
     }
@@ -100,9 +101,7 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
             StockLockKey.ReadyLot(order.ItemId, order.Id), cancellationToken))
         {
 
-        var alreadyTransferred = await _db.ReadyGoodsTransfers.AnyAsync(t => t.ProductionOrderId == order.Id, cancellationToken);
-        if (alreadyTransferred)
-            throw new DomainException($"Production order '{order.OrderNumber}' has already been transferred to ready goods.");
+        // Multiple classified receipts are allowed; stage output remains the shared upper limit.
 
         var pendingStages = await _db.ProductionOrderStageExecutions
             .Where(s => s.ProductionOrderId == order.Id && (s.Status == StageExecutionStatus.Pending || s.Status == StageExecutionStatus.InProgress))
@@ -140,7 +139,7 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
         var transfer = new ReadyGoodsTransfer(
             transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId, request.WarehouseId,
             request.QuantityKg, request.QuantityMeter, _currentUser.UserName, request.PieceCount, request.Notes,
-            stageExecutionId: stage.Id);
+            stageExecutionId: stage.Id, category: request.Category);
         _db.ReadyGoodsTransfers.Add(transfer);
 
 var allocations = await _db.RawAllocations
@@ -162,7 +161,8 @@ foreach (var allocation in allocations)
             request.WarehouseId, order.CustomerId, order.ItemId,
             rawMessageId: null, productionOrderId: order.Id,
             quantityKg: request.QuantityKg, quantityMeter: request.QuantityMeter,
-            direction: TransactionDirection.In, createdBy: _currentUser.UserName));
+            direction: TransactionDirection.In, createdBy: _currentUser.UserName,
+            readyGoodsCategory: request.Category));
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -171,7 +171,7 @@ foreach (var allocation in allocations)
 
         return new ReadyGoodsTransferDto
         {
-            Id = transfer.Id, TransferNumber = transfer.TransferNumber, TransferDate = transfer.TransferDate,
+            Id = transfer.Id, TransferNumber = transfer.TransferNumber, Category = transfer.Category.ToString(), TransferDate = transfer.TransferDate,
             ProductionOrderId = order.Id, ProductionOrderNumber = order.OrderNumber,
             CustomerId = order.CustomerId, CustomerCode = customer?.Code ?? "", CustomerName = customer?.Name ?? "",
             ItemId = order.ItemId, ItemCode = item?.Code ?? "", ItemName = item?.Name ?? "", Color = order.Color,
