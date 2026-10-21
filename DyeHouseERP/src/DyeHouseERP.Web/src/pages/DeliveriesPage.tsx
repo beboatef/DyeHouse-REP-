@@ -20,11 +20,12 @@ const statusTone: Record<string, "gray" | "blue" | "green" | "red"> = { Draft: "
 // come from the primary permit being sliced (spec section 31).
 type LineDraft = {
   sourceKey: string; productionOrderId: string; itemId: string; color: string;
+  category: "FirstGrade" | "SecondGrade" | "Separates";
   quantityKg: string; quantityMeter: string; pieceCount: string;
   originalRawQuantityKg: string; originalRawQuantityMeter: string;
 };
 const emptyLine = (): LineDraft => ({
-  sourceKey: "", productionOrderId: "", itemId: "", color: "",
+  sourceKey: "", productionOrderId: "", itemId: "", color: "", category: "FirstGrade", category: "FirstGrade",
   quantityKg: "", quantityMeter: "", pieceCount: "",
   originalRawQuantityKg: "", originalRawQuantityMeter: ""
 });
@@ -113,20 +114,20 @@ export default function DeliveriesPage() {
    * own item. An ordinary permit keeps the ready-goods lots of the chosen customer.
    */
   const sourceOptions = useMemo(() => {
-    const asOption = (productionOrderId: string, itemId: string, number: string, code: string, color: string | null | undefined, fromPrimary: boolean) => ({
-      key: `${productionOrderId}|${itemId}`,
-      productionOrderId, itemId,
+    const asOption = (productionOrderId: string, itemId: string, category: "FirstGrade" | "SecondGrade" | "Separates" | "Waste", number: string, code: string, color: string | null | undefined, fromPrimary: boolean) => ({
+      key: `${productionOrderId}|${itemId}|${category}`,
+      productionOrderId, itemId, category,
       label: `${number} - ${code}${color ? ` (${color})` : ""}`,
       color: color ?? "", fromPrimary
     });
 
     if (!primaryPermit) {
       return (readyBalance ?? []).map((b) =>
-        asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, false));
+        asOption(b.productionOrderId, b.itemId, b.category, b.productionOrderNumber, b.itemCode, b.color, false));
     }
 
     const fromPrimary = primaryPermit.lines.map((l) =>
-      asOption(l.productionOrderId, l.itemId, l.productionOrderNumber, l.itemCode, l.color, true));
+      asOption(l.productionOrderId, l.itemId, l.category, l.productionOrderNumber, l.itemCode, l.color, true));
 
     const own = (readyBalance ?? [])
       .filter((b) => b.customerId === customerId)
@@ -141,7 +142,7 @@ export default function DeliveriesPage() {
     const bySource = new Map<string, string[]>();
     for (const line of primaryPermit?.lines ?? []) {
       if (!line.color) continue;
-      const key = `${line.productionOrderId}|${line.itemId}`;
+      const key = `${line.productionOrderId}|${line.itemId}|${line.category}`;
       const colors = bySource.get(key) ?? [];
       if (!colors.includes(line.color)) colors.push(line.color);
       bySource.set(key, colors);
@@ -158,7 +159,7 @@ export default function DeliveriesPage() {
     if (!primaryPermit) return usage;
 
     for (const line of primaryPermit.lines) {
-      const key = `${line.productionOrderId}|${line.itemId}`;
+      const key = `${line.productionOrderId}|${line.itemId}|${line.category}`;
       const row = usage.get(key) ?? { allowedKg: 0, allowedMeter: 0, claimedKg: 0, claimedMeter: 0, hasKg: false, hasMeter: false };
       row.allowedKg += line.quantityKg ?? 0;
       row.allowedMeter += line.quantityMeter ?? 0;
@@ -170,7 +171,7 @@ export default function DeliveriesPage() {
     for (const delivery of deliveries ?? []) {
       if (delivery.primaryDeliveryId !== primaryPermit.id || delivery.status === "Cancelled") continue;
       for (const line of delivery.lines) {
-        const row = usage.get(`${line.productionOrderId}|${line.itemId}`);
+        const row = usage.get(`${line.productionOrderId}|${line.itemId}|${line.category}`);
         if (!row) continue;
         row.claimedKg += line.quantityKg ?? 0;
         row.claimedMeter += line.quantityMeter ?? 0;
@@ -193,7 +194,8 @@ export default function DeliveriesPage() {
     }
     updateLine(idx, {
       sourceKey: key, productionOrderId: source.productionOrderId, itemId: source.itemId,
-      color: primaryPermit ? (primaryColorsFor.get(key)?.[0] ?? "") : source.color
+      color: primaryPermit ? (primaryColorsFor.get(`${source.productionOrderId}|${source.itemId}`)?.[0] ?? "") : source.color,
+      category: source.category
     });
   };
 
@@ -204,7 +206,7 @@ export default function DeliveriesPage() {
       // A line needs its lot and at least one measured quantity (KG and/or Meter) - the roll count is
       // an auxiliary figure the user may enter on its own, without forcing the other two.
       lines: lines.filter((l) => l.productionOrderId && l.itemId && (l.quantityKg || l.quantityMeter)).map((l) => ({
-        productionOrderId: l.productionOrderId, itemId: l.itemId, color: l.color || undefined,
+        productionOrderId: l.productionOrderId, itemId: l.itemId, category: l.category, color: l.color || undefined,
         quantityKg: l.quantityKg ? Number(l.quantityKg) : undefined,
         quantityMeter: l.quantityMeter ? Number(l.quantityMeter) : undefined,
         // Manually entered per delivery: the roll count, and the original raw this delivery settles.
