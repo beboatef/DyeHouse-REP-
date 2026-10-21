@@ -294,4 +294,36 @@ public class StageCheckboxTransferAndFinalWeightsTests
         var closed = await db.ProductionOrderStageExecutions.FirstAsync(s => s.Id == current.Id);
         closed.WasteKg.Should().Be(100m);
     }
+
+    [Fact]
+    public async Task RecordingSecondGradePieceCount_PersistsItSeparatelyFromBaleCount()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        var current = await CurrentStageAsync(db, scene.OrderId);
+
+        await Transferrer(db).Handle(
+            new TransferToNextStageCommand(
+                current.Id, scene.NextStageId, 950m, 110m, null, null, "second grade counted",
+                InputKg: 1000m, InputMeter: 120m, SecondGradePieceCount: 4),
+            CancellationToken.None);
+
+        var saved = await db.ProductionOrderStageExecutions.SingleAsync(s => s.Id == current.Id);
+        saved.SecondGradePieceCount.Should().Be(4);
+        saved.SecondGradeKg.Should().BeNull("a piece count must not invent a KG quantity");
+        saved.SecondGradeMeter.Should().BeNull("a piece count must not invent a Meter quantity");
+    }
+
+    [Fact]
+    public void NegativeSecondGradePieceCount_IsRejectedByValidator()
+    {
+        var command = new TransferToNextStageCommand(
+            Guid.NewGuid(), Guid.NewGuid(), 950m, 110m, null, null, "invalid count",
+            SecondGradePieceCount: -1);
+
+        var result = new TransferToNextStageCommandValidator().Validate(command);
+
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(TransferToNextStageCommand.SecondGradePieceCount));
+    }
+
 }
