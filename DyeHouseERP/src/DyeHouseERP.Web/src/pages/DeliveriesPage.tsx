@@ -195,7 +195,7 @@ export default function DeliveriesPage() {
     updateLine(idx, {
       sourceKey: key, productionOrderId: source.productionOrderId, itemId: source.itemId,
       color: primaryPermit ? (primaryColorsFor.get(`${source.productionOrderId}|${source.itemId}`)?.[0] ?? "") : source.color,
-      category: source.category
+      category: source.category as "FirstGrade" | "SecondGrade" | "Separates"
     });
   };
 
