@@ -49,6 +49,7 @@ public class ReadyGoodsTransferDto
 
 public class ReadyGoodsBalanceDto
 {
+    public string Category { get; set; } = "FirstGrade";
     public Guid ProductionOrderId { get; set; }
     public string ProductionOrderNumber { get; set; } = string.Empty;
     public Guid CustomerId { get; set; }
