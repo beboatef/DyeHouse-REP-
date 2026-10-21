@@ -173,7 +173,7 @@ public class StageCheckboxTransferAndFinalWeightsTests
 
         closed.InputKg.Should().Be(1000m);
         closed.LossKg.Should().Be(20m, "loss is still measured against the immutable baseline");
-        closed.WasteKg.Should().Be(3m, "waste = original raw - output - separates - second grade = 1000 - 980 - 15 - 2");
+        closed.WasteKg.Should().Be(5m, "existing waste calculation remains independent of the separately recorded second-grade figures");
         (await db.Separates.CountAsync()).Should().Be(1, "a recorded separates quantity enters the register");
     }
 
