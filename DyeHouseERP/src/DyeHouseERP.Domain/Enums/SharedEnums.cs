@@ -1,5 +1,15 @@
 namespace DyeHouseERP.Domain.Enums;
 
+/// <summary>Classification of customer-owned output held in the ready-goods warehouse. Waste is a production loss, never deliverable stock.</summary>
+public enum ReadyGoodsCategory
+{
+    FirstGrade = 1,
+    SecondGrade = 2,
+    Separates = 3,
+    Waste = 4
+}
+
+
 /// <summary>
 /// The two independent base units supported by the system (spec section 5).
 /// There is deliberately NO "Top/توب" unit and NO fixed KG<->Meter conversion.
