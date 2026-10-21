@@ -8,6 +8,6 @@ namespace DyeHouseERP.Persistence.Migrations;
 
 [DbContext(typeof(ApplicationDbContext))]
 [Migration("20261022120000_AddReadyGoodsCategories")]
-partial class AddReadyGoodsCategories
+public partial class AddReadyGoodsCategories
 {
 }
