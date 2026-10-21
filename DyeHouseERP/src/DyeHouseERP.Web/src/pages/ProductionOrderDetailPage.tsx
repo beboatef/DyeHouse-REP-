@@ -345,6 +345,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   const [separatesMeter, setSeparatesMeter] = useState("");
   const [secondGradeKg, setSecondGradeKg] = useState("");
   const [secondGradeMeter, setSecondGradeMeter] = useState("");
+  const [secondGradePieceCount, setSecondGradePieceCount] = useState("");
   const [notes, setNotes] = useState("");
   const [flowError, setFlowError] = useState<string | null>(null);
 
@@ -400,6 +401,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
         separatesMeter: input.recordFigures && separatesMeter ? Number(separatesMeter) : undefined,
         secondGradeKg: input.recordFigures && secondGradeKg ? Number(secondGradeKg) : undefined,
         secondGradeMeter: input.recordFigures && secondGradeMeter ? Number(secondGradeMeter) : undefined,
+        secondGradePieceCount: input.recordFigures && secondGradePieceCount ? Number(secondGradePieceCount) : undefined,
         notes: notes.trim() || undefined
       }),
     onSuccess: () => {
@@ -414,6 +416,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
       setSeparatesMeter("");
       setSecondGradeKg("");
       setSecondGradeMeter("");
+      setSecondGradePieceCount("");
       setNotes("");
       setFlowError(null);
     },
@@ -851,6 +854,9 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
               </Field>
               <Field label={t("stage.secondGradeMeter")}>
                 <Input type="number" min={0} step="0.01" value={secondGradeMeter} onChange={(e) => setSecondGradeMeter(e.target.value)} />
+              </Field>
+              <Field label="عدد قطع الدرجة الثانية">
+                <Input type="number" min={0} step="1" value={secondGradePieceCount} onChange={(e) => setSecondGradePieceCount(e.target.value)} />
               </Field>
             </div>
           )}
