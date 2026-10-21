@@ -146,6 +146,32 @@ public class ProductionOrderStageExecutionTests
     }
 
     [Fact]
+    public void CloseWithOutput_RecordsSecondGradePieceCountIndependently()
+    {
+        var execution = NewExecution();
+
+        execution.CloseWithOutput(
+            90m, null, null, null, null, "tester",
+            inputKg: 100m, secondGradeKg: 5m, secondGradePieceCount: 3);
+
+        execution.SecondGradeKg.Should().Be(5m);
+        execution.SecondGradePieceCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void CloseWithOutput_RejectsNegativeSecondGradePieceCount()
+    {
+        var execution = NewExecution();
+
+        var act = () => execution.CloseWithOutput(
+            90m, null, null, null, null, "tester",
+            inputKg: 100m, secondGradePieceCount: -1);
+
+        act.Should().Throw<DomainException>();
+        execution.SecondGradePieceCount.Should().BeNull();
+    }
+
+    [Fact]
     public void A_Closed_Operation_Cannot_Be_Closed_Twice()
     {
         var execution = NewExecution();
