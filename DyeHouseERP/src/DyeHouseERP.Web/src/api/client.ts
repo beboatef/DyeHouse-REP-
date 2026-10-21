@@ -651,6 +651,7 @@ export interface StageExecution {
   /** Second-grade material produced by this operation - its own quantity, neither output nor waste. */
   secondGradeKg: number | null;
   secondGradeMeter: number | null;
+  secondGradePieceCount: number | null;
   /**
    * Derived WASTE (الهالك) for the last operation before the Ready Goods warehouse:
    * original raw (input) - ready weight (output) - separates, per unit and never between units.
@@ -792,7 +793,7 @@ export const ProductionOrdersApi = {
       // Reprocessable material split off by this operation (it is not output and it is not waste),
       // and second-grade material, which is a quantity of its own.
       separatesKg?: number; separatesMeter?: number;
-      secondGradeKg?: number; secondGradeMeter?: number;
+      secondGradeKg?: number; secondGradeMeter?: number; secondGradePieceCount?: number;
       notes?: string;
     }
   ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/transfer`, body).then((r) => r.data),
@@ -1189,7 +1190,7 @@ export interface DeliveryStatementRow {
   readyGoodsQuantityKg: number | null; readyGoodsQuantityMeter: number | null;
   baleCount: number | null;
   scrapsKg: number | null; scrapsMeter: number | null;
-  secondGradeKg: number | null; secondGradeMeter: number | null;
+  secondGradeKg: number | null; secondGradeMeter: number | null; secondGradePieceCount: number | null;
   /** The waste of the line's job order - a WEIGHT, so it exists in KG only (never a metre waste). */
   calculatedWasteKg: number | null;
   drawingNumbers: string[];
