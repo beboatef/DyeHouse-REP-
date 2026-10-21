@@ -36,7 +36,8 @@ public record ReturnReadyGoodsToRawStockCommand(
     decimal? QuantityKg,
     decimal? QuantityMeter,
     string Reason,
-    string? Notes = null) : IRequest<ReadyGoodsRawReturnDto>;
+    string? Notes = null,
+    ReadyGoodsCategory Category = ReadyGoodsCategory.FirstGrade) : IRequest<ReadyGoodsRawReturnDto>;
 
 public class ReturnReadyGoodsToRawStockCommandValidator : AbstractValidator<ReturnReadyGoodsToRawStockCommand>
 {
@@ -140,7 +141,8 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             var readyRows = await _db.InventoryTransactions.AsNoTracking()
                 .Where(t => t.RawMessageId == null
                          && t.ProductionOrderId == order.Id
-                         && t.ItemId == request.ItemId)
+                         && t.ItemId == request.ItemId
+                         && (t.ReadyGoodsCategory ?? ReadyGoodsCategory.FirstGrade) == request.Category)
                 .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
                 .ToListAsync(cancellationToken);
 
@@ -158,7 +160,7 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             var movement = new ReadyGoodsRawReturn(
                 movementNumber, _clock.UtcNow, order.Id, order.CustomerId, request.ItemId,
                 readyWarehouse.Id, message.Id, message.WarehouseId,
-                request.QuantityKg, request.QuantityMeter, request.Reason, _currentUser.UserName, request.Notes);
+                request.QuantityKg, request.QuantityMeter, request.Reason, _currentUser.UserName, request.Notes, request.Category);
 
             _db.ReadyGoodsRawReturns.Add(movement);
 
@@ -168,7 +170,8 @@ public class ReturnReadyGoodsToRawStockCommandHandler
                 readyWarehouse.Id, order.CustomerId, request.ItemId,
                 rawMessageId: null, productionOrderId: order.Id,
                 quantityKg: request.QuantityKg, quantityMeter: request.QuantityMeter,
-                direction: TransactionDirection.Out, createdBy: _currentUser.UserName));
+                direction: TransactionDirection.Out, createdBy: _currentUser.UserName,
+                readyGoodsCategory: request.Category));
 
             // ...and INTO the raw material lot, in the same transaction.
             _db.InventoryTransactions.Add(new InventoryTransaction(
