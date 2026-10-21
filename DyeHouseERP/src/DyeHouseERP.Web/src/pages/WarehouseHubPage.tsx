@@ -101,8 +101,8 @@ function MovementsTab() {
   const { t } = useI18n();
   const [filters, setFilters] = useState({ from: "", to: "", warehouseId: "" });
   const { data: warehouses } = useQuery({
-    queryKey: ["warehouses", "active"],
-    queryFn: () => WarehousesApi.list({ activeOnly: true })
+    queryKey: ["warehouses"],
+    queryFn: () => WarehousesApi.list()
   });
 
   const { data, isLoading } = useQuery({
@@ -128,7 +128,7 @@ function MovementsTab() {
           <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
         </div>
         <div>
-          <label className="field-label">{t("wh.tab.master")}</label>
+          <label className="field-label">{t("wh.name")}</label>
           <Select
             value={filters.warehouseId}
             onChange={(e) => setFilters({ ...filters, warehouseId: e.target.value })}
@@ -164,7 +164,7 @@ function MovementsTab() {
           <thead>
             <tr>
               <th>{t("common.date")}</th>
-              <th>{t("wh.tab.master")}</th>
+              <th>{t("wh.name")}</th>
               <th>{t("fr.rawMessage")} / {t("fr.jobOrder")}</th>
               <th>{t("common.customer")}</th>
               <th>{t("common.item")}</th>
