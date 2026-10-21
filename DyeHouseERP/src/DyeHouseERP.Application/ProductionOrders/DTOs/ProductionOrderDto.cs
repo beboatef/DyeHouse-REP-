@@ -42,6 +42,7 @@ public class StageExecutionDto
     /// <summary>Second-grade material produced by this operation - its own quantity, neither output nor waste.</summary>
     public decimal? SecondGradeKg { get; set; }
     public decimal? SecondGradeMeter { get; set; }
+    public int? SecondGradePieceCount { get; set; }
 
     /// <summary>The machine and the execution shift this operation actually ran on (historical references).</summary>
     public Guid? MachineId { get; set; }
