@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProductionOrdersApi, RawMessagesApi, ReadyGoodsApi, WarehousesApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, SearchInput, KpiCard } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ReadyGoodsExports } from "@/api/exports";
 import StockTraceability from "@/components/StockTraceability";
@@ -9,6 +9,7 @@ import StockTraceability from "@/components/StockTraceability";
 export default function ReadyGoodsPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
   const [productionOrderId, setProductionOrderId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [stageExecutionId, setStageExecutionId] = useState("");
@@ -34,6 +35,29 @@ export default function ReadyGoodsPage() {
     queryKey: ["raw-messages", "with-balance"],
     queryFn: () => RawMessagesApi.list({ onlyWithBalance: true })
   });
+
+  const visibleBalance = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (balance ?? []).filter((row) =>
+      !term || [row.productionOrderNumber, row.customerCode, row.customerName, row.itemCode, row.itemName, row.color]
+        .filter(Boolean).join(" ").toLocaleLowerCase().includes(term)
+    );
+  }, [balance, search]);
+
+  const visibleTransfers = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (transfers ?? []).filter((row) =>
+      !term || [row.transferNumber, row.productionOrderNumber, row.customerCode, row.customerName,
+        row.itemCode, row.itemName, row.warehouseName, row.stageName]
+        .filter(Boolean).join(" ").toLocaleLowerCase().includes(term)
+    );
+  }, [transfers, search]);
+
+  const balanceSummary = useMemo(() => ({
+    lots: (balance ?? []).length,
+    kg: (balance ?? []).reduce((sum, row) => sum + row.remainingKg, 0),
+    meter: (balance ?? []).reduce((sum, row) => sum + row.remainingMeter, 0)
+  }), [balance]);
 
   // The stage link (spec section 23) is mandatory, so the form loads the chosen
   // order's closed stages and the quantity is capped by the stage's own output.
@@ -153,6 +177,17 @@ export default function ReadyGoodsPage() {
         </Card>
       )}
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <KpiCard label="أوامر/أرصدة لها جاهز" value={balanceSummary.lots} />
+        <KpiCard label="الرصيد المتاح بالكيلو" value={balanceSummary.kg.toLocaleString("en-US", { maximumFractionDigits: 3 })} tone="info" />
+        <KpiCard label="الرصيد المتاح بالمتر" value={balanceSummary.meter.toLocaleString("en-US", { maximumFractionDigits: 3 })} tone="success" />
+        <KpiCard label="حركات الترحيل" value={transfers?.length ?? 0} />
+      </div>
+      <Card className="card-pad mb-4">
+        <label className="field-label">بحث في أرصدة وحركات الجاهز</label>
+        <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم أمر التشغيل أو العميل أو الصنف أو المخزن" />
+      </Card>
+
       <h2 className="card-title mb-3">تتبع أرصدة وحركات الجاهز لكل أمر تشغيل</h2>
       <div className="mb-8">
         <StockTraceability scope="ready" />
@@ -169,7 +204,7 @@ export default function ReadyGoodsPage() {
           <tbody>
             {balanceLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {!balanceLoading && balance?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
-            {balance?.map((b) => (
+            {visibleBalance.map((b) => (
               <tr key={`${b.productionOrderId}-${b.itemId}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{b.customerCode}</td>
                 <td>{b.itemCode}</td><td>{b.color ?? "-"}</td>
@@ -282,7 +317,7 @@ export default function ReadyGoodsPage() {
           </tr></thead>
           <tbody>
             {transfersLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
-            {transfers?.map((t) => (
+            {visibleTransfers.map((t) => (
               <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td className="ltr-nums">{t.productionOrderNumber}</td>
                 <td>{t.stageSequence != null ? `#${t.stageSequence} ${t.stageName ?? ""}` : "—"}</td>
