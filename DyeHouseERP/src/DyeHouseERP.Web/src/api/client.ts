@@ -963,6 +963,7 @@ export const CustomerTransfersApi = {
   create: (body: {
     fromCustomerId: string; toCustomerId: string; rawMessageId: string; itemId: string;
     quantityKg?: number; quantityMeter?: number; reason: string; notes?: string;
+    category?: "FirstGrade" | "SecondGrade" | "Separates";
   }) => api.post<CustomerTransfer>("/customer-transfers", body).then((r) => r.data)
 };
 
