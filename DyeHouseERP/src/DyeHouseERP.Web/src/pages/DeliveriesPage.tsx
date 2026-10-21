@@ -25,7 +25,7 @@ type LineDraft = {
   originalRawQuantityKg: string; originalRawQuantityMeter: string;
 };
 const emptyLine = (): LineDraft => ({
-  sourceKey: "", productionOrderId: "", itemId: "", color: "", category: "FirstGrade", category: "FirstGrade",
+  sourceKey: "", productionOrderId: "", itemId: "", color: "", category: "FirstGrade",
   quantityKg: "", quantityMeter: "", pieceCount: "",
   originalRawQuantityKg: "", originalRawQuantityMeter: ""
 });
@@ -122,16 +122,16 @@ export default function DeliveriesPage() {
     });
 
     if (!primaryPermit) {
-      return (readyBalance ?? []).map((b) =>
+      return (readyBalance ?? []).filter((b) => b.category !== "Waste").map((b) =>
         asOption(b.productionOrderId, b.itemId, b.category, b.productionOrderNumber, b.itemCode, b.color, false));
     }
 
-    const fromPrimary = primaryPermit.lines.map((l) =>
+    const fromPrimary = primaryPermit.lines.filter((l) => l.category !== "Waste").map((l) =>
       asOption(l.productionOrderId, l.itemId, l.category, l.productionOrderNumber, l.itemCode, l.color, true));
 
     const own = (readyBalance ?? [])
       .filter((b) => b.customerId === customerId)
-      .map((b) => asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, false));
+      .map((b) => asOption(b.productionOrderId, b.itemId, b.category, b.productionOrderNumber, b.itemCode, b.color, false));
 
     const seen = new Set(fromPrimary.map((o) => o.key));
     return [...fromPrimary, ...own.filter((o) => !seen.has(o.key))];
