@@ -314,24 +314,23 @@ export default function ReadyGoodsPage() {
           <thead><tr>
             <th>الرقم</th><th>أمر التشغيل</th>
             <th>المرحلة المنتِجة</th><th>العميل</th><th>مخزن الجاهز</th>
-            <th>الكمية المستلمة</th><th>المتاح الآن</th>
+            <th className="text-end">المستلم (كجم)</th><th className="text-end">المستلم (متر)</th>
+            <th className="text-end">المتاح (كجم)</th><th className="text-end">المتاح (متر)</th>
           </tr></thead>
           <tbody>
-            {transfersLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {transfersLoading && <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {visibleTransfers.map((t) => (
               <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td className="ltr-nums">{t.productionOrderNumber}</td>
                 <td>{t.stageSequence != null ? `#${t.stageSequence} ${t.stageName ?? ""}` : "—"}</td>
-                <td>{t.customerCode}</td>
+                <td><div className="font-medium">{t.customerName || t.customerCode}</div><div className="text-xs text-ink-subtle ltr-nums">{t.customerCode}</div></td>
                 <td>{t.warehouseName}</td>
-                <td className="ltr-nums">{t.quantityKg != null && `${t.quantityKg} كجم `}{t.quantityMeter != null && `${t.quantityMeter} م`}</td>
+                <td className="text-end ltr-nums">{t.quantityKg != null ? t.quantityKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
+                <td className="text-end ltr-nums">{t.quantityMeter != null ? t.quantityMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
                 {/* Available is read live from the ledger - what is left after deliveries and any
                     movements back to raw stock, never a stored figure. */}
-                <td className="ltr-nums">
-                  {t.availableQuantityKg > 0 && `${t.availableQuantityKg} كجم `}
-                  {t.availableQuantityMeter > 0 && `${t.availableQuantityMeter} م`}
-                  {t.availableQuantityKg <= 0 && t.availableQuantityMeter <= 0 && "—"}
-                </td>
+                <td className="text-end ltr-nums font-semibold">{t.availableQuantityKg > 0 ? t.availableQuantityKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
+                <td className="text-end ltr-nums font-semibold">{t.availableQuantityMeter > 0 ? t.availableQuantityMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
               </tr>
             ))}
           </tbody>
