@@ -1001,6 +1001,11 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1342,6 +1347,11 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<Guid>("DeliveryId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1360,8 +1370,12 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<int?>("PieceCount")
                         .HasColumnType("int");
 
-                    b.Property<Guid>("ProductionOrderId")
+                    b.Property<Guid?>("ProductionOrderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReadyGoodsCategory")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<decimal?>("QuantityKg")
                         .HasPrecision(18, 3)
@@ -5391,8 +5405,7 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductionOrderId")
-                        .IsUnique();
+                    b.HasIndex("ProductionOrderId", "Category");
 
                     b.HasIndex("StageExecutionId");
 
