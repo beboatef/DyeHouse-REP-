@@ -224,7 +224,7 @@ export default function ReadyGoodsPage() {
                     onClick={() => {
                       const key = `${b.productionOrderId}-${b.itemId}-${b.category}`;
                       setRawFormFor(rawFormFor === key ? null : key);
-                      setRawDraft({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "" });
+                      setRawDraft({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "", category: b.category as "FirstGrade" | "SecondGrade" | "Separates" });
                       setRawError(null);
                     }}
                   >
@@ -239,7 +239,7 @@ export default function ReadyGoodsPage() {
         {/* Ready goods -> raw: an authorized movement of its own, with a mandatory reason. It is
             refused by the API when the quantity exceeds what is actually available on the lot. */}
         {rawFormFor && (() => {
-          const row = balance?.find((b) => `${b.productionOrderId}-${b.itemId}` === rawFormFor);
+          const row = balance?.find((b) => `${b.productionOrderId}-${b.itemId}-${b.category}` === rawFormFor);
           if (!row) return null;
           return (
             <div className="border-t border-line bg-surface-sunken p-4">
