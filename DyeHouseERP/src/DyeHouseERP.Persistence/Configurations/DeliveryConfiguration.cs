@@ -47,6 +47,7 @@ public class DeliveryLineConfiguration : IEntityTypeConfiguration<DeliveryLine>
         builder.ToTable("DeliveryLines");
         builder.HasKey(l => l.Id);
         builder.Property(l => l.Color).HasMaxLength(100);
+        builder.Property(l => l.Category).HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(l => l.QuantityKg).HasPrecision(18, 3);
         builder.Property(l => l.QuantityMeter).HasPrecision(18, 3);
         builder.Property(l => l.RawOrigin).HasMaxLength(500);
