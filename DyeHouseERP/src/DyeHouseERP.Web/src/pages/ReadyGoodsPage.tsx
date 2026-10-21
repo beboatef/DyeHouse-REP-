@@ -211,7 +211,7 @@ export default function ReadyGoodsPage() {
           </tr></thead>
           <tbody>
             {balanceLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
-            {!balanceLoading && balance?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
+            {!balanceLoading && balance?.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
             {visibleBalance.map((b) => (
               <tr key={`${b.productionOrderId}-${b.itemId}-${b.category}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{({ FirstGrade: "درجة أولى", SecondGrade: "درجة ثانية", Separates: "منفصلات", Waste: "هالك" } as const)[b.category]}</td><td><div className="font-medium">{b.customerName || b.customerCode}</div><div className="text-xs text-ink-subtle ltr-nums">{b.customerCode}</div></td>
@@ -326,7 +326,7 @@ export default function ReadyGoodsPage() {
             <th className="text-end">المتاح (كجم)</th><th className="text-end">المتاح (متر)</th>
           </tr></thead>
           <tbody>
-            {transfersLoading && <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {transfersLoading && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {visibleTransfers.map((t) => (
               <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td className="ltr-nums">{t.productionOrderNumber}</td>
