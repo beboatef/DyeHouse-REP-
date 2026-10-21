@@ -1081,6 +1081,7 @@ export const MaterialPreparationsApi = {
 
 export interface ReadyGoodsTransfer {
   id: string; transferNumber: string; transferDate: string;
+  category: "FirstGrade" | "SecondGrade" | "Separates" | "Waste";
   productionOrderId: string; productionOrderNumber: string;
   customerId: string; customerCode: string; customerName: string;
   itemId: string; itemCode: string; itemName: string; color: string | null;
@@ -1115,6 +1116,7 @@ export interface ReadyGoodsRawReturn {
 
 export interface ReadyGoodsBalance {
   productionOrderId: string; productionOrderNumber: string;
+  category: "FirstGrade" | "SecondGrade" | "Separates" | "Waste";
   customerId: string; customerCode: string; customerName: string;
   itemId: string; itemCode: string; itemName: string; color: string | null;
   remainingKg: number; remainingMeter: number;
@@ -1128,7 +1130,7 @@ export const ReadyGoodsApi = {
    * quantity, and the transfers linked to one stage can never together exceed its output.
    */
   createTransfer: (body: {
-    productionOrderId: string; warehouseId: string; stageExecutionId: string;
+    productionOrderId: string; warehouseId: string; stageExecutionId: string; category?: "FirstGrade" | "SecondGrade" | "Separates";
     quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string;
   }) => api.post<ReadyGoodsTransfer>("/ready-goods/transfers", body).then((r) => r.data),
 
@@ -1152,6 +1154,7 @@ export const ReadyGoodsApi = {
 export type DeliveryStatus = "Draft" | "Prepared" | "Delivered" | "Cancelled";
 
 export interface DeliveryLine {
+  category: "FirstGrade" | "SecondGrade" | "Separates" | "Waste";
   drawingNumbers: string[];
   id: string; productionOrderId: string; productionOrderNumber: string; itemId: string; itemCode: string; itemName: string;
   color: string | null; quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null; rawOrigin: string | null;
@@ -1214,7 +1217,7 @@ export const DeliveriesApi = {
     /** Set to issue this as a SUB-CUSTOMER permit against a primary permit. */
     primaryDeliveryId?: string | null;
     lines: {
-      productionOrderId: string; itemId: string; color?: string; quantityKg?: number; quantityMeter?: number;
+      productionOrderId: string; itemId: string; category?: "FirstGrade" | "SecondGrade" | "Separates"; color?: string; quantityKg?: number; quantityMeter?: number;
       pieceCount?: number; rawOrigin?: string;
       originalRawQuantityKg?: number; originalRawQuantityMeter?: number;
     }[];
