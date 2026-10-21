@@ -1104,6 +1104,7 @@ export interface ReadyGoodsTransfer {
  */
 export interface ReadyGoodsRawReturn {
   id: string; movementNumber: string; movementDate: string;
+  category: "FirstGrade" | "SecondGrade" | "Separates" | "Waste";
   productionOrderId: string; productionOrderNumber: string;
   customerId: string; customerCode: string;
   itemId: string; itemCode: string;
