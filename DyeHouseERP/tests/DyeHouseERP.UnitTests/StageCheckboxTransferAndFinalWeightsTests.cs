@@ -161,11 +161,16 @@ public class StageCheckboxTransferAndFinalWeightsTests
         await Transferrer(db).Handle(
             new TransferToNextStageCommand(
                 current.Id, scene.NextStageId, 980m, 118m, 15m, null, "weighed",
-                InputKg: 1000m, InputMeter: 120m),
+                InputKg: 1000m, InputMeter: 120m,
+                SecondGradeKg: 2m, SecondGradeMeter: 4m, SecondGradePieceCount: 3),
             CancellationToken.None);
 
         var closed = await db.ProductionOrderStageExecutions.FirstAsync(s => s.Id == current.Id);
         closed.OutputKg.Should().Be(980m);
+        closed.SecondGradeKg.Should().Be(2m);
+        closed.SecondGradeMeter.Should().Be(4m);
+        closed.SecondGradePieceCount.Should().Be(3, "second-grade pieces are independent from bale count");
+
         closed.InputKg.Should().Be(1000m);
         closed.LossKg.Should().Be(20m, "loss is still measured against the immutable baseline");
         closed.WasteKg.Should().Be(5m, "waste = original raw - ready weight - separates = 1000 - 980 - 15");
