@@ -83,7 +83,8 @@ public class Delivery : AuditableEntity
         // Manually entered per delivery, never derived: a partial delivery of finished goods says
         // how much original raw material it settles, and that is what "remaining original raw" is
         // measured against. Optional because a delivery line genuinely may not carry it.
-        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null)
+        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null,
+        ReadyGoodsCategory category = ReadyGoodsCategory.FirstGrade)
     {
         if (Status != DeliveryStatus.Draft)
             throw new DocumentLockedException("Delivery", DeliveryNumber);
@@ -94,7 +95,7 @@ public class Delivery : AuditableEntity
 
         var line = new DeliveryLine(
             Id, productionOrderId, itemId, color, quantityKg, quantityMeter, pieceCount, rawOrigin, notes,
-            originalRawQuantityKg, originalRawQuantityMeter);
+            originalRawQuantityKg, originalRawQuantityMeter, category);
         _lines.Add(line);
         return line;
     }
@@ -162,6 +163,7 @@ public class DeliveryLine : BaseEntity
     public Guid DeliveryId { get; private set; }
     public Guid ProductionOrderId { get; private set; }
     public Guid ItemId { get; private set; }
+    public ReadyGoodsCategory Category { get; private set; } = ReadyGoodsCategory.FirstGrade;
     public string? Color { get; private set; }
     public decimal? QuantityKg { get; private set; }
     public decimal? QuantityMeter { get; private set; }
@@ -182,11 +184,13 @@ public class DeliveryLine : BaseEntity
 
     internal DeliveryLine(Guid deliveryId, Guid productionOrderId, Guid itemId, string? color,
         decimal? quantityKg, decimal? quantityMeter, int? pieceCount, string? rawOrigin, string? notes,
-        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null)
+        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null,
+        ReadyGoodsCategory category = ReadyGoodsCategory.FirstGrade)
     {
         DeliveryId = deliveryId;
         ProductionOrderId = productionOrderId;
         ItemId = itemId;
+        Category = category;
         Color = color;
         QuantityKg = quantityKg;
         QuantityMeter = quantityMeter;
