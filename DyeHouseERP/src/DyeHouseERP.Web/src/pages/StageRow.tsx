@@ -79,6 +79,12 @@ export default function StageRow({ stage }: { stage: StageExecution }) {
             <span className="ltr-nums">{secondGrade}</span>
           </div>
         )}
+        {stage.secondGradePieceCount != null && (
+          <div>
+            <span className="text-ink-subtle">عدد قطع الدرجة الثانية: </span>
+            <span className="ltr-nums">{stage.secondGradePieceCount}</span>
+          </div>
+        )}
         {waste && (
           <div>
             <span className="text-ink-subtle">{t("stage.waste")}: </span>
