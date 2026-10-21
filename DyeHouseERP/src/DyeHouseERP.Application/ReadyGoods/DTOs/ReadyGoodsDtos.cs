@@ -4,6 +4,7 @@ public class ReadyGoodsTransferDto
 {
     public Guid Id { get; set; }
     public string TransferNumber { get; set; } = string.Empty;
+    public string Category { get; set; } = "FirstGrade";
     public DateTime TransferDate { get; set; }
     public Guid ProductionOrderId { get; set; }
     public string ProductionOrderNumber { get; set; } = string.Empty;
