@@ -198,17 +198,18 @@ export default function ReadyGoodsPage() {
         <table className="table">
           <thead><tr>
             <th>أمر التشغيل</th><th>العميل</th>
-            <th>الصنف</th><th>اللون</th><th>الرصيد المتاح</th>
-            <th className="text-end">إجراء</th>
+            <th>الصنف</th><th>اللون</th><th className="text-end">الرصيد (كجم)</th>
+            <th className="text-end">الرصيد (متر)</th><th className="text-end">إجراء</th>
           </tr></thead>
           <tbody>
-            {balanceLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {balanceLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {!balanceLoading && balance?.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
             {visibleBalance.map((b) => (
               <tr key={`${b.productionOrderId}-${b.itemId}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
-                <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{b.customerCode}</td>
-                <td>{b.itemCode}</td><td>{b.color ?? "-"}</td>
-                <td className="ltr-nums font-medium">{b.remainingKg > 0 && `${b.remainingKg} كجم `}{b.remainingMeter > 0 && `${b.remainingMeter} م`}</td>
+                <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td><div className="font-medium">{b.customerName || b.customerCode}</div><div className="text-xs text-ink-subtle ltr-nums">{b.customerCode}</div></td>
+                <td><div className="font-medium">{b.itemName || b.itemCode}</div><div className="text-xs text-ink-subtle ltr-nums">{b.itemCode}</div></td><td>{b.color ?? "-"}</td>
+                <td className="text-end ltr-nums font-semibold">{b.remainingKg > 0 ? b.remainingKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
+                <td className="text-end ltr-nums font-semibold">{b.remainingMeter > 0 ? b.remainingMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
                 <td className="text-end">
                   <Button
                     variant="ghost"
