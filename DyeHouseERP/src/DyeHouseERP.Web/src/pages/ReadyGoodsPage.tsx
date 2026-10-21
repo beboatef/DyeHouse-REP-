@@ -23,7 +23,7 @@ export default function ReadyGoodsPage() {
   // A separate, authorized, reasoned movement. Nothing does this implicitly: undelivered goods stay in
   // Ready Goods until someone explicitly moves them back for rework or reclassification.
   const [rawFormFor, setRawFormFor] = useState<string | null>(null);
-  const [rawDraft, setRawDraft] = useState({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "" });
+  const [rawDraft, setRawDraft] = useState({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "", category: "FirstGrade" as "FirstGrade" | "SecondGrade" | "Separates" });
   const [rawError, setRawError] = useState<string | null>(null);
 
   const { data: orders } = useQuery({ queryKey: ["production-orders", "completed-eligible"], queryFn: () => ProductionOrdersApi.list() });
@@ -87,12 +87,13 @@ export default function ReadyGoodsPage() {
   });
 
   const rawReturnMutation = useMutation({
-    mutationFn: (vars: { productionOrderId: string; itemId: string }) => ReadyGoodsApi.returnToRaw({
+    mutationFn: (vars: { productionOrderId: string; itemId: string; category: "FirstGrade" | "SecondGrade" | "Separates" }) => ReadyGoodsApi.returnToRaw({
       productionOrderId: vars.productionOrderId,
       itemId: vars.itemId,
       rawMessageId: rawDraft.rawMessageId,
       quantityKg: rawDraft.quantityKg ? Number(rawDraft.quantityKg) : undefined,
       quantityMeter: rawDraft.quantityMeter ? Number(rawDraft.quantityMeter) : undefined,
+      category: vars.category,
       reason: rawDraft.reason.trim(),
       notes: rawDraft.notes.trim() || undefined
     }),
@@ -102,7 +103,7 @@ export default function ReadyGoodsPage() {
       qc.invalidateQueries({ queryKey: ["raw-messages"] });
       qc.invalidateQueries({ queryKey: ["stock-traceability"] });
       setRawFormFor(null);
-      setRawDraft({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "" });
+      setRawDraft({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "", category: "FirstGrade" });
       setRawError(null);
     },
     onError: (err: ApiErrorLike) => setRawError(err?.response?.data?.title ?? err?.response?.data?.detail ?? "تعذر النقل")
@@ -221,7 +222,7 @@ export default function ReadyGoodsPage() {
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      const key = `${b.productionOrderId}-${b.itemId}`;
+                      const key = `${b.productionOrderId}-${b.itemId}-${b.category}`;
                       setRawFormFor(rawFormFor === key ? null : key);
                       setRawDraft({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "" });
                       setRawError(null);
@@ -281,7 +282,7 @@ export default function ReadyGoodsPage() {
                     rawReturnMutation.isPending || !rawDraft.rawMessageId ||
                     (!rawDraft.quantityKg && !rawDraft.quantityMeter) || rawDraft.reason.trim() === ""
                   }
-                  onClick={() => rawReturnMutation.mutate({ productionOrderId: row.productionOrderId, itemId: row.itemId })}
+                  onClick={() => rawReturnMutation.mutate({ productionOrderId: row.productionOrderId, itemId: row.itemId, category: row.category as "FirstGrade" | "SecondGrade" | "Separates" })}
                 >
                   {rawReturnMutation.isPending ? "جارٍ الحفظ..." : "تنفيذ النقل إلى الخام"}
                 </Button>
