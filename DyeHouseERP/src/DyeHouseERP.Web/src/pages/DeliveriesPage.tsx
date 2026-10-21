@@ -130,7 +130,7 @@ export default function DeliveriesPage() {
       asOption(l.productionOrderId, l.itemId, l.category, l.productionOrderNumber, l.itemCode, l.color, true));
 
     const own = (readyBalance ?? [])
-      .filter((b) => b.customerId === customerId)
+      .filter((b) => b.customerId === customerId && b.category !== "Waste")
       .map((b) => asOption(b.productionOrderId, b.itemId, b.category, b.productionOrderNumber, b.itemCode, b.color, false));
 
     const seen = new Set(fromPrimary.map((o) => o.key));
