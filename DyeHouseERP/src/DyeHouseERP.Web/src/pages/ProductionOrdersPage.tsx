@@ -5,7 +5,7 @@ import {
   ApprovalsApi, CustomersApi, FormationRequestsApi, ItemsApi, JobOrderType,
   ProductionOrdersApi, ProductionPriority, RawMessagesApi
 } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput, KpiCard } from "@/components/ui";
 import { ExportButtons, DocumentActions } from "@/components/ExportButtons";
 import { ProductionOrdersExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
@@ -43,6 +43,8 @@ export default function ProductionOrdersPage() {
   const [showForm, setShowForm] = useState(Boolean(prefillCustomerId || prefillFormationRequestId));
   const [jobOrderType, setJobOrderType] = useState<JobOrderType>("ClosedLine");
   const [typeFilter, setTypeFilter] = useState<JobOrderType | "">("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
   const [customerId, setCustomerId] = useState(prefillCustomerId);
   const [itemId, setItemId] = useState(prefillItemId);
   const [rawMessageId, setRawMessageId] = useState("");
@@ -85,6 +87,28 @@ export default function ProductionOrdersPage() {
     queryFn: () => FormationRequestsApi.list({ customerId, itemId: itemId || undefined }),
     enabled: !!customerId && !!itemId
   });
+
+  const visibleOrders = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (orders ?? []).filter((order) => {
+      const matchesStatus = !statusFilter || order.status === statusFilter;
+      const searchable = [
+        order.orderNumber, order.customerCode, order.customerName,
+        order.itemCode, order.itemName, order.color, order.customerReference
+      ].filter(Boolean).join(" ").toLocaleLowerCase();
+      return matchesStatus && (!term || searchable.includes(term));
+    });
+  }, [orders, search, statusFilter]);
+
+  const orderCounts = useMemo(() => {
+    const list = orders ?? [];
+    return {
+      total: list.length,
+      active: list.filter((o) => ["RawAllocated", "InProduction"].includes(o.status)).length,
+      paused: list.filter((o) => o.status === "Paused").length,
+      completed: list.filter((o) => o.status === "Completed").length
+    };
+  }, [orders]);
 
   const selectedRequest = useMemo(
     () => (formationRequests ?? []).find((r) => r.id === formationRequestId),
@@ -202,13 +226,36 @@ export default function ProductionOrdersPage() {
         </Card>
       )}
 
-      <Card className="card-pad mb-4">
-        <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")} className="max-w-xs">
-          <option value="">{t("common.all")} - {t("jo.type")}</option>
-          <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
-          <option value="OpenLine">{t("jo.type.OpenLine")}</option>
-        </Select>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <KpiCard label="إجمالي الأوامر" value={orderCounts.total} />
+        <KpiCard label="قيد التشغيل" value={orderCounts.active} tone={orderCounts.active ? "info" : "neutral"} />
+        <KpiCard label="متوقفة مؤقتًا" value={orderCounts.paused} tone={orderCounts.paused ? "warning" : "neutral"} />
+        <KpiCard label="مكتملة" value={orderCounts.completed} tone="success" />
+      </div>
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+        <div>
+          <label className="field-label">{t("common.search")}</label>
+          <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم الأمر أو العميل أو الصنف أو اللون" />
+        </div>
+        <div>
+          <label className="field-label">{t("jo.type")}</label>
+          <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")}>
+            <option value="">{t("common.all")} - {t("jo.type")}</option>
+            <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
+            <option value="OpenLine">{t("jo.type.OpenLine")}</option>
+          </Select>
+        </div>
+        <div>
+          <label className="field-label">حالة أمر التشغيل</label>
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">{t("common.all")} - الحالة</option>
+            {["Draft", "RawAllocated", "InProduction", "Paused", "Completed", "Cancelled"].map((status) => (
+              <option key={status} value={status}>{t(`prod.status.${status}`)}</option>
+            ))}
+          </Select>
+        </div>
       </Card>
+      <p className="text-xs text-ink-muted mb-3">عرض {visibleOrders.length} من {orders?.length ?? 0} أمر تشغيل</p>
 
       {showForm && (
         <Card className="card-pad mb-6">
@@ -386,8 +433,9 @@ export default function ProductionOrdersPage() {
       <div className="space-y-3">
         {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
         {!isLoading && orders?.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد أوامر تشغيل بعد</Card>}
+        {!isLoading && (orders?.length ?? 0) > 0 && visibleOrders.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد نتائج مطابقة للفلاتر</Card>}
 
-        {orders?.map((o) => (
+        {visibleOrders.map((o) => (
           <Card key={o.id} className="p-4 hover:border-brand-300 transition-colors">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Link to={`/production-orders/${o.id}`} className="min-w-0">
