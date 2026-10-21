@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Exceptions;
+using DyeHouseERP.Domain.Enums;
 
 namespace DyeHouseERP.Domain.Entities;
 
