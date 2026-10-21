@@ -18,9 +18,10 @@ public class ReadyGoodsTransferConfiguration : IEntityTypeConfiguration<ReadyGoo
         builder.Property(t => t.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(t => t.ModifiedBy).HasMaxLength(100);
         builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(t => t.Category).HasConversion<string>().HasMaxLength(30).IsRequired();
 
-        // Prevent duplicate transfer for the same order (spec section 29).
-        builder.HasIndex(t => t.ProductionOrderId).IsUnique();
+        // One order can produce multiple categories and multiple stage outputs. The handler's stage-output guard and stock lock protect quantities.
+        builder.HasIndex(t => new { t.ProductionOrderId, t.Category });
 
         // Traceability (spec section 23): the stage whose output this transfer moved.
         // Mapped as a real reference (never a cascade) so the chain
