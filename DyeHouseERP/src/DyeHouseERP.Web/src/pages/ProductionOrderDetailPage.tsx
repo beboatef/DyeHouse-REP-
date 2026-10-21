@@ -758,6 +758,15 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
                 <Field label={t("stage.separatesMeterOptional")}>
                   <Input type="number" min={0} step="0.01" value={separatesMeter} onChange={(e) => setSeparatesMeter(e.target.value)} />
                 </Field>
+                <Field label={t("stage.secondGradeKg")}>
+                  <Input type="number" min={0} step="0.01" value={secondGradeKg} onChange={(e) => setSecondGradeKg(e.target.value)} />
+                </Field>
+                <Field label={t("stage.secondGradeMeter")}>
+                  <Input type="number" min={0} step="0.01" value={secondGradeMeter} onChange={(e) => setSecondGradeMeter(e.target.value)} />
+                </Field>
+                <Field label={t("stage.secondGradePieceCount")}>
+                  <Input type="number" min={0} step="1" value={secondGradePieceCount} onChange={(e) => setSecondGradePieceCount(e.target.value)} />
+                </Field>
                 <div className="rounded-lg bg-surface px-3 py-2">
                   <div className="text-2xs text-ink-muted">{t("stage.waste")}</div>
                   <div className="ltr-nums font-semibold">
