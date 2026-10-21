@@ -4389,6 +4389,9 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<int?>("SecondGradePieceCount")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("SeparatesKg")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
