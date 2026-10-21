@@ -1135,8 +1135,10 @@ const ar: Record<string, string> = {
   "wh.name": "اسم المخزن",
   "wh.kind": "نوع المخزن",
   "wh.kind.RawMaterial": "مخزن خام",
+  "wh.kind.ProductionWip": "مخزن تحت التشغيل",
   "wh.kind.Materials": "مخزن مواد/كيماويات",
   "wh.kind.ReadyGoods": "مخزن جاهز",
+  "wh.kind.OperatingSupplies": "مخزن مستلزمات التشغيل",
 
   // ---------------- production stage administration screen (labels and feature flags) ----------------
   "stg.new": "+ مرحلة جديدة",
@@ -2254,8 +2256,10 @@ const en: Record<string, string> = {
   "wh.name": "Warehouse name",
   "wh.kind": "Warehouse kind",
   "wh.kind.RawMaterial": "Raw material warehouse",
+  "wh.kind.ProductionWip": "Production / WIP warehouse",
   "wh.kind.Materials": "Materials / chemicals warehouse",
   "wh.kind.ReadyGoods": "Ready-goods warehouse",
+  "wh.kind.OperatingSupplies": "Operating supplies warehouse",
 
   // ---------------- production stage administration screen (labels and feature flags) ----------------
   "stg.new": "+ New stage",
