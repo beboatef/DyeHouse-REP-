@@ -369,16 +369,17 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 var transferNumber = await _numberGenerator.NextAsync(
                     DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
 
-                _db.ReadyGoodsTransfers.Add(new ReadyGoodsTransfer(
+                var transfer = new ReadyGoodsTransfer(
                     transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId,
                     readyWarehouse.Id, quantityKg, quantityMeter, _currentUser.UserName,
                     pieceCount: pieceCount,
                     notes: $"Stage transfer to ready goods ({nextStage.Name}) - {category}",
                     stageExecutionId: stage.Id,
-                    category: category));
+                    category: category);
+                _db.ReadyGoodsTransfers.Add(transfer);
 
                 _db.InventoryTransactions.Add(new InventoryTransaction(
-                    DocumentType.ReadyGoodsTransfer, order.OrderNumber, order.Id,
+                    DocumentType.ReadyGoodsTransfer, transfer.TransferNumber, transfer.Id,
                     _clock.UtcNow, readyWarehouse.Id, order.CustomerId, order.ItemId,
                     rawMessageId: null, productionOrderId: order.Id,
                     quantityKg: quantityKg, quantityMeter: quantityMeter,
