@@ -357,26 +357,42 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             await WarehouseGuard.EnsureUsableForNewMovementAsync(
                 _db, readyWarehouse.Id, cancellationToken, "to post ready-goods stock into it");
 
-            var transferNumber = await _numberGenerator.NextAsync(
-                DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
+            // The final capture records each customer-owned output category independently.
+            // First grade is Output, second grade is its own recorded quantity, and separates
+            // are their own quantity. Waste remains a stage loss and is never stock.
+            async Task PostReadyCategoryAsync(
+                ReadyGoodsCategory category, decimal? quantityKg, decimal? quantityMeter, int? pieceCount)
+            {
+                if (quantityKg is not > 0 && quantityMeter is not > 0)
+                    return;
 
-            // Spec section 23: the automatic transfer carries the same stage link a manual
-            // one does - the quantity it posts IS this stage's recorded output.
-            _db.ReadyGoodsTransfers.Add(new ReadyGoodsTransfer(
-                transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId,
-                readyWarehouse.Id, request.OutputKg, request.OutputMeter, _currentUser.UserName,
-                pieceCount: null,
-                notes: $"Stage transfer to ready goods ({nextStage.Name})",
-                stageExecutionId: stage.Id));
+                var transferNumber = await _numberGenerator.NextAsync(
+                    DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
 
-            // IN into the ready dimension (RawMessageId = null, ProductionOrderId
-            // set) - the same ledger shape ReadyGoods balances are read from.
-            _db.InventoryTransactions.Add(new InventoryTransaction(
-                DocumentType.ReadyGoodsTransfer, order.OrderNumber, order.Id,
-                _clock.UtcNow, readyWarehouse.Id, order.CustomerId, order.ItemId,
-                rawMessageId: null, productionOrderId: order.Id,
-                quantityKg: request.OutputKg, quantityMeter: request.OutputMeter,
-                direction: TransactionDirection.In, createdBy: _currentUser.UserName));
+                _db.ReadyGoodsTransfers.Add(new ReadyGoodsTransfer(
+                    transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId,
+                    readyWarehouse.Id, quantityKg, quantityMeter, _currentUser.UserName,
+                    pieceCount: pieceCount,
+                    notes: $"Stage transfer to ready goods ({nextStage.Name}) - {category}",
+                    stageExecutionId: stage.Id,
+                    category: category));
+
+                _db.InventoryTransactions.Add(new InventoryTransaction(
+                    DocumentType.ReadyGoodsTransfer, order.OrderNumber, order.Id,
+                    _clock.UtcNow, readyWarehouse.Id, order.CustomerId, order.ItemId,
+                    rawMessageId: null, productionOrderId: order.Id,
+                    quantityKg: quantityKg, quantityMeter: quantityMeter,
+                    direction: TransactionDirection.In, createdBy: _currentUser.UserName,
+                    readyGoodsCategory: category));
+            }
+
+            await PostReadyCategoryAsync(
+                ReadyGoodsCategory.FirstGrade, request.OutputKg, request.OutputMeter, null);
+            await PostReadyCategoryAsync(
+                ReadyGoodsCategory.SecondGrade, request.SecondGradeKg, request.SecondGradeMeter,
+                request.SecondGradePieceCount);
+            await PostReadyCategoryAsync(
+                ReadyGoodsCategory.Separates, request.SeparatesKg, request.SeparatesMeter, null);
 
             order.Complete();
         }
