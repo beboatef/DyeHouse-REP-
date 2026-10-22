@@ -327,6 +327,12 @@ public class ReadyGoodsStageTraceabilityTests
         ledger.Should().ContainSingle(t => t.ReadyGoodsCategory == ReadyGoodsCategory.SecondGrade);
         ledger.Should().ContainSingle(t => t.ReadyGoodsCategory == ReadyGoodsCategory.Separates);
         ledger.Should().NotContain(t => t.ReadyGoodsCategory == ReadyGoodsCategory.Waste);
+        foreach (var transfer in transfers)
+        {
+            var row = ledger.Single(t => t.ReadyGoodsCategory == transfer.Category);
+            row.SourceDocumentId.Should().Be(transfer.Id);
+            row.SourceDocumentNumber.Should().Be(transfer.TransferNumber);
+        }
     }
 
     /// <summary>
