@@ -298,6 +298,51 @@ public class ReadyGoodsStageTraceabilityTests
     /// still renders it (as "no stage") instead of dropping the row.
     /// </summary>
     [Fact]
+    public async Task ClassifiedTransfers_KeepSeparateLedgerBalancesPerCategory()
+    {
+        var f = Seed(outputKg: 500m, outputMeter: 120m);
+        using var db = NewDb();
+
+        await TransferHandler(db).Handle(
+            new CreateReadyGoodsTransferCommand(
+                f.Order.Id, f.ReadyWarehouse.Id, 200m, 50m, null, "first grade",
+                StageExecutionId: f.Stage.Id, Category: ReadyGoodsCategory.FirstGrade),
+            CancellationToken.None);
+
+        await TransferHandler(db).Handle(
+            new CreateReadyGoodsTransferCommand(
+                f.Order.Id, f.ReadyWarehouse.Id, 100m, 30m, null, "second grade",
+                StageExecutionId: f.Stage.Id, Category: ReadyGoodsCategory.SecondGrade),
+            CancellationToken.None);
+
+        var balances = await new DyeHouseERP.Application.ReadyGoods.Queries.GetReadyGoodsBalanceQueryHandler(db)
+            .Handle(new DyeHouseERP.Application.ReadyGoods.Queries.GetReadyGoodsBalanceQuery(), CancellationToken.None);
+
+        balances.Should().ContainSingle(b => b.Category == nameof(ReadyGoodsCategory.FirstGrade)
+            && b.RemainingKg == 200m && b.RemainingMeter == 50m);
+        balances.Should().ContainSingle(b => b.Category == nameof(ReadyGoodsCategory.SecondGrade)
+            && b.RemainingKg == 100m && b.RemainingMeter == 30m);
+
+        var ledgerRows = await db.InventoryTransactions
+            .Where(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)
+            .ToListAsync();
+        ledgerRows.Should().HaveCount(2);
+        ledgerRows.Should().ContainSingle(t => t.ReadyGoodsCategory == ReadyGoodsCategory.FirstGrade);
+        ledgerRows.Should().ContainSingle(t => t.ReadyGoodsCategory == ReadyGoodsCategory.SecondGrade);
+    }
+
+    [Fact]
+    public void TransferValidator_RejectsWasteAsDeliverableReadyStock()
+    {
+        var validator = new CreateReadyGoodsTransferCommandValidator();
+
+        validator.Validate(new CreateReadyGoodsTransferCommand(
+            Guid.NewGuid(), Guid.NewGuid(), 10m, null, null, "waste",
+            StageExecutionId: Guid.NewGuid(), Category: ReadyGoodsCategory.Waste))
+            .IsValid.Should().BeFalse("waste is a production loss, not deliverable customer stock");
+    }
+
+    [Fact]
     public async Task APreExistingTransfer_KeepsItsNullLink_AndStillReadsBack()
     {
         var f = Seed(outputKg: 500m);
