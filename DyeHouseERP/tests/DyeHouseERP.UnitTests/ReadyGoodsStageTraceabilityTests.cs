@@ -57,7 +57,11 @@ public class ReadyGoodsStageTraceabilityTests
     /// <paramref name="outputKg"/> / <paramref name="outputMeter"/> - the shape
     /// a floor transfer leaves behind just before the ready-goods posting.
     /// </summary>
-    private Fixture Seed(decimal outputKg = 500m, decimal? outputMeter = 120m, bool closeStage = true)
+    private Fixture Seed(
+        decimal outputKg = 500m, decimal? outputMeter = 120m, bool closeStage = true,
+        decimal? separatesKg = null, decimal? separatesMeter = null,
+        decimal? secondGradeKg = null, decimal? secondGradeMeter = null,
+        int? secondGradePieceCount = null)
     {
         using var db = NewDb();
 
@@ -89,7 +93,9 @@ public class ReadyGoodsStageTraceabilityTests
 
         var stage = order.StageExecutions.Single();
         if (closeStage)
-            stage.CloseWithOutput(outputKg, outputMeter, null, null, null, "operator");
+            stage.CloseWithOutput(outputKg, outputMeter, separatesKg, separatesMeter, null, "operator",
+                secondGradeKg: secondGradeKg, secondGradeMeter: secondGradeMeter,
+                secondGradePieceCount: secondGradePieceCount);
 
         db.SaveChanges();
 
@@ -343,7 +349,7 @@ public class ReadyGoodsStageTraceabilityTests
     [Fact]
     public async Task ClassifiedTransfers_KeepSeparateLedgerBalancesPerCategory()
     {
-        var f = Seed(outputKg: 500m, outputMeter: 120m);
+        var f = Seed(outputKg: 500m, outputMeter: 120m, secondGradeKg: 100m, secondGradeMeter: 30m);
         using var db = NewDb();
 
         await TransferHandler(db).Handle(
