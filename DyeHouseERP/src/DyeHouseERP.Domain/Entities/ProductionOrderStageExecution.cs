@@ -369,9 +369,9 @@ public class ProductionOrderStageExecution : BaseEntity
             throw new DomainException($"This stage recorded no Meter {categoryName}, so Meter cannot be transferred against it.");
 
         if (transferKg is > 0 && alreadyTransferredKg + transferKg.Value > availableKg!.Value + 0.001m)
-            throw new DomainException($"Cumulative {categoryName} transfers can never exceed the stage's recorded KG output.");
+            throw new DomainException($"Cumulative transfers can never exceed a stage's output for {categoryName}: requested KG exceeds the recorded category output.");
         if (transferMeter is > 0 && alreadyTransferredMeter + transferMeter.Value > availableMeter!.Value + 0.001m)
-            throw new DomainException($"Cumulative {categoryName} transfers can never exceed the stage's recorded Meter output.");
+            throw new DomainException($"Cumulative transfers can never exceed a stage's output for {categoryName}: requested Meter exceeds the recorded category output.");
     }
 
     // Phase 4: Start(...), Complete(...) and Skip(...) were DELETED together with their endpoints.
