@@ -195,12 +195,15 @@ public class StageCheckboxTransferAndFinalWeightsTests
         // The ready-goods mechanism is unchanged: one transfer row and one IN movement.
         var transfer = await db.ReadyGoodsTransfers.SingleAsync();
         transfer.StageExecutionId.Should().Be(current.Id);
+        transfer.Category.Should().Be(ReadyGoodsCategory.FirstGrade,
+            "the final output is the first-grade stream, separate from second grade and separates");
         transfer.QuantityKg.Should().Be(900m);
         transfer.QuantityMeter.Should().Be(115m);
 
         var movement = await db.InventoryTransactions
             .SingleAsync(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer);
         movement.Direction.Should().Be(TransactionDirection.In);
+        movement.ReadyGoodsCategory.Should().Be(ReadyGoodsCategory.FirstGrade);
         movement.QuantityKg.Should().Be(900m);
         movement.QuantityMeter.Should().Be(115m);
         (await db.ProductionOrders.FirstAsync(o => o.Id == scene.OrderId)).Status
