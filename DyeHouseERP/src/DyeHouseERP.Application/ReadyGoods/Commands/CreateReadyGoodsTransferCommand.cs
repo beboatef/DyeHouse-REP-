@@ -37,6 +37,8 @@ public class CreateReadyGoodsTransferCommandValidator : AbstractValidator<Create
             .WithMessage("Specify the transferred quantity in KG and/or Meter.");
         RuleFor(x => x.Category).NotNull()
             .WithMessage("Select the finished-fabric category.");
+        RuleFor(x => x.Category).NotNull()
+            .WithMessage("Select the finished-fabric category.");
         RuleFor(x => x.StageExecutionId).NotNull()
             .WithMessage("Name the stage execution whose output is being moved - an untraceable ready-goods transfer is refused.");
     }
