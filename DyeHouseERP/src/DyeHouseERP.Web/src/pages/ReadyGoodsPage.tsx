@@ -283,15 +283,16 @@ export default function ReadyGoodsPage() {
       <Card className="mb-8">
         <table className="table">
           <thead><tr>
-            <th>الرقم</th><th>أمر التشغيل</th><th>الرسالة المستقبلة</th><th>الكمية</th><th>السبب</th><th>المستخدم</th>
+            <th>الرقم</th><th>أمر التشغيل</th><th>الرسالة المستقبلة</th><th>التصنيف</th><th>الكمية</th><th>السبب</th><th>المستخدم</th>
           </tr></thead>
           <tbody>
-            {!rawReturns?.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-subtle">لا توجد حركات إرجاع إلى الخام</td></tr>}
+            {!rawReturns?.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">لا توجد حركات إرجاع إلى الخام</td></tr>}
             {rawReturns?.map((m) => (
               <tr key={m.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{m.movementNumber}</td>
                 <td className="ltr-nums">{m.productionOrderNumber}</td>
                 <td className="ltr-nums">{m.destinationMessageNumber}</td>
+                <td>{m.category === "FirstGrade" ? translate("readyGoods.firstGrade", "درجة أولى") : m.category === "SecondGrade" ? translate("readyGoods.secondGrade", "درجة ثانية") : m.category === "Separates" ? translate("readyGoods.separates", "منفصلات") : translate("readyGoods.unclassified", "غير مصنف")}</td>
                 <td className="ltr-nums">{m.quantityKg != null && `${m.quantityKg} كجم `}{m.quantityMeter != null && `${m.quantityMeter} م`}</td>
                 <td className="text-ink-muted">{m.reason}</td>
                 <td className="text-ink-muted">{m.createdBy}</td>
