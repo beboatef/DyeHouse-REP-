@@ -71,6 +71,13 @@ export default function DeliveryStatementPrintPage() {
       render: (r: DeliveryStatementRow) => (r.itemName ? `${r.itemCode} · ${r.itemName}` : r.itemCode)
     });
 
+    cells.push({
+      header: "التصنيف",
+      render: (r: DeliveryStatementRow) => r.category === "FirstGrade" ? "درجة أولى"
+        : r.category === "SecondGrade" ? "درجة ثانية"
+        : r.category === "Separates" ? "منفصلات" : "غير مصنف"
+    });
+
     // The colour is a COLUMN of its own (not a suffix hidden on the item cell), because the statement is
     // read down a column: "what did we deliver in this colour?".
     if (optional.color) {
