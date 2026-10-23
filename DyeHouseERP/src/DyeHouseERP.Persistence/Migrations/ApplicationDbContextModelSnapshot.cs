@@ -1335,6 +1335,10 @@ namespace DyeHouseERP.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("Color")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
