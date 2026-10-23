@@ -115,7 +115,7 @@ export default function DeliveriesPage() {
   const sourceOptions = useMemo(() => {
     const asOption = (productionOrderId: string, itemId: string, number: string, code: string, color: string | null | undefined, category: "FirstGrade" | "SecondGrade" | "Separates" | null | undefined, fromPrimary: boolean) => ({
       key: `${productionOrderId}|${itemId}|${category ?? "Unclassified"}`,
-      productionOrderId, itemId, category: category ?? "",
+      productionOrderId, itemId, category: (category ?? "") as LineDraft["category"],
       label: `${number} - ${code}${color ? ` (${color})` : ""} — ${category === "FirstGrade" ? "درجة أولى" : category === "SecondGrade" ? "درجة ثانية" : category === "Separates" ? "منفصلات" : "غير مصنف"}`,
       color: color ?? "", fromPrimary
     });
