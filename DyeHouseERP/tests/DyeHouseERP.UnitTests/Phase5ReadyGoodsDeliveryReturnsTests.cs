@@ -308,6 +308,28 @@ public class Phase5ReadyGoodsRawReturnTests : Phase5TestBase
         row.DestinationWarehouseName.Should().Be("Raw Material");
         row.Reason.Should().Be("reclassify");
     }
+
+    [Fact]
+    public async Task TheMovement_DoesNotOfferACategoryThatExistsOnlyOnCancelledTransfers()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+
+        var cancelled = new ReadyGoodsTransfer(
+            "RGT-CANCELLED-SECOND", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id, scene.Item.Id,
+            scene.Ready.Id, 100m, null, "seed", category: ReadyGoodsCategory.SecondGrade);
+        cancelled.Cancel("entered in error", "seed");
+        db.ReadyGoodsTransfers.Add(cancelled);
+        await db.SaveChangesAsync();
+
+        var act = () => Handler(db).Handle(new ReturnReadyGoodsToRawStockCommand(
+            scene.Order.Id, scene.Item.Id, scene.Lot.Id, 10m, null, "return cancelled category",
+            Category: ReadyGoodsCategory.SecondGrade), CancellationToken.None);
+
+        (await act.Should().ThrowAsync<DomainException>())
+            .WithMessage("*category is not available*");
+        (await db.ReadyGoodsRawReturns.CountAsync()).Should().Be(0);
+    }
 }
 
 // ============================================================================================
