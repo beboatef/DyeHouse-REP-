@@ -59,10 +59,10 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
   const { data: materials } = useQuery({
     queryKey: ["materials", "active"],
     queryFn: () => MaterialsApi.list({ activeOnly: true }),
-    enabled: scope === "materials"
+    enabled: scope === "materials" || scope === "supplies"
   });
 
-  const isMaterials = scope === "materials";
+  const isMaterials = scope === "materials" || scope === "supplies";
   const isRaw = scope === "raw";
 
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery({
@@ -610,7 +610,7 @@ function MovementRow({ movement, scope, formatter, hasMeter }: {
         {movement.supplierName && <div className="text-2xs text-ink-subtle">{movement.supplierName}{movement.purchaseOrderNumber ? ` · ${movement.purchaseOrderNumber}` : ""}</div>}
       </td>
       <td>
-        {scope === "materials" ? (movement.materialCode ?? "—") : (
+        {(scope === "materials" || scope === "supplies") ? (movement.materialCode ?? "—") : (
           <>
             {scope === "raw"
               ? (movement.messageNumber ?? "—")
@@ -632,7 +632,7 @@ function MovementRow({ movement, scope, formatter, hasMeter }: {
         </span>
       </td>
       <td className="ltr-nums">
-        {scope === "materials"
+        {(scope === "materials" || scope === "supplies")
           ? `${formatter(movement.quantity)} ${t(`material.unit.${movement.unit}`, movement.unit ?? "")}`.trim()
           : <>
               {movement.quantityKg != null && <span className="font-medium">{formatter(movement.quantityKg)} كجم</span>}
@@ -641,7 +641,7 @@ function MovementRow({ movement, scope, formatter, hasMeter }: {
             </>}
       </td>
       <td className="ltr-nums">
-        {scope === "materials"
+        {(scope === "materials" || scope === "supplies")
           ? formatter(movement.balanceAfter)
           : <>
               {formatter(movement.balanceAfterKg)}{hasMeter ? ` · ${formatter(movement.balanceAfterMeter)}` : ""}
