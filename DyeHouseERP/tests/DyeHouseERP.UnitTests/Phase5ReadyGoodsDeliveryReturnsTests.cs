@@ -465,7 +465,7 @@ public class Phase5DeliveryStatementTests : Phase5TestBase
             scene.Ready.Id, 300m, 50m, "seed", category: ReadyGoodsCategory.FirstGrade);
         var cancelled = new ReadyGoodsTransfer(
             "RGT-CANCELLED", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id, scene.Item.Id,
-            scene.Ready.Id, 500m, 35m, "seed", category: ReadyGoodsCategory.SecondGrade);
+            scene.Ready.Id, 500m, 35m, "seed", category: ReadyGoodsCategory.FirstGrade);
         cancelled.Cancel("Correct wrong transfer", "seed");
         db.ReadyGoodsTransfers.AddRange(posted, cancelled);
         await db.SaveChangesAsync();
