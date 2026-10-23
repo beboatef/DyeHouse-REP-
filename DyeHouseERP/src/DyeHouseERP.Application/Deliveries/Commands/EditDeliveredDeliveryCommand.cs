@@ -147,10 +147,25 @@ public class EditDeliveredDeliveryCommandHandler
             // balance. Two lines on the same lot that each add 100 KG must be
             // checked as one 200 KG requirement, otherwise the lot could be
             // over-committed - the H3 bug class, guarded here too.
-            var netByLot = new Dictionary<(Guid ItemId, Guid OrderId), LotDelta>();
-            var categoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
+            var netByLot = new Dictionary<(Guid ItemId, Guid OrderId, ReadyGoodsCategory? Category), LotDelta>();
+            var transferCategoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
                 .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId))
-                .ToDictionaryAsync(t => t.ProductionOrderId, t => t.Category, cancellationToken);
+                .Select(t => new { t.ProductionOrderId, t.Category })
+                .ToListAsync(cancellationToken);
+            var categoriesByOrder = transferCategoriesByOrder
+                .GroupBy(t => t.ProductionOrderId)
+                .ToDictionary(g => g.Key, g => g.Select(t => t.Category).Distinct().ToList());
+            var categoryByLine = new Dictionary<Guid, ReadyGoodsCategory?>();
+
+            foreach (var line in lines)
+            {
+                var categories = categoriesByOrder.GetValueOrDefault(line.ProductionOrderId) ?? new List<ReadyGoodsCategory?>();
+                var category = line.Category;
+                if (!category.HasValue && categories.Count == 1) category = categories[0];
+                if (!categories.Contains(category))
+                    throw new DomainException("The delivery line must retain the exact ready-goods category it was issued from.");
+                categoryByLine[line.Id] = category;
+            }
 
             if (postsStock)
             {
@@ -162,14 +177,13 @@ public class EditDeliveredDeliveryCommandHandler
 
                     if (deltaKg == 0 && deltaMeter == 0) continue;
 
-                    var key = (line.ItemId, line.ProductionOrderId);
+                    var key = (line.ItemId, line.ProductionOrderId, categoryByLine[line.Id]);
                     netByLot.TryGetValue(key, out var current);
                     netByLot[key] = new LotDelta(current?.Kg + deltaKg ?? deltaKg, current?.Meter + deltaMeter ?? deltaMeter);
                 }
 
                 foreach (var net in netByLot)
                 {
-                    categoriesByOrder.TryGetValue(net.Key.OrderId, out var category);
                     // Only an INCREASE can be refused: returning stock to Ready Goods
                     // can never overdraw anything.
                     if (net.Value.Kg <= 0 && net.Value.Meter <= 0) continue;
@@ -178,7 +192,7 @@ public class EditDeliveredDeliveryCommandHandler
                         .Where(t => t.RawMessageId == null
                                  && t.ProductionOrderId == net.Key.OrderId
                                  && t.ItemId == net.Key.ItemId
-                                 && t.ReadyGoodsCategory == category)
+                                 && t.ReadyGoodsCategory == net.Key.Category)
                         .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
                         .ToListAsync(cancellationToken);
 
@@ -260,7 +274,7 @@ public class EditDeliveredDeliveryCommandHandler
                     rawMessageId: null, productionOrderId: net.Key.OrderId,
                     quantityKg: Math.Abs(net.Value.Kg), quantityMeter: Math.Abs(net.Value.Meter),
                     direction: direction, createdBy: _currentUser.UserName,
-                    readyGoodsCategory: categoriesByOrder.GetValueOrDefault(net.Key.OrderId)));
+                    readyGoodsCategory: net.Key.Category));
             }
 
             delivery.EditAfterApproval(request.Reason, _currentUser.UserName);
