@@ -1185,6 +1185,7 @@ export interface Delivery {
 export interface DeliveryStatementRow {
   productionOrderId: string; productionOrderNumber: string; productionOrderDate: string | null;
   itemId: string; itemCode: string; itemName: string; color: string | null;
+  category: "FirstGrade" | "SecondGrade" | "Separates" | null;
   originalRawQuantityKg: number | null; originalRawQuantityMeter: number | null;
   deliveredOriginalRawQuantityKg: number | null; deliveredOriginalRawQuantityMeter: number | null;
   remainingOriginalRawKg: number; remainingOriginalRawMeter: number;
