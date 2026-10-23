@@ -1,6 +1,7 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Deliveries.DTOs;
+using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -69,7 +70,9 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
         // the last COMPLETED operation's output. The two screens can therefore never quote different
         // denominators for one order.
         var transferRows = await _db.ReadyGoodsTransfers.AsNoTracking()
-            .Where(t => orderIds.Contains(t.ProductionOrderId))
+            // Cancelled documents remain in history, but their IN movements have matching reversal
+            // rows. They must not inflate the production output reported on a delivery statement.
+            .Where(t => orderIds.Contains(t.ProductionOrderId) && t.Status == ReadyGoodsTransferStatus.Posted)
             .Select(t => new { t.ProductionOrderId, t.QuantityKg, t.QuantityMeter })
             .ToListAsync(cancellationToken);
         var transfers = transferRows
