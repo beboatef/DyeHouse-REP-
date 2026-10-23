@@ -31,6 +31,8 @@ public class CreateReadyGoodsTransferCommandValidator : AbstractValidator<Create
     {
         RuleFor(x => x.ProductionOrderId).NotEmpty();
         RuleFor(x => x.WarehouseId).NotEmpty();
+        RuleFor(x => x.PieceCount).GreaterThanOrEqualTo(0).When(x => x.PieceCount.HasValue)
+            .WithMessage("Piece count cannot be negative.");
         RuleFor(x => x).Must(x => x.QuantityKg is > 0 || x.QuantityMeter is > 0)
             .WithMessage("Specify the transferred quantity in KG and/or Meter.");
         RuleFor(x => x.StageExecutionId).NotNull()
