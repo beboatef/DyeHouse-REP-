@@ -21,9 +21,16 @@ export default function ProductionOrderPrintPage() {
       columns={[
         { header: "المرحلة", render: (s) => s.stageName },
         { header: "الحالة", render: (s) => s.status },
-        { header: "دخول", render: (s) => s.inputKg ?? "-", align: "end" },
-        { header: "خروج", render: (s) => s.outputKg ?? "-", align: "end" },
-        { header: "فاقد", render: (s) => s.lossKg ?? "-", align: "end" }
+        { header: "دخول (كجم)", render: (s) => s.inputKg ?? "—", align: "end" },
+        { header: "دخول (متر)", render: (s) => s.inputMeter ?? "—", align: "end" },
+        { header: "خروج (كجم)", render: (s) => s.outputKg ?? "—", align: "end" },
+        { header: "خروج (متر)", render: (s) => s.outputMeter ?? "—", align: "end" },
+        { header: "الدرجة الثانية (كجم)", render: (s) => s.secondGradeKg ?? "—", align: "end" },
+        { header: "الدرجة الثانية (متر)", render: (s) => s.secondGradeMeter ?? "—", align: "end" },
+        { header: "أتواب الدرجة الثانية", render: (s) => s.secondGradePieceCount ?? "—", align: "end" },
+        { header: "المنفصلات (كجم)", render: (s) => s.separatesKg ?? "—", align: "end" },
+        { header: "المنفصلات (متر)", render: (s) => s.separatesMeter ?? "—", align: "end" },
+        { header: "الهالك (كجم)", render: (s) => s.lossKg ?? "—", align: "end" }
       ]}
       rows={order.stageExecutions}
       qrValue={`${window.location.origin}/scan/production-order/${order.id}`}
