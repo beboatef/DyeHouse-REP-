@@ -185,6 +185,13 @@ public class WarehouseMasterDataTests
     }
 
     [Fact]
+    public void WarehouseDomainEntity_RejectsProductionWipAsANewWarehouse()
+    {
+        var create = () => new Warehouse("WIP-01", "Under production", WarehouseKind.ProductionWip, "tester");
+        create.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void MaterialWarehouseCompatibility_SeparatesChemicalsAndOperatingSupplies()
     {
         var materials = new Warehouse("MAT-01", "Chemicals", WarehouseKind.Materials, "tester");
