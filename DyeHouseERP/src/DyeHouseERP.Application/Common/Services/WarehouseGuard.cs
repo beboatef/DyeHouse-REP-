@@ -64,9 +64,12 @@ public static class WarehouseGuard
     /// <summary>Ensures factory-owned materials are kept only in their designated warehouse.</summary>
     public static void EnsureMaterialWarehouseCompatibility(MaterialKind materialKind, Warehouse warehouse)
     {
-        var expectedKind = materialKind == MaterialKind.OperatingSupply
-            ? WarehouseKind.OperatingSupplies
-            : WarehouseKind.Materials;
+        var expectedKind = materialKind switch
+        {
+            MaterialKind.Chemical => WarehouseKind.Materials,
+            MaterialKind.OperatingSupply => WarehouseKind.OperatingSupplies,
+            _ => throw new DomainException($"Unknown material kind '{materialKind}' cannot be moved through inventory.")
+        };
 
         if (warehouse.Kind != expectedKind)
             throw new DomainException(
