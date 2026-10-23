@@ -3,6 +3,7 @@ using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ReadyGoods.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Exceptions;
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +26,17 @@ public sealed record UpdateReadyGoodsTransferCommand(
     DateTime TransferDate,
     int? PieceCount,
     string? Notes) : IRequest<ReadyGoodsTransferDto>;
+
+public sealed class UpdateReadyGoodsTransferCommandValidator : AbstractValidator<UpdateReadyGoodsTransferCommand>
+{
+    public UpdateReadyGoodsTransferCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.TransferDate).NotEmpty();
+        RuleFor(x => x.PieceCount).GreaterThanOrEqualTo(0).When(x => x.PieceCount.HasValue)
+            .WithMessage("Piece count cannot be negative.");
+    }
+}
 
 public sealed class UpdateReadyGoodsTransferCommandHandler
     : IRequestHandler<UpdateReadyGoodsTransferCommand, ReadyGoodsTransferDto>
