@@ -120,7 +120,8 @@ export default function DeliveryStatementPrintPage() {
     if (optional.secondGrade) {
       cells.push(
         { header: t("statement.secondKg", "درجة ثانية كجم"), render: (r: DeliveryStatementRow) => r.secondGradeKg ?? "—", align: "end" },
-        { header: t("statement.secondM", "درجة ثانية متر"), render: (r: DeliveryStatementRow) => r.secondGradeMeter ?? "—", align: "end" }
+        { header: t("statement.secondM", "درجة ثانية متر"), render: (r: DeliveryStatementRow) => r.secondGradeMeter ?? "—", align: "end" },
+        { header: t("statement.secondPieces", "عدد قطع الدرجة الثانية"), render: (r: DeliveryStatementRow) => r.secondGradePieceCount ?? "—", align: "end" }
       );
     }
 
