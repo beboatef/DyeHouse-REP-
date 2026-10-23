@@ -231,6 +231,16 @@ public class WarehouseMasterDataTests
     }
 
     [Fact]
+    public void MaterialDomainEntity_DoesNotAllowKindChanges()
+    {
+        var material = new Material("MAT-01", "Dye", MaterialUnit.KG, 10m, "tester", MaterialKind.Chemical);
+        Action changeKind = () => material.SetKind(MaterialKind.OperatingSupply, "tester");
+
+        changeKind.Should().Throw<InvalidOperationException>();
+        material.Kind.Should().Be(MaterialKind.Chemical);
+    }
+
+    [Fact]
     public void OnlyTheFourApprovedWarehouseKindsCanBeCreated()
     {
         WarehouseGuard.EnsureAllowedWarehouseKind(WarehouseKind.RawMaterial);
