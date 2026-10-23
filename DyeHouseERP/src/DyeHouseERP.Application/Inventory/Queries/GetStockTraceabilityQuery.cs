@@ -14,6 +14,7 @@ public static class StockScopes
     public const string Raw = "raw";
     public const string Ready = "ready";
     public const string Materials = "materials";
+    public const string Supplies = "supplies";
 }
 
 /// <summary>
@@ -63,7 +64,8 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         return scope switch
         {
             StockScopes.Ready => await ReadFabricAsync(request, StockScopes.Ready, cancellationToken),
-            StockScopes.Materials => await ReadMaterialsAsync(request, cancellationToken),
+            StockScopes.Materials => await ReadMaterialsAsync(request, cancellationToken, operatingSupplies: false),
+            StockScopes.Supplies => await ReadMaterialsAsync(request, cancellationToken, operatingSupplies: true),
             _ => await ReadFabricAsync(request, StockScopes.Raw, cancellationToken),
         };
     }
@@ -523,15 +525,17 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
     // their OWN unit (KG / Gram / Liter) - never forced into the fabric KG/Meter pair.
 
     private async Task<StockTraceabilityDto> ReadMaterialsAsync(
-        GetStockTraceabilityQuery request, CancellationToken cancellationToken)
+        GetStockTraceabilityQuery request, CancellationToken cancellationToken, bool operatingSupplies)
     {
         var query = _db.MaterialTransactions.AsNoTracking().AsQueryable();
+        query = query.Where(t => _db.Materials.Any(m => m.Id == t.MaterialId &&
+            (operatingSupplies ? m.Kind == MaterialKind.OperatingSupply : m.Kind == MaterialKind.Chemical)));
         if (request.MaterialId.HasValue) query = query.Where(t => t.MaterialId == request.MaterialId.Value);
         if (request.WarehouseId.HasValue) query = query.Where(t => t.WarehouseId == request.WarehouseId.Value);
         if (request.ProductionOrderId.HasValue) query = query.Where(t => t.ProductionOrderId == request.ProductionOrderId.Value);
 
         var rows = await query.ToListAsync(cancellationToken);
-        if (rows.Count == 0) return Empty(StockScopes.Materials);
+        if (rows.Count == 0) return Empty(operatingSupplies ? StockScopes.Supplies : StockScopes.Materials);
 
         var materialIds = rows.Select(t => t.MaterialId).Distinct().ToList();
         var warehouseIds = rows.Select(t => t.WarehouseId).Distinct().ToList();
@@ -599,7 +603,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
             movements.Add((new StockTraceMovementDto
             {
                 Id = t.Id,
-                Scope = StockScopes.Materials,
+                Scope = operatingSupplies ? StockScopes.Supplies : StockScopes.Materials,
                 LotKey = lotKey,
                 Date = t.TransactionDate,
                 DocumentType = t.SourceDocumentType.ToString(),
