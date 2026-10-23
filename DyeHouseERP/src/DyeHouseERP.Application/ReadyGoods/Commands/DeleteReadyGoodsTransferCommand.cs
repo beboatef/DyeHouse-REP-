@@ -121,7 +121,8 @@ public sealed class DeleteReadyGoodsTransferCommandHandler
                 row.WarehouseId, row.CustomerId, row.ItemId, row.RawMessageId, row.ProductionOrderId,
                 row.QuantityKg, row.QuantityMeter,
                 direction: row.Direction == TransactionDirection.Out ? TransactionDirection.In : TransactionDirection.Out,
-                createdBy: _currentUser.UserName, reversesTransactionId: row.Id));
+                createdBy: _currentUser.UserName, reversesTransactionId: row.Id,
+                readyGoodsCategory: row.ReadyGoodsCategory));
         }
 
         transfer.Cancel(request.Reason, _currentUser.UserName);
