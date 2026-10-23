@@ -1,5 +1,5 @@
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace DyeHouseERP.Persistence.Migrations
 {
@@ -9,29 +9,17 @@ namespace DyeHouseERP.Persistence.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_ReadyGoodsTransfers_ProductionOrderId",
-                table: "ReadyGoodsTransfers");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ReadyGoodsTransfers_ProductionOrderId_Category",
-                table: "ReadyGoodsTransfers",
-                columns: new[] { "ProductionOrderId", "Category" },
-                unique: true,
-                filter: "[Status] = N'Posted'");
+            // The preceding AddReadyGoodsCategory migration already replaces the old
+            // single-transfer-per-order index with the filtered unique index on
+            // (ProductionOrderId, Category). Repeating the DROP of the old index here
+            // makes a fresh database migration fail because that index no longer exists.
+            // The schema is already in the required state, so this migration is a no-op.
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_ReadyGoodsTransfers_ProductionOrderId_Category",
-                table: "ReadyGoodsTransfers");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ReadyGoodsTransfers_ProductionOrderId",
-                table: "ReadyGoodsTransfers",
-                column: "ProductionOrderId",
-                unique: true);
+            // No schema change was made by Up; keep the schema from the preceding
+            // migration intact when rolling this migration back.
         }
     }
 }
