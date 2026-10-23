@@ -46,17 +46,17 @@ public class Warehouse : AuditableEntity
     }
 
     /// <summary>
-    /// Changes the warehouse's kind. This is a classification change only: no stock is
-    /// moved, no ledger row is written and no existing document loses its warehouse
-    /// reference. Which kind a NEW document may use is enforced where that document is
-    /// created (for example a ready-goods transfer requires a ReadyGoods warehouse).
+    /// The warehouse kind is immutable: changing it would reinterpret every historical
+    /// ledger row and document without moving stock. Rename the warehouse or use an
+    /// authorized stock transfer instead.
     /// </summary>
     public void SetKind(WarehouseKind kind, string modifiedBy)
     {
         if (!Enum.IsDefined(typeof(WarehouseKind), kind) || kind == WarehouseKind.ProductionWip)
             throw new ArgumentException("Only RawMaterial, ReadyGoods, Materials, and OperatingSupplies are allowed warehouse kinds.", nameof(kind));
+        if (Kind != kind)
+            throw new InvalidOperationException("A warehouse's kind cannot be changed after creation.");
 
-        Kind = kind;
         ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }
