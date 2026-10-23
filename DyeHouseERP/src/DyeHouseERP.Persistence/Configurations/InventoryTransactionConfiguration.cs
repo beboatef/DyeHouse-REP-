@@ -16,6 +16,7 @@ public class InventoryTransactionConfiguration : IEntityTypeConfiguration<Invent
         builder.Property(t => t.QuantityKg).HasPrecision(18, 3);
         builder.Property(t => t.QuantityMeter).HasPrecision(18, 3);
         builder.Property(t => t.Direction).HasConversion<string>().HasMaxLength(10);
+        builder.Property(t => t.ReadyGoodsCategory).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.CreatedBy).HasMaxLength(100).IsRequired();
 
         // This table is append-only: rows are never updated after insert.
