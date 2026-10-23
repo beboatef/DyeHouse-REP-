@@ -178,7 +178,7 @@ export default function ReadyGoodsPage() {
             </div>
             <div><label className="field-label">الكمية (كجم)</label><Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} /></div>
             <div><label className="field-label">الكمية (متر)</label><Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} /></div>
-            <div><label className="field-label">عدد القطع (وصفي)</label><Input type="number" min="0" value={pieceCount} onChange={(e) => setPieceCount(e.target.value)} /></div>
+            <div><label className="field-label">عدد الأتواب (وصفي)</label><Input type="number" min="0" value={pieceCount} onChange={(e) => setPieceCount(e.target.value)} /></div>
             <Button type="submit" disabled={createMutation.isPending || !stageExecutionId}>{createMutation.isPending ? "جارٍ الحفظ..." : "ترحيل"}</Button>
           </form>
           {error && <p className="form-error mt-2">{error}</p>}
