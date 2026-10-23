@@ -443,7 +443,9 @@ export default function DeliveriesPage() {
                     <th>{t("prod.jobOrder", "أمر التشغيل")}</th>
                     <th>{t("statement.orderDate", "تاريخ الأمر الأصلي")}</th>
                     <th>{t("common.item", "الصنف")}</th>
+                    <th>التصنيف</th>
                     <th>{t("common.quantity", "الكمية")}</th>
+                    <th>{t("del.pieceCount", "عدد الأتواب")}</th>
                     <th>{t("statement.originalRaw", "الخام الأصلي المُسوَّى")}</th>
                     <th>{t("statement.remaining", "المتبقي من الخام الأصلي")}</th>
                   </tr>
@@ -457,7 +459,9 @@ export default function DeliveriesPage() {
                         {l.productionOrderDate ? new Date(l.productionOrderDate).toLocaleDateString("en-GB") : "—"}
                       </td>
                       <td>{l.itemCode}{l.color ? ` (${l.color})` : ""}</td>
+                      <td>{l.category === "FirstGrade" ? "درجة أولى" : l.category === "SecondGrade" ? "درجة ثانية" : l.category === "Separates" ? "منفصلات" : "غير مصنف"}</td>
                       <td className="ltr-nums">{l.quantityKg != null && `${l.quantityKg} كجم `}{l.quantityMeter != null && `${l.quantityMeter} م`}</td>
+                      <td className="ltr-nums">{l.pieceCount ?? "—"}</td>
                       <td className="ltr-nums">
                         {l.originalRawQuantityKg != null && `${l.originalRawQuantityKg} كجم `}
                         {l.originalRawQuantityMeter != null && `${l.originalRawQuantityMeter} م`}
