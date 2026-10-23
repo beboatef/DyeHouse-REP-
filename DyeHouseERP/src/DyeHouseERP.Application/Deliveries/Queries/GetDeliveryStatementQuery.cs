@@ -90,6 +90,18 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
             })
             .ToList();
 
+        // Distinguish a genuinely legacy order with no posted ready-goods transfer
+        // from an order whose posted transfers are only second-grade/separates. In
+        // the latter case the last-stage output is NOT a valid first-grade substitute:
+        // using it would subtract the same second-grade/separates quantities twice
+        // when calculating waste.
+        var ordersWithPostedTransfers = await _db.ReadyGoodsTransfers.AsNoTracking()
+            .Where(t => orderIds.Contains(t.ProductionOrderId) && t.Status == ReadyGoodsTransferStatus.Posted)
+            .Select(t => t.ProductionOrderId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var ordersWithPostedTransferSet = ordersWithPostedTransfers.ToHashSet();
+
         var lastStageOutput = await _db.ProductionOrderStageExecutions.AsNoTracking()
             .Where(s => orderIds.Contains(s.ProductionOrderId) && s.Status == StageExecutionStatus.Completed)
             .OrderByDescending(s => s.Sequence).ThenByDescending(s => s.CompletedAtUtc)
@@ -132,10 +144,15 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
             var originalKg = order?.RequestedQuantityKg;
             var originalMeter = order?.RequestedQuantityMeter;
 
-            var producedKg = transfers.FirstOrDefault(t => t.ProductionOrderId == line.ProductionOrderId)?.QuantityKg
-                             ?? lastStageOutput.FirstOrDefault(s => s.ProductionOrderId == line.ProductionOrderId)?.OutputKg;
-            var producedMeter = transfers.FirstOrDefault(t => t.ProductionOrderId == line.ProductionOrderId)?.QuantityMeter
-                                ?? lastStageOutput.FirstOrDefault(s => s.ProductionOrderId == line.ProductionOrderId)?.OutputMeter;
+            var firstGradeTransfer = transfers.FirstOrDefault(t => t.ProductionOrderId == line.ProductionOrderId);
+            var hasPostedTransfer = ordersWithPostedTransferSet.Contains(line.ProductionOrderId);
+            var lastOutput = lastStageOutput.FirstOrDefault(s => s.ProductionOrderId == line.ProductionOrderId);
+            var producedKg = firstGradeTransfer is not null
+                ? firstGradeTransfer.QuantityKg
+                : hasPostedTransfer ? null : lastOutput?.OutputKg;
+            var producedMeter = firstGradeTransfer is not null
+                ? firstGradeTransfer.QuantityMeter
+                : hasPostedTransfer ? null : lastOutput?.OutputMeter;
 
             var scrapsKg = Sum(stages.Select(s => s.SeparatesKg));
             var scrapsMeter = Sum(stages.Select(s => s.SeparatesMeter));
