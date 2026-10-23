@@ -427,14 +427,20 @@ export default function ProductionOrdersPage() {
           <table className="table table-dense">
             <thead><tr>
               <th>رقم الأمر / التاريخ</th><th>العميل</th><th>الصنف / اللون</th>
-              <th>النوع والأولوية</th><th>المرحلة الحالية</th><th>تقدم المراحل</th><th>الحالة</th><th>الإجراءات</th>
+              <th>الكمية المطلوبة</th><th>الناتج المسجل</th><th>النوع / الأولوية</th>
+              <th>المرحلة الحالية</th><th>تقدم المراحل</th><th>الحالة</th><th>الإجراءات</th>
             </tr></thead>
             <tbody>
-              {isLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
-              {!isLoading && visibleOrders.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">لا توجد أوامر تشغيل مطابقة للبحث</td></tr>}
+              {isLoading && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+              {!isLoading && visibleOrders.length === 0 && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">لا توجد أوامر تشغيل مطابقة للبحث</td></tr>}
               {visibleOrders.map((o) => {
                 const completedStages = o.stageExecutions.filter((stage) => stage.status === "Completed").length;
                 const currentStage = o.stageExecutions.find((stage) => stage.status !== "Completed");
+                const lastCompletedStage = [...o.stageExecutions]
+                  .filter((stage) => stage.status === "Completed")
+                  .sort((a, b) => b.sequence - a.sequence)[0];
+                const formatQty = (value: number | null | undefined, unit: string) =>
+                  value == null ? "—" : `${value.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${unit}`;
                 return (
                   <tr key={o.id}>
                     <td>
@@ -443,6 +449,8 @@ export default function ProductionOrdersPage() {
                     </td>
                     <td><div className="font-medium">{o.customerName}</div><div className="text-xs text-ink-subtle ltr-nums">{o.customerCode}</div></td>
                     <td><div className="font-medium">{o.itemName}</div><div className="text-xs text-ink-subtle">{o.itemCode}{o.color ? ` · ${o.color}` : ""}</div></td>
+                    <td><div className="ltr-nums">{formatQty(o.requestedQuantityKg, "كجم")}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(o.requestedQuantityMeter, "م")}</div></td>
+                    <td><div className="ltr-nums">{formatQty(lastCompletedStage?.outputKg, "كجم")}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(lastCompletedStage?.outputMeter, "م")}</div></td>
                     <td><div><Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge></div><div className="mt-1 text-xs text-ink-muted">{priorityLabel[o.priority]}</div></td>
                     <td>{currentStage?.stageName ?? (o.status === "Completed" ? "مكتمل" : "—")}</td>
                     <td className="ltr-nums">{completedStages} / {o.stageExecutions.length}</td>
