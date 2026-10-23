@@ -84,9 +84,23 @@ public class ReturnReadyGoodsToRawStockCommandHandler
         if (order.Status == ProductionOrderStatus.Cancelled)
             throw new DocumentLockedException("Production Order", order.OrderNumber);
 
+        // A ready-goods return is item-specific. Never let a caller use another item's
+        // balance on the same order as the source for a raw-stock receipt.
+        if (order.ItemId != request.ItemId)
+            throw new DomainException(
+                $"Item '{request.ItemId}' does not match the item on Job Order '{order.OrderNumber}'.");
+
         var message = await _db.RawMessages.AsNoTracking()
+            .Include(m => m.Lines)
             .FirstOrDefaultAsync(m => m.Id == request.RawMessageId, cancellationToken)
             ?? throw new NotFoundException("RawMessage", request.RawMessageId);
+
+        // The destination must be a lot that actually received this item. Checking only
+        // the lot's customer and warehouse would otherwise allow the ledger to credit an
+        // unrelated item into a raw lot that never contained it.
+        if (!message.Lines.Any(line => line.ItemId == request.ItemId))
+            throw new DomainException(
+                $"Lot '{message.MessageNumber}' does not contain the item being returned.");
 
         // Returned-to-raw stock is the customer's material again, so it must land on that customer's own
         // lot: crediting someone else's lot would move stock between accounts.
