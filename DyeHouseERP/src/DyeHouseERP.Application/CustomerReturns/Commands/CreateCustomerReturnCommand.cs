@@ -156,6 +156,12 @@ public class CreateCustomerReturnCommandHandler : IRequestHandler<CreateCustomer
             if (message.CustomerId != request.CustomerId)
                 throw new DomainException(
                     $"Lot '{message.MessageNumber}' belongs to another customer and cannot receive this return.");
+
+            // A return line must credit an item that was actually received on this lot.
+            // Customer + warehouse ownership alone is not enough to prove item traceability.
+            if (!message.Lines.Any(l => l.ItemId == input.ItemId))
+                throw new DomainException(
+                    $"Lot '{message.MessageNumber}' does not contain item '{input.ItemId}' and cannot receive it as a customer return.");
         }
 
         // Spec sections 5-6: a return line may only carry the units configured on its
