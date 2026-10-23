@@ -455,3 +455,6 @@ export default function ProductionOrdersPage() {
           </table>
         </div>
       </Card>
+    </>
+  );
+}
