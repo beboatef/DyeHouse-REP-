@@ -9,25 +9,9 @@ namespace DyeHouseERP.Persistence.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Before category tracking was introduced, existing ready-goods movements
-            // represented the ordinary finished output. Classify those legacy rows as
-            // FirstGrade so they remain visible in category-specific balances and delivery
-            // statements instead of appearing as "Unclassified".
-            migrationBuilder.Sql(@"
-UPDATE ReadyGoodsTransfers
-SET Category = N'FirstGrade'
-WHERE Category IS NULL;
-
-UPDATE DeliveryLines
-SET Category = N'FirstGrade'
-WHERE Category IS NULL;
-
-UPDATE InventoryTransactions
-SET ReadyGoodsCategory = N'FirstGrade'
-WHERE ReadyGoodsCategory IS NULL
-  AND RawMessageId IS NULL
-  AND ProductionOrderId IS NOT NULL;
-");
+            // Historical rows do not contain reliable quality information.
+            // Leave their category NULL rather than guessing that they were FirstGrade.
+            // New postings must supply a category through the normal command workflow.
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
