@@ -58,6 +58,8 @@ public class ReadyGoodsTransfer : AuditableEntity
     {
         if (quantityKg is null && quantityMeter is null)
             throw new ArgumentException("A ready goods transfer must specify a KG and/or Meter quantity.");
+        if (pieceCount is < 0)
+            throw new ArgumentOutOfRangeException(nameof(pieceCount), "Piece count cannot be negative.");
 
         TransferNumber = transferNumber;
         TransferDate = transferDate;
@@ -87,6 +89,9 @@ public class ReadyGoodsTransfer : AuditableEntity
         int? pieceCount,
         string? notes)
     {
+        if (pieceCount is < 0)
+            throw new ArgumentOutOfRangeException(nameof(pieceCount), "Piece count cannot be negative.");
+
         TransferDate = transferDate;
         PieceCount = pieceCount;
         Notes = notes;
