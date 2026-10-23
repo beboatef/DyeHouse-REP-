@@ -104,8 +104,10 @@ public class AddMaterialSaleLineCommandHandler : IRequestHandler<AddMaterialSale
         // A line on a DRAFT is not a movement yet, but posting the sale will draw it out of this
         // warehouse - so a retired warehouse cannot be extended with new lines either. (A sale
         // posted before the warehouse was retired never accepts another line.)
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+        var saleWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, sale.WarehouseId, cancellationToken, "to add a line to it");
+        if (saleWarehouse.Kind != WarehouseKind.Materials)
+            throw new DomainException("Material sales must use a Materials warehouse.");
 
         var material = await _db.Materials.AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
@@ -115,8 +117,6 @@ public class AddMaterialSaleLineCommandHandler : IRequestHandler<AddMaterialSale
         // supplies are internal consumables and are issued, never sold here.
         if (material.Kind != MaterialKind.Chemical)
             throw new DomainException("Operating supplies are internal consumables and cannot be sold through the materials sales document.");
-        var saleWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, sale.WarehouseId, cancellationToken, "to add a sale line to it");
         WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, saleWarehouse);
 
         var balance = await _ledger.GetBalanceAsync(material.Id, sale.WarehouseId, cancellationToken);
