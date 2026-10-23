@@ -72,10 +72,10 @@ export default function DeliveryStatementPrintPage() {
     });
 
     cells.push({
-      header: "التصنيف",
-      render: (r: DeliveryStatementRow) => r.category === "FirstGrade" ? "درجة أولى"
-        : r.category === "SecondGrade" ? "درجة ثانية"
-        : r.category === "Separates" ? "منفصلات" : "غير مصنف"
+      header: t("readyGoods.category", "التصنيف"),
+      render: (r: DeliveryStatementRow) => r.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى")
+        : r.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية")
+        : r.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")
     });
 
     // The colour is a COLUMN of its own (not a suffix hidden on the item cell), because the statement is
@@ -173,7 +173,7 @@ export default function DeliveryStatementPrintPage() {
               ["originalRaw", t("statement.originalRaw", "الخام الأصلي")],
               ["settled", t("statement.settled", "المُسوَّى في هذا التسليم")],
               ["remaining", t("statement.remaining", "المتبقي")],
-              ["bales", t("statement.bales", "عدد البالات")],
+              ["bales", t("statement.bales", "عدد الأتواب")],
               ["scraps", t("statement.scraps", "القصاصات")],
               ["secondGrade", t("statement.secondGrade", "الدرجة الثانية")],
               ["waste", t("statement.waste", "الهالك المحسوب")],
