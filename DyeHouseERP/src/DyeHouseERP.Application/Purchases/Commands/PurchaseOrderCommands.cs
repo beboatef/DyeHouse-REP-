@@ -62,7 +62,7 @@ public class CreatePurchaseOrderCommandHandler : IRequestHandler<CreatePurchaseO
     public async Task<PurchaseOrderDto> Handle(CreatePurchaseOrderCommand request, CancellationToken cancellationToken)
     {
         await PurchaseRules.EnsureSupplierExists(_db, request.SupplierId, cancellationToken);
-        await PurchaseRules.EnsureWarehouseExists(_db, request.WarehouseId, cancellationToken);
+        var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, request.WarehouseId, cancellationToken);
 
         var orderNumber = await _numberGenerator.NextAsync(DocumentType.PurchaseOrder, cancellationToken: cancellationToken);
 
@@ -71,7 +71,10 @@ public class CreatePurchaseOrderCommandHandler : IRequestHandler<CreatePurchaseO
 
         foreach (var line in request.Lines ?? new List<PurchaseOrderLineInput>())
         {
-            await PurchaseRules.EnsureMaterialExists(_db, line.MaterialId, cancellationToken);
+            var material = await _db.Materials.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == line.MaterialId, cancellationToken)
+                ?? throw new NotFoundException("Material", line.MaterialId);
+            WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, warehouse);
             order.AddLine(line.MaterialId, line.Quantity, line.Unit, line.UnitPrice, line.Notes, _currentUser.UserName);
         }
 
@@ -97,10 +100,18 @@ public class UpdatePurchaseOrderCommandHandler : IRequestHandler<UpdatePurchaseO
 
     public async Task<PurchaseOrderDto> Handle(UpdatePurchaseOrderCommand request, CancellationToken cancellationToken)
     {
-        var order = await _db.PurchaseOrders.FirstOrDefaultAsync(o => o.Id == request.Id, cancellationToken)
+        var order = await _db.PurchaseOrders.Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("PurchaseOrder", request.Id);
 
-        await PurchaseRules.EnsureWarehouseExists(_db, request.WarehouseId, cancellationToken);
+        var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, request.WarehouseId, cancellationToken);
+        foreach (var line in order.Lines)
+        {
+            var material = await _db.Materials.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == line.MaterialId, cancellationToken)
+                ?? throw new NotFoundException("Material", line.MaterialId);
+            WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, warehouse);
+        }
         order.UpdateHeader(request.OrderDate, request.WarehouseId, request.ExpectedDeliveryDate, request.Notes, _currentUser.UserName);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -126,7 +137,11 @@ public class AddPurchaseOrderLineCommandHandler : IRequestHandler<AddPurchaseOrd
         var order = await _db.PurchaseOrders.FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("PurchaseOrder", request.OrderId);
 
-        await PurchaseRules.EnsureMaterialExists(_db, request.MaterialId, cancellationToken);
+        var material = await _db.Materials.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == request.MaterialId, cancellationToken)
+            ?? throw new NotFoundException("Material", request.MaterialId);
+        var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, order.WarehouseId, cancellationToken);
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, warehouse);
         var line = order.AddLine(request.MaterialId, request.Quantity, request.Unit, request.UnitPrice, request.Notes, _currentUser.UserName);
 
         // A line added to an order that is ALREADY persisted keeps the key it was created with, so EF
@@ -155,9 +170,17 @@ public class UpdatePurchaseOrderLineCommandHandler : IRequestHandler<UpdatePurch
 
     public async Task<PurchaseOrderDto> Handle(UpdatePurchaseOrderLineCommand request, CancellationToken cancellationToken)
     {
-        var order = await _db.PurchaseOrders.FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+        var order = await _db.PurchaseOrders.Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("PurchaseOrder", request.OrderId);
 
+        var existingLine = order.Lines.FirstOrDefault(l => l.Id == request.LineId)
+            ?? throw new NotFoundException("PurchaseOrderLine", request.LineId);
+        var material = await _db.Materials.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == existingLine.MaterialId, cancellationToken)
+            ?? throw new NotFoundException("Material", existingLine.MaterialId);
+        var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, order.WarehouseId, cancellationToken);
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, warehouse);
         order.UpdateLine(request.LineId, request.Quantity, request.Unit, request.UnitPrice, request.Notes, _currentUser.UserName);
 
         await _db.SaveChangesAsync(cancellationToken);
