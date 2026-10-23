@@ -61,6 +61,18 @@ public static class WarehouseGuard
         => LoadAsync(db, warehouseId, cancellationToken, operation);
 
 
+    /// <summary>Loads an active warehouse for a new movement and enforces its business role.</summary>
+    public static async Task<Warehouse> EnsureWarehouseKindForNewMovementAsync(
+        IApplicationDbContext db, Guid warehouseId, WarehouseKind expectedKind,
+        CancellationToken cancellationToken = default, string operation = "to post a new stock movement")
+    {
+        var warehouse = await EnsureUsableForNewMovementAsync(db, warehouseId, cancellationToken, operation);
+        if (warehouse.Kind != expectedKind)
+            throw new DomainException(
+                $"Warehouse '{warehouse.Name}' ({warehouse.Code}) is '{warehouse.Kind}', but this operation requires '{expectedKind}'.");
+        return warehouse;
+    }
+
     /// <summary>Ensures factory-owned materials are kept only in their designated warehouse.</summary>
     public static void EnsureMaterialWarehouseCompatibility(MaterialKind materialKind, Warehouse warehouse)
     {
