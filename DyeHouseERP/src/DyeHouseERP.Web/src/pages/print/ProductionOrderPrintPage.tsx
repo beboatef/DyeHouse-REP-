@@ -21,9 +21,28 @@ export default function ProductionOrderPrintPage() {
       columns={[
         { header: "المرحلة", render: (s) => s.stageName },
         { header: "الحالة", render: (s) => s.status },
-        { header: "دخول", render: (s) => s.inputKg ?? "-", align: "end" },
-        { header: "خروج", render: (s) => s.outputKg ?? "-", align: "end" },
-        { header: "فاقد", render: (s) => s.lossKg ?? "-", align: "end" }
+        {
+          header: "الدخول (كجم / متر)",
+          render: (s) => [s.inputKg != null ? `${s.inputKg} كجم` : null, s.inputMeter != null ? `${s.inputMeter} متر` : null].filter(Boolean).join(" / ") || "—",
+          align: "end"
+        },
+        {
+          header: "الخروج (كجم / متر)",
+          render: (s) => [s.outputKg != null ? `${s.outputKg} كجم` : null, s.outputMeter != null ? `${s.outputMeter} متر` : null].filter(Boolean).join(" / ") || "—",
+          align: "end"
+        },
+        {
+          header: "الدرجة الثانية (كجم / متر)",
+          render: (s) => [s.secondGradeKg != null ? `${s.secondGradeKg} كجم` : null, s.secondGradeMeter != null ? `${s.secondGradeMeter} متر` : null].filter(Boolean).join(" / ") || "—",
+          align: "end"
+        },
+        { header: "عدد أتواب الدرجة الثانية", render: (s) => s.secondGradePieceCount ?? "—", align: "end" },
+        {
+          header: "المنفصلات (كجم / متر)",
+          render: (s) => [s.separatesKg != null ? `${s.separatesKg} كجم` : null, s.separatesMeter != null ? `${s.separatesMeter} متر` : null].filter(Boolean).join(" / ") || "—",
+          align: "end"
+        },
+        { header: "الهالك (كجم)", render: (s) => s.wasteKg ?? "—", align: "end" }
       ]}
       rows={order.stageExecutions}
       qrValue={`${window.location.origin}/scan/production-order/${order.id}`}
