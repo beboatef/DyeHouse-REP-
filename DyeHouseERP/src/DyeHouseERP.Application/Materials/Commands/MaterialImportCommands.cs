@@ -163,10 +163,13 @@ internal static class MaterialImportValidator
             if (string.IsNullOrWhiteSpace(name)) row.Errors.Add("Name is required.");
 
             if (string.IsNullOrWhiteSpace(unit)) row.Errors.Add("Unit is required (KG, Gram or Liter).");
-            else if (!Enum.TryParse<MaterialUnit>(unit, ignoreCase: true, out _))
+            else if (!Enum.TryParse<MaterialUnit>(unit, ignoreCase: true, out var parsedUnit)
+                || !Enum.IsDefined(typeof(MaterialUnit), parsedUnit))
                 row.Errors.Add($"Unit '{unit}' is not valid - it must be KG, Gram or Liter. Units are never converted into each other.");
 
-            if (!string.IsNullOrWhiteSpace(kind) && !Enum.TryParse<MaterialKind>(kind, ignoreCase: true, out _))
+            if (!string.IsNullOrWhiteSpace(kind)
+                && (!Enum.TryParse<MaterialKind>(kind, ignoreCase: true, out var parsedKind)
+                    || !Enum.IsDefined(typeof(MaterialKind), parsedKind)))
                 row.Errors.Add($"Kind '{kind}' is not valid - it must be Chemical or OperatingSupply.");
 
             if (!string.IsNullOrWhiteSpace(price) && (!decimal.TryParse(price, out var p) || p < 0))
@@ -190,6 +193,7 @@ internal static class MaterialImportValidator
                         row.Action = "Update";
                         if (!string.IsNullOrWhiteSpace(kind)
                             && Enum.TryParse<MaterialKind>(kind, ignoreCase: true, out var requestedKind)
+                            && Enum.IsDefined(typeof(MaterialKind), requestedKind)
                             && existingKinds.TryGetValue(code, out var currentKind)
                             && requestedKind != currentKind)
                             row.Errors.Add($"Material kind cannot be changed from '{currentKind}' to '{requestedKind}' because its stock history is classified by kind.");
