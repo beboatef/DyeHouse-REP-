@@ -141,7 +141,7 @@ export default function DeliveriesPage() {
     const bySource = new Map<string, string[]>();
     for (const line of primaryPermit?.lines ?? []) {
       if (!line.color) continue;
-      const key = `${line.productionOrderId}|${line.itemId}`;
+      const key = `${line.productionOrderId}|${line.itemId}|${line.category ?? "Unclassified"}`;
       const colors = bySource.get(key) ?? [];
       if (!colors.includes(line.color)) colors.push(line.color);
       bySource.set(key, colors);
@@ -158,7 +158,7 @@ export default function DeliveriesPage() {
     if (!primaryPermit) return usage;
 
     for (const line of primaryPermit.lines) {
-      const key = `${line.productionOrderId}|${line.itemId}`;
+      const key = `${line.productionOrderId}|${line.itemId}|${line.category ?? "Unclassified"}`;
       const row = usage.get(key) ?? { allowedKg: 0, allowedMeter: 0, claimedKg: 0, claimedMeter: 0, hasKg: false, hasMeter: false };
       row.allowedKg += line.quantityKg ?? 0;
       row.allowedMeter += line.quantityMeter ?? 0;
@@ -170,7 +170,7 @@ export default function DeliveriesPage() {
     for (const delivery of deliveries ?? []) {
       if (delivery.primaryDeliveryId !== primaryPermit.id || delivery.status === "Cancelled") continue;
       for (const line of delivery.lines) {
-        const row = usage.get(`${line.productionOrderId}|${line.itemId}`);
+        const row = usage.get(`${line.productionOrderId}|${line.itemId}|${line.category ?? "Unclassified"}`);
         if (!row) continue;
         row.claimedKg += line.quantityKg ?? 0;
         row.claimedMeter += line.quantityMeter ?? 0;
@@ -193,7 +193,7 @@ export default function DeliveriesPage() {
     }
     updateLine(idx, {
       sourceKey: key, productionOrderId: source.productionOrderId, itemId: source.itemId,
-      color: primaryPermit ? (primaryColorsFor.get(`${"${source.productionOrderId}"}|${"${source.itemId}"}`)?.[0] ?? "") : source.color,
+      color: primaryPermit ? (primaryColorsFor.get(source.key)?.[0] ?? "") : source.color,
       category: source.category
     });
   };
