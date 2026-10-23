@@ -58,6 +58,7 @@ const navGroups: NavGroup[] = [
       { to: "/warehouse?tab=ready", labelKey: "nav.readyGoods", icon: <PackageCheck size={16} /> },
       { to: "/warehouse?tab=materials", labelKey: "nav.materials", icon: <FlaskConical size={16} /> },
       { to: "/warehouse?tab=supplies", labelKey: "nav.operatingSupplies", icon: <LifeBuoy size={16} /> },
+      { to: "/supplies", labelKey: "nav.supplies", icon: <LifeBuoy size={16} /> },
       // المنفصلات sits with the warehouses: a separate is MATERIAL HELD ON SITE, tracked by the
       // warehouse register (it is reprocessed into a new job or scrapped), not a production stage -
       // and the register is where the floor looks for the material it set aside.
@@ -92,6 +93,7 @@ const navGroups: NavGroup[] = [
       { to: "/invoices", labelKey: "nav.invoices", icon: <Receipt size={16} /> },
       { to: "/treasury", labelKey: "nav.treasury", icon: <Wallet size={16} /> },
       { to: "/checks", labelKey: "nav.checks", icon: <BadgeDollarSign size={16} /> },
+      { to: "/material-sales", labelKey: "nav.materialSales", icon: <BadgeDollarSign size={16} /> },
       // The two commercial lists: what each stage costs US, and what the customer
       // is charged (spec sections 34 + 36).
       { to: "/price-lists", labelKey: "nav.priceLists", icon: <Tags size={16} /> }
