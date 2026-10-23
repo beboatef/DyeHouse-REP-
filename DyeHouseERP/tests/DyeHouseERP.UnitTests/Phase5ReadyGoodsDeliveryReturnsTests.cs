@@ -182,6 +182,29 @@ public class Phase5ReadyGoodsCategoryBalanceTests : Phase5TestBase
         separates.RemainingKg.Should().Be(8m);
         separates.RemainingMeter.Should().Be(0m);
     }
+
+    [Fact]
+    public async Task TheBalanceRegister_DoesNotHideAnUnexpectedNegativeLedgerBalance()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        db.InventoryTransactions.Add(new InventoryTransaction(
+            DocumentType.Delivery, "DLV-LEGACY-NEGATIVE", Guid.NewGuid(),
+            new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+            scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+            rawMessageId: null, productionOrderId: scene.Order.Id,
+            quantityKg: 12m, quantityMeter: null,
+            direction: TransactionDirection.Out, createdBy: "seed",
+            readyGoodsCategory: ReadyGoodsCategory.SecondGrade));
+        await db.SaveChangesAsync();
+
+        var rows = await new GetReadyGoodsBalanceQueryHandler(db)
+            .Handle(new GetReadyGoodsBalanceQuery(), CancellationToken.None);
+
+        var negative = rows.Should().ContainSingle(r => r.Category == nameof(ReadyGoodsCategory.SecondGrade)).Subject;
+        negative.RemainingKg.Should().Be(-12m,
+            "an unexpected ledger inconsistency must remain visible for investigation, not disappear from the register");
+    }
 }
 
 // ============================================================================================
