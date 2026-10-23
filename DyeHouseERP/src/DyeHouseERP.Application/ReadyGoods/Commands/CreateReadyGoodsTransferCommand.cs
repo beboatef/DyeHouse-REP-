@@ -105,7 +105,9 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
         {
 
         var alreadyTransferred = await _db.ReadyGoodsTransfers.AnyAsync(
-            t => t.ProductionOrderId == order.Id && t.Category == request.Category, cancellationToken);
+            t => t.ProductionOrderId == order.Id
+              && t.Category == request.Category
+              && t.Status != ReadyGoodsTransferStatus.Cancelled, cancellationToken);
         if (alreadyTransferred)
             throw new DomainException($"Production order '{order.OrderNumber}' has already been transferred to ready goods under this category.");
 
