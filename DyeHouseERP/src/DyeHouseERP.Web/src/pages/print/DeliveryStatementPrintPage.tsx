@@ -41,8 +41,9 @@ export default function DeliveryStatementPrintPage() {
     settled: true,
     remaining: true,
     bales: true,
-    scraps: false,
-    secondGrade: false,
+    // The main statement must show the separate production streams by default.
+    scraps: true,
+    secondGrade: true,
     waste: true,
     drawing: true,
     dates: true,
