@@ -28,6 +28,7 @@ public class ReadyGoodsTransfer : AuditableEntity
     public Guid WarehouseId { get; private set; }
     public decimal? QuantityKg { get; private set; }
     public decimal? QuantityMeter { get; private set; }
+    public ReadyGoodsCategory? Category { get; private set; }
 
     /// <summary>
     /// The stage execution whose output this transfer moved (spec section 23). A lot in
@@ -54,7 +55,7 @@ public class ReadyGoodsTransfer : AuditableEntity
     public ReadyGoodsTransfer(
         string transferNumber, DateTime transferDate, Guid productionOrderId, Guid customerId, Guid itemId,
         Guid warehouseId, decimal? quantityKg, decimal? quantityMeter, string createdBy,
-        int? pieceCount = null, string? notes = null, Guid? stageExecutionId = null)
+        int? pieceCount = null, string? notes = null, Guid? stageExecutionId = null, ReadyGoodsCategory? category = null)
     {
         if (quantityKg is null && quantityMeter is null)
             throw new ArgumentException("A ready goods transfer must specify a KG and/or Meter quantity.");
@@ -70,6 +71,7 @@ public class ReadyGoodsTransfer : AuditableEntity
         QuantityKg = quantityKg;
         QuantityMeter = quantityMeter;
         StageExecutionId = stageExecutionId;
+        Category = category;
         PieceCount = pieceCount;
         Notes = notes;
         CreatedBy = createdBy;
@@ -120,6 +122,14 @@ public class ReadyGoodsTransfer : AuditableEntity
 /// writes the transfer and its ledger IN row together), so unlike Invoice
 /// there is no Draft state - it starts Posted and can only be Cancelled.
 /// </summary>
+/// <summary>Quality classification of customer-owned finished fabric. Null is reserved for historical rows not classified at posting./// </summary>
+public enum ReadyGoodsCategory
+{
+    FirstGrade = 1,
+    SecondGrade = 2,
+    Separates = 3
+}
+
 public enum ReadyGoodsTransferStatus
 {
     Posted = 1,
