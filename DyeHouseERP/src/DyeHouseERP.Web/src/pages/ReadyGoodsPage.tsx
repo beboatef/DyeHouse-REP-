@@ -177,7 +177,7 @@ export default function ReadyGoodsPage() {
             <th className="text-end">إجراء</th>
           </tr></thead>
           <tbody>
-            {balanceLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {balanceLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {!balanceLoading && balance?.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
             {balance?.map((b) => (
               <tr key={`${b.productionOrderId}-${b.itemId}-${b.category ?? "Unclassified"}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
