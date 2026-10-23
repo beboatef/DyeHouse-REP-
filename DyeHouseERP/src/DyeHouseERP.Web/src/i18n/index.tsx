@@ -1137,6 +1137,7 @@ const ar: Record<string, string> = {
   "wh.kind.RawMaterial": "مخزن خام",
   "wh.kind.Materials": "مخزن مواد/كيماويات",
   "wh.kind.ReadyGoods": "مخزن جاهز",
+  "wh.kind.OperatingSupplies": "مخزن مستلزمات التشغيل",
 
   // ---------------- production stage administration screen (labels and feature flags) ----------------
   "stg.new": "+ مرحلة جديدة",
@@ -2256,6 +2257,7 @@ const en: Record<string, string> = {
   "wh.kind.RawMaterial": "Raw material warehouse",
   "wh.kind.Materials": "Materials / chemicals warehouse",
   "wh.kind.ReadyGoods": "Ready-goods warehouse",
+  "wh.kind.OperatingSupplies": "Operating supplies warehouse",
 
   // ---------------- production stage administration screen (labels and feature flags) ----------------
   "stg.new": "+ New stage",
