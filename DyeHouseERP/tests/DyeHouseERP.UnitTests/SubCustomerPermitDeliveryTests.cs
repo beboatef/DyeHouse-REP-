@@ -64,6 +64,16 @@ public class SubCustomerPermitDeliveryTests
         negative.Should().Throw<DomainException>()
             .WithMessage("A delivery piece count cannot be negative.");
 
+        Action negativeKg = () => delivery.AddLine(
+            Guid.NewGuid(), Guid.NewGuid(), null, -1m, null, null, null, null);
+        negativeKg.Should().Throw<DomainException>()
+            .WithMessage("A delivery quantity cannot be negative.");
+
+        Action negativeMeter = () => delivery.AddLine(
+            Guid.NewGuid(), Guid.NewGuid(), null, 10m, -1m, null, null, null);
+        negativeMeter.Should().Throw<DomainException>()
+            .WithMessage("A delivery quantity cannot be negative.");
+
         Action zero = () => delivery.AddLine(
             Guid.NewGuid(), Guid.NewGuid(), null, 10m, null, 0, null, null);
         zero.Should().NotThrow("zero is valid when piece count is not tracked");
