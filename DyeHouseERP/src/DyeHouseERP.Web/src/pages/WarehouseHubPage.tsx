@@ -18,21 +18,21 @@ import SeparatesPage from "@/pages/SeparatesPage";
  * The single Warehouse module (spec section 14): every screen that reads or moves stock lives here as a
  * TAB, and each tab reuses the existing, already-working screen rather than duplicating it.
  *
- * The four balance tabs are the point of this module: raw material, ready goods, materials/chemicals and
- * the separations register. Each one shows a balance PER LOT - a receipt message, a job order or a
- * material in a warehouse - together with the LEDGER ROWS that balance is made of, so "what is in stock?"
- * and "why?" are answered on the same screen. Nothing is stored or cached: every figure is summed from
- * the append-only ledger when the screen asks, which is what makes it current by construction.
+ * Each stock class has its own balance tab: customer raw fabric, ready goods, factory chemicals/materials,
+ * and factory-owned operating supplies. Separates remain their own reprocessing register, not a fifth
+ * warehouse. Every balance comes from its matching append-only ledger; KG/Meter fabric quantities are
+ * never combined or converted.
  */
 
 type TabKey =
-  | "balances" | "ready" | "materials" | "separates"
+  | "balances" | "ready" | "materials" | "supplies" | "separates"
   | "receipts" | "issues" | "transfers" | "adjustments" | "movements" | "master";
 
 const tabs: { key: TabKey; labelKey: string }[] = [
   { key: "balances", labelKey: "wh.tab.balances" },
   { key: "ready", labelKey: "wh.tab.readyBalances" },
   { key: "materials", labelKey: "wh.tab.materialBalances" },
+  { key: "supplies", labelKey: "nav.operatingSupplies" },
   { key: "separates", labelKey: "nav.separates" },
   { key: "receipts", labelKey: "wh.tab.receipts" },
   { key: "issues", labelKey: "wh.tab.issues" },
@@ -85,6 +85,7 @@ export default function WarehouseHubPage() {
       )}
       {tab === "ready" && <StockTraceability scope="ready" />}
       {tab === "materials" && <StockTraceability scope="materials" />}
+      {tab === "supplies" && <StockTraceability scope="supplies" />}
       {tab === "separates" && <SeparatesPage />}
       {tab === "receipts" && <RawMessagesPage />}
       {tab === "issues" && <RawExternalReleasesPage />}
