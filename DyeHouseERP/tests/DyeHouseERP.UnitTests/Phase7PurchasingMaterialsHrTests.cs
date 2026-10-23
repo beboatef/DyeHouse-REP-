@@ -76,7 +76,10 @@ public abstract class Phase7TestBase
     protected static (Warehouse Warehouse, Material Material) SeedFactoryStock(
         ApplicationDbContext db, MaterialKind kind, decimal openingQuantity, decimal purchasePrice)
     {
-        var warehouse = new Warehouse($"WH-{kind}", "Factory Store", WarehouseKind.Materials, "seed");
+        var warehouseKind = kind == MaterialKind.OperatingSupply
+            ? WarehouseKind.OperatingSupplies
+            : WarehouseKind.Materials;
+        var warehouse = new Warehouse($"WH-{kind}", "Factory Store", warehouseKind, "seed");
         var material = new Material($"MAT-{kind}", kind == MaterialKind.Chemical ? "Dye" : "Gloves",
             MaterialUnit.KG, purchasePrice, "seed", kind);
         db.Warehouses.Add(warehouse);
