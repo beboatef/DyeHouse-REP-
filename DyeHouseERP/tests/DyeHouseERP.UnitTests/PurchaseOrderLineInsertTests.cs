@@ -36,7 +36,7 @@ public class PurchaseOrderLineInsertTests
         ApplicationDbContext db, int linesAtCreation)
     {
         var supplier = new Supplier("SUP-1", "Supplier", "tester");
-        var warehouse = new Warehouse("RAW", "Raw", WarehouseKind.RawMaterial, "tester");
+        var warehouse = new Warehouse("MAT", "Materials", WarehouseKind.Materials, "tester");
         var materials = Enumerable.Range(1, 3)
             .Select(i => new Material($"MAT-{i}", $"Chemical {i}", MaterialUnit.KG, 10m, "tester")).ToList();
 
