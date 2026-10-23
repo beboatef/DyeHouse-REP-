@@ -338,6 +338,41 @@ public class ProductionOrderStageExecution : BaseEntity
                 $"Cumulative transfers can never exceed a stage's output: this stage produced {OutputMeter} Meter, {alreadyTransferredMeter} Meter has already been transferred and {transferMeter} Meter more was requested.");
     }
 
+    /// <summary>
+    /// Validates a transfer against the quantity recorded for its own ready-goods category.
+    /// First grade uses Output; second grade and separates use their separately recorded figures.
+    /// Each category has an independent cumulative limit, and KG/Meter are never converted.
+    /// </summary>
+    public void EnsureCategoryTransfersWithinOutput(
+        ReadyGoodsCategory category,
+        decimal alreadyTransferredKg, decimal alreadyTransferredMeter,
+        decimal? transferKg, decimal? transferMeter)
+    {
+        if (Status != StageExecutionStatus.Completed)
+            throw new DomainException("This stage has not been closed, so it has no output to transfer to ready goods.");
+
+        var (categoryKg, categoryMeter, label) = category switch
+        {
+            ReadyGoodsCategory.FirstGrade => (OutputKg, OutputMeter, "first-grade output"),
+            ReadyGoodsCategory.SecondGrade => (SecondGradeKg, SecondGradeMeter, "second-grade output"),
+            ReadyGoodsCategory.Separates => (SeparatesKg, SeparatesMeter, "separates output"),
+            _ => throw new DomainException("Unknown ready-goods category.")
+        };
+
+        if (categoryKg is null && categoryMeter is null)
+            throw new DomainException($"This stage recorded no {label} to transfer.");
+
+        if (transferKg is > 0 && categoryKg is null)
+            throw new DomainException($"This stage recorded no KG for {label}, so KG cannot be transferred against it.");
+        if (transferMeter is > 0 && categoryMeter is null)
+            throw new DomainException($"This stage recorded no Meter for {label}, so Meter cannot be transferred against it.");
+
+        if (transferKg is > 0 && alreadyTransferredKg + transferKg.Value > categoryKg!.Value + 0.001m)
+            throw new DomainException($"Cumulative transfers can never exceed the {label}: recorded {categoryKg} KG, already transferred {alreadyTransferredKg} KG, requested {transferKg} KG.");
+        if (transferMeter is > 0 && alreadyTransferredMeter + transferMeter.Value > categoryMeter!.Value + 0.001m)
+            throw new DomainException($"Cumulative transfers can never exceed the {label}: recorded {categoryMeter} Meter, already transferred {alreadyTransferredMeter} Meter, requested {transferMeter} Meter.");
+    }
+
     // Phase 4: Start(...), Complete(...) and Skip(...) were DELETED together with their endpoints.
     // An operation can only be closed through CloseWithOutput above, which the transfer transaction
     // calls at the same moment it activates the operation the user chose next. There is therefore no
