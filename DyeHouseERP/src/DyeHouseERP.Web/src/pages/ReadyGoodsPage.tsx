@@ -5,8 +5,10 @@ import { PageHeader, Card, Button, Input, Select, SearchInput } from "@/componen
 import { ExportButtons } from "@/components/ExportButtons";
 import { ReadyGoodsExports } from "@/api/exports";
 import StockTraceability from "@/components/StockTraceability";
+import { useI18n } from "@/i18n";
 
 export default function ReadyGoodsPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [productionOrderId, setProductionOrderId] = useState("");
@@ -198,7 +200,7 @@ export default function ReadyGoodsPage() {
               <tr key={`${b.productionOrderId}-${b.itemId}-${b.category ?? "Unclassified"}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{b.customerCode}</td>
                 <td>{b.itemCode}</td><td>{b.color ?? "-"}</td>
-                <td>{b.category === "FirstGrade" ? "درجة أولى" : b.category === "SecondGrade" ? "درجة ثانية" : b.category === "Separates" ? "منفصلات" : "غير مصنف"}</td>
+                <td>{b.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : b.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : b.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")"}</td>
                 <td className="text-end ltr-nums font-semibold">{b.remainingKg > 0 ? b.remainingKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td><td className="text-end ltr-nums font-semibold">{b.remainingMeter > 0 ? b.remainingMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
                 <td className="text-end">
                   <Button
@@ -227,7 +229,7 @@ export default function ReadyGoodsPage() {
           return (
             <div className="border-t border-line bg-surface-sunken p-4">
               <div className="text-sm font-semibold">
-                إرجاع مخزون جاهز إلى الخام — <span className="ltr-nums">{row.productionOrderNumber}</span> — {row.category === "FirstGrade" ? "درجة أولى" : row.category === "SecondGrade" ? "درجة ثانية" : row.category === "Separates" ? "منفصلات" : "غير مصنف"}
+                إرجاع مخزون جاهز إلى الخام — <span className="ltr-nums">{row.productionOrderNumber}</span> — {row.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : row.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : row.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")"}
               </div>
               <p className="kpi-footnote mb-3">
                 حركة منفصلة مصرح بها: لا يحدث هذا تلقائيًا أبدًا، ويُسجَّل السبب في المستند وفي سجل التدقيق.
@@ -315,7 +317,7 @@ export default function ReadyGoodsPage() {
                 <td>{t.stageSequence != null ? `#${t.stageSequence} ${t.stageName ?? ""}` : "—"}</td>
                 <td>{t.customerCode}</td>
                 <td>{t.warehouseName}</td>
-                <td>{t.category === "FirstGrade" ? "درجة أولى" : t.category === "SecondGrade" ? "درجة ثانية" : t.category === "Separates" ? "منفصلات" : "غير مصنف"}</td>
+                <td>{t.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : t.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : t.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")"}</td>
                 <td className="ltr-nums">{t.quantityKg != null && `${t.quantityKg} كجم `}{t.quantityMeter != null && `${t.quantityMeter} م`}</td>
                 {/* Available is read live from the ledger - what is left after deliveries and any
                     movements back to raw stock, never a stored figure. */}
