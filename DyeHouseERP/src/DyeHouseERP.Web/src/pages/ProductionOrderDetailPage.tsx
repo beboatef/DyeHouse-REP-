@@ -866,7 +866,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
               <Field label={t("stage.secondGradeMeter")}>
                 <Input type="number" min={0} step="0.01" value={secondGradeMeter} onChange={(e) => setSecondGradeMeter(e.target.value)} />
               </Field>
-              <Field label={t("stage.secondGradePieceCount", "عدد قطع الدرجة الثانية")}>
+              <Field label={t("stage.secondGradePieceCount", "عدد أتواب الدرجة الثانية")}>
                 <Input type="number" min={0} step="1" value={secondGradePieceCount} onChange={(e) => setSecondGradePieceCount(e.target.value)} />
               </Field>
             </div>
