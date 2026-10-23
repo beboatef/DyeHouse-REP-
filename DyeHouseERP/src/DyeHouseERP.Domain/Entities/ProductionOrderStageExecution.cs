@@ -243,7 +243,7 @@ public class ProductionOrderStageExecution : BaseEntity
     /// The operation's WASTE (الهالك) - the figure the LAST operation before the Ready Goods warehouse is
     /// required to produce, derived exactly as the floor states it:
     ///
-    ///     waste = original raw (KG) - ready weight (KG) - separates (KG)
+    ///     waste = original raw (KG) - first-grade ready (KG) - second-grade (KG) - separates (KG)
     ///
     /// It is a WEIGHT, so it is computed in KILOGRAMS ONLY. The metre figure of the same operation is
     /// deliberately NOT turned into a "metre waste": a metre is a length, not a weight, and there is no
@@ -254,8 +254,8 @@ public class ProductionOrderStageExecution : BaseEntity
     /// Null (never a fabricated zero) while the KG input or output was not recorded, and null when the
     /// subtraction would go negative - produced material that outweighs its raw plus what was kept aside
     /// means the figures overlap or the raw figure is understated, which is a data problem and not a waste
-    /// figure. Second grade is NOT subtracted, because it is a quantity of its own and is reported in its
-    /// own column.
+    /// figure. Second grade is subtracted from the raw total because it is another output category, not waste;
+    /// it remains independently reported and is never merged into first-grade ready stock.
     /// </summary>
     public decimal? WasteKg
     {
@@ -263,26 +263,25 @@ public class ProductionOrderStageExecution : BaseEntity
         {
             if (InputKg is null || OutputKg is null) return null;
 
-            var waste = InputKg.Value - OutputKg.Value - (SeparatesKg ?? 0m);
+            var waste = InputKg.Value - OutputKg.Value - (SecondGradeKg ?? 0m) - (SeparatesKg ?? 0m);
             return waste < 0m ? null : waste;
         }
     }
 
     /// <summary>
     /// Guards the FINAL capture on the last operation before the Ready Goods warehouse: the waste may not be
-    /// negative, which is the caller's check that "أصل الخام" (KG) is not smaller than the ready weight plus
-    /// what was kept aside. The check is in KILOGRAMS, because the waste is a weight (see
+    /// negative, which is the caller's check that "أصل الخام" (KG) is not smaller than first-grade ready, second grade, and separates combined. The check is in KILOGRAMS, because the waste is a weight (see
     /// <see cref="WasteKg"/>): the metre figures the same operation may also record are a length, they form
     /// no part of the waste equation, and they therefore impose nothing here.
     ///
     /// Called by the transfer that moves the output into Ready Goods, where the original raw and ready
     /// weight are required in the first place.
     /// </summary>
-    public void EnsureWasteIsPossible(decimal? rawKg, decimal? producedKg, decimal? separatesKg)
+    public void EnsureWasteIsPossible(decimal? rawKg, decimal? producedKg, decimal? separatesKg, decimal? secondGradeKg = null)
     {
-        if (rawKg is > 0 && producedKg is > 0 && rawKg.Value - producedKg.Value - (separatesKg ?? 0m) < 0m)
+        if (rawKg is > 0 && producedKg is > 0 && rawKg.Value - producedKg.Value - (separatesKg ?? 0m) - (secondGradeKg ?? 0m) < 0m)
             throw new DomainException(
-                $"The original raw weight ({rawKg} KG) cannot be smaller than the ready weight ({producedKg} KG) plus the separates ({separatesKg ?? 0m} KG). " +
+                $"The original raw weight ({rawKg} KG) cannot be smaller than first-grade ready ({producedKg} KG), second grade ({secondGradeKg ?? 0m} KG), and separates ({separatesKg ?? 0m} KG) combined. " +
                 "وزن أصل الخام لا يمكن أن يقل عن وزن الجاهز مضافًا إليه المنفصلات.");
     }
 
