@@ -112,11 +112,11 @@ public class ReadyGoodsStageTraceabilityTests
         var validator = new CreateReadyGoodsTransferCommandValidator();
 
         validator.Validate(new CreateReadyGoodsTransferCommand(
-                Guid.NewGuid(), Guid.NewGuid(), 100m, null, null, null, StageExecutionId: null))
+                Guid.NewGuid(), Guid.NewGuid(), 100m, null, null, null, StageExecutionId: null, Category: ReadyGoodsCategory.FirstGrade))
             .IsValid.Should().BeFalse("an untraceable transfer must never reach the database");
 
         validator.Validate(new CreateReadyGoodsTransferCommand(
-                Guid.NewGuid(), Guid.NewGuid(), 100m, null, null, null, StageExecutionId: Guid.NewGuid()))
+                Guid.NewGuid(), Guid.NewGuid(), 100m, null, null, null, StageExecutionId: Guid.NewGuid(), Category: ReadyGoodsCategory.FirstGrade))
             .IsValid.Should().BeTrue();
     }
 
@@ -126,11 +126,11 @@ public class ReadyGoodsStageTraceabilityTests
         var validator = new CreateReadyGoodsTransferCommandValidator();
 
         validator.Validate(new CreateReadyGoodsTransferCommand(
-                Guid.NewGuid(), Guid.NewGuid(), 100m, null, -1, null, StageExecutionId: Guid.NewGuid()))
+                Guid.NewGuid(), Guid.NewGuid(), 100m, null, -1, null, StageExecutionId: Guid.NewGuid(), Category: ReadyGoodsCategory.FirstGrade))
             .IsValid.Should().BeFalse("piece counts cannot be negative");
 
         validator.Validate(new CreateReadyGoodsTransferCommand(
-                Guid.NewGuid(), Guid.NewGuid(), 100m, null, 0, null, StageExecutionId: Guid.NewGuid()))
+                Guid.NewGuid(), Guid.NewGuid(), 100m, null, 0, null, StageExecutionId: Guid.NewGuid(), Category: ReadyGoodsCategory.FirstGrade))
             .IsValid.Should().BeTrue("zero is valid when the quantity is tracked without piece count");
     }
 
