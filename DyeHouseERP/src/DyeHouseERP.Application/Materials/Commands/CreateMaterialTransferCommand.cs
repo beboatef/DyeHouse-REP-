@@ -58,6 +58,8 @@ public class CreateMaterialTransferCommandHandler : IRequestHandler<CreateMateri
             _db, request.FromWarehouseId, cancellationToken, "to move stock out of it");
         var toWh = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, request.ToWarehouseId, cancellationToken, "to move stock into it");
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, fromWh);
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, toWh);
 
         // H6: lock both warehouses in one deterministic acquisition so a
         // simultaneous transfer of the same material the other way round cannot
