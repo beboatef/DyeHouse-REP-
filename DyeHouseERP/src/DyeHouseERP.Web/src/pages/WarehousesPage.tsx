@@ -10,7 +10,6 @@ import { useI18n } from "@/i18n";
 /** `value` is the technical WarehouseKind sent to the API - only the label is translated. */
 const kinds = [
   { value: "RawMaterial", labelKey: "wh.kind.RawMaterial" },
-  { value: "ProductionWip", labelKey: "wh.kind.ProductionWip" },
   { value: "ReadyGoods", labelKey: "wh.kind.ReadyGoods" },
   { value: "Materials", labelKey: "wh.kind.Materials" },
   { value: "OperatingSupplies", labelKey: "wh.kind.OperatingSupplies" }
