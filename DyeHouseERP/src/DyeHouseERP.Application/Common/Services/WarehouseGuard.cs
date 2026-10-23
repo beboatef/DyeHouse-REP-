@@ -1,6 +1,7 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Domain.Entities;
+using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
@@ -58,6 +59,26 @@ public static class WarehouseGuard
         IApplicationDbContext db, Guid warehouseId, CancellationToken cancellationToken = default,
         string operation = "to post a new stock movement")
         => LoadAsync(db, warehouseId, cancellationToken, operation);
+
+
+    /// <summary>Ensures factory-owned materials are kept only in their designated warehouse.</summary>
+    public static void EnsureMaterialWarehouseCompatibility(MaterialKind materialKind, Warehouse warehouse)
+    {
+        var expectedKind = materialKind == MaterialKind.OperatingSupply
+            ? WarehouseKind.OperatingSupplies
+            : WarehouseKind.Materials;
+
+        if (warehouse.Kind != expectedKind)
+            throw new DomainException(
+                $"Material kind '{materialKind}' cannot be moved through warehouse '{warehouse.Name}' ({warehouse.Code}) of kind '{warehouse.Kind}'. Expected warehouse kind '{expectedKind}'.");
+    }
+
+    /// <summary>The WIP warehouse is not a user-manageable fifth warehouse in this ERP.</summary>
+    public static void EnsureAllowedWarehouseKind(WarehouseKind kind)
+    {
+        if (!Enum.IsDefined(typeof(WarehouseKind), kind) || kind == WarehouseKind.ProductionWip)
+            throw new DomainException("Only RawMaterial, ReadyGoods, Materials, and OperatingSupplies warehouses can be created or selected.");
+    }
 
     private static async Task<Warehouse> LoadAsync(
         IApplicationDbContext db, Guid warehouseId, CancellationToken cancellationToken, string operation)
