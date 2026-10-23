@@ -137,7 +137,7 @@ public class DeliveriesController : ControllerBase
         {
             "Job order", "Date", "Item", "Color", "Original raw KG", "Original raw M",
             "Settled KG", "Settled M", "Remaining KG", "Remaining M", "Ready KG", "Ready M",
-            "Bales", "Scraps KG", "Scraps M", "2nd grade KG", "2nd grade M", "Waste KG",
+            "Bales", "Scraps KG", "Scraps M", "2nd grade KG", "2nd grade M", "2nd grade pieces", "Waste KG",
             "Drawing no.", "Notes"
         };
 
@@ -148,7 +148,7 @@ public class DeliveriesController : ControllerBase
             r.DeliveredOriginalRawQuantityKg, r.DeliveredOriginalRawQuantityMeter,
             r.RemainingOriginalRawKg, r.RemainingOriginalRawMeter,
             r.ReadyGoodsQuantityKg, r.ReadyGoodsQuantityMeter, r.BaleCount,
-            r.ScrapsKg, r.ScrapsMeter, r.SecondGradeKg, r.SecondGradeMeter,
+            r.ScrapsKg, r.ScrapsMeter, r.SecondGradeKg, r.SecondGradeMeter, r.SecondGradePieceCount,
             // The waste is a weight: KG only, by the units rule for waste (see the units table).
             r.CalculatedWasteKg,
             string.Join(", ", r.DrawingNumbers), r.LineNotes
