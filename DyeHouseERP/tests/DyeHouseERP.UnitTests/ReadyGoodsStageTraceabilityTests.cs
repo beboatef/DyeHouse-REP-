@@ -57,7 +57,9 @@ public class ReadyGoodsStageTraceabilityTests
     /// <paramref name="outputKg"/> / <paramref name="outputMeter"/> - the shape
     /// a floor transfer leaves behind just before the ready-goods posting.
     /// </summary>
-    private Fixture Seed(decimal outputKg = 500m, decimal? outputMeter = 120m, bool closeStage = true)
+    private Fixture Seed(decimal outputKg = 500m, decimal? outputMeter = 120m, bool closeStage = true,
+        decimal? separatesKg = null, decimal? separatesMeter = null,
+        decimal? secondGradeKg = null, decimal? secondGradeMeter = null)
     {
         using var db = NewDb();
 
@@ -89,7 +91,8 @@ public class ReadyGoodsStageTraceabilityTests
 
         var stage = order.StageExecutions.Single();
         if (closeStage)
-            stage.CloseWithOutput(outputKg, outputMeter, null, null, null, "operator");
+            stage.CloseWithOutput(outputKg, outputMeter, separatesKg, separatesMeter, null, "operator",
+                secondGradeKg: secondGradeKg, secondGradeMeter: secondGradeMeter);
 
         db.SaveChanges();
 
@@ -192,6 +195,33 @@ public class ReadyGoodsStageTraceabilityTests
         // says nothing about the KG allowance.
         Action kgStillOpen = () => f.Stage.EnsureTransfersWithinOutput(0m, 120m, 400m, null);
         kgStillOpen.Should().NotThrow("the stage produced 500 KG, of which none has been transferred");
+    }
+
+    [Fact]
+    public void CategoryTransfers_AreCappedAgainstTheirOwnRecordedQuantities()
+    {
+        var f = Seed(outputKg: 500m, outputMeter: 120m,
+            separatesKg: 30m, separatesMeter: 12m,
+            secondGradeKg: 40m, secondGradeMeter: 10m);
+
+        Action secondGradeWithinLimit = () => f.Stage.EnsureCategoryTransfersWithinOutput(
+            ReadyGoodsCategory.SecondGrade, 20m, 5m, 20m, 5m);
+        secondGradeWithinLimit.Should().NotThrow();
+
+        Action secondGradeOverLimit = () => f.Stage.EnsureCategoryTransfersWithinOutput(
+            ReadyGoodsCategory.SecondGrade, 20m, 5m, 21m, null);
+        secondGradeOverLimit.Should().Throw<DomainException>()
+            .WithMessage("*second-grade output*");
+
+        Action separatesOverLimit = () => f.Stage.EnsureCategoryTransfersWithinOutput(
+            ReadyGoodsCategory.Separates, 20m, 0m, 11m, null);
+        separatesOverLimit.Should().Throw<DomainException>()
+            .WithMessage("*separates output*");
+
+        // A category is checked against its own stream, not against the combined total.
+        Action firstGradeWithinLimit = () => f.Stage.EnsureCategoryTransfersWithinOutput(
+            ReadyGoodsCategory.FirstGrade, 0m, 0m, 500m, 120m);
+        firstGradeWithinLimit.Should().NotThrow();
     }
 
     [Fact]
