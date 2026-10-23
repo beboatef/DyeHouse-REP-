@@ -134,6 +134,48 @@ public class WarehouseDeactivationTests
     }
 
     [Fact]
+    public async Task CreatingAPurchaseOrderWithOperatingSuppliesInMaterialsWarehouse_IsRefused()
+    {
+        using var db = NewDb();
+        var warehouse = new Warehouse("MAT-01", "Materials Store", WarehouseKind.Materials, "tester");
+        var supplier = new Supplier("SUP-1", "Supplier One", "tester");
+        var supply = new Material("SUP-1A", "Packaging", MaterialUnit.KG, 4m, "tester", MaterialKind.OperatingSupply);
+        db.AddRange(warehouse, supplier, supply);
+        await db.SaveChangesAsync();
+
+        var act = () => new CreatePurchaseOrderCommandHandler(db, User(), new FixedNumberGenerator(), Mock.Of<ISender>())
+            .Handle(new CreatePurchaseOrderCommand(DateTime.UtcNow, supplier.Id, warehouse.Id,
+                Lines: new List<PurchaseOrderLineInput>
+                {
+                    new() { MaterialId = supply.Id, Quantity = 5m, Unit = MaterialUnit.KG, UnitPrice = 4m }
+                }), CancellationToken.None);
+
+        await act.Should().ThrowAsync<DomainException>();
+        (await db.PurchaseOrders.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ReceivingCustomerFabricIntoMaterialsWarehouse_IsRefused()
+    {
+        using var db = NewDb();
+        var warehouse = new Warehouse("MAT-01", "Materials Store", WarehouseKind.Materials, "tester");
+        var customer = new Customer("C-1", "Customer", "tester");
+        var item = new Item("IT-1", "Fabric", UnitOfMeasure.KG, "tester");
+        db.AddRange(warehouse, customer, item);
+        await db.SaveChangesAsync();
+
+        var act = () => new CreateRawMessageCommandHandler(
+                db, User(), new FixedNumberGenerator(), new FixedClock(), new OpenPeriod(), new RecordingStockLock(),
+                new InventoryLedgerService(db))
+            .Handle(new CreateRawMessageCommand(DateTime.UtcNow, customer.Id, warehouse.Id, null,
+                new List<RawMessageLineInput> { new() { ItemId = item.Id, QuantityKg = 10m } }), CancellationToken.None);
+
+        await act.Should().ThrowAsync<DomainException>();
+        (await db.RawMessages.CountAsync()).Should().Be(0);
+        (await db.InventoryTransactions.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task TransferringMaterialIsRefusedWhenEitherEndIsDeactivated()
     {
         using var db = NewDb();
