@@ -46,7 +46,8 @@ public record TransferToNextStageCommand(
     decimal? SecondGradeKg = null, decimal? SecondGradeMeter = null,
     // Where the operation ran. Validated for SUITABILITY (the machine must be mapped to this stage)
     // and AVAILABILITY (machine and shift must be active) before anything is written.
-    Guid? MachineId = null, Guid? ProductionShiftId = null) : IRequest<ProductionOrderDto>;
+    Guid? MachineId = null, Guid? ProductionShiftId = null,
+    int? SecondGradePieceCount = null) : IRequest<ProductionOrderDto>;
 
 public class TransferToNextStageCommandValidator : AbstractValidator<TransferToNextStageCommand>
 {
@@ -68,6 +69,7 @@ public class TransferToNextStageCommandValidator : AbstractValidator<TransferToN
         RuleFor(x => x.SeparatesMeter).GreaterThanOrEqualTo(0).When(x => x.SeparatesMeter.HasValue);
         RuleFor(x => x.SecondGradeKg).GreaterThanOrEqualTo(0).When(x => x.SecondGradeKg.HasValue);
         RuleFor(x => x.SecondGradeMeter).GreaterThanOrEqualTo(0).When(x => x.SecondGradeMeter.HasValue);
+        RuleFor(x => x.SecondGradePieceCount).GreaterThanOrEqualTo(0).When(x => x.SecondGradePieceCount.HasValue);
     }
 }
 
@@ -287,7 +289,8 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 request.SeparatesKg, request.SeparatesMeter, request.Notes, _currentUser.UserName,
                 inputKg: request.InputKg, inputMeter: request.InputMeter,
                 secondGradeKg: request.SecondGradeKg, secondGradeMeter: request.SecondGradeMeter,
-                machineId: request.MachineId, productionShiftId: request.ProductionShiftId);
+                machineId: request.MachineId, productionShiftId: request.ProductionShiftId,
+                secondGradePieceCount: request.SecondGradePieceCount);
         }
 
         // Spec sections 22-23: the separates quantity a closing operation records ENTERS the separates
