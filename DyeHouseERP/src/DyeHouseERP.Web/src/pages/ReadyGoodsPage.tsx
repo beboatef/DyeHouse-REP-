@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProductionOrdersApi, RawMessagesApi, ReadyGoodsApi, WarehousesApi } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, SearchInput } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ReadyGoodsExports } from "@/api/exports";
 import StockTraceability from "@/components/StockTraceability";
@@ -30,6 +30,14 @@ export default function ReadyGoodsPage() {
   const { data: balance, isLoading: balanceLoading } = useQuery({ queryKey: ["ready-goods-balance"], queryFn: () => ReadyGoodsApi.balance() });
   const { data: transfers, isLoading: transfersLoading } = useQuery({ queryKey: ["ready-goods-transfers"], queryFn: () => ReadyGoodsApi.listTransfers() });
   const { data: rawReturns } = useQuery({ queryKey: ["ready-goods-raw-returns"], queryFn: () => ReadyGoodsApi.rawReturns() });
+
+  const [balanceSearch, setBalanceSearch] = useState("");
+  const visibleBalance = useMemo(() => {
+    const term = balanceSearch.trim().toLocaleLowerCase();
+    return (balance ?? []).filter((row) => !term || [
+      row.productionOrderNumber, row.customerCode, row.itemCode, row.color, row.category
+    ].filter(Boolean).join(" ").toLocaleLowerCase().includes(term));
+  }, [balance, balanceSearch]);
   // Only lots that hold a balance can receive ready stock back as raw material.
   const { data: rawLots } = useQuery({
     queryKey: ["raw-messages", "with-balance"],
@@ -169,22 +177,29 @@ export default function ReadyGoodsPage() {
       </div>
 
       <h2 className="card-title mb-3">الرصيد الجاهز الحالي</h2>
-      <Card className="mb-8">
-        <table className="table">
+      <Card className="card-pad mb-3">
+        <label className="field-label">بحث في أرصدة الجاهز</label>
+        <SearchInput value={balanceSearch} onChange={(e) => setBalanceSearch(e.target.value)}
+          placeholder="رقم أمر التشغيل أو العميل أو الصنف أو التصنيف" />
+      </Card>
+      <Card className="mb-8 overflow-hidden">
+        <div className="table-wrap">
+        <table className="table table-dense">
           <thead><tr>
             <th>أمر التشغيل</th><th>العميل</th>
-            <th>الصنف</th><th>اللون</th><th>التصنيف</th><th>الرصيد المتاح</th>
+            <th>الصنف</th><th>اللون</th><th>التصنيف</th>
+            <th className="text-end">الرصيد (كجم)</th><th className="text-end">الرصيد (متر)</th>
             <th className="text-end">إجراء</th>
           </tr></thead>
           <tbody>
-            {balanceLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
-            {!balanceLoading && balance?.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز حاليًا</td></tr>}
-            {balance?.map((b) => (
+            {balanceLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {!balanceLoading && visibleBalance.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">لا يوجد رصيد جاهز مطابق للبحث</td></tr>}
+            {visibleBalance.map((b) => (
               <tr key={`${b.productionOrderId}-${b.itemId}-${b.category ?? "Unclassified"}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{b.customerCode}</td>
                 <td>{b.itemCode}</td><td>{b.color ?? "-"}</td>
                 <td>{b.category === "FirstGrade" ? "درجة أولى" : b.category === "SecondGrade" ? "درجة ثانية" : b.category === "Separates" ? "منفصلات" : "غير مصنف"}</td>
-                <td className="ltr-nums font-medium">{b.remainingKg > 0 && `${b.remainingKg} كجم `}{b.remainingMeter > 0 && `${b.remainingMeter} م`}</td>
+                <td className="text-end ltr-nums font-semibold">{b.remainingKg > 0 ? b.remainingKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td><td className="text-end ltr-nums font-semibold">{b.remainingMeter > 0 ? b.remainingMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
                 <td className="text-end">
                   <Button
                     variant="ghost"
@@ -202,6 +217,7 @@ export default function ReadyGoodsPage() {
             ))}
           </tbody>
         </table>
+        </div>
 
         {/* Ready goods -> raw: an authorized movement of its own, with a mandatory reason. It is
             refused by the API when the quantity exceeds what is actually available on the lot. */}
