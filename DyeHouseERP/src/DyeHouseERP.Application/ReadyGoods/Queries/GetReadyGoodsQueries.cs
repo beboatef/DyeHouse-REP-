@@ -146,6 +146,7 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
                     .Sum(r => (r.QuantityMeter ?? 0) * (int)r.Direction),
                 Color = orders.GetValueOrDefault(t.ProductionOrderId)?.Color,
                 QuantityKg = t.QuantityKg, QuantityMeter = t.QuantityMeter, PieceCount = t.PieceCount,
+                Category = t.Category?.ToString(),
                 StageExecutionId = t.StageExecutionId,
                 StageSequence = stage?.Sequence,
                 StageName = stage is null ? null : stageNames.GetValueOrDefault(stage.StageDefinitionId),
@@ -177,10 +178,10 @@ public class GetReadyGoodsBalanceQueryHandler : IRequestHandler<GetReadyGoodsBal
         if (request.CustomerId.HasValue) query = query.Where(t => t.CustomerId == request.CustomerId);
 
         var grouped = await query
-            .GroupBy(t => new { ProductionOrderId = t.ProductionOrderId!.Value, t.ItemId, t.CustomerId })
+            .GroupBy(t => new { ProductionOrderId = t.ProductionOrderId!.Value, t.ItemId, t.CustomerId, t.ReadyGoodsCategory })
             .Select(g => new
             {
-                g.Key.ProductionOrderId, g.Key.ItemId, g.Key.CustomerId,
+                g.Key.ProductionOrderId, g.Key.ItemId, g.Key.CustomerId, Category = g.Key.ReadyGoodsCategory,
                 Kg = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityKg ?? 0) : -(t.QuantityKg ?? 0)),
                 Meter = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityMeter ?? 0) : -(t.QuantityMeter ?? 0))
             })
@@ -199,7 +200,7 @@ public class GetReadyGoodsBalanceQueryHandler : IRequestHandler<GetReadyGoodsBal
             CustomerId = g.CustomerId, CustomerCode = customers.GetValueOrDefault(g.CustomerId)?.Code ?? "", CustomerName = customers.GetValueOrDefault(g.CustomerId)?.Name ?? "",
             ItemId = g.ItemId, ItemCode = items.GetValueOrDefault(g.ItemId)?.Code ?? "", ItemName = items.GetValueOrDefault(g.ItemId)?.Name ?? "",
             Color = orders.GetValueOrDefault(g.ProductionOrderId)?.Color,
-            RemainingKg = g.Kg, RemainingMeter = g.Meter
+            RemainingKg = g.Kg, RemainingMeter = g.Meter, Category = g.Category?.ToString()
         }).ToList();
     }
 }
