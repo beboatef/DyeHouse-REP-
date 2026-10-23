@@ -194,8 +194,8 @@ function MovementsTab() {
                   <div className="ltr-nums font-medium">{m.sourceDocumentNumber}</div>
                   <div className="text-2xs text-ink-subtle">{m.sourceDocumentType}</div>
                 </td>
-                <td className="ltr-nums">{m.customerCode}</td>
-                <td className="ltr-nums">{m.itemCode}</td>
+                <td><div className="ltr-nums font-medium">{m.customerCode}</div><div className="text-2xs text-ink-subtle">{m.customerName}</div></td>
+                <td><div className="ltr-nums font-medium">{m.itemCode}</div><div className="text-2xs text-ink-subtle">{m.itemName}</div></td>
                 <td className={`px-4 py-3 ltr-nums font-medium ${(m.signedQuantityKg ?? 0) < 0 ? "text-danger-ink" : "text-success-ink"}`}>
                   {m.signedQuantityKg ?? "—"}
                 </td>
