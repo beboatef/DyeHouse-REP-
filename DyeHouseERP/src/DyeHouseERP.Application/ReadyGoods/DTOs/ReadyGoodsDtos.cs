@@ -61,5 +61,4 @@ public class ReadyGoodsBalanceDto
     public decimal RemainingKg { get; set; }
     public decimal RemainingMeter { get; set; }
     public string? Category { get; set; }
-    public string? Category { get; set; }
 }
