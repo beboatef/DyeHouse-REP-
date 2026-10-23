@@ -239,6 +239,32 @@ public class Phase5ReadyGoodsRawReturnTests : Phase5TestBase
     }
 
     [Fact]
+    public async Task TheMovement_RefusesARequestedItemThatIsNotOnTheDestinationLot()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+
+        var otherItem = new Item("IT-2", "Different fabric", UnitOfMeasure.KG, "seed");
+        var otherOrder = new ProductionOrder(
+            "PRD-2026-0002", scene.Customer.Id, otherItem.Id,
+            new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc), "seed",
+            color: "Red", requestedQuantityKg: 100m);
+        db.Items.Add(otherItem);
+        db.ProductionOrders.Add(otherOrder);
+        await db.SaveChangesAsync();
+
+        var act = () => Handler(db).Handle(new ReturnReadyGoodsToRawStockCommand(
+            otherOrder.Id, otherItem.Id, scene.Lot.Id, 10m, null, "item not on lot"), CancellationToken.None);
+
+        (await act.Should().ThrowAsync<DomainException>())
+            .WithMessage("*does not contain the item being returned*");
+
+        (await db.ReadyGoodsRawReturns.CountAsync()).Should().Be(0);
+        (await db.InventoryTransactions.CountAsync(t =>
+            t.SourceDocumentType == DocumentType.ReadyGoodsRawReturn)).Should().Be(0);
+    }
+
+    [Fact]
     public async Task TheMovement_RefusesALotThatIsNotInRawMaterialStock()
     {
         var scene = Seed();
