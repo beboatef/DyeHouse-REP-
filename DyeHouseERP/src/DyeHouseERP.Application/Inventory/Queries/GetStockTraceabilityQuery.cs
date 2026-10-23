@@ -528,8 +528,11 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         GetStockTraceabilityQuery request, CancellationToken cancellationToken, bool operatingSupplies)
     {
         var query = _db.MaterialTransactions.AsNoTracking().AsQueryable();
-        query = query.Where(t => _db.Materials.Any(m => m.Id == t.MaterialId &&
-            (operatingSupplies ? m.Kind == MaterialKind.OperatingSupply : m.Kind == MaterialKind.Chemical)));
+        // Scope by the warehouse that physically owns the stock, not by material classification.
+        // This keeps legacy/misclassified movements visible for reconciliation instead of silently
+        // hiding them in a different tab. New movements are protected by WarehouseGuard.
+        query = query.Where(t => _db.Warehouses.Any(w => w.Id == t.WarehouseId &&
+            (operatingSupplies ? w.Kind == WarehouseKind.OperatingSupplies : w.Kind == WarehouseKind.Materials)));
         if (request.MaterialId.HasValue) query = query.Where(t => t.MaterialId == request.MaterialId.Value);
         if (request.WarehouseId.HasValue) query = query.Where(t => t.WarehouseId == request.WarehouseId.Value);
         if (request.ProductionOrderId.HasValue) query = query.Where(t => t.ProductionOrderId == request.ProductionOrderId.Value);
@@ -660,7 +663,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
 
             rowList.Add(new StockTraceRowDto
             {
-                Scope = StockScopes.Materials,
+                Scope = operatingSupplies ? StockScopes.Supplies : StockScopes.Materials,
                 LotKey = LotKeyOfMaterial(any),
                 ItemId = Guid.Empty, // materials are not fabric items - the material identity below is theirs
                 MaterialId = any.MaterialId,
@@ -694,7 +697,7 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
 
         return new StockTraceabilityDto
         {
-            Scope = StockScopes.Materials,
+            Scope = operatingSupplies ? StockScopes.Supplies : StockScopes.Materials,
             Rows = rowList,
             Movements = visibleMovements,
             TotalRemainingQuantity = rowList.Any(r => r.RemainingQuantity.HasValue) ? rowList.Sum(r => r.RemainingQuantity ?? 0m) : null,
