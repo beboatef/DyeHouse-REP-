@@ -85,7 +85,7 @@ public class GetDeliveriesQueryHandler : IRequestHandler<GetDeliveriesQuery, Lis
                 ItemName = items.GetValueOrDefault(l.ItemId)?.Name ?? "", Color = l.Color,
                 DrawingNumbers = drawings.Where(s => s.ProductionOrderId == l.ProductionOrderId)
                     .Select(s => s.DrawingNumber!).Distinct().ToList(),
-                QuantityKg = l.QuantityKg, QuantityMeter = l.QuantityMeter, PieceCount = l.PieceCount, RawOrigin = l.RawOrigin,
+                QuantityKg = l.QuantityKg, QuantityMeter = l.QuantityMeter, PieceCount = l.PieceCount, Category = l.Category, RawOrigin = l.RawOrigin,
                 OriginalRawQuantityKg = l.OriginalRawQuantityKg,
                 OriginalRawQuantityMeter = l.OriginalRawQuantityMeter,
                 OriginalOrderRawQuantityKg = orders.GetValueOrDefault(l.ProductionOrderId)?.RequestedQuantityKg,
