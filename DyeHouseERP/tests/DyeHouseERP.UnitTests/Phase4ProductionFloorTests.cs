@@ -257,6 +257,20 @@ public class Phase4FloorCaptureTests
     }
 
     [Fact]
+    public void CancellingItsReprocessingOrder_ReleasesTheSeparateForAnotherAttempt()
+    {
+        var orderId = Guid.NewGuid();
+        var separate = new Separate(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            quantityKg: 15m, quantityMeter: null, createdBy: "operator");
+        separate.StartReprocessing(orderId);
+
+        separate.CancelReprocessing(orderId, "supervisor");
+
+        separate.Status.Should().Be(SeparateStatus.PendingReprocessing);
+        separate.ReprocessingProductionOrderId.Should().BeNull();
+    }
+
+    [Fact]
     public async Task ASeparateAlreadyAssignedToReprocessing_CannotAlsoBeScrapped()
     {
         using var db = NewDb();
