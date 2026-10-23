@@ -288,7 +288,7 @@ public class ReadyGoodsStageTraceabilityTests
             CancellationToken.None);
 
         (await act.Should().ThrowAsync<DomainException>())
-            .WithMessage("*Cumulative transfers can never exceed a stage's output*");
+            .WithMessage("*Cumulative transfers can never exceed the first-grade output*");
 
         (await db.ReadyGoodsTransfers.CountAsync()).Should().Be(0);
         (await db.InventoryTransactions.CountAsync(t =>
