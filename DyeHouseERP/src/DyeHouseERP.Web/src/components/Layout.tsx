@@ -45,7 +45,6 @@ const navGroups: NavGroup[] = [
       { to: "/customers", labelKey: "nav.customers", icon: <Users size={16} /> },
       { to: "/suppliers", labelKey: "nav.suppliers", icon: <Handshake size={16} /> },
       { to: "/items", labelKey: "nav.items", icon: <Package size={16} /> },
-      { to: "/warehouses", labelKey: "nav.warehouses", icon: <Warehouse size={16} /> },
       { to: "/purchase-units", labelKey: "nav.purchaseUnits", icon: <Ruler size={16} /> },
       { to: "/production-stages", labelKey: "nav.productionStages", icon: <Layers3 size={16} /> }
     ]
@@ -55,12 +54,13 @@ const navGroups: NavGroup[] = [
     icon: <Warehouse size={18} />,
     items: [
       { to: "/warehouse", labelKey: "nav.warehouseHub", icon: <Warehouse size={16} /> },
-      // المنفصلات sits with the warehouses: a separate is MATERIAL HELD ON SITE, tracked by the
-      // warehouse register (it is reprocessed into a new job or scrapped), not a production stage -
-      // and the register is where the floor looks for the material it set aside.
+      { to: "/warehouse?tab=balances", labelKey: "wh.tab.balances", icon: <Package size={16} /> },
+      { to: "/ready-goods", labelKey: "nav.readyGoods", icon: <PackageCheck size={16} /> },
+      { to: "/materials", labelKey: "nav.materials", icon: <FlaskConical size={16} /> },
+      { to: "/supplies", labelKey: "nav.operatingSupplies", icon: <LifeBuoy size={16} /> },
+      { to: "/material-sales", labelKey: "nav.materialSales", icon: <BadgeDollarSign size={16} /> },
+      { to: "/warehouses", labelKey: "nav.warehouses", icon: <Warehouse size={16} /> },
       { to: "/separates", labelKey: "nav.separates", icon: <GitBranch size={16} /> },
-      // Customer returns are a raw-material receipt (spec section 32), so they sit
-      // with the warehouse module rather than with deliveries.
       { to: "/customer-returns", labelKey: "nav.customerReturns", icon: <PackageOpen size={16} /> }
     ]
   },
@@ -78,16 +78,6 @@ const navGroups: NavGroup[] = [
     items: [
       { to: "/production-orders", labelKey: "nav.jobOrders", icon: <ClipboardList size={16} /> },
       { to: "/ready-goods", labelKey: "nav.readyGoods", icon: <PackageCheck size={16} /> }
-    ]
-  },
-  {
-    titleKey: "nav.group.materials",
-    icon: <FlaskConical size={18} />,
-    items: [
-      { to: "/materials", labelKey: "nav.materials", icon: <FlaskConical size={16} /> },
-      { to: "/supplies", labelKey: "nav.supplies", icon: <LifeBuoy size={16} /> },
-      { to: "/material-sales", labelKey: "nav.materialSales", icon: <BadgeDollarSign size={16} /> },
-      { to: "/warehouse?tab=materials", labelKey: "nav.operatingSupplies", icon: <Warehouse size={16} /> }
     ]
   },
   {
