@@ -182,6 +182,7 @@ foreach (var allocation in allocations)
             CustomerId = order.CustomerId, CustomerCode = customer?.Code ?? "", CustomerName = customer?.Name ?? "",
             ItemId = order.ItemId, ItemCode = item?.Code ?? "", ItemName = item?.Name ?? "", Color = order.Color,
             QuantityKg = transfer.QuantityKg, QuantityMeter = transfer.QuantityMeter, PieceCount = transfer.PieceCount,
+            Category = transfer.Category?.ToString(),
             WarehouseId = request.WarehouseId, WarehouseName = warehouse.Name,
             // The lot was created by this very movement inside this transaction, so nothing else has
             // consumed any of it yet: the receipt reports the transferred quantity as available. The
