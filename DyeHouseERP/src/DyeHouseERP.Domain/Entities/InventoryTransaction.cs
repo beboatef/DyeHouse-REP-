@@ -35,6 +35,7 @@ public class InventoryTransaction : BaseEntity
     public decimal? QuantityKg { get; private set; }
     public decimal? QuantityMeter { get; private set; }
     public TransactionDirection Direction { get; private set; }
+    public ReadyGoodsCategory? ReadyGoodsCategory { get; private set; }
 
     public string CreatedBy { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
@@ -58,7 +59,7 @@ public class InventoryTransaction : BaseEntity
         DateTime transactionDate, Guid warehouseId, Guid customerId, Guid itemId,
         Guid? rawMessageId, Guid? productionOrderId,
         decimal? quantityKg, decimal? quantityMeter, TransactionDirection direction,
-        string createdBy, Guid? reversesTransactionId = null)
+        string createdBy, Guid? reversesTransactionId = null, ReadyGoodsCategory? readyGoodsCategory = null)
     {
         SourceDocumentType = sourceDocumentType;
         SourceDocumentNumber = sourceDocumentNumber;
@@ -75,5 +76,6 @@ public class InventoryTransaction : BaseEntity
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
         ReversesTransactionId = reversesTransactionId;
+        ReadyGoodsCategory = readyGoodsCategory;
     }
 }
