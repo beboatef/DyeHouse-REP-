@@ -14,7 +14,7 @@ namespace DyeHouseERP.Application.Warehouses.Commands;
 /// rights: changing a warehouse's Kind would silently reinterpret every
 /// historical balance it holds (a material store becoming a ready-goods store).
 /// Warehouses are therefore create-only through import; an existing one must be
-/// corrected through a reviewed stock-transfer workflow; the kind itself is immutable.
+/// reconciled separately and stock moved through authorized documents; the kind itself is immutable.
 /// </summary>
 public record PreviewWarehouseImportCommand(byte[] FileBytes) : IRequest<ImportPreviewDto>;
 
