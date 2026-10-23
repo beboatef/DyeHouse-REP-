@@ -270,6 +270,36 @@ public class StageCheckboxTransferAndFinalWeightsTests
     // ============================================================ 3. units: the second one stays optional
 
     [Fact]
+    public async Task TheFinalCapture_SubtractsSecondGradeFromWasteAndRejectsOverlappingOutput()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        var current = await CurrentStageAsync(db, scene.OrderId);
+
+        await Transferrer(db).Handle(
+            new TransferToNextStageCommand(
+                current.Id, scene.ReadyStageId, 900m, null, 20m, null, "second grade included",
+                InputKg: 1000m, SecondGradeKg: 50m),
+            CancellationToken.None);
+
+        var closed = await db.ProductionOrderStageExecutions.FirstAsync(s => s.Id == current.Id);
+        closed.WasteKg.Should().Be(30m, "1000 - 900 first grade - 50 second grade - 20 separates");
+
+        var invalidScene = Seed(orderNumber: "PRD-2026-OVERLAP");
+        using var invalidDb = NewDb();
+        var invalidCurrent = await CurrentStageAsync(invalidDb, invalidScene.OrderId);
+        var act = () => Transferrer(invalidDb).Handle(
+            new TransferToNextStageCommand(
+                invalidCurrent.Id, invalidScene.ReadyStageId, 900m, null, 20m, null, "overlap",
+                InputKg: 1000m, SecondGradeKg: 100m),
+            CancellationToken.None);
+
+        (await act.Should().ThrowAsync<DomainException>()).WithMessage("*cannot be smaller*");
+        (await invalidDb.ReadyGoodsTransfers.CountAsync()).Should().Be(0);
+        (await ReadyGoodsMovementCountAsync(invalidDb)).Should().Be(0);
+    }
+
+    [Fact]
     public async Task AnItemWithASecondaryUnit_StillAcceptsASingleUnit_AndNeverConvertsIt()
     {
         var scene = Seed();
