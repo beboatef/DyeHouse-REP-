@@ -68,10 +68,19 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
         // rollup resolves its output denominator: the ready-goods transfer when there is one, otherwise
         // the last COMPLETED operation's output. The two screens can therefore never quote different
         // denominators for one order.
-        var transfers = await _db.ReadyGoodsTransfers.AsNoTracking()
+        var transferRows = await _db.ReadyGoodsTransfers.AsNoTracking()
             .Where(t => orderIds.Contains(t.ProductionOrderId))
             .Select(t => new { t.ProductionOrderId, t.QuantityKg, t.QuantityMeter })
             .ToListAsync(cancellationToken);
+        var transfers = transferRows
+            .GroupBy(t => t.ProductionOrderId)
+            .Select(g => new
+            {
+                ProductionOrderId = g.Key,
+                QuantityKg = g.Any(t => t.QuantityKg.HasValue) ? g.Sum(t => t.QuantityKg) : (decimal?)null,
+                QuantityMeter = g.Any(t => t.QuantityMeter.HasValue) ? g.Sum(t => t.QuantityMeter) : (decimal?)null
+            })
+            .ToList();
 
         var lastStageOutput = await _db.ProductionOrderStageExecutions.AsNoTracking()
             .Where(s => orderIds.Contains(s.ProductionOrderId) && s.Status == StageExecutionStatus.Completed)
