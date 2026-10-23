@@ -135,6 +135,24 @@ public class ReadyGoodsStageTraceabilityTests
     }
 
     [Fact]
+    public void UpdateCommand_RejectsNegativePieceCountAndEmptyId()
+    {
+        var validator = new UpdateReadyGoodsTransferCommandValidator();
+
+        validator.Validate(new UpdateReadyGoodsTransferCommand(
+                Guid.NewGuid(), DateTime.UtcNow, -1, null))
+            .IsValid.Should().BeFalse("piece counts cannot be negative");
+
+        validator.Validate(new UpdateReadyGoodsTransferCommand(
+                Guid.Empty, DateTime.UtcNow, 0, null))
+            .IsValid.Should().BeFalse("an edit must identify the transfer");
+
+        validator.Validate(new UpdateReadyGoodsTransferCommand(
+                Guid.NewGuid(), DateTime.UtcNow, 0, null))
+            .IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public void ReadyGoodsTransfer_DomainRejectsNegativePieceCountOnCreateAndUpdate()
     {
         var f = Seed();
