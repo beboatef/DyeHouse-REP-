@@ -257,6 +257,32 @@ public class Phase4FloorCaptureTests
     }
 
     [Fact]
+    public async Task ASeparateAlreadyAssignedToReprocessing_CannotAlsoBeScrapped()
+    {
+        using var db = NewDb();
+        var scene = SeedOrderOnFirstStage(db, UnitOfMeasure.KG);
+        await Transfer(db).Handle(
+            CloseFirstOperation(scene, inputKg: 1010m, outputKg: 950m, separatesKg: 15m),
+            CancellationToken.None);
+        var separate = await db.Separates.AsNoTracking().SingleAsync();
+
+        await Reprocessor(db).Handle(
+            new ReprocessSeparateCommand(separate.Id, DateTime.UtcNow, "إعادة تشغيل"),
+            CancellationToken.None);
+
+        Func<Task> scrap = () => Scrapper(db).Handle(
+            new ScrapSeparateCommand(separate.Id, "إلغاء المنفصل وتحويله لهالك"),
+            CancellationToken.None);
+
+        (await scrap.Should().ThrowAsync<DomainException>())
+            .WithMessage("*cannot be scrapped*");
+
+        var unchanged = await db.Separates.AsNoTracking().SingleAsync(s => s.Id == separate.Id);
+        unchanged.Status.Should().Be(SeparateStatus.Reprocessing);
+        unchanged.ReprocessingProductionOrderId.Should().NotBeNull();
+    }
+
+    [Fact]
     public void ScrappingASeparate_IsItsOwnConfigurableRight_NotAnImpliedEditRight()
     {
         // Phase 4 decided the open question from Phase 1 §G.1: the permission the spec's checklist
