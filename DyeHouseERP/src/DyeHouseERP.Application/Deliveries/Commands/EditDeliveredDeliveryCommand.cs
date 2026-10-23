@@ -162,13 +162,14 @@ public class EditDeliveredDeliveryCommandHandler
             {
                 var categories = categoriesByOrder.GetValueOrDefault(line.ProductionOrderId) ?? new List<ReadyGoodsCategory?>();
                 var category = line.Category;
-                if (!category.HasValue && categories.Count == 1) category = categories[0];
-                // Historical delivery lines may point to ledger-only, unclassified ready
-                // stock for which no transfer document exists. Preserve that null category
-                // on correction; new classified lines must still match their original lot.
-                if (categories.Count == 0 && !category.HasValue) category = null;
-                else if (!categories.Contains(category))
+
+                // A persisted delivery line already records the category that was deducted.
+                // Do not infer a grade for a historical null-category line just because the
+                // same order now has classified transfers; corrections must reverse the same
+                // ledger dimension that the original delivery used.
+                if (category.HasValue && !categories.Contains(category))
                     throw new DomainException("The delivery line must retain the exact ready-goods category it was issued from.");
+
                 categoryByLine[line.Id] = category;
             }
 
