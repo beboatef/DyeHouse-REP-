@@ -231,6 +231,81 @@ public class DeliveryDuplicateLineBalanceTests
 }
 
 /// <summary>
+/// Ready-goods category regression: delivery must deduct only the selected grade,
+/// even when the same production order has balances in several categories.
+/// </summary>
+public class DeliveryReadyGoodsCategoryTests
+{
+    [Fact]
+    public async Task Delivery_DeductsOnlyTheSelectedReadyGoodsCategory()
+    {
+        var customer = new Customer("C-CAT", "Customer", "seed");
+        var item = new Item("IT-CAT", "Fabric", default(UnitOfMeasure), "seed");
+        var order = new ProductionOrder("PRD-CAT", customer.Id, item.Id, DateTime.UtcNow, "seed");
+        var warehouse = new Warehouse("RDY-CAT", "Ready Goods", WarehouseKind.ReadyGoods, "seed");
+        var firstTransfer = new ReadyGoodsTransfer(
+            "RGT-FIRST", DateTime.UtcNow, order.Id, customer.Id, item.Id, warehouse.Id,
+            200m, null, "seed", category: ReadyGoodsCategory.FirstGrade);
+        var secondTransfer = new ReadyGoodsTransfer(
+            "RGT-SECOND", DateTime.UtcNow, order.Id, customer.Id, item.Id, warehouse.Id,
+            100m, null, "seed", category: ReadyGoodsCategory.SecondGrade);
+
+        var options = new DbContextOptionsBuilder<Persistence.ApplicationDbContext>()
+            .UseInMemoryDatabase($"delivery-category-{Guid.NewGuid()}")
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new Persistence.ApplicationDbContext(options);
+        db.Customers.Add(customer);
+        db.Items.Add(item);
+        db.ProductionOrders.Add(order);
+        db.Warehouses.Add(warehouse);
+        db.ReadyGoodsTransfers.AddRange(firstTransfer, secondTransfer);
+        db.InventoryTransactions.AddRange(
+            new InventoryTransaction(
+                DocumentType.ReadyGoodsTransfer, firstTransfer.TransferNumber, firstTransfer.Id, DateTime.UtcNow,
+                warehouse.Id, customer.Id, item.Id, rawMessageId: null, productionOrderId: order.Id,
+                quantityKg: 200m, quantityMeter: null, direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.FirstGrade),
+            new InventoryTransaction(
+                DocumentType.ReadyGoodsTransfer, secondTransfer.TransferNumber, secondTransfer.Id, DateTime.UtcNow,
+                warehouse.Id, customer.Id, item.Id, rawMessageId: null, productionOrderId: order.Id,
+                quantityKg: 100m, quantityMeter: null, direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.SecondGrade));
+
+        var delivery = new Delivery("DLV-CAT", DateTime.UtcNow, customer.Id, "seed");
+        delivery.AddLine(order.Id, item.Id, null, 60m, null, null, null, null,
+            category: ReadyGoodsCategory.SecondGrade);
+        delivery.MarkPrepared();
+        db.Deliveries.Add(delivery);
+        await db.SaveChangesAsync();
+
+        var handler = new MarkDeliveryDeliveredCommandHandler(
+            db,
+            Mock.Of<ICurrentUserService>(u => u.UserName == "operator"),
+            new FixedClock(),
+            new OpenPeriod(),
+            new RecordingStockLock());
+
+        await handler.Handle(new MarkDeliveryDeliveredCommand(delivery.Id), CancellationToken.None);
+
+        var posted = await db.InventoryTransactions
+            .Where(t => t.SourceDocumentType == DocumentType.Delivery && t.SourceDocumentId == delivery.Id)
+            .ToListAsync();
+        posted.Should().ContainSingle();
+        posted[0].Direction.Should().Be(TransactionDirection.Out);
+        posted[0].ReadyGoodsCategory.Should().Be(ReadyGoodsCategory.SecondGrade);
+
+        var readyRows = await db.InventoryTransactions
+            .Where(t => t.WarehouseId == warehouse.Id && t.ProductionOrderId == order.Id && t.RawMessageId == null)
+            .ToListAsync();
+        readyRows.Where(t => t.ReadyGoodsCategory == ReadyGoodsCategory.FirstGrade)
+            .Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction).Should().Be(200m);
+        readyRows.Where(t => t.ReadyGoodsCategory == ReadyGoodsCategory.SecondGrade)
+            .Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction).Should().Be(40m);
+    }
+}
+
+/// <summary>
 /// H4: a receipt may only be settled against an invoice belonging to the
 /// customer named in the request, and the guard must fire before anything is
 /// written.
