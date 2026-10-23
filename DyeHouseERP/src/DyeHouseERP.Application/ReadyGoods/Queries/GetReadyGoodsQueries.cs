@@ -100,10 +100,15 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
         // Available quantity per lot, live from the ledger (spec section 29): the ready dimension is
         // (RawMessageId IS NULL, ProductionOrderId, ItemId), so the same figures the delivery and the
         // ready-to-raw movement act on are what this register reports - never a stored copy.
+        var readyWarehouseIds = await _db.Warehouses.AsNoTracking()
+            .Where(w => w.Kind == WarehouseKind.ReadyGoods)
+            .Select(w => w.Id)
+            .ToListAsync(cancellationToken);
         var orderIdsForLots = transfers.Select(t => t.ProductionOrderId).Distinct().ToList();
         var itemIdsForLots = transfers.Select(t => t.ItemId).Distinct().ToList();
         var lotRows = await _db.InventoryTransactions.AsNoTracking()
-            .Where(t => t.RawMessageId == null && t.ProductionOrderId != null
+            .Where(t => readyWarehouseIds.Contains(t.WarehouseId)
+                     && t.RawMessageId == null && t.ProductionOrderId != null
                      && orderIdsForLots.Contains(t.ProductionOrderId!.Value)
                      && itemIdsForLots.Contains(t.ItemId))
             .Select(t => new { t.ProductionOrderId, t.ItemId, t.ReadyGoodsCategory, t.QuantityKg, t.QuantityMeter, t.Direction })
@@ -173,8 +178,15 @@ public class GetReadyGoodsBalanceQueryHandler : IRequestHandler<GetReadyGoodsBal
 
     public async Task<List<ReadyGoodsBalanceDto>> Handle(GetReadyGoodsBalanceQuery request, CancellationToken cancellationToken)
     {
+        var readyWarehouseIds = await _db.Warehouses.AsNoTracking()
+            .Where(w => w.Kind == WarehouseKind.ReadyGoods)
+            .Select(w => w.Id)
+            .ToListAsync(cancellationToken);
+        if (readyWarehouseIds.Count == 0) return new List<ReadyGoodsBalanceDto>();
+
         var query = _db.InventoryTransactions.AsNoTracking()
-            .Where(t => t.RawMessageId == null && t.ProductionOrderId != null);
+            .Where(t => readyWarehouseIds.Contains(t.WarehouseId)
+                     && t.RawMessageId == null && t.ProductionOrderId != null);
 
         if (request.CustomerId.HasValue) query = query.Where(t => t.CustomerId == request.CustomerId);
 
