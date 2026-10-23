@@ -192,8 +192,10 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
 
         // The issue posts an OUT row against the lot's warehouse, so that warehouse must
         // exist and still be active.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+        var rawWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, message.WarehouseId, cancellationToken, "to issue raw material out of it");
+        if (rawWarehouse.Kind != WarehouseKind.RawMaterial)
+            throw new DomainException("Customer-owned raw fabric can only be issued from a RawMaterial warehouse.");
 
         // The customer's lot belongs to its own customer - issuing another customer's
         // material would post stock against the wrong account.
