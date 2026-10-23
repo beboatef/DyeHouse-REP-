@@ -1,0 +1,48 @@
+name: ERP CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "codex/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend build and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DyeHouseERP/src/DyeHouseERP.Web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: DyeHouseERP/src/DyeHouseERP.Web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Lint frontend
+        run: npm run lint
+
+  backend:
+    name: .NET 9 unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.318
+      - name: Restore solution
+        run: dotnet restore DyeHouseERP/DyeHouseERP.sln
+      - name: Run unit tests
+        run: dotnet test DyeHouseERP/tests/DyeHouseERP.UnitTests/DyeHouseERP.UnitTests.csproj --configuration Release --no-restore
