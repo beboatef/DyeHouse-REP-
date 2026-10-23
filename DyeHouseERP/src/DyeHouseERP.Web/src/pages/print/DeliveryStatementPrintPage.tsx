@@ -106,7 +106,7 @@ export default function DeliveryStatementPrintPage() {
     );
 
     if (optional.bales) {
-      cells.push({ header: t("statement.bales", "عدد البالات"), render: (r: DeliveryStatementRow) => r.baleCount ?? "—", align: "end" });
+      cells.push({ header: t("statement.bales", "عدد الأتواب"), render: (r: DeliveryStatementRow) => r.baleCount ?? "—", align: "end" });
     }
 
     if (optional.scraps) {
@@ -165,7 +165,7 @@ export default function DeliveryStatementPrintPage() {
               ["originalRaw", t("statement.originalRaw", "الخام الأصلي")],
               ["settled", t("statement.settled", "المُسوَّى في هذا التسليم")],
               ["remaining", t("statement.remaining", "المتبقي")],
-              ["bales", t("statement.bales", "عدد البالات")],
+              ["bales", t("statement.bales", "عدد الأتواب")],
               ["scraps", t("statement.scraps", "القصاصات")],
               ["secondGrade", t("statement.secondGrade", "الدرجة الثانية")],
               ["waste", t("statement.waste", "الهالك المحسوب")],
