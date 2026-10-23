@@ -22,6 +22,7 @@ public class CreateMaterialCommandValidator : AbstractValidator<CreateMaterialCo
     {
         RuleFor(x => x.Code).NotEmpty().MaximumLength(30);
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Kind).IsInEnum();
         RuleFor(x => x.PurchasePrice).GreaterThanOrEqualTo(0);
         RuleFor(x => x.ReorderLevel).GreaterThanOrEqualTo(0).When(x => x.ReorderLevel is not null);
     }
