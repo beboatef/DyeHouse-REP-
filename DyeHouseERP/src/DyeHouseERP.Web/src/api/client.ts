@@ -1084,7 +1084,7 @@ export interface ReadyGoodsTransfer {
   productionOrderId: string; productionOrderNumber: string;
   customerId: string; customerCode: string; customerName: string;
   itemId: string; itemCode: string; itemName: string; color: string | null;
-  quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null;
+  quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null; category: string | null;
   /** Where the output was physically received (spec section 29). */
   warehouseId: string; warehouseName: string;
   /** Still available on this transfer's lot, live from the ledger. */
@@ -1117,7 +1117,7 @@ export interface ReadyGoodsBalance {
   productionOrderId: string; productionOrderNumber: string;
   customerId: string; customerCode: string; customerName: string;
   itemId: string; itemCode: string; itemName: string; color: string | null;
-  remainingKg: number; remainingMeter: number;
+  remainingKg: number; remainingMeter: number; category: string | null;
 }
 
 export const ReadyGoodsApi = {
@@ -1129,7 +1129,7 @@ export const ReadyGoodsApi = {
    */
   createTransfer: (body: {
     productionOrderId: string; warehouseId: string; stageExecutionId: string;
-    quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string;
+    quantityKg?: number; quantityMeter?: number; pieceCount?: number; notes?: string; category: "FirstGrade" | "SecondGrade" | "Separates";
   }) => api.post<ReadyGoodsTransfer>("/ready-goods/transfers", body).then((r) => r.data),
 
   /** The register of ready-goods-to-raw movements. */
