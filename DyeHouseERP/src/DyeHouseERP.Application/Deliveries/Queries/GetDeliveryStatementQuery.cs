@@ -71,7 +71,13 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
         var transferRows = await _db.ReadyGoodsTransfers.AsNoTracking()
             // Cancelled documents remain in history, but their IN movements have matching reversal
             // rows. They must not inflate the production output reported on a delivery statement.
-            .Where(t => orderIds.Contains(t.ProductionOrderId) && t.Status == ReadyGoodsTransferStatus.Posted)
+            .Where(t => orderIds.Contains(t.ProductionOrderId)
+                     && t.Status == ReadyGoodsTransferStatus.Posted
+                     // Waste is based on first-grade output. Second-grade and separates are
+                     // separate production streams and are subtracted below, so counting their
+                     // ready-goods transfers here would deduct them twice. Null is retained for
+                     // legacy transfers created before categories were introduced.
+                     && (t.Category == ReadyGoodsCategory.FirstGrade || t.Category == null))
             .Select(t => new { t.ProductionOrderId, t.QuantityKg, t.QuantityMeter })
             .ToListAsync(cancellationToken);
         var transfers = transferRows
