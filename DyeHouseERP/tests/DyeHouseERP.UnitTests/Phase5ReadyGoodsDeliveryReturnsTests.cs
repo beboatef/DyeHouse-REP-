@@ -186,6 +186,36 @@ public class Phase5ReadyGoodsCategoryBalanceTests : Phase5TestBase
     }
 
     [Fact]
+    public async Task TheBalanceRegister_IgnoresLedgerRowsFromNonReadyWarehouses()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        db.InventoryTransactions.AddRange(
+            new InventoryTransaction(DocumentType.ReadyGoodsTransfer, "RGT-READY-FIRST", Guid.NewGuid(),
+                new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 100m, quantityMeter: 50m,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.FirstGrade),
+            new InventoryTransaction(DocumentType.Delivery, "RAW-OUTSIDE-READY", Guid.NewGuid(),
+                new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+                scene.Raw.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 70m, quantityMeter: 25m,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.FirstGrade));
+        await db.SaveChangesAsync();
+
+        var rows = await new GetReadyGoodsBalanceQueryHandler(db)
+            .Handle(new GetReadyGoodsBalanceQuery(), CancellationToken.None);
+
+        var first = rows.Should().ContainSingle(r => r.Category == nameof(ReadyGoodsCategory.FirstGrade)).Subject;
+        first.RemainingKg.Should().Be(100m);
+        first.RemainingMeter.Should().Be(50m);
+    }
+
+    [Fact]
     public async Task TheBalanceRegister_DoesNotHideAnUnexpectedNegativeLedgerBalance()
     {
         var scene = Seed();
