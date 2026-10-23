@@ -201,7 +201,7 @@ export default function ReadyGoodsPage() {
                 <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{b.customerCode}</td>
                 <td>{b.itemCode}</td><td>{b.color ?? "-"}</td>
                 <td>{b.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : b.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : b.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")}</td>
-                <td className="text-end ltr-nums font-semibold">{b.remainingKg > 0 ? b.remainingKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td><td className="text-end ltr-nums font-semibold">{b.remainingMeter > 0 ? b.remainingMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
+                <td className="text-end ltr-nums font-semibold">{b.remainingKg !== 0 ? b.remainingKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td><td className="text-end ltr-nums font-semibold">{b.remainingMeter !== 0 ? b.remainingMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
                 <td className="text-end">
                   <Button
                     variant="ghost"
@@ -322,9 +322,9 @@ export default function ReadyGoodsPage() {
                 {/* Available is read live from the ledger - what is left after deliveries and any
                     movements back to raw stock, never a stored figure. */}
                 <td className="ltr-nums">
-                  {t.availableQuantityKg > 0 && `${t.availableQuantityKg} كجم `}
-                  {t.availableQuantityMeter > 0 && `${t.availableQuantityMeter} م`}
-                  {t.availableQuantityKg <= 0 && t.availableQuantityMeter <= 0 && "—"}
+                  {t.availableQuantityKg !== 0 && `${t.availableQuantityKg} كجم `}
+                  {t.availableQuantityMeter !== 0 && `${t.availableQuantityMeter} م`}
+                  {t.availableQuantityKg === 0 && t.availableQuantityMeter === 0 && "—"}
                 </td>
               </tr>
             ))}
