@@ -192,20 +192,29 @@ public class StageCheckboxTransferAndFinalWeightsTests
         // الهالك = أصل الخام - وزن الجاهز - المنفصلات، بالكيلو فقط.
         closed.WasteKg.Should().Be(60m, "1000 - 900 - 40");
 
-        // The ready-goods mechanism is unchanged: one transfer row and one IN movement.
-        var transfer = await db.ReadyGoodsTransfers.SingleAsync();
+        // The final output and separates post as independent ready-goods categories.
+        var transfers = await db.ReadyGoodsTransfers.ToListAsync();
+        transfers.Should().HaveCount(2);
+        var transfer = transfers.Single(t => t.Category == ReadyGoodsCategory.FirstGrade);
         transfer.StageExecutionId.Should().Be(current.Id);
-        transfer.Category.Should().Be(ReadyGoodsCategory.FirstGrade,
-            "the final output is the first-grade stream, separate from second grade and separates");
         transfer.QuantityKg.Should().Be(900m);
         transfer.QuantityMeter.Should().Be(115m);
+        transfers.Should().ContainSingle(t => t.Category == ReadyGoodsCategory.Separates
+            && t.QuantityKg == 40m && t.QuantityMeter == 3m);
 
-        var movement = await db.InventoryTransactions
-            .SingleAsync(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer);
+        var movements = await db.InventoryTransactions
+            .Where(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer).ToListAsync();
+        movements.Should().HaveCount(2);
+        var movement = movements.Single(t => t.ReadyGoodsCategory == ReadyGoodsCategory.FirstGrade);
         movement.Direction.Should().Be(TransactionDirection.In);
-        movement.ReadyGoodsCategory.Should().Be(ReadyGoodsCategory.FirstGrade);
         movement.QuantityKg.Should().Be(900m);
         movement.QuantityMeter.Should().Be(115m);
+        foreach (var postedTransfer in transfers)
+        {
+            var linkedMovement = movements.Single(t => t.ReadyGoodsCategory == postedTransfer.Category);
+            linkedMovement.SourceDocumentId.Should().Be(postedTransfer.Id);
+            linkedMovement.SourceDocumentNumber.Should().Be(postedTransfer.TransferNumber);
+        }
         (await db.ProductionOrders.FirstAsync(o => o.Id == scene.OrderId)).Status
             .Should().Be(ProductionOrderStatus.Completed);
     }
