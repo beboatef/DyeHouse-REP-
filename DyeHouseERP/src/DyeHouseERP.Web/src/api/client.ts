@@ -1144,6 +1144,7 @@ export const ReadyGoodsApi = {
   returnToRaw: (body: {
     productionOrderId: string; itemId: string; rawMessageId: string;
     quantityKg?: number; quantityMeter?: number; reason: string; notes?: string;
+    category?: "FirstGrade" | "SecondGrade" | "Separates" | null;
   }) => api.post<ReadyGoodsRawReturn>("/ready-goods/raw-returns", body).then((r) => r.data)
 };
 
