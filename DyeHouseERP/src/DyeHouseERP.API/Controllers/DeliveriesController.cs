@@ -39,11 +39,11 @@ public class DeliveriesController : ControllerBase
     {
         var deliveries = await _mediator.Send(new GetDeliveriesQuery(customerId, status));
 
-        var headers = new[] { "Delivery no.", "Date", "Customer", "Job order", "Item", "Color", "Qty KG", "Qty M", "Pieces", "Raw origin", "Status" };
+        var headers = new[] { "Delivery no.", "Date", "Customer", "Job order", "Item", "Color", "Ready-goods category", "Qty KG", "Qty M", "Pieces", "Raw origin", "Status" };
         var rows = deliveries.SelectMany(d => d.Lines.Select(l => new object?[]
         {
             d.DeliveryNumber, d.DeliveryDate.ToString("yyyy-MM-dd"), $"{d.CustomerCode} - {d.CustomerName}",
-            l.ProductionOrderNumber, $"{l.ItemCode}", l.Color, l.QuantityKg, l.QuantityMeter, l.PieceCount,
+            l.ProductionOrderNumber, $"{l.ItemCode}", l.Color, l.Category?.ToString(), l.QuantityKg, l.QuantityMeter, l.PieceCount,
             l.RawOrigin, d.Status.ToString()
         })).ToList();
 
@@ -135,7 +135,7 @@ public class DeliveriesController : ControllerBase
 
         var headers = new[]
         {
-            "Job order", "Date", "Item", "Color", "Original raw KG", "Original raw M",
+            "Job order", "Date", "Item", "Color", "Ready-goods category", "Original raw KG", "Original raw M",
             "Settled KG", "Settled M", "Remaining KG", "Remaining M", "Ready KG", "Ready M",
             "Bales", "Scraps KG", "Scraps M", "2nd grade KG", "2nd grade M", "2nd grade pieces", "Waste KG",
             "Drawing no.", "Notes"
@@ -143,7 +143,7 @@ public class DeliveriesController : ControllerBase
 
         var rows = statement.Rows.Select(r => new object?[]
         {
-            r.ProductionOrderNumber, r.ProductionOrderDate?.ToString("yyyy-MM-dd"), r.ItemCode, r.Color,
+            r.ProductionOrderNumber, r.ProductionOrderDate?.ToString("yyyy-MM-dd"), r.ItemCode, r.Color, r.Category?.ToString(),
             r.OriginalRawQuantityKg, r.OriginalRawQuantityMeter,
             r.DeliveredOriginalRawQuantityKg, r.DeliveredOriginalRawQuantityMeter,
             r.RemainingOriginalRawKg, r.RemainingOriginalRawMeter,
