@@ -130,11 +130,12 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
                 $"The named stage belongs to a different production order than '{order.OrderNumber}'.");
 
         var alreadyLinked = await _db.ReadyGoodsTransfers.AsNoTracking()
-            .Where(t => t.StageExecutionId == stage.Id && t.Status != ReadyGoodsTransferStatus.Cancelled)
+            .Where(t => t.StageExecutionId == stage.Id && t.Status != ReadyGoodsTransferStatus.Cancelled && t.Category == request.Category)
             .Select(t => new { t.QuantityKg, t.QuantityMeter })
             .ToListAsync(cancellationToken);
 
-        stage.EnsureTransfersWithinOutput(
+        stage.EnsureCategoryTransfersWithinOutput(
+            request.Category!.Value,
             alreadyLinked.Sum(t => t.QuantityKg ?? 0),
             alreadyLinked.Sum(t => t.QuantityMeter ?? 0),
             request.QuantityKg, request.QuantityMeter);
