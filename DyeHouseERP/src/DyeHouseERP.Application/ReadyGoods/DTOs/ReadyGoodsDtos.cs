@@ -23,7 +23,6 @@ public class ReadyGoodsTransferDto
     public decimal? QuantityMeter { get; set; }
     public int? PieceCount { get; set; }
     public string? Category { get; set; }
-    public string? Category { get; set; }
 
     /// <summary>Where the output was physically received - the Ready Goods warehouse (spec section 29).</summary>
     public Guid WarehouseId { get; set; }
