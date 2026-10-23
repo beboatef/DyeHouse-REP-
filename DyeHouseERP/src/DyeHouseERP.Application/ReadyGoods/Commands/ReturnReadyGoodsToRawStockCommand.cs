@@ -187,7 +187,8 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             }
 
             var readyRows = await _db.InventoryTransactions.AsNoTracking()
-                .Where(t => t.RawMessageId == null
+                .Where(t => t.WarehouseId == readyWarehouse.Id
+                         && t.RawMessageId == null
                          && t.ProductionOrderId == order.Id
                          && t.ItemId == request.ItemId
                          && t.ReadyGoodsCategory == readyCategory)
