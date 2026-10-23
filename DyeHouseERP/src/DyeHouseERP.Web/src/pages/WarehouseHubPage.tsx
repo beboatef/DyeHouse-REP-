@@ -168,6 +168,7 @@ function MovementsTab() {
           <thead>
             <tr>
               <th>{t("common.date")}</th>
+              <th>{t("common.warehouse")}</th>
               <th>{t("fr.rawMessage")} / {t("fr.jobOrder")}</th>
               <th>{t("common.customer")}</th>
               <th>{t("common.item")}</th>
@@ -178,14 +179,17 @@ function MovementsTab() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
             {!isLoading && (data?.length ?? 0) === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {data?.map((m) => (
               <tr key={m.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="ltr-nums text-ink-muted">{m.transactionDate.slice(0, 10)}</td>
+                <td>
+                  <div className="font-medium">{m.warehouseName || "—"}</div>
+                </td>
                 <td>
                   <div className="ltr-nums font-medium">{m.sourceDocumentNumber}</div>
                   <div className="text-2xs text-ink-subtle">{m.sourceDocumentType}</div>
