@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Warehouses.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Exceptions;
@@ -39,6 +40,7 @@ public class CreateWarehouseCommandHandler : IRequestHandler<CreateWarehouseComm
 
     public async Task<WarehouseMasterDto> Handle(CreateWarehouseCommand request, CancellationToken cancellationToken)
     {
+        WarehouseGuard.EnsureAllowedWarehouseKind(request.Kind);
         var code = (request.Code ?? string.Empty).Trim();
 
         // The code is the identity documents and reports carry, so it stays unique.
@@ -97,8 +99,11 @@ public class UpdateWarehouseCommandHandler : IRequestHandler<UpdateWarehouseComm
             .FirstOrDefaultAsync(w => w.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Warehouse", request.Id);
 
+        WarehouseGuard.EnsureAllowedWarehouseKind(request.Kind);
+        if (warehouse.Kind != request.Kind)
+            throw new DomainException("A warehouse's kind cannot be changed after creation. Create the correct warehouse and move stock through authorized documents instead.");
+
         warehouse.SetName(request.Name, _currentUser.UserName);
-        warehouse.SetKind(request.Kind, _currentUser.UserName);
 
         await _db.SaveChangesAsync(cancellationToken);
         return CreateWarehouseCommandHandler.Map(warehouse);
