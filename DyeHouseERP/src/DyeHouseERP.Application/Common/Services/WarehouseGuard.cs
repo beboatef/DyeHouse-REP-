@@ -66,6 +66,7 @@ public static class WarehouseGuard
         IApplicationDbContext db, Guid warehouseId, WarehouseKind expectedKind,
         CancellationToken cancellationToken = default, string operation = "to post a new stock movement")
     {
+        EnsureAllowedWarehouseKind(expectedKind);
         var warehouse = await EnsureUsableForNewMovementAsync(db, warehouseId, cancellationToken, operation);
         if (warehouse.Kind != expectedKind)
             throw new DomainException(
