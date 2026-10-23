@@ -1,4 +1,5 @@
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Entities;
 
 namespace DyeHouseERP.Application.Deliveries.DTOs;
 
