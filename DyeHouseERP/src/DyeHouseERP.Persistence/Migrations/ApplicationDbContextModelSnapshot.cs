@@ -5404,7 +5404,8 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProductionOrderId", "Category")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[Status] = N'Posted'");
 
                     b.HasIndex("StageExecutionId");
 
