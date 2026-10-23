@@ -557,7 +557,7 @@ public class ProductionOrderCancellationTests
                 new FixedClock(), new OpenPeriod(), new RecordingStockLock())
             .Handle(new CreateReadyGoodsTransferCommand(
                 f.Order.Id, readyWarehouse.Id, 700m, null, null, "post cancelled output",
-                StageExecutionId: f.Order.StageExecutions.Single().Id), CancellationToken.None);
+                StageExecutionId: f.Order.StageExecutions.Single().Id, Category: ReadyGoodsCategory.FirstGrade), CancellationToken.None);
 
         await act.Should().ThrowAsync<DocumentLockedException>();
         (await db.ReadyGoodsTransfers.CountAsync()).Should().Be(0);
