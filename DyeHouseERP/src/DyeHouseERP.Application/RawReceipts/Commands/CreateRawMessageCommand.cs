@@ -3,6 +3,7 @@ using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.RawReceipts.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -104,8 +105,10 @@ public class CreateRawMessageCommandHandler : IRequestHandler<CreateRawMessageCo
         // A receipt is written into exactly the warehouse the caller picked, so the
         // warehouse must exist and still be active. Deactivated warehouses stay readable
         // for every message already received into them.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+        var rawWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, request.WarehouseId, cancellationToken, "to receive raw material into it");
+        if (rawWarehouse.Kind != WarehouseKind.RawMaterial)
+            throw new DomainException("Customer-owned raw fabric can only be received into a RawMaterial warehouse.");
 
         // Spec section 5: each line may only use the units its item is configured for,
         // and when the item requires both units, BOTH measurements must be recorded.
