@@ -1154,7 +1154,7 @@ export type DeliveryStatus = "Draft" | "Prepared" | "Delivered" | "Cancelled";
 export interface DeliveryLine {
   drawingNumbers: string[];
   id: string; productionOrderId: string; productionOrderNumber: string; itemId: string; itemCode: string; itemName: string;
-  color: string | null; quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null; rawOrigin: string | null;
+  color: string | null; quantityKg: number | null; quantityMeter: number | null; pieceCount: number | null; category: "FirstGrade" | "SecondGrade" | "Separates" | null; rawOrigin: string | null;
   /** The ORIGINAL Job Order date, preserved on every later partial-delivery document. */
   productionOrderDate: string | null;
   /** Original raw this line settles - manually entered, never derived. */
@@ -1216,7 +1216,7 @@ export const DeliveriesApi = {
     primaryDeliveryId?: string | null;
     lines: {
       productionOrderId: string; itemId: string; color?: string; quantityKg?: number; quantityMeter?: number;
-      pieceCount?: number; rawOrigin?: string;
+      pieceCount?: number; category?: "FirstGrade" | "SecondGrade" | "Separates"; rawOrigin?: string;
       originalRawQuantityKg?: number; originalRawQuantityMeter?: number;
     }[];
   }) => api.post<Delivery>("/deliveries", body).then((r) => r.data),
