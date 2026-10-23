@@ -226,14 +226,10 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
                 else
                 {
                     var hasUnclassifiedBalance = unclassifiedBalances.TryGetValue((line.ProductionOrderId, line.ItemId), out var unclassified);
-                    var requestedKg = line.QuantityKg ?? 0m;
-                    var requestedMeter = line.QuantityMeter ?? 0m;
-                    var fitsUnclassified = hasUnclassifiedBalance
-                        && (requestedKg <= 0 || unclassified.Kg >= requestedKg)
-                        && (requestedMeter <= 0 || unclassified.Meter >= requestedMeter)
+                    var hasUnclassifiedStock = hasUnclassifiedBalance
                         && (unclassified.Kg > 0 || unclassified.Meter > 0);
 
-                    if (fitsUnclassified || availableCategories.Count == 0)
+                    if (hasUnclassifiedStock || availableCategories.Count == 0)
                     {
                         // The UI's unclassified option is represented by null. A null-category
                         // ledger lot remains distinct from FirstGrade/SecondGrade/Separates.
