@@ -56,7 +56,13 @@ export default function DeliveryPrintPage() {
   const columns: PrintColumn<DeliveryLine>[] = [
     { header: t("printing.drawingNumber"), render: (l) => l.drawingNumbers?.join(", ") || "—" },
     { header: t("prod.jobOrder", "أمر التشغيل"), render: (l) => l.productionOrderNumber },
-    { header: t("common.item"), render: (l) => `${l.itemCode}${l.color ? ` (${l.color})` : ""}` }
+    { header: t("common.item"), render: (l) => `${l.itemCode}${l.color ? ` (${l.color})` : ""}` },
+    {
+      header: "التصنيف",
+      render: (l) => l.category === "FirstGrade" ? "درجة أولى"
+        : l.category === "SecondGrade" ? "درجة ثانية"
+        : l.category === "Separates" ? "منفصلات" : "غير مصنف"
+    }
   ];
 
   if (quantityColumns.kg) {
