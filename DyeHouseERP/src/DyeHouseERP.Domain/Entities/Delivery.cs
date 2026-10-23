@@ -89,6 +89,10 @@ public class Delivery : AuditableEntity
             throw new DocumentLockedException("Delivery", DeliveryNumber);
         if (quantityKg is null && quantityMeter is null)
             throw new DomainException("A delivery line must specify a KG and/or Meter quantity.");
+        if (quantityKg is < 0 || quantityMeter is < 0)
+            throw new DomainException("A delivery quantity cannot be negative.");
+        if (pieceCount is < 0)
+            throw new DomainException("A delivery piece count cannot be negative.");
         if (originalRawQuantityKg is < 0 || originalRawQuantityMeter is < 0)
             throw new DomainException("An original raw quantity cannot be negative.");
 
