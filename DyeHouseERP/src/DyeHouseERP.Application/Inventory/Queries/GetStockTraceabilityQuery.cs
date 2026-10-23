@@ -18,10 +18,10 @@ public static class StockScopes
 }
 
 /// <summary>
-/// BALANCES WITH THE MOVEMENTS BEHIND THEM - one query for all three warehouses.
+/// BALANCES WITH THE MOVEMENTS BEHIND THEM - one query for all four stock classes.
 ///
 /// Why it exists: a balance on its own is not traceable. This returns, for the SAME filter:
-///   * one row per LOT - a raw lot is a receipt message, a ready lot is a job order, a materials lot
+///   * one row per LOT - a raw lot is a receipt message, a ready lot is a job order, a materials or supplies lot
 ///     is a (material, warehouse) pair - with its received / issued / returned / produced / delivered /
 ///     under-production / remaining figures, each in its OWN unit;
 ///   * the ledger rows behind those figures, each with the balance AS IT STOOD after it;
