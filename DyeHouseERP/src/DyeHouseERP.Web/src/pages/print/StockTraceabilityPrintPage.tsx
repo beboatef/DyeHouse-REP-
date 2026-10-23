@@ -340,7 +340,8 @@ function LotTraceabilityCard({ scope, token, pageBreakAfter }: {
 const scopeLabelKey: Record<StockScope, string> = {
   raw: "stock.print.scope.raw",
   ready: "stock.print.scope.ready",
-  materials: "stock.print.scope.materials"
+  materials: "stock.print.scope.materials",
+  supplies: "stock.print.scope.supplies"
 };
 
 /** A card that could not render says why, in its own place, and still respects the page break. */
