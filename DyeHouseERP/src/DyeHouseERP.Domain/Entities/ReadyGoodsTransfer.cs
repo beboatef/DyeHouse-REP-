@@ -29,6 +29,7 @@ public class ReadyGoodsTransfer : AuditableEntity
     public decimal? QuantityKg { get; private set; }
     public decimal? QuantityMeter { get; private set; }
     public ReadyGoodsCategory? Category { get; private set; }
+    public ReadyGoodsCategory? Category { get; private set; }
 
     /// <summary>
     /// The stage execution whose output this transfer moved (spec section 23). A lot in
@@ -71,6 +72,7 @@ public class ReadyGoodsTransfer : AuditableEntity
         QuantityKg = quantityKg;
         QuantityMeter = quantityMeter;
         StageExecutionId = stageExecutionId;
+        Category = category;
         Category = category;
         PieceCount = pieceCount;
         Notes = notes;
@@ -123,6 +125,13 @@ public class ReadyGoodsTransfer : AuditableEntity
 /// there is no Draft state - it starts Posted and can only be Cancelled.
 /// </summary>
 /// <summary>Quality classification of customer-owned finished fabric. Null is reserved for historical rows not classified at posting./// </summary>
+public enum ReadyGoodsCategory
+{
+    FirstGrade = 1,
+    SecondGrade = 2,
+    Separates = 3
+}
+
 public enum ReadyGoodsCategory
 {
     FirstGrade = 1,
