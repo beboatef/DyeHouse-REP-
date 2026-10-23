@@ -149,7 +149,8 @@ public class EditDeliveredDeliveryCommandHandler
             // over-committed - the H3 bug class, guarded here too.
             var netByLot = new Dictionary<(Guid ItemId, Guid OrderId, ReadyGoodsCategory? Category), LotDelta>();
             var transferCategoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
-                .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId))
+                .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId)
+                         && t.Status != ReadyGoodsTransferStatus.Cancelled)
                 .Select(t => new { t.ProductionOrderId, t.Category })
                 .ToListAsync(cancellationToken);
             var categoriesByOrder = transferCategoriesByOrder
