@@ -7,6 +7,7 @@ using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
 using DyeHouseERP.Persistence;
 using DyeHouseERP.Persistence.Services;
+using DyeHouseERP.Persistence.Seeding;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -182,6 +183,18 @@ public class WarehouseMasterDataTests
 
         await duplicate.Should().ThrowAsync<DuplicateCodeException>();
         (await db.Warehouses.CountAsync()).Should().Be(1, "the refused create must not leave a second row behind");
+    }
+
+    [Fact]
+    public async Task FreshWarehouseSeed_CreatesOnlyTheFourApprovedWarehouseKinds()
+    {
+        using var db = NewDb();
+
+        await WarehouseSeeder.SeedAsync(db, CancellationToken.None);
+
+        var warehouses = await db.Warehouses.AsNoTracking().OrderBy(w => w.Code).ToListAsync();
+        warehouses.Select(w => w.Code).Should().BeEquivalentTo(new[] { "WH-RAW", "WH-RDY", "WH-MAT", "WH-SUP" });
+        warehouses.Should().NotContain(w => w.Kind == WarehouseKind.ProductionWip);
     }
 
     [Fact]
