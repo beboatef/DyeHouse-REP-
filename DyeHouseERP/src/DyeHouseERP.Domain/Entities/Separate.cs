@@ -74,8 +74,11 @@ public class Separate : AuditableEntity
 
     public void Scrap(string reason, string modifiedBy)
     {
-        if (Status is SeparateStatus.Reprocessed or SeparateStatus.Scrapped)
-            throw new DomainException($"Separate is already {Status} and cannot be scrapped.");
+        // A separate assigned to a reprocessing order is already committed to that
+        // workflow. Scrapping it while that order exists would give the same material
+        // two terminal paths (reprocessing and scrap).
+        if (Status != SeparateStatus.PendingReprocessing)
+            throw new DomainException($"Separate is {Status} and cannot be scrapped; only pending separates may be scrapped.");
 
         Status = SeparateStatus.Scrapped;
         Notes = string.IsNullOrWhiteSpace(Notes) ? $"[Scrapped by {modifiedBy}] {reason}" : $"{Notes}\n[Scrapped by {modifiedBy}] {reason}";
