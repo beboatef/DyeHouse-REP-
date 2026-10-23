@@ -164,11 +164,10 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
         await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, readyWarehouse.Id, cancellationToken, "to deliver ready goods out of it");
 
-        // R2: the key mirrors the balance query's own filter - (item, production
-        // order), with NO warehouse and NO customer term, because the query below
-        // does not filter on either. Locking on a warehouse would let a delivery
-        // and a ready-goods transfer that resolved different warehouses read the
-        // same balance concurrently and jointly overdraw it.
+        // R2: serialize movements for the same order/item lot. The balance check below
+        // is scoped to the selected Ready Goods warehouse and category; using the
+        // broader lot lock also prevents concurrent category transfers for one order
+        // from racing against delivery or return movements.
         var lockKeys = lines
             .Select(l => StockLockKey.ReadyLot(l.ItemId, l.ProductionOrderId))
             .Distinct()
