@@ -76,7 +76,7 @@ export default function WarehouseHubPage() {
         ))}
       </div>
 
-      {/* Balances: one tab per warehouse, all three on the same principles - a balance per lot, the
+      {/* Balances: one tab per warehouse, all on the same principles - a balance per lot, the
           movements behind it, KG and Meter in their own columns, and nothing merged or converted. */}
       {tab === "balances" && (
         <>
