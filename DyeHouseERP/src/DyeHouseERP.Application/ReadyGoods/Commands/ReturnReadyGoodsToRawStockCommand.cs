@@ -36,7 +36,8 @@ public record ReturnReadyGoodsToRawStockCommand(
     decimal? QuantityKg,
     decimal? QuantityMeter,
     string Reason,
-    string? Notes = null) : IRequest<ReadyGoodsRawReturnDto>;
+    string? Notes = null,
+    ReadyGoodsCategory? Category = null) : IRequest<ReadyGoodsRawReturnDto>;
 
 public class ReturnReadyGoodsToRawStockCommandValidator : AbstractValidator<ReturnReadyGoodsToRawStockCommand>
 {
@@ -151,10 +152,26 @@ public class ReturnReadyGoodsToRawStockCommandHandler
         {
             // Availability is checked on the exact dimension the ready balance is read from, so stock
             // that is already promised to a delivery is never double-spent.
-            var readyCategory = await _db.ReadyGoodsTransfers.AsNoTracking()
-                .Where(t => t.ProductionOrderId == order.Id)
+            var availableCategories = await _db.ReadyGoodsTransfers.AsNoTracking()
+                .Where(t => t.ProductionOrderId == order.Id && t.ItemId == request.ItemId)
                 .Select(t => t.Category)
-                .FirstOrDefaultAsync(cancellationToken);
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            ReadyGoodsCategory? readyCategory;
+            if (request.Category.HasValue)
+            {
+                if (!availableCategories.Contains(request.Category))
+                    throw new DomainException("The selected category is not available for this ready-goods order.");
+                readyCategory = request.Category;
+            }
+            else if (availableCategories.Count == 1)
+            {
+                readyCategory = availableCategories[0];
+            }
+            else
+            {
+                throw new DomainException("Select the ready-goods category to return; this order has multiple categories or no classified ready stock.");
+            }
 
             var readyRows = await _db.InventoryTransactions.AsNoTracking()
                 .Where(t => t.RawMessageId == null
