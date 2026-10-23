@@ -79,8 +79,8 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
         // The adjustment posts a NEW IN/OUT row against the message's warehouse. A
         // deactivated warehouse keeps the history of everything already posted and
         // stays readable, but it never receives a new stock row to correct.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, message.WarehouseId, cancellationToken, "to post a stock adjustment against it");
+        await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+            _db, message.WarehouseId, WarehouseKind.RawMaterial, cancellationToken, "to post a stock adjustment against it");
 
         // Spec sections 5-6: the adjustment may only use the units configured on its
         // item, and both measurements when the item requires them.
