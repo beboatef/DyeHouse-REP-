@@ -448,7 +448,7 @@ export default function ProductionOrdersPage() {
               </Link>
               <div className="flex items-center gap-2">
                 <Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge>
-                <Badge tone="gray">{priorityLabel[o.priority]}</Badge>
+                <Badge tone="gray">{t(`jo.priority.${o.priority}`, priorityLabel[o.priority] ?? o.priority)}</Badge>
                 <Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge>
               </div>
             </div>
