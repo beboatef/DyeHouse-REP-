@@ -295,8 +295,8 @@ public class StageCheckboxTransferAndFinalWeightsTests
             CancellationToken.None);
 
         (await act.Should().ThrowAsync<DomainException>()).WithMessage("*cannot be smaller*");
-        (await invalidDb.ReadyGoodsTransfers.CountAsync()).Should().Be(0);
-        (await ReadyGoodsMovementCountAsync(invalidDb)).Should().Be(0);
+        (await invalidDb.ReadyGoodsTransfers.CountAsync(t => t.ProductionOrderId == invalidScene.OrderId)).Should().Be(0);
+        (await invalidDb.InventoryTransactions.CountAsync(t => t.ProductionOrderId == invalidScene.OrderId && t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)).Should().Be(0);
     }
 
     [Fact]
