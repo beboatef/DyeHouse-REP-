@@ -49,6 +49,8 @@ public class CreateSupplyIssueCommandHandler : IRequestHandler<CreateSupplyIssue
         // A new issue may only target a warehouse that exists and is still active;
         // deactivated warehouses stay readable for everything already issued from them.
         var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, request.WarehouseId, cancellationToken);
+        if (warehouse.Kind != WarehouseKind.OperatingSupplies)
+            throw new DomainException("An operating-supplies issue must use an OperatingSupplies warehouse.");
 
         if (request.DepartmentId is not null &&
             !await _db.Departments.AnyAsync(d => d.Id == request.DepartmentId, cancellationToken))
@@ -109,6 +111,9 @@ public class AddSupplyIssueLineCommandHandler : IRequestHandler<AddSupplyIssueLi
         // so a dye or chemical can never be booked as an internal supply issue.
         if (material.Kind != MaterialKind.OperatingSupply)
             throw new DomainException("That item is a production chemical, not an operating supply. Issue it to a Job Order instead.");
+        var issueWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, issue.WarehouseId, cancellationToken, "to add a line to it");
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, issueWarehouse);
 
         var balance = await _ledger.GetBalanceAsync(material.Id, issue.WarehouseId, cancellationToken);
         var requested = issue.Lines.Where(l => l.MaterialId == material.Id).Sum(l => l.Quantity) + request.Quantity;
@@ -182,8 +187,10 @@ public class PostSupplyIssueCommandHandler : IRequestHandler<PostSupplyIssueComm
         // Posting writes one OUT row per line, so the warehouse must still be active. A draft
         // created while it was active is NOT a licence to draw from it afterwards: retiring a
         // warehouse stops all new movements from it, whichever step tries to write them.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+        var issueWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, issue.WarehouseId, cancellationToken, "to post a stock movement out of it");
+        if (issueWarehouse.Kind != WarehouseKind.OperatingSupplies)
+            throw new DomainException("An operating-supplies issue must use an OperatingSupplies warehouse.");
 
         // Re-check availability at posting time: stock may have moved since the
         // lines were typed. Negative stock is never allowed implicitly.
@@ -198,6 +205,12 @@ public class PostSupplyIssueCommandHandler : IRequestHandler<PostSupplyIssueComm
         {
         foreach (var line in issue.Lines)
         {
+            var material = await _db.Materials.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == line.MaterialId, cancellationToken)
+                ?? throw new NotFoundException("Material", line.MaterialId);
+            if (material.Kind != MaterialKind.OperatingSupply)
+                throw new DomainException("A supply issue can contain operating supplies only.");
+            WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, issueWarehouse);
             var balance = await _ledger.GetBalanceAsync(line.MaterialId, issue.WarehouseId, cancellationToken);
             if (line.Quantity > balance) throw new NegativeStockException(balance, line.Quantity);
         }
