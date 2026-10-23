@@ -15,7 +15,7 @@ namespace DyeHouseERP.UnitTests;
 
 /// <summary>
 /// Warehouse master data is DYNAMIC (spec section 15): an administrator creates, renames,
-/// re-classifies and deactivates warehouses at runtime, with no code change and no fixed
+/// renames and deactivates warehouses at runtime, with no code change and no fixed
 /// list anywhere. These are handler-level tests against a real DbContext, because the
 /// list/search filtering and the "deactivation is a flag, never a removal" rule are both
 /// decided in the application and persistence layers.
@@ -102,23 +102,28 @@ public class WarehouseMasterDataTests
     }
 
     [Fact]
-    public async Task UpdatingAWarehouse_RenamesItAndChangesItsKindInPlace()
+    public async Task UpdatingAWarehouse_RenamesItButRefusesKindChanges()
     {
         using var db = NewDb();
         var created = await CreateHandler(db).Handle(
             new CreateWarehouseCommand("WRH-01", "Store one", WarehouseKind.Materials), CancellationToken.None);
 
         var updated = await UpdateHandler(db).Handle(
-            new UpdateWarehouseCommand(created.Id, "Main chemicals store", WarehouseKind.OperatingSupplies), CancellationToken.None);
+            new UpdateWarehouseCommand(created.Id, "Main chemicals store", WarehouseKind.Materials), CancellationToken.None);
 
         updated.Name.Should().Be("Main chemicals store");
-        updated.Kind.Should().Be(WarehouseKind.OperatingSupplies);
+        updated.Kind.Should().Be(WarehouseKind.Materials);
         updated.Code.Should().Be("WRH-01", "the code is the identity documents carry and is never edited");
 
         var reloaded = await db.Warehouses.AsNoTracking().SingleAsync(w => w.Id == created.Id);
         reloaded.Name.Should().Be("Main chemicals store");
-        reloaded.Kind.Should().Be(WarehouseKind.OperatingSupplies);
+        reloaded.Kind.Should().Be(WarehouseKind.Materials);
         reloaded.ModifiedBy.Should().Be("tester");
+
+        var changeKind = () => UpdateHandler(db).Handle(
+            new UpdateWarehouseCommand(created.Id, "Wrong classification", WarehouseKind.OperatingSupplies), CancellationToken.None);
+        await changeKind.Should().ThrowAsync<DomainException>();
+        (await db.Warehouses.AsNoTracking().SingleAsync(w => w.Id == created.Id)).Kind.Should().Be(WarehouseKind.Materials);
     }
 
     [Fact]
@@ -152,6 +157,17 @@ public class WarehouseMasterDataTests
 
         var deactivate = () => ActiveHandler(db).Handle(new SetWarehouseActiveCommand(missing, false), CancellationToken.None);
         await deactivate.Should().ThrowAsync<NotFoundException>();
+    }
+
+    [Fact]
+    public async Task CreatingAProductionWipWarehouse_IsRefused()
+    {
+        using var db = NewDb();
+        var create = () => CreateHandler(db).Handle(
+            new CreateWarehouseCommand("WIP-01", "Under production", WarehouseKind.ProductionWip), CancellationToken.None);
+
+        await create.Should().ThrowAsync<DomainException>();
+        (await db.Warehouses.CountAsync()).Should().Be(0);
     }
 
     [Fact]
