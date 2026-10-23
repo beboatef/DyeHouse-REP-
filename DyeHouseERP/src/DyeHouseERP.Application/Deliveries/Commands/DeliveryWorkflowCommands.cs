@@ -181,16 +181,43 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             // lot must be validated as their combined quantity, otherwise each
             // one is checked against the full balance and together they can
             // consume more than exists.
-            var categoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
+            var transferCategoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
                 .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId))
-                .ToDictionaryAsync(t => t.ProductionOrderId, t => t.Category, cancellationToken);
+                .Select(t => new { t.ProductionOrderId, t.Category })
+                .ToListAsync(cancellationToken);
+            var categoriesByOrder = transferCategoriesByOrder
+                .GroupBy(t => t.ProductionOrderId)
+                .ToDictionary(g => g.Key, g => g.Select(t => t.Category).Distinct().ToList());
+            var categoryByLine = new Dictionary<Guid, ReadyGoodsCategory?>();
+
+            foreach (var line in lines)
+            {
+                var availableCategories = categoriesByOrder.GetValueOrDefault(line.ProductionOrderId) ?? new List<ReadyGoodsCategory?>();
+                ReadyGoodsCategory? selectedCategory = line.Category;
+                if (selectedCategory.HasValue)
+                {
+                    if (!availableCategories.Contains(selectedCategory))
+                        throw new DomainException($"Production order has no ready-goods lot classified as {selectedCategory}.");
+                }
+                else if (availableCategories.Count == 1)
+                {
+                    // Compatibility for historical/API-created lines where the order has exactly one category.
+                    selectedCategory = availableCategories[0];
+                }
+                else
+                {
+                    throw new DomainException("Select the ready-goods category for each delivery line; this production order has multiple categories or no classified ready stock.");
+                }
+                categoryByLine[line.Id] = selectedCategory;
+            }
 
             var requestedByLot = lines
-                .GroupBy(l => new { l.ProductionOrderId, l.ItemId })
+                .GroupBy(l => new { l.ProductionOrderId, l.ItemId, Category = categoryByLine[l.Id] })
                 .Select(g => new
                 {
                     g.Key.ProductionOrderId,
                     g.Key.ItemId,
+                    g.Key.Category,
                     RequestedKg = g.Sum(l => l.QuantityKg ?? 0),
                     RequestedMeter = g.Sum(l => l.QuantityMeter ?? 0)
                 })
@@ -198,12 +225,11 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
 
             foreach (var requested in requestedByLot)
             {
-                categoriesByOrder.TryGetValue(requested.ProductionOrderId, out var category);
                 var rows = await _db.InventoryTransactions.AsNoTracking()
                     .Where(t => t.RawMessageId == null
                              && t.ProductionOrderId == requested.ProductionOrderId
                              && t.ItemId == requested.ItemId
-                             && t.ReadyGoodsCategory == category)
+                             && t.ReadyGoodsCategory == requested.Category)
                     .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
                     .ToListAsync(cancellationToken);
 
@@ -226,7 +252,7 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
                     rawMessageId: null, productionOrderId: line.ProductionOrderId,
                     quantityKg: line.QuantityKg, quantityMeter: line.QuantityMeter,
                     direction: TransactionDirection.Out, createdBy: _currentUser.UserName,
-                    readyGoodsCategory: categoriesByOrder.GetValueOrDefault(line.ProductionOrderId)));
+                    readyGoodsCategory: categoryByLine[line.Id]));
             }
 
             await _db.SaveChangesAsync(cancellationToken);
