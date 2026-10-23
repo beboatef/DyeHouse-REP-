@@ -91,8 +91,8 @@ public class CreateRawExternalReleaseCommandHandler : IRequestHandler<CreateRawE
         // A release posts a NEW OUT row against the message's own warehouse, so a
         // deactivated warehouse cannot take part: its history stays readable and
         // untouched, but no new stock row may be written into it.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, message.WarehouseId, cancellationToken, "to release raw material out of it");
+        await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+            _db, message.WarehouseId, WarehouseKind.RawMaterial, cancellationToken, "to release raw material out of it");
 
         // Spec sections 5-6: the release may only use the units configured on its item,
         // and both measurements when the item requires them.
