@@ -19,8 +19,9 @@ namespace DyeHouseERP.Persistence.Migrations
                 maxLength: 20,
                 nullable: true);
 
-            // Preserve the category already recorded on the ready-goods OUT ledger row.
-            // Older rows have been backfilled to FirstGrade by the preceding migration.
+            // The ready-goods OUT row is authoritative because it records which category left ready stock;
+            // never infer the category from the raw-lot IN row. Older ready OUT rows are backfilled to
+            // FirstGrade by the preceding migration.
             migrationBuilder.Sql(@"
 UPDATE rr
 SET Category = COALESCE(tx.ReadyGoodsCategory, N'FirstGrade')
