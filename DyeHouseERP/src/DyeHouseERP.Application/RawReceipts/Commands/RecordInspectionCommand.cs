@@ -107,8 +107,8 @@ public class RecordInspectionCommandHandler : IRequestHandler<RecordInspectionCo
         // A retired warehouse never receives a new stock row: a rejection posts a
         // correcting OUT row against the message's warehouse, so that warehouse must
         // still be active. Reading the message and its inspection history stays possible.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, snapshot.WarehouseId, cancellationToken, "to record a rejected quantity against it");
+        await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+            _db, snapshot.WarehouseId, WarehouseKind.RawMaterial, cancellationToken, "to record a rejected quantity against it");
 
         // Spec sections 5-6: a rejected quantity is a quantity of the line's item, so
         // it may only use that item's configured units.
