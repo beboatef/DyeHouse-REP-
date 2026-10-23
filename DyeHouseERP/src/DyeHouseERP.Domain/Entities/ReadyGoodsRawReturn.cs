@@ -31,6 +31,7 @@ public class ReadyGoodsRawReturn : AuditableEntity
 
     public Guid CustomerId { get; private set; }
     public Guid ItemId { get; private set; }
+    public ReadyGoodsCategory? Category { get; private set; }
 
     /// <summary>The Ready Goods warehouse the stock leaves - always a Ready Goods warehouse.</summary>
     public Guid SourceWarehouseId { get; private set; }
@@ -58,7 +59,8 @@ public class ReadyGoodsRawReturn : AuditableEntity
     public ReadyGoodsRawReturn(
         string movementNumber, DateTime movementDate, Guid productionOrderId, Guid customerId, Guid itemId,
         Guid sourceWarehouseId, Guid destinationRawMessageId, Guid destinationWarehouseId,
-        decimal? quantityKg, decimal? quantityMeter, string reason, string createdBy, string? notes = null)
+        decimal? quantityKg, decimal? quantityMeter, string reason, string createdBy, string? notes = null,
+        ReadyGoodsCategory? category = null)
     {
         if (string.IsNullOrWhiteSpace(movementNumber))
             throw new ArgumentException("Movement number is required.", nameof(movementNumber));
@@ -85,6 +87,7 @@ public class ReadyGoodsRawReturn : AuditableEntity
         ProductionOrderId = productionOrderId;
         CustomerId = customerId;
         ItemId = itemId;
+        Category = category;
         SourceWarehouseId = sourceWarehouseId;
         DestinationRawMessageId = destinationRawMessageId;
         DestinationWarehouseId = destinationWarehouseId;
