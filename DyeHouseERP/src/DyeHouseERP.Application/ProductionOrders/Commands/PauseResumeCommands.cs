@@ -154,8 +154,8 @@ public class PauseProductionOrderCommandHandler : IRequestHandler<PauseProductio
             // A retired warehouse never receives a new stock row: the release posts an IN
             // row into the chosen lot's warehouse, so that warehouse must still be active.
             // Checked before the state change below, so a refusal leaves nothing half-written.
-            await WarehouseGuard.EnsureUsableForNewMovementAsync(
-                _db, chosen.WarehouseId, cancellationToken, "to return unused raw material into it");
+            await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+                _db, chosen.WarehouseId, WarehouseKind.RawMaterial, cancellationToken, "to return unused raw material into it");
 
             // The released quantity is a quantity of the chosen lot's item, so it may only
             // use that item's configured units (spec sections 5-6).
@@ -278,8 +278,8 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
 
         // A retired warehouse never receives a new stock row: the re-issue posts an OUT row
         // against the message's warehouse, so that warehouse must still be active.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, message.WarehouseId, cancellationToken, "to re-issue raw material out of it");
+        await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+            _db, message.WarehouseId, WarehouseKind.RawMaterial, cancellationToken, "to re-issue raw material out of it");
 
         // Spec sections 5-6: the re-issued quantity may only use the item's configured
         // units, and both when the item requires both.
