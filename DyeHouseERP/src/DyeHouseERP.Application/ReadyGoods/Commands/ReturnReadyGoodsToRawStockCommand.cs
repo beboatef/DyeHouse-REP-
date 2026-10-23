@@ -168,9 +168,14 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             {
                 readyCategory = availableCategories[0];
             }
+            else if (availableCategories.Contains(null))
+            {
+                // The UI sends null for an explicitly selected historical, unclassified balance.
+                readyCategory = null;
+            }
             else
             {
-                throw new DomainException("Select the ready-goods category to return; this order has multiple categories or no classified ready stock.");
+                throw new DomainException("Select the ready-goods category to return; this order has multiple categories.");
             }
 
             var readyRows = await _db.InventoryTransactions.AsNoTracking()
