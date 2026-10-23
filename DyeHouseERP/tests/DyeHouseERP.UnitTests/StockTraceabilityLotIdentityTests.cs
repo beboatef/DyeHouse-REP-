@@ -205,6 +205,41 @@ public class StockTraceabilityLotIdentityTests
         one.Movements.Single().LotKey.Should().Be(row.LotKey);
     }
 
+    [Fact]
+    public async Task MaterialsAndOperatingSuppliesScopes_KeepTheirLedgerRowsSeparate()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase($"material-supplies-scope-{Guid.NewGuid()}")
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new ApplicationDbContext(options);
+
+        var chemical = new Material("MAT-C1", "صبغة", MaterialUnit.KG, 10m, "seed");
+        var supply = new Material("SUP-S1", "قطع غيار", MaterialUnit.KG, 10m, "seed");
+        supply.SetKind(MaterialKind.OperatingSupply, "seed");
+        var chemicalsWarehouse = new Warehouse("WH-MAT", "مخزن المواد والكيماويات", WarehouseKind.Materials, "seed");
+        var suppliesWarehouse = new Warehouse("WH-SUP", "مخزن مستلزمات التشغيل", WarehouseKind.OperatingSupplies, "seed");
+        db.AddRange(chemical, supply, chemicalsWarehouse, suppliesWarehouse);
+        db.MaterialTransactions.AddRange(
+            new MaterialTransaction(DocumentType.PurchaseReceipt, "PR-C1", Guid.NewGuid(), new DateTime(2026, 10, 1),
+                chemical.Id, chemicalsWarehouse.Id, null, 100m, MaterialTransactionDirection.In, 10m, "clerk"),
+            new MaterialTransaction(DocumentType.PurchaseReceipt, "PR-S1", Guid.NewGuid(), new DateTime(2026, 10, 2),
+                supply.Id, suppliesWarehouse.Id, null, 25m, MaterialTransactionDirection.In, 10m, "clerk"));
+        await db.SaveChangesAsync();
+
+        var handler = new GetStockTraceabilityQueryHandler(db);
+        var chemicals = await handler.Handle(
+            new GetStockTraceabilityQuery(Scope: StockScopes.Materials), CancellationToken.None);
+        var supplies = await handler.Handle(
+            new GetStockTraceabilityQuery(Scope: StockScopes.Supplies), CancellationToken.None);
+
+        chemicals.Rows.Should().ContainSingle().Which.MaterialId.Should().Be(chemical.Id);
+        chemicals.TotalRemainingQuantity.Should().Be(100m);
+        supplies.Rows.Should().ContainSingle().Which.MaterialId.Should().Be(supply.Id);
+        supplies.TotalRemainingQuantity.Should().Be(25m);
+        supplies.Scope.Should().Be(StockScopes.Supplies);
+    }
+
     // =================================================================== the card, end to end
 
     /// <summary>
