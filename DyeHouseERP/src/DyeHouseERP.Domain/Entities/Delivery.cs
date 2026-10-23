@@ -83,7 +83,8 @@ public class Delivery : AuditableEntity
         // Manually entered per delivery, never derived: a partial delivery of finished goods says
         // how much original raw material it settles, and that is what "remaining original raw" is
         // measured against. Optional because a delivery line genuinely may not carry it.
-        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null)
+        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null,
+        ReadyGoodsCategory? category = null)
     {
         if (Status != DeliveryStatus.Draft)
             throw new DocumentLockedException("Delivery", DeliveryNumber);
@@ -98,7 +99,7 @@ public class Delivery : AuditableEntity
 
         var line = new DeliveryLine(
             Id, productionOrderId, itemId, color, quantityKg, quantityMeter, pieceCount, rawOrigin, notes,
-            originalRawQuantityKg, originalRawQuantityMeter);
+            originalRawQuantityKg, originalRawQuantityMeter, category);
         _lines.Add(line);
         return line;
     }
@@ -170,6 +171,7 @@ public class DeliveryLine : BaseEntity
     public decimal? QuantityKg { get; private set; }
     public decimal? QuantityMeter { get; private set; }
     public int? PieceCount { get; private set; }
+    public ReadyGoodsCategory? Category { get; private set; }
     public string? RawOrigin { get; private set; }
     public string? Notes { get; private set; }
 
@@ -186,7 +188,8 @@ public class DeliveryLine : BaseEntity
 
     internal DeliveryLine(Guid deliveryId, Guid productionOrderId, Guid itemId, string? color,
         decimal? quantityKg, decimal? quantityMeter, int? pieceCount, string? rawOrigin, string? notes,
-        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null)
+        decimal? originalRawQuantityKg = null, decimal? originalRawQuantityMeter = null,
+        ReadyGoodsCategory? category = null)
     {
         DeliveryId = deliveryId;
         ProductionOrderId = productionOrderId;
@@ -195,6 +198,7 @@ public class DeliveryLine : BaseEntity
         QuantityKg = quantityKg;
         QuantityMeter = quantityMeter;
         PieceCount = pieceCount;
+        Category = category;
         RawOrigin = rawOrigin;
         Notes = notes;
         OriginalRawQuantityKg = originalRawQuantityKg;
