@@ -1109,6 +1109,7 @@ export interface ReadyGoodsRawReturn {
   destinationRawMessageId: string; destinationMessageNumber: string;
   destinationWarehouseId: string; destinationWarehouseName: string;
   quantityKg: number | null; quantityMeter: number | null;
+  category: string | null;
   reason: string; notes: string | null;
   createdBy: string; createdAtUtc: string;
 }
