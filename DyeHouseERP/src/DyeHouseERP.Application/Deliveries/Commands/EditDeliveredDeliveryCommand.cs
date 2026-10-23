@@ -148,6 +148,9 @@ public class EditDeliveredDeliveryCommandHandler
             // checked as one 200 KG requirement, otherwise the lot could be
             // over-committed - the H3 bug class, guarded here too.
             var netByLot = new Dictionary<(Guid ItemId, Guid OrderId), LotDelta>();
+            var categoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
+                .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId))
+                .ToDictionaryAsync(t => t.ProductionOrderId, t => t.Category, cancellationToken);
 
             if (postsStock)
             {
@@ -166,6 +169,7 @@ public class EditDeliveredDeliveryCommandHandler
 
                 foreach (var net in netByLot)
                 {
+                    categoriesByOrder.TryGetValue(net.Key.OrderId, out var category);
                     // Only an INCREASE can be refused: returning stock to Ready Goods
                     // can never overdraw anything.
                     if (net.Value.Kg <= 0 && net.Value.Meter <= 0) continue;
@@ -173,7 +177,8 @@ public class EditDeliveredDeliveryCommandHandler
                     var rows = await _db.InventoryTransactions.AsNoTracking()
                         .Where(t => t.RawMessageId == null
                                  && t.ProductionOrderId == net.Key.OrderId
-                                 && t.ItemId == net.Key.ItemId)
+                                 && t.ItemId == net.Key.ItemId
+                                 && t.ReadyGoodsCategory == category)
                         .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
                         .ToListAsync(cancellationToken);
 
@@ -254,7 +259,8 @@ public class EditDeliveredDeliveryCommandHandler
                     readyWarehouse!.Id, delivery.CustomerId, net.Key.ItemId,
                     rawMessageId: null, productionOrderId: net.Key.OrderId,
                     quantityKg: Math.Abs(net.Value.Kg), quantityMeter: Math.Abs(net.Value.Meter),
-                    direction: direction, createdBy: _currentUser.UserName));
+                    direction: direction, createdBy: _currentUser.UserName,
+                    readyGoodsCategory: categoriesByOrder.GetValueOrDefault(net.Key.OrderId)));
             }
 
             delivery.EditAfterApproval(request.Reason, _currentUser.UserName);
