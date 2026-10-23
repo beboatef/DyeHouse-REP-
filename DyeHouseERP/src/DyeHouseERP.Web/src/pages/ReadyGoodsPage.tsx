@@ -157,7 +157,7 @@ export default function ReadyGoodsPage() {
               )}
             </div>
             <div>
-              <label className="field-label">تصنيف القماش الجاهز</label>
+              <label className="field-label">{translate("readyGoods.category", "التصنيف")}</label>
               <Select value={category} onChange={(e) => setCategory(e.target.value as "FirstGrade" | "SecondGrade" | "Separates")} required>
                 <option value="FirstGrade">{translate("readyGoods.firstGrade", "درجة أولى")}</option>
                 <option value="SecondGrade">{translate("readyGoods.secondGrade", "درجة ثانية")}</option>
