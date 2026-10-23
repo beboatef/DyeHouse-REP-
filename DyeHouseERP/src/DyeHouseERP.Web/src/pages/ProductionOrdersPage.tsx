@@ -5,7 +5,7 @@ import {
   ApprovalsApi, CustomersApi, FormationRequestsApi, ItemsApi, JobOrderType,
   ProductionOrdersApi, ProductionPriority, RawMessagesApi
 } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
 import { ExportButtons, DocumentActions } from "@/components/ExportButtons";
 import { ProductionOrdersExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
@@ -43,6 +43,8 @@ export default function ProductionOrdersPage() {
   const [showForm, setShowForm] = useState(Boolean(prefillCustomerId || prefillFormationRequestId));
   const [jobOrderType, setJobOrderType] = useState<JobOrderType>("ClosedLine");
   const [typeFilter, setTypeFilter] = useState<JobOrderType | "">("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
   const [customerId, setCustomerId] = useState(prefillCustomerId);
   const [itemId, setItemId] = useState(prefillItemId);
   const [rawMessageId, setRawMessageId] = useState("");
@@ -70,6 +72,18 @@ export default function ProductionOrdersPage() {
     queryKey: ["production-orders", typeFilter],
     queryFn: () => ProductionOrdersApi.list({ jobOrderType: typeFilter || undefined })
   });
+
+  const visibleOrders = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (orders ?? []).filter((order) => {
+      const matchesStatus = !statusFilter || order.status === statusFilter;
+      const matchesSearch = !term || [
+        order.orderNumber, order.customerCode, order.customerName, order.itemCode,
+        order.itemName, order.color, order.customerReference
+      ].filter(Boolean).join(" ").toLocaleLowerCase().includes(term);
+      return matchesStatus && matchesSearch;
+    });
+  }, [orders, search, statusFilter]);
 
   // Lots of the chosen customer/item that still hold a balance - the material actually
   // available to issue from.
@@ -203,11 +217,32 @@ export default function ProductionOrdersPage() {
       )}
 
       <Card className="card-pad mb-4">
-        <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")} className="max-w-xs">
-          <option value="">{t("common.all")} - {t("jo.type")}</option>
-          <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
-          <option value="OpenLine">{t("jo.type.OpenLine")}</option>
-        </Select>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div>
+            <label className="field-label">بحث سريع</label>
+            <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم الأمر أو العميل أو الصنف أو اللون" />
+          </div>
+          <div>
+            <label className="field-label">{t("jo.type")}</label>
+            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")}>
+              <option value="">{t("common.all")} - {t("jo.type")}</option>
+              <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
+              <option value="OpenLine">{t("jo.type.OpenLine")}</option>
+            </Select>
+          </div>
+          <div>
+            <label className="field-label">حالة أمر التشغيل</label>
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">كل الحالات</option>
+              <option value="Draft">مسودة</option>
+              <option value="RawAllocated">تم صرف الخام</option>
+              <option value="InProduction">تحت التشغيل</option>
+              <option value="Paused">متوقف مؤقتًا</option>
+              <option value="Completed">مكتمل</option>
+              <option value="Cancelled">ملغي</option>
+            </Select>
+          </div>
+        </div>
       </Card>
 
       {showForm && (
@@ -383,42 +418,40 @@ export default function ProductionOrdersPage() {
         </Card>
       )}
 
-      <div className="space-y-3">
-        {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
-        {!isLoading && orders?.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد أوامر تشغيل بعد</Card>}
-
-        {orders?.map((o) => (
-          <Card key={o.id} className="p-4 hover:border-brand-300 transition-colors">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Link to={`/production-orders/${o.id}`} className="min-w-0">
-                <span className="font-bold ltr-nums">{o.orderNumber}</span>
-                <span className="text-ink-subtle mx-2">·</span>
-                <span className="text-sm text-ink-muted">{o.customerCode} - {o.customerName}</span>
-                <span className="text-ink-subtle mx-2">·</span>
-                <span className="text-sm text-ink-muted">{o.itemCode} - {o.itemName}</span>
-                {o.color && <><span className="text-ink-subtle mx-2">·</span><span className="text-sm text-ink-muted">{o.color}</span></>}
-              </Link>
-              <div className="flex items-center gap-2">
-                <Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge>
-                <Badge tone="gray">{priorityLabel[o.priority]}</Badge>
-                <Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge>
-              </div>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs text-ink-subtle">
-                {o.stageExecutions.filter((s) => s.status === "Completed").length} / {o.stageExecutions.length} مراحل مكتملة
-              </div>
-              {/* The job-order card, not the detail screen, is where a supervisor
-                  actually prints from - so both the PDF and the print preview
-                  have to be one click away here. */}
-              <DocumentActions
-                pdf={ProductionOrdersExports.documentPdf(o.id)}
-                printTo={`/print/production-order/${o.id}`}
-              />
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-}
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+          <h2 className="card-title">سجل أوامر التشغيل</h2>
+          <span className="text-xs text-ink-muted">النتائج: <b className="ltr-nums">{visibleOrders.length}</b></span>
+        </div>
+        <div className="table-wrap">
+          <table className="table table-dense">
+            <thead><tr>
+              <th>رقم الأمر / التاريخ</th><th>العميل</th><th>الصنف / اللون</th>
+              <th>النوع والأولوية</th><th>المرحلة الحالية</th><th>تقدم المراحل</th><th>الحالة</th><th>الإجراءات</th>
+            </tr></thead>
+            <tbody>
+              {isLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+              {!isLoading && visibleOrders.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">لا توجد أوامر تشغيل مطابقة للبحث</td></tr>}
+              {visibleOrders.map((o) => {
+                const completedStages = o.stageExecutions.filter((stage) => stage.status === "Completed").length;
+                const currentStage = o.stageExecutions.find((stage) => stage.status !== "Completed");
+                return (
+                  <tr key={o.id}>
+                    <td>
+                      <Link to={`/production-orders/${o.id}`} className="font-semibold ltr-nums text-brand-700 hover:underline">{o.orderNumber}</Link>
+                      <div className="text-xs text-ink-subtle ltr-nums">{new Date(o.orderDate).toLocaleDateString()}</div>
+                    </td>
+                    <td><div className="font-medium">{o.customerName}</div><div className="text-xs text-ink-subtle ltr-nums">{o.customerCode}</div></td>
+                    <td><div className="font-medium">{o.itemName}</div><div className="text-xs text-ink-subtle">{o.itemCode}{o.color ? ` · ${o.color}` : ""}</div></td>
+                    <td><div><Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge></div><div className="mt-1 text-xs text-ink-muted">{priorityLabel[o.priority]}</div></td>
+                    <td>{currentStage?.stageName ?? (o.status === "Completed" ? "مكتمل" : "—")}</td>
+                    <td className="ltr-nums">{completedStages} / {o.stageExecutions.length}</td>
+                    <td><Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge></td>
+                    <td><DocumentActions pdf={ProductionOrdersExports.documentPdf(o.id)} printTo={`/print/production-order/${o.id}`} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
