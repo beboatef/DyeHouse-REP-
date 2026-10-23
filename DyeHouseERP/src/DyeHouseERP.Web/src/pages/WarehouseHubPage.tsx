@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { InventoryLedgerApi } from "@/api/client";
+import { InventoryLedgerApi, WarehousesApi } from "@/api/client";
 import { PageHeader, Card, Button, Input } from "@/components/ui";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ReportsExports } from "@/api/exports";
@@ -103,6 +103,11 @@ function MovementsTab() {
   const { t } = useI18n();
   const [filters, setFilters] = useState({ from: "", to: "", warehouseId: "" });
 
+  const { data: warehouses } = useQuery({
+    queryKey: ["warehouses", "active"],
+    queryFn: () => WarehousesApi.list({ activeOnly: true })
+  });
+
   const { data, isLoading } = useQuery({
     queryKey: ["inventory-movements", filters],
     queryFn: () =>
@@ -116,7 +121,7 @@ function MovementsTab() {
 
   return (
     <>
-      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
         <div>
           <label className="field-label">{t("common.from")}</label>
           <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
@@ -124,6 +129,19 @@ function MovementsTab() {
         <div>
           <label className="field-label">{t("common.to")}</label>
           <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+        </div>
+        <div>
+          <label className="field-label">{t("common.warehouse")}</label>
+          <select
+            className="input w-full"
+            value={filters.warehouseId}
+            onChange={(e) => setFilters({ ...filters, warehouseId: e.target.value })}
+          >
+            <option value="">{t("common.all")}</option>
+            {warehouses?.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>{warehouse.code} — {warehouse.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex flex-wrap gap-2">
           <ExportButtons
