@@ -23,7 +23,7 @@ namespace DyeHouseERP.Persistence.Migrations
             // Older rows have been backfilled to FirstGrade by the preceding migration.
             migrationBuilder.Sql(@"
 UPDATE rr
-SET rr.Category = COALESCE(tx.ReadyGoodsCategory, N'FirstGrade')
+SET Category = COALESCE(tx.ReadyGoodsCategory, N'FirstGrade')
 FROM ReadyGoodsRawReturns AS rr
 LEFT JOIN InventoryTransactions AS tx
   ON tx.SourceDocumentId = rr.Id
