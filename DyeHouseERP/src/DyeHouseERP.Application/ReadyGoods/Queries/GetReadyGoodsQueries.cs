@@ -97,9 +97,9 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
         var warehouses = await _db.Warehouses.AsNoTracking().Where(w => transfers.Select(t => t.WarehouseId).Contains(w.Id))
             .ToDictionaryAsync(w => w.Id, w => w.Name, cancellationToken);
 
-        // Available quantity per lot, live from the ledger (spec section 29): the ready dimension is
-        // (RawMessageId IS NULL, ProductionOrderId, ItemId), so the same figures the delivery and the
-        // ready-to-raw movement act on are what this register reports - never a stored copy.
+        // Available quantity per lot, live from the ledger (spec section 29): only Ready Goods
+        // warehouse rows with RawMessageId IS NULL count, grouped by ProductionOrderId, ItemId
+        // and category. Raw warehouse receipts and other warehouse movements cannot inflate this balance.
         var readyWarehouseIds = await _db.Warehouses.AsNoTracking()
             .Where(w => w.Kind == WarehouseKind.ReadyGoods)
             .Select(w => w.Id)
