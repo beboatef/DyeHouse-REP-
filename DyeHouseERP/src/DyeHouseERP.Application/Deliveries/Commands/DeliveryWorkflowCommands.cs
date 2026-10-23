@@ -234,7 +234,8 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             foreach (var requested in requestedByLot)
             {
                 var rows = await _db.InventoryTransactions.AsNoTracking()
-                    .Where(t => t.RawMessageId == null
+                    .Where(t => t.WarehouseId == readyWarehouse.Id
+                             && t.RawMessageId == null
                              && t.ProductionOrderId == requested.ProductionOrderId
                              && t.ItemId == requested.ItemId
                              && t.ReadyGoodsCategory == requested.Category)
