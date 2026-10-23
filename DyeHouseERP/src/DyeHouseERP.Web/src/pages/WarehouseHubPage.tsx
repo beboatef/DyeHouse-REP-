@@ -26,13 +26,14 @@ import SeparatesPage from "@/pages/SeparatesPage";
  */
 
 type TabKey =
-  | "balances" | "ready" | "materials" | "separates"
+  | "balances" | "ready" | "materials" | "supplies" | "separates"
   | "receipts" | "issues" | "transfers" | "adjustments" | "movements" | "master";
 
 const tabs: { key: TabKey; labelKey: string }[] = [
   { key: "balances", labelKey: "wh.tab.balances" },
   { key: "ready", labelKey: "wh.tab.readyBalances" },
   { key: "materials", labelKey: "wh.tab.materialBalances" },
+  { key: "supplies", labelKey: "nav.operatingSupplies" },
   { key: "separates", labelKey: "nav.separates" },
   { key: "receipts", labelKey: "wh.tab.receipts" },
   { key: "issues", labelKey: "wh.tab.issues" },
@@ -85,6 +86,7 @@ export default function WarehouseHubPage() {
       )}
       {tab === "ready" && <StockTraceability scope="ready" />}
       {tab === "materials" && <StockTraceability scope="materials" />}
+      {tab === "supplies" && <StockTraceability scope="supplies" />}
       {tab === "separates" && <SeparatesPage />}
       {tab === "receipts" && <RawMessagesPage />}
       {tab === "issues" && <RawExternalReleasesPage />}
