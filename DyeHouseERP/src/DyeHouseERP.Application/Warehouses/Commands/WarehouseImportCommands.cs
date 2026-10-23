@@ -121,7 +121,8 @@ internal static class WarehouseImportValidator
 
             if (string.IsNullOrWhiteSpace(kind))
                 row.Errors.Add("Kind is required (RawMaterial, Materials, ReadyGoods or OperatingSupplies).");
-            else if (!Enum.TryParse<WarehouseKind>(kind, ignoreCase: true, out var parsedKind))
+            else if (!Enum.TryParse<WarehouseKind>(kind, ignoreCase: true, out var parsedKind)
+                || !Enum.IsDefined(typeof(WarehouseKind), parsedKind))
                 row.Errors.Add($"Kind '{kind}' is not valid. Allowed kinds are RawMaterial, ReadyGoods, Materials and OperatingSupplies.");
             else if (parsedKind == WarehouseKind.ProductionWip)
                 row.Errors.Add("ProductionWip is a legacy classification only and cannot be created through import.");
