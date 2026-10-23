@@ -35,8 +35,9 @@ public class CreateDeliveryCommandValidator : AbstractValidator<CreateDeliveryCo
         {
             l.RuleFor(x => x.ProductionOrderId).NotEmpty();
             l.RuleFor(x => x.ItemId).NotEmpty();
-            l.RuleFor(x => x.Category).NotNull()
-                .WithMessage("Select the ready-goods category for each delivery line.");
+            // Null is reserved for legacy, unclassified ready stock. The delivery handler
+            // resolves it against the actual ledger balance; classified lots still require
+            // an explicit category whenever more than one category is available.
             l.RuleFor(x => x).Must(x => x.QuantityKg is > 0 || x.QuantityMeter is > 0);
             l.RuleFor(x => x.PieceCount).GreaterThanOrEqualTo(0).When(x => x.PieceCount.HasValue);
             l.RuleFor(x => x.OriginalRawQuantityKg).GreaterThanOrEqualTo(0).When(x => x.OriginalRawQuantityKg.HasValue);
