@@ -206,6 +206,17 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
             // leaves the ledger untouched.
             order.Cancel(request.Reason, _currentUser.UserName);
 
+            // If this is a reprocessing order that has not entered production,
+            // release its linked separate back to the pending register in the
+            // same unit of work as the cancellation and raw-ledger reversal.
+            if (order.ReprocessingOfProductionOrderId.HasValue)
+            {
+                var linkedSeparate = await _db.Separates.FirstOrDefaultAsync(
+                    s => s.ReprocessingProductionOrderId == order.Id,
+                    cancellationToken);
+                linkedSeparate?.CancelReprocessing(order.Id, _currentUser.UserName);
+            }
+
             // The state change and every returned lot are audited with who/when/
             // why and the exact quantities - a cancellation is never a silent
             // stock mutation (same convention as Pause).
