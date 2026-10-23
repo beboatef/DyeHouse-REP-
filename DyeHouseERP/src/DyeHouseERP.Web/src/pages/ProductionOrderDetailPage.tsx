@@ -510,11 +510,13 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   const finalReadyKg = num(outputKg);
   const finalReadyMeter = num(outputMeter);
   const finalSeparatesKg = num(separatesKg);
-  // الهالك وزن، فيُحسب بالكيلو فقط: أصل الخام بالكيلو − وزن الجاهز بالكيلو − المنفصلات بالكيلو. The metre
-  // figures entered on the same operation stay a LENGTH and are never turned into a "metre waste" -
-  // nothing is shown until the two KG figures it needs exist, and a negative result is reported as an
-  // error rather than printed as a "waste".
-  const wasteKg = finalRawKg != null && finalReadyKg != null ? finalRawKg - finalReadyKg - (finalSeparatesKg ?? 0) : null;
+  const finalSecondGradeKg = num(secondGradeKg);
+  // Waste is weight only: original raw KG - first-grade ready KG - separates KG - second-grade KG.
+  // Metres remain an independent length and are never converted into waste. Keep this preview aligned
+  // with the delivery statement's server-side calculation.
+  const wasteKg = finalRawKg != null && finalReadyKg != null
+    ? finalRawKg - finalReadyKg - (finalSeparatesKg ?? 0) - (finalSecondGradeKg ?? 0)
+    : null;
   const finalWasteKg = wasteKg != null && wasteKg >= 0 ? wasteKg : null;
   const finalWasteNegativeKg = wasteKg != null && wasteKg < 0;
   // The final capture is complete when the ready weight AND the original raw weight it is measured against
@@ -747,13 +749,19 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
                 <Field label={t("stage.finalMeter")}>
                   <Input type="number" min={0} step="0.01" value={outputMeter} onChange={(e) => setOutputMeter(e.target.value)} />
                 </Field>
-                {/* Separates are OPTIONAL on purpose: with none, the operator completes the operation
-                    without entering them and the waste is simply original raw - ready weight. */}
+                {/* Separates and second grade are their own recorded streams, not first-grade output.
+                    Waste preview below subtracts both without converting KG and Meter. */}
                 <Field label={t("stage.separatesKgOptional")}>
                   <Input type="number" min={0} step="0.01" value={separatesKg} onChange={(e) => setSeparatesKg(e.target.value)} />
                 </Field>
                 <Field label={t("stage.separatesMeterOptional")}>
                   <Input type="number" min={0} step="0.01" value={separatesMeter} onChange={(e) => setSeparatesMeter(e.target.value)} />
+                </Field>
+                <Field label={t("stage.secondGradeKg")}>
+                  <Input type="number" min={0} step="0.01" value={secondGradeKg} onChange={(e) => setSecondGradeKg(e.target.value)} />
+                </Field>
+                <Field label={t("stage.secondGradeMeter")}>
+                  <Input type="number" min={0} step="0.01" value={secondGradeMeter} onChange={(e) => setSecondGradeMeter(e.target.value)} />
                 </Field>
                 <div className="rounded-lg bg-surface px-3 py-2">
                   <div className="text-2xs text-ink-muted">{t("stage.waste")}</div>
