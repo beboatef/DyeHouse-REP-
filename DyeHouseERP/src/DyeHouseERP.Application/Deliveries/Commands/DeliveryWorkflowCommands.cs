@@ -182,7 +182,8 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             // one is checked against the full balance and together they can
             // consume more than exists.
             var transferCategoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
-                .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId))
+                .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId)
+                         && t.Status != ReadyGoodsTransferStatus.Cancelled)
                 .Select(t => new { t.ProductionOrderId, t.Category })
                 .ToListAsync(cancellationToken);
             var categoriesByOrder = transferCategoriesByOrder
