@@ -218,8 +218,10 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
 
         // Posting writes one OUT row per line, so the warehouse must still be active: a draft
         // written while it was active is not a licence to draw from it later.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+        var saleWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, sale.WarehouseId, cancellationToken, "to post a stock movement out of it");
+        if (saleWarehouse.Kind != WarehouseKind.Materials)
+            throw new DomainException("Material sales must use a Materials warehouse.");
 
         // H6: lock every material this sale consumes, then re-check availability
         // and post under those locks.
@@ -232,6 +234,12 @@ public class PostMaterialSaleCommandHandler : IRequestHandler<PostMaterialSaleCo
         {
         foreach (var line in sale.Lines)
         {
+            var material = await _db.Materials.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == line.MaterialId, cancellationToken)
+                ?? throw new NotFoundException("Material", line.MaterialId);
+            if (material.Kind != MaterialKind.Chemical)
+                throw new DomainException("A material sale can contain production chemicals only; operating supplies cannot be sold.");
+            WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, saleWarehouse);
             var balance = await _ledger.GetBalanceAsync(line.MaterialId, sale.WarehouseId, cancellationToken);
             if (line.Quantity > balance) throw new NegativeStockException(balance, line.Quantity);
         }
