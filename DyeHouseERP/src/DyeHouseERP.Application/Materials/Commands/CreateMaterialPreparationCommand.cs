@@ -53,10 +53,13 @@ public class CreateMaterialPreparationCommandHandler : IRequestHandler<CreateMat
         var material = await _db.Materials.FirstOrDefaultAsync(m => m.Id == request.OriginalMaterialId, cancellationToken)
             ?? throw new NotFoundException("Material", request.OriginalMaterialId);
 
-        // Preparation consumes stock and writes its own ledger row, so it is a new movement:
-        // the warehouse must still be active. Existing preparations and their rows are untouched.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, request.WarehouseId, cancellationToken, "to consume material out of it");
+        if (material.Kind != MaterialKind.Chemical)
+            throw new DomainException("Only production chemicals can be prepared or diluted; operating supplies cannot.");
+
+        // Preparation consumes chemical stock, so both its item class and physical warehouse must match.
+        var warehouse = await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+            _db, request.WarehouseId, WarehouseKind.Materials, cancellationToken, "to consume material out of it");
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, warehouse);
 
         // H6: dilution consumes the original material's stock, so the check and
         // the consuming OUT row run under that (warehouse, material) lock.
