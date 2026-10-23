@@ -60,7 +60,7 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
             .Select(s => new
             {
                 s.ProductionOrderId, s.SeparatesKg, s.SeparatesMeter,
-                s.SecondGradeKg, s.SecondGradeMeter, s.RequiresDrawingNumber, s.DrawingNumber
+                s.SecondGradeKg, s.SecondGradeMeter, s.SecondGradePieceCount, s.RequiresDrawingNumber, s.DrawingNumber
             })
             .ToListAsync(cancellationToken);
 
@@ -124,6 +124,7 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
             var scrapsMeter = Sum(stages.Select(s => s.SeparatesMeter));
             var secondKg = Sum(stages.Select(s => s.SecondGradeKg));
             var secondMeter = Sum(stages.Select(s => s.SecondGradeMeter));
+            var secondGradePieces = SumCounts(stages.Select(s => s.SecondGradePieceCount));
 
             return new DeliveryStatementRowDto
             {
@@ -147,6 +148,7 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
                 ScrapsMeter = scrapsMeter,
                 SecondGradeKg = secondKg,
                 SecondGradeMeter = secondMeter,
+                SecondGradePieceCount = secondGradePieces,
                 // Calculated waste: a WEIGHT, so it is computed in KILOGRAMS ONLY (see Waste below). Null
                 // (never a made-up number) when the KG stream has no original-raw figure to measure
                 // against, and null when the recorded streams would make it negative - that means the
@@ -177,6 +179,12 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
     }
 
     /// <summary>Sum of a nullable stream, or null when the unit was never recorded anywhere.</summary>
+    private static int? SumCounts(IEnumerable<int?> values)
+    {
+        var list = values.ToList();
+        return list.Count == 0 || list.All(v => v is null) ? null : list.Sum(v => v ?? 0);
+    }
+
     private static decimal? Sum(IEnumerable<decimal?> values)
     {
         var list = values.ToList();
