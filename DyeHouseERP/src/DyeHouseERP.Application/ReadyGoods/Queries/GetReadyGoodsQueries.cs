@@ -70,6 +70,7 @@ public class GetReadyGoodsRawReturnsQueryHandler : IRequestHandler<GetReadyGoods
             DestinationWarehouseName = warehouses.GetValueOrDefault(m.DestinationWarehouseId) ?? string.Empty,
             QuantityKg = m.QuantityKg,
             QuantityMeter = m.QuantityMeter,
+            Category = m.Category?.ToString(),
             Reason = m.Reason,
             Notes = m.Notes,
             CreatedBy = m.CreatedBy,
