@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.Inventory.Queries;
 
-/// <summary>The three warehouses the same traceability principle is applied to.</summary>
+/// <summary>The warehouse scopes using the same traceability principle.</summary>
 public static class StockScopes
 {
     public const string Raw = "raw";
@@ -18,7 +18,7 @@ public static class StockScopes
 }
 
 /// <summary>
-/// BALANCES WITH THE MOVEMENTS BEHIND THEM - one query for all three warehouses.
+/// BALANCES WITH THE MOVEMENTS BEHIND THEM - one query per warehouse scope.
 ///
 /// Why it exists: a balance on its own is not traceable. This returns, for the SAME filter:
 ///   * one row per LOT - a raw lot is a receipt message, a ready lot is a job order, a materials lot
