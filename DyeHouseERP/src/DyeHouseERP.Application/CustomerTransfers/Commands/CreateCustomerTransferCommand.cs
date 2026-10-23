@@ -92,8 +92,8 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         // The transfer posts a NEW OUT row and a NEW IN row, both against the message's
         // warehouse: ownership moves, but the stock row is still new stock movement in
         // that warehouse, so it is refused while the warehouse is deactivated.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, message.WarehouseId, cancellationToken, "to transfer stock between customers");
+        await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+            _db, message.WarehouseId, WarehouseKind.RawMaterial, cancellationToken, "to transfer stock between customers");
 
         // Spec sections 5-6: the transfer may only use the units configured on its item,
         // and both measurements when the item requires them.
