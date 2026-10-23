@@ -72,6 +72,17 @@ public class Separate : AuditableEntity
         Status = SeparateStatus.Reprocessed;
     }
 
+    public void CancelReprocessing(Guid productionOrderId, string modifiedBy)
+    {
+        if (Status != SeparateStatus.Reprocessing || ReprocessingProductionOrderId != productionOrderId)
+            throw new DomainException("The separate is not assigned to this reprocessing order.");
+
+        Status = SeparateStatus.PendingReprocessing;
+        ReprocessingProductionOrderId = null;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
     public void Scrap(string reason, string modifiedBy)
     {
         // A separate assigned to a reprocessing order is already committed to that
