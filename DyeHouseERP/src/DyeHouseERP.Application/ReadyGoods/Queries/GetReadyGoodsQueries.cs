@@ -105,7 +105,7 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
             .Where(t => t.RawMessageId == null && t.ProductionOrderId != null
                      && orderIdsForLots.Contains(t.ProductionOrderId!.Value)
                      && itemIdsForLots.Contains(t.ItemId))
-            .Select(t => new { t.ProductionOrderId, t.ItemId, t.QuantityKg, t.QuantityMeter, t.Direction })
+            .Select(t => new { t.ProductionOrderId, t.ItemId, t.ReadyGoodsCategory, t.QuantityKg, t.QuantityMeter, t.Direction })
             .ToListAsync(cancellationToken);
 
         // The register reads each transfer's stage back with its IDENTITY (sequence and
@@ -140,9 +140,9 @@ public class GetReadyGoodsTransfersQueryHandler : IRequestHandler<GetReadyGoodsT
                 ItemName = items.GetValueOrDefault(t.ItemId)?.Name ?? "",
                 WarehouseId = t.WarehouseId,
                 WarehouseName = warehouses.GetValueOrDefault(t.WarehouseId) ?? "",
-                AvailableQuantityKg = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId)
+                AvailableQuantityKg = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId && r.ReadyGoodsCategory == t.Category)
                     .Sum(r => (r.QuantityKg ?? 0) * (int)r.Direction),
-                AvailableQuantityMeter = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId)
+                AvailableQuantityMeter = lotRows.Where(r => r.ProductionOrderId == t.ProductionOrderId && r.ItemId == t.ItemId && r.ReadyGoodsCategory == t.Category)
                     .Sum(r => (r.QuantityMeter ?? 0) * (int)r.Direction),
                 Color = orders.GetValueOrDefault(t.ProductionOrderId)?.Color,
                 QuantityKg = t.QuantityKg, QuantityMeter = t.QuantityMeter, PieceCount = t.PieceCount,
