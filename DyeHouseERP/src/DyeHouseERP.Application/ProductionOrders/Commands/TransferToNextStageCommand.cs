@@ -206,7 +206,7 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             if (request.InputKg is not > 0 && request.InputMeter is not > 0)
                 throw new DomainException(
                     "Enter the ORIGINAL RAW weight this last operation started from (أصل الخام): the waste is " +
-                    "calculated as original raw - ready weight - separates. أصل الخام مطلوب في المرحلة الأخيرة قبل مخزن الجاهز.");
+                    "calculated as original raw - first-grade ready - second grade - separates. أصل الخام مطلوب في المرحلة الأخيرة قبل مخزن الجاهز.");
         }
 
         // Spec sections 5-6: any recorded figure may only use the units configured on the order's item, with
@@ -277,7 +277,7 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 // recorded on the same operation stay a length: they are never converted into a weight
                 // and they form no part of the waste equation, so they are not passed here at all.
                 stage.EnsureWasteIsPossible(
-                    request.InputKg, request.OutputKg, request.SeparatesKg);
+                    request.InputKg, request.OutputKg, request.SeparatesKg, request.SecondGradeKg);
             }
 
             // Steps 1-4: close, record what the operation consumed and produced (input, output, separates,
@@ -325,7 +325,7 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 machineId = request.MachineId,
                 productionShiftId = request.ProductionShiftId,
                 // A route step records no production figure, and the waste the LAST operation before the ready
-                // goods warehouse derived (original raw KG - ready weight KG - separates KG) is captured with
+                // goods warehouse derived (original raw KG - first-grade ready KG - second-grade KG - separates KG) is captured with
                 // it. The metre figure is a length and is deliberately not turned into a "metre waste".
                 routeStep = isRouteStep,
                 wasteKg = stage.WasteKg,
