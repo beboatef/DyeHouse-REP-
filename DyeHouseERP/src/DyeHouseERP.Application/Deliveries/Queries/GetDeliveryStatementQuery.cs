@@ -2,6 +2,7 @@ using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Deliveries.DTOs;
 using DyeHouseERP.Domain.Enums;
+using DyeHouseERP.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
