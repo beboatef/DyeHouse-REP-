@@ -55,6 +55,9 @@ const navGroups: NavGroup[] = [
     icon: <Warehouse size={18} />,
     items: [
       { to: "/warehouse", labelKey: "nav.warehouseHub", icon: <Warehouse size={16} /> },
+      { to: "/warehouse?tab=ready", labelKey: "nav.readyGoods", icon: <PackageCheck size={16} /> },
+      { to: "/warehouse?tab=materials", labelKey: "nav.materials", icon: <FlaskConical size={16} /> },
+      { to: "/warehouse?tab=supplies", labelKey: "nav.operatingSupplies", icon: <LifeBuoy size={16} /> },
       // المنفصلات sits with the warehouses: a separate is MATERIAL HELD ON SITE, tracked by the
       // warehouse register (it is reprocessed into a new job or scrapped), not a production stage -
       // and the register is where the floor looks for the material it set aside.
@@ -80,16 +83,7 @@ const navGroups: NavGroup[] = [
       { to: "/ready-goods", labelKey: "nav.readyGoods", icon: <PackageCheck size={16} /> }
     ]
   },
-  {
-    titleKey: "nav.group.materials",
-    icon: <FlaskConical size={18} />,
-    items: [
-      { to: "/materials", labelKey: "nav.materials", icon: <FlaskConical size={16} /> },
-      { to: "/supplies", labelKey: "nav.supplies", icon: <LifeBuoy size={16} /> },
-      { to: "/material-sales", labelKey: "nav.materialSales", icon: <BadgeDollarSign size={16} /> },
-      { to: "/warehouse?tab=materials", labelKey: "nav.operatingSupplies", icon: <Warehouse size={16} /> }
-    ]
-  },
+
   {
     titleKey: "nav.group.finance",
     icon: <Wallet size={18} />,
