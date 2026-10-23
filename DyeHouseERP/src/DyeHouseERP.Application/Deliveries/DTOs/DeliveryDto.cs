@@ -22,6 +22,7 @@ public class DeliveryLineDto
     public decimal? QuantityKg { get; set; }
     public decimal? QuantityMeter { get; set; }
     public int? PieceCount { get; set; }
+    public ReadyGoodsCategory? Category { get; set; }
     public string? RawOrigin { get; set; }
     public List<string> DrawingNumbers { get; set; } = new();
 
@@ -77,6 +78,7 @@ public class DeliveryLineInput
     public decimal? QuantityKg { get; set; }
     public decimal? QuantityMeter { get; set; }
     public int? PieceCount { get; set; }
+    public ReadyGoodsCategory? Category { get; set; }
     public string? RawOrigin { get; set; }
     public string? Notes { get; set; }
 
