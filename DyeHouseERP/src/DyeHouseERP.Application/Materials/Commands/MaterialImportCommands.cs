@@ -13,10 +13,10 @@ namespace DyeHouseERP.Application.Materials.Commands;
 /// -> result. Columns: Code, Name, Unit, PurchasePrice, Kind, ReorderLevel.
 ///
 /// Unit must be exactly KG, Gram or Liter (no conversion between them). Kind
-/// separates production chemicals from the operating-supplies store. Existing
-/// codes are never overwritten automatically - they are only updated when the
-/// caller holds items.edit (the API exposes that as import/preview-update and
-/// import/execute-update).
+/// separates production chemicals from the operating-supplies store and is immutable
+/// after creation, because existing stock movements are tied to that classification.
+/// Existing codes can be updated only when the caller holds items.edit; a kind change
+/// is rejected even for an authorized import.
 /// </summary>
 public record PreviewMaterialImportCommand(byte[] FileBytes, bool AllowExistingUpdate = false) : IRequest<ImportPreviewDto>;
 
@@ -78,12 +78,14 @@ public class ExecuteMaterialImportCommandHandler : IRequestHandler<ExecuteMateri
             }
 
             var unit = Enum.Parse<MaterialUnit>(row.Values.GetValueOrDefault("Unit")!, ignoreCase: true);
-            var kind = Enum.Parse<MaterialKind>(row.Values.GetValueOrDefault("Kind") ?? "Chemical", ignoreCase: true);
             var name = row.Values.GetValueOrDefault("Name")!;
             var price = decimal.Parse(row.Values.GetValueOrDefault("PurchasePrice") ?? "0");
             var reorder = row.Values.GetValueOrDefault("ReorderLevel") is { Length: > 0 } r ? decimal.Parse(r) : (decimal?)null;
-
             var match = existing.FirstOrDefault(m => string.Equals(m.Code, code, StringComparison.OrdinalIgnoreCase));
+            var kindText = row.Values.GetValueOrDefault("Kind");
+            var kind = string.IsNullOrWhiteSpace(kindText) && match is not null
+                ? match.Kind
+                : Enum.Parse<MaterialKind>(kindText ?? "Chemical", ignoreCase: true);
             if (match is null)
             {
                 var material = new Material(code, name, unit, price, _currentUser.UserName, kind);
@@ -126,8 +128,12 @@ internal static class MaterialImportValidator
     {
         var rawRows = ImportSheet.Read(fileBytes, reader, out var headers);
 
-        var existingCodes = (await db.Materials.AsNoTracking().Select(m => m.Code).ToListAsync(cancellationToken))
+        var existingMaterials = await db.Materials.AsNoTracking()
+            .Select(m => new { m.Code, m.Kind })
+            .ToListAsync(cancellationToken);
+        var existingCodes = existingMaterials.Select(m => m.Code)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existingKinds = existingMaterials.ToDictionary(m => m.Code, m => m.Kind, StringComparer.OrdinalIgnoreCase);
         var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var results = new List<ImportRowPreview>();
@@ -149,7 +155,7 @@ internal static class MaterialImportValidator
                 Values = new Dictionary<string, string?>
                 {
                     ["Code"] = code, ["Name"] = name, ["Unit"] = unit,
-                    ["PurchasePrice"] = price, ["Kind"] = kind ?? "Chemical", ["ReorderLevel"] = reorder
+                    ["PurchasePrice"] = price, ["Kind"] = kind, ["ReorderLevel"] = reorder
                 }
             };
 
@@ -180,7 +186,14 @@ internal static class MaterialImportValidator
                     if (!allowExistingUpdate)
                         row.Errors.Add($"Code '{code}' already exists. Existing materials are not overwritten automatically.");
                     else
+                    {
                         row.Action = "Update";
+                        if (!string.IsNullOrWhiteSpace(kind)
+                            && Enum.TryParse<MaterialKind>(kind, ignoreCase: true, out var requestedKind)
+                            && existingKinds.TryGetValue(code, out var currentKind)
+                            && requestedKind != currentKind)
+                            row.Errors.Add($"Material kind cannot be changed from '{currentKind}' to '{requestedKind}' because its stock history is classified by kind.");
+                    }
                 }
             }
 
