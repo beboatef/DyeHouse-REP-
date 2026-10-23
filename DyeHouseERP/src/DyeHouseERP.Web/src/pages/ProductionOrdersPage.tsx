@@ -246,7 +246,7 @@ export default function ProductionOrdersPage() {
           </Select>
         </div>
         <div>
-          <label className="field-label">حالة أمر التشغيل</label>
+          <label className="field-label">{t("jo.list.statusFilter")}</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">{t("jo.list.allStatuses", "كل الحالات")}</option>
             {["Draft", "RawAllocated", "InProduction", "Paused", "Completed", "Cancelled"].map((status) => (
@@ -255,7 +255,7 @@ export default function ProductionOrdersPage() {
           </Select>
         </div>
       </Card>
-      <p className="text-xs text-ink-muted mb-3">عرض {visibleOrders.length} من {orders?.length ?? 0} أمر تشغيل</p>
+      <p className="text-xs text-ink-muted mb-3">{t("jo.list.results")}: {visibleOrders.length} / {orders?.length ?? 0}</p>
 
       {showForm && (
         <Card className="card-pad mb-6">
