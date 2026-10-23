@@ -42,7 +42,7 @@ import { useI18n } from "@/i18n";
  * loud instead of printing the first lot it finds.
  */
 const isScope = (value: string | undefined): value is StockScope =>
-  value === "raw" || value === "ready" || value === "materials";
+  value === "raw" || value === "ready" || value === "materials" || value === "supplies";
 
 export default function StockTraceabilityPrintPage() {
   const { t } = useI18n();
@@ -93,7 +93,7 @@ function LotTraceabilityCard({ scope, token, pageBreakAfter }: {
   scope: StockScope; token: string; pageBreakAfter: boolean;
 }) {
   const { t } = useI18n();
-  const isMaterials = scope === "materials";
+  const isMaterials = scope === "materials" || scope === "supplies";
 
   // The token carries the lot's FULL identity - its document AND the item (or warehouse) that makes it
   // one balance - which is what the request below has to state, or the server answers about the wrong
