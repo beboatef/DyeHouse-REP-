@@ -15,7 +15,6 @@ const statusTone: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> =
   // still alive and resumable, which is exactly how it differs from a cancelled one.
   Draft: "gray", RawAllocated: "blue", InProduction: "yellow", Paused: "yellow", Completed: "green", Cancelled: "red"
 };
-const priorityLabel: Record<string, string> = { Low: "منخفضة", Normal: "عادية", High: "عالية", Urgent: "عاجلة" };
 
 /**
  * Job orders (أوامر التشغيل).
@@ -451,7 +450,7 @@ export default function ProductionOrdersPage() {
                     <td><div className="font-medium">{o.itemName}</div><div className="text-xs text-ink-subtle">{o.itemCode}{o.color ? ` · ${o.color}` : ""}</div></td>
                     <td><div className="ltr-nums">{formatQty(o.requestedQuantityKg, t("common.kg"))}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(o.requestedQuantityMeter, t("common.meter"))}</div></td>
                     <td><div className="ltr-nums">{formatQty(lastCompletedStage?.outputKg, t("common.kg"))}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(lastCompletedStage?.outputMeter, t("common.meter"))}</div></td>
-                    <td><div><Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge></div><div className="mt-1 text-xs text-ink-muted">{priorityLabel[o.priority]}</div></td>
+                    <td><div><Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge></div><div className="mt-1 text-xs text-ink-muted">{t(`jo.priority.${o.priority}`)}</div></td>
                     <td>{currentStage?.stageName ?? (o.status === "Completed" ? t("prod.status.Completed") : "—")}</td>
                     <td className="ltr-nums">{completedStages} / {o.stageExecutions.length}</td>
                     <td><Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge></td>
