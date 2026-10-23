@@ -1,10 +1,14 @@
 using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using DyeHouseERP.Persistence;
 
 #nullable disable
 
 namespace DyeHouseERP.Persistence.Migrations
 {
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20261023221500_AddReadyGoodsCategory")]
     public partial class AddReadyGoodsCategory : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
