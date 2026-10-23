@@ -15,18 +15,18 @@ namespace DyeHouseERP.Persistence.Migrations
                 maxLength: 20,
                 nullable: true);
 
-            // The ready-goods OUT row is authoritative because it records which category left ready stock;
-            // never infer the category from the raw-lot IN row. Older ready OUT rows are backfilled to
-            // FirstGrade by the preceding migration.
+            // The ready-goods OUT ledger row is authoritative. Do not infer a category
+            // for legacy documents whose corresponding ledger row/category is unavailable.
             migrationBuilder.Sql(@"
 UPDATE rr
-SET Category = COALESCE(tx.ReadyGoodsCategory, N'FirstGrade')
+SET Category = tx.ReadyGoodsCategory
 FROM ReadyGoodsRawReturns AS rr
-LEFT JOIN InventoryTransactions AS tx
+INNER JOIN InventoryTransactions AS tx
   ON tx.SourceDocumentId = rr.Id
  AND tx.SourceDocumentType = N'ReadyGoodsRawReturn'
  AND tx.Direction = N'Out'
-WHERE rr.Category IS NULL;
+WHERE rr.Category IS NULL
+  AND tx.ReadyGoodsCategory IS NOT NULL;
 ");
         }
 
