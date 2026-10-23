@@ -36,6 +36,7 @@ public class InventoryTransaction : BaseEntity
     public decimal? QuantityMeter { get; private set; }
     public TransactionDirection Direction { get; private set; }
     public ReadyGoodsCategory? ReadyGoodsCategory { get; private set; }
+    public ReadyGoodsCategory? ReadyGoodsCategory { get; private set; }
 
     public string CreatedBy { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
@@ -76,6 +77,7 @@ public class InventoryTransaction : BaseEntity
         CreatedBy = createdBy;
         CreatedAtUtc = DateTime.UtcNow;
         ReversesTransactionId = reversesTransactionId;
+        ReadyGoodsCategory = readyGoodsCategory;
         ReadyGoodsCategory = readyGoodsCategory;
     }
 }
