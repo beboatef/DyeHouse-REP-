@@ -382,7 +382,7 @@ public class RawAllocationGateHandlerTests
 
         var act = () => ReadyGoodsHandler(db).Handle(
             new CreateReadyGoodsTransferCommand(
-                order.Id, scene.ReadyWarehouse.Id, 400m, null, null, "manual transfer", StageExecutionId: stage.Id),
+                order.Id, scene.ReadyWarehouse.Id, 400m, null, null, "manual transfer", StageExecutionId: stage.Id, Category: ReadyGoodsCategory.FirstGrade),
             CancellationToken.None);
 
         (await act.Should().ThrowAsync<DomainException>()).WithMessage("*not fully allocated*");
@@ -404,7 +404,7 @@ public class RawAllocationGateHandlerTests
 
         var dto = await ReadyGoodsHandler(db).Handle(
             new CreateReadyGoodsTransferCommand(
-                order.Id, scene.ReadyWarehouse.Id, 400m, null, null, "manual transfer", StageExecutionId: stage.Id),
+                order.Id, scene.ReadyWarehouse.Id, 400m, null, null, "manual transfer", StageExecutionId: stage.Id, Category: ReadyGoodsCategory.FirstGrade),
             CancellationToken.None);
 
         dto.QuantityKg.Should().Be(400m);
