@@ -62,8 +62,8 @@ public class RecordExternalProcessingReturnCommandHandler
         // The return posts a NEW IN row against the lot's warehouse, so a deactivated
         // warehouse refuses it even though the release itself is old. (The cancel path
         // below posts NO ledger row, so it deliberately does not come through here.)
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
-            _db, message.WarehouseId, cancellationToken, $"to return material into it (release {release.ReleaseNumber})");
+        await WarehouseGuard.EnsureWarehouseKindForNewMovementAsync(
+            _db, message.WarehouseId, WarehouseKind.RawMaterial, cancellationToken, $"to return material into it (release {release.ReleaseNumber})");
 
         // H6: the return posts an IN into the same raw lot the release took out
         // of, under that lot's lock.
