@@ -43,7 +43,7 @@ public class StageCheckboxTransferAndFinalWeightsTests
     /// item does not require both), 100% raw allocation so the floor gate is satisfied exactly as it is for
     /// a real issued order, and three active stages (formation, an ordinary next one, ready goods).
     /// </summary>
-    private Scene Seed(decimal requestedKg = 1000m, decimal? requestedMeter = 120m)
+    private Scene Seed(decimal requestedKg = 1000m, decimal? requestedMeter = 120m, string orderNumber = "PRD-1")
     {
         var customer = new Customer("C-1", "Buyer", "seed");
         var item = new Item("IT-1", "Fabric", UnitOfMeasure.KG, "seed", secondaryUnit: UnitOfMeasure.Meter);
@@ -54,7 +54,7 @@ public class StageCheckboxTransferAndFinalWeightsTests
         var nextStage = new ProductionStageDefinition("PS002", "الغسيل", 2, "seed");
         var readyStage = new ProductionStageDefinition("PS010", "الجاهز", 10, "seed", isReadyGoodsStage: true);
 
-        var order = new ProductionOrder("PRD-1", customer.Id, item.Id, DateTime.UtcNow, "seed",
+        var order = new ProductionOrder(orderNumber, customer.Id, item.Id, DateTime.UtcNow, "seed",
             color: "Blue", requestedQuantityKg: requestedKg, requestedQuantityMeter: requestedMeter);
 
         using var db = NewDb();
