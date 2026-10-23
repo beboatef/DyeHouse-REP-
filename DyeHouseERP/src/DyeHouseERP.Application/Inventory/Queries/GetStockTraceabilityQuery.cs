@@ -124,19 +124,19 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         var deliveryLines = deliveryDocIds.Count == 0 ? new List<DeliveryLine>()
             : await _db.DeliveryLines.AsNoTracking().Where(l => deliveryDocIds.Contains(l.DeliveryId)).ToListAsync(cancellationToken);
 
-        // Produced quantities per (job order, item): the ready-goods IN rows. Read for the same orders so
-        // a raw lot can report how much of what it issued has already come back out as finished fabric.
-        var producedByOrderItem = await _db.InventoryTransactions.AsNoTracking()
-            .Where(t => t.RawMessageId == null && t.ProductionOrderId != null && orderIds.Contains(t.ProductionOrderId!.Value)
-                        && t.SourceDocumentType == DocumentType.ReadyGoodsTransfer && t.Direction == TransactionDirection.In)
-            .Select(t => new { OrderId = t.ProductionOrderId!.Value, t.ItemId, t.QuantityKg, t.QuantityMeter })
-            .ToListAsync(cancellationToken);
-
+        // Active produced quantities per (job order, item). A cancelled transfer keeps its original
+        // IN ledger row for audit and adds a compensating OUT row; summing only the IN rows would
+        // incorrectly report cancelled fabric as produced. Use the transfer documents' live status
+        // for production totals, while the stock balance and movement history still come from ledger rows.
         var readyTransfersByOrder = orderIds.Count == 0
             ? new List<ReadyGoodsTransfer>()
             : await _db.ReadyGoodsTransfers.AsNoTracking()
                 .Where(rt => orderIds.Contains(rt.ProductionOrderId) && rt.Status != ReadyGoodsTransferStatus.Cancelled)
                 .ToListAsync(cancellationToken);
+
+        var producedByOrderItem = readyTransfersByOrder
+            .Select(rt => new { OrderId = rt.ProductionOrderId, rt.ItemId, rt.QuantityKg, rt.QuantityMeter })
+            .ToList();
 
         // When in raw scope, a receipt lot is linked to Job Orders that were subsequently delivered. When a
         // Job Order sourced its raw material from ONLY this lot (unambiguous 1:1 raw-message-to-order link),
