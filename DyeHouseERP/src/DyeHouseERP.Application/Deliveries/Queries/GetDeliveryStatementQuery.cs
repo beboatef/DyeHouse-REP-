@@ -144,6 +144,7 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
                 ItemCode = item?.Code ?? string.Empty,
                 ItemName = item?.Name ?? string.Empty,
                 Color = line.Color,
+                Category = line.Category,
                 OriginalRawQuantityKg = originalKg,
                 OriginalRawQuantityMeter = originalMeter,
                 DeliveredOriginalRawQuantityKg = line.OriginalRawQuantityKg,
