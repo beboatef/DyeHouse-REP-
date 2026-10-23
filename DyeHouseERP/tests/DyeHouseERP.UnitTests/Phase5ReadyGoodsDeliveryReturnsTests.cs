@@ -421,6 +421,35 @@ public class Phase5DeliveryStatementTests : Phase5TestBase
     }
 
     [Fact]
+    public async Task TheStatement_DoesNotCountSecondGradeOrSeparatesTransfersTwiceInWaste()
+    {
+        var scene = Seed(requestedKg: 600m, requestedMeter: 100m,
+            stageOutputKg: 520m, stageOutputMeter: 85m,
+            separatesKg: 20m, separatesMeter: 5m, secondGradeKg: 10m, secondGradeMeter: 2m);
+
+        using var db = NewDb();
+        var deliveryId = await SeedDeliveryAsync(db, scene, readyKg: 500m, readyMeter: 80m,
+            originalRawKg: 600m, originalRawMeter: 100m);
+
+        db.ReadyGoodsTransfers.AddRange(
+            new ReadyGoodsTransfer("RGT-FIRST", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id,
+                scene.Item.Id, scene.Ready.Id, 500m, 80m, "seed", category: ReadyGoodsCategory.FirstGrade),
+            new ReadyGoodsTransfer("RGT-SECOND", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id,
+                scene.Item.Id, scene.Ready.Id, 10m, 2m, "seed", category: ReadyGoodsCategory.SecondGrade),
+            new ReadyGoodsTransfer("RGT-SEPARATES", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id,
+                scene.Item.Id, scene.Ready.Id, 20m, 5m, "seed", category: ReadyGoodsCategory.Separates));
+        await db.SaveChangesAsync();
+
+        var row = (await StatementHandler(db).Handle(
+            new GetDeliveryStatementQuery(deliveryId), CancellationToken.None)).Rows.Single();
+
+        // 600 original - 500 first grade - 20 separates - 10 second grade = 70? No:
+        // the operation's stage output (520) is not used when a first-grade transfer exists.
+        // The first-grade transfer is 500, so 600 - 500 - 20 - 10 = 70 KG.
+        row.CalculatedWasteKg.Should().Be(70m);
+    }
+
+    [Fact]
     public async Task TheStatement_ExcludesCancelledReadyGoodsTransfersFromProducedOutput()
     {
         var scene = Seed(requestedKg: 600m, requestedMeter: 100m,
