@@ -291,7 +291,7 @@ export default function ReadyGoodsPage() {
             <th>الكمية المستلمة</th><th>المتاح الآن</th>
           </tr></thead>
           <tbody>
-            {transfersLoading && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
+            {transfersLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
             {transfers?.map((t) => (
               <tr key={t.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{t.transferNumber}</td><td className="ltr-nums">{t.productionOrderNumber}</td>
