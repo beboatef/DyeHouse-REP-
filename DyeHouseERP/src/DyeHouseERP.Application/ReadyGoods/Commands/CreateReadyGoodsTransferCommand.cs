@@ -106,9 +106,10 @@ public class CreateReadyGoodsTransferCommandHandler : IRequestHandler<CreateRead
             StockLockKey.ReadyLot(order.ItemId, order.Id), cancellationToken))
         {
 
-        var alreadyTransferred = await _db.ReadyGoodsTransfers.AnyAsync(t => t.ProductionOrderId == order.Id, cancellationToken);
+        var alreadyTransferred = await _db.ReadyGoodsTransfers.AnyAsync(
+            t => t.ProductionOrderId == order.Id && t.Category == request.Category, cancellationToken);
         if (alreadyTransferred)
-            throw new DomainException($"Production order '{order.OrderNumber}' has already been transferred to ready goods.");
+            throw new DomainException($"Production order '{order.OrderNumber}' has already been transferred to ready goods under this category.");
 
         var pendingStages = await _db.ProductionOrderStageExecutions
             .Where(s => s.ProductionOrderId == order.Id && (s.Status == StageExecutionStatus.Pending || s.Status == StageExecutionStatus.InProgress))
