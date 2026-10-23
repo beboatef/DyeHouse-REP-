@@ -181,6 +181,10 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             // lot must be validated as their combined quantity, otherwise each
             // one is checked against the full balance and together they can
             // consume more than exists.
+            var categoriesByOrder = await _db.ReadyGoodsTransfers.AsNoTracking()
+                .Where(t => lines.Select(l => l.ProductionOrderId).Contains(t.ProductionOrderId))
+                .ToDictionaryAsync(t => t.ProductionOrderId, t => t.Category, cancellationToken);
+
             var requestedByLot = lines
                 .GroupBy(l => new { l.ProductionOrderId, l.ItemId })
                 .Select(g => new
@@ -194,10 +198,12 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
 
             foreach (var requested in requestedByLot)
             {
+                categoriesByOrder.TryGetValue(requested.ProductionOrderId, out var category);
                 var rows = await _db.InventoryTransactions.AsNoTracking()
                     .Where(t => t.RawMessageId == null
                              && t.ProductionOrderId == requested.ProductionOrderId
-                             && t.ItemId == requested.ItemId)
+                             && t.ItemId == requested.ItemId
+                             && t.ReadyGoodsCategory == category)
                     .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
                     .ToListAsync(cancellationToken);
 
@@ -219,7 +225,8 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
                     readyWarehouse.Id, delivery.CustomerId, line.ItemId,
                     rawMessageId: null, productionOrderId: line.ProductionOrderId,
                     quantityKg: line.QuantityKg, quantityMeter: line.QuantityMeter,
-                    direction: TransactionDirection.Out, createdBy: _currentUser.UserName));
+                    direction: TransactionDirection.Out, createdBy: _currentUser.UserName,
+                    readyGoodsCategory: categoriesByOrder.GetValueOrDefault(line.ProductionOrderId)));
             }
 
             await _db.SaveChangesAsync(cancellationToken);
@@ -315,7 +322,8 @@ public class CancelDeliveryCommandHandler : IRequestHandler<CancelDeliveryComman
                         row.WarehouseId, row.CustomerId, row.ItemId, row.RawMessageId, row.ProductionOrderId,
                         row.QuantityKg, row.QuantityMeter,
                         direction: row.Direction == TransactionDirection.Out ? TransactionDirection.In : TransactionDirection.Out,
-                        createdBy: _currentUser.UserName, reversesTransactionId: row.Id));
+                        createdBy: _currentUser.UserName, reversesTransactionId: row.Id,
+                        readyGoodsCategory: row.ReadyGoodsCategory));
                 }
 
                 delivery.Cancel(request.Reason, _currentUser.UserName);
