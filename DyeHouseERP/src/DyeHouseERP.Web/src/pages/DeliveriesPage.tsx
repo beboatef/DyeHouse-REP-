@@ -19,12 +19,12 @@ const statusTone: Record<string, "gray" | "blue" | "green" | "red"> = { Draft: "
 // on its own: it arrives with the source, and on a sub-customer permit the source and the colour both
 // come from the primary permit being sliced (spec section 31).
 type LineDraft = {
-  sourceKey: string; productionOrderId: string; itemId: string; color: string;
+  sourceKey: string; productionOrderId: string; itemId: string; color: string; category: "FirstGrade" | "SecondGrade" | "Separates" | "";
   quantityKg: string; quantityMeter: string; pieceCount: string;
   originalRawQuantityKg: string; originalRawQuantityMeter: string;
 };
 const emptyLine = (): LineDraft => ({
-  sourceKey: "", productionOrderId: "", itemId: "", color: "",
+  sourceKey: "", productionOrderId: "", itemId: "", color: "", category: "",
   quantityKg: "", quantityMeter: "", pieceCount: "",
   originalRawQuantityKg: "", originalRawQuantityMeter: ""
 });
@@ -113,24 +113,24 @@ export default function DeliveriesPage() {
    * own item. An ordinary permit keeps the ready-goods lots of the chosen customer.
    */
   const sourceOptions = useMemo(() => {
-    const asOption = (productionOrderId: string, itemId: string, number: string, code: string, color: string | null | undefined, fromPrimary: boolean) => ({
-      key: `${productionOrderId}|${itemId}`,
-      productionOrderId, itemId,
-      label: `${number} - ${code}${color ? ` (${color})` : ""}`,
+    const asOption = (productionOrderId: string, itemId: string, number: string, code: string, color: string | null | undefined, category: "FirstGrade" | "SecondGrade" | "Separates" | null | undefined, fromPrimary: boolean) => ({
+      key: `${productionOrderId}|${itemId}|${category ?? "Unclassified"}`,
+      productionOrderId, itemId, category: category ?? "",
+      label: `${number} - ${code}${color ? ` (${color})` : ""} — ${category === "FirstGrade" ? "درجة أولى" : category === "SecondGrade" ? "درجة ثانية" : category === "Separates" ? "منفصلات" : "غير مصنف"}`,
       color: color ?? "", fromPrimary
     });
 
     if (!primaryPermit) {
       return (readyBalance ?? []).map((b) =>
-        asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, false));
+        asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, b.category as "FirstGrade" | "SecondGrade" | "Separates" | null, false));
     }
 
     const fromPrimary = primaryPermit.lines.map((l) =>
-      asOption(l.productionOrderId, l.itemId, l.productionOrderNumber, l.itemCode, l.color, true));
+      asOption(l.productionOrderId, l.itemId, l.productionOrderNumber, l.itemCode, l.color, l.category, true));
 
     const own = (readyBalance ?? [])
       .filter((b) => b.customerId === customerId)
-      .map((b) => asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, false));
+      .map((b) => asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, b.category as "FirstGrade" | "SecondGrade" | "Separates" | null, false));
 
     const seen = new Set(fromPrimary.map((o) => o.key));
     return [...fromPrimary, ...own.filter((o) => !seen.has(o.key))];
@@ -193,7 +193,8 @@ export default function DeliveriesPage() {
     }
     updateLine(idx, {
       sourceKey: key, productionOrderId: source.productionOrderId, itemId: source.itemId,
-      color: primaryPermit ? (primaryColorsFor.get(key)?.[0] ?? "") : source.color
+      color: primaryPermit ? (primaryColorsFor.get(`${"${source.productionOrderId}"}|${"${source.itemId}"}`)?.[0] ?? "") : source.color,
+      category: source.category
     });
   };
 
@@ -204,7 +205,7 @@ export default function DeliveriesPage() {
       // A line needs its lot and at least one measured quantity (KG and/or Meter) - the roll count is
       // an auxiliary figure the user may enter on its own, without forcing the other two.
       lines: lines.filter((l) => l.productionOrderId && l.itemId && (l.quantityKg || l.quantityMeter)).map((l) => ({
-        productionOrderId: l.productionOrderId, itemId: l.itemId, color: l.color || undefined,
+        productionOrderId: l.productionOrderId, itemId: l.itemId, color: l.color || undefined, category: l.category || undefined,
         quantityKg: l.quantityKg ? Number(l.quantityKg) : undefined,
         quantityMeter: l.quantityMeter ? Number(l.quantityMeter) : undefined,
         // Manually entered per delivery: the roll count, and the original raw this delivery settles.
