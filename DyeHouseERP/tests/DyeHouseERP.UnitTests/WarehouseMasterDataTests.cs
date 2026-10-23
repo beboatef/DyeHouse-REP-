@@ -15,7 +15,7 @@ namespace DyeHouseERP.UnitTests;
 
 /// <summary>
 /// Warehouse master data is DYNAMIC (spec section 15): an administrator creates, renames,
-/// renames and deactivates warehouses at runtime, with no code change and no fixed
+/// and deactivates warehouses at runtime, with no code change and no fixed
 /// list anywhere. These are handler-level tests against a real DbContext, because the
 /// list/search filtering and the "deactivation is a flag, never a removal" rule are both
 /// decided in the application and persistence layers.
