@@ -49,6 +49,8 @@ public class CreateMaterialSaleCommandHandler : IRequestHandler<CreateMaterialSa
         // A new sale may only draw from a warehouse that exists and is still active;
         // deactivated warehouses stay readable for everything already sold from them.
         var warehouse = await WarehouseGuard.EnsureUsableForNewDocumentAsync(_db, request.WarehouseId, cancellationToken);
+        if (warehouse.Kind != WarehouseKind.Materials)
+            throw new DomainException("Material sales must use a Materials warehouse.");
 
         if (request.CustomerId is not null &&
             !await _db.Customers.AnyAsync(c => c.Id == request.CustomerId, cancellationToken))
@@ -113,6 +115,9 @@ public class AddMaterialSaleLineCommandHandler : IRequestHandler<AddMaterialSale
         // supplies are internal consumables and are issued, never sold here.
         if (material.Kind != MaterialKind.Chemical)
             throw new DomainException("Operating supplies are internal consumables and cannot be sold through the materials sales document.");
+        var saleWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
+            _db, sale.WarehouseId, cancellationToken, "to add a sale line to it");
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, saleWarehouse);
 
         var balance = await _ledger.GetBalanceAsync(material.Id, sale.WarehouseId, cancellationToken);
         var requested = sale.Lines.Where(l => l.MaterialId == material.Id).Sum(l => l.Quantity) + request.Quantity;
