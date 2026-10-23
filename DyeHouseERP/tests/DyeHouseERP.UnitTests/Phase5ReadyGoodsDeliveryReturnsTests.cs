@@ -126,6 +126,65 @@ public abstract class Phase5TestBase
 }
 
 // ============================================================================================
+//  Ready-goods category balances: each category is an independent ledger dimension.
+// ============================================================================================
+public class Phase5ReadyGoodsCategoryBalanceTests : Phase5TestBase
+{
+    [Fact]
+    public async Task TheBalanceRegister_KeepsFirstGradeSecondGradeAndSeparatesIndependent()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        var date = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
+
+        db.InventoryTransactions.AddRange(
+            new InventoryTransaction(DocumentType.ReadyGoodsTransfer, "RGT-FIRST", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 100m, quantityMeter: 50m,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.FirstGrade),
+            new InventoryTransaction(DocumentType.ReadyGoodsTransfer, "RGT-SECOND", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 30m, quantityMeter: 20m,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.SecondGrade),
+            new InventoryTransaction(DocumentType.ReadyGoodsTransfer, "RGT-SEPARATES", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 8m, quantityMeter: null,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.Separates),
+            // Delivery consumes only the selected second-grade category; it must not change
+            // first-grade or separates balances, and KG/Meter remain independent.
+            new InventoryTransaction(DocumentType.Delivery, "DLV-SECOND", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 10m, quantityMeter: 5m,
+                direction: TransactionDirection.Out, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.SecondGrade));
+        await db.SaveChangesAsync();
+
+        var rows = await new GetReadyGoodsBalanceQueryHandler(db)
+            .Handle(new GetReadyGoodsBalanceQuery(), CancellationToken.None);
+
+        rows.Should().HaveCount(3);
+        var first = rows.Single(r => r.Category == nameof(ReadyGoodsCategory.FirstGrade));
+        first.RemainingKg.Should().Be(100m);
+        first.RemainingMeter.Should().Be(50m);
+
+        var second = rows.Single(r => r.Category == nameof(ReadyGoodsCategory.SecondGrade));
+        second.RemainingKg.Should().Be(20m);
+        second.RemainingMeter.Should().Be(15m);
+
+        var separates = rows.Single(r => r.Category == nameof(ReadyGoodsCategory.Separates));
+        separates.RemainingKg.Should().Be(8m);
+        separates.RemainingMeter.Should().Be(0m);
+    }
+}
+
+// ============================================================================================
 //  Ready Goods -> raw material (spec section 29): the only authorized way finished stock
 //  becomes raw stock again - authorized, reasoned, traceable and audited.
 // ============================================================================================
