@@ -44,12 +44,6 @@ namespace DyeHouseERP.Persistence.Migrations
                 maxLength: 20,
                 nullable: true);
 
-            migrationBuilder.AddColumn<string>(
-                name: "Category",
-                table: "DeliveryLines",
-                type: "nvarchar(20)",
-                maxLength: 20,
-                nullable: true);
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
@@ -59,7 +53,6 @@ namespace DyeHouseERP.Persistence.Migrations
             migrationBuilder.DropColumn(name: "Category", table: "ReadyGoodsTransfers");
             migrationBuilder.CreateIndex(name: "IX_ReadyGoodsTransfers_ProductionOrderId", table: "ReadyGoodsTransfers", column: "ProductionOrderId", unique: true);
             migrationBuilder.DropColumn(name: "ReadyGoodsCategory", table: "InventoryTransactions");
-            migrationBuilder.DropColumn(name: "Category", table: "DeliveryLines");
         }
     }
 }
