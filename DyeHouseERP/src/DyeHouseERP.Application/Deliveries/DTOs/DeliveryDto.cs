@@ -110,6 +110,7 @@ public class DeliveryStatementRowDto
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string? Color { get; set; }
+    public ReadyGoodsCategory? Category { get; set; }
 
     /// <summary>The order's original raw quantity (fixed, never overwritten).</summary>
     public decimal? OriginalRawQuantityKg { get; set; }
