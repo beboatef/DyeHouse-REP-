@@ -114,7 +114,7 @@ export default function DeliveryStatementPrintPage() {
     );
 
     if (optional.bales) {
-      cells.push({ header: t("statement.bales", "عدد البالات"), render: (r: DeliveryStatementRow) => r.baleCount ?? "—", align: "end" });
+      cells.push({ header: t("statement.bales", "عدد الأتواب"), render: (r: DeliveryStatementRow) => r.baleCount ?? "—", align: "end" });
     }
 
     if (optional.scraps) {
