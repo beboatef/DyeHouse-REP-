@@ -37,6 +37,7 @@ public class Material : AuditableEntity
         if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Material code is required.", nameof(code));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Material name is required.", nameof(name));
         if (purchasePrice < 0) throw new ArgumentException("Purchase price cannot be negative.", nameof(purchasePrice));
+        if (!Enum.IsDefined(typeof(MaterialKind), kind)) throw new ArgumentException("Unknown material kind.", nameof(kind));
 
         Code = code.Trim();
         Name = name.Trim();
@@ -65,7 +66,11 @@ public class Material : AuditableEntity
 
     public void SetKind(MaterialKind kind, string modifiedBy)
     {
-        Kind = kind;
+        if (!Enum.IsDefined(typeof(MaterialKind), kind))
+            throw new ArgumentException("Unknown material kind.", nameof(kind));
+        if (Kind != kind)
+            throw new InvalidOperationException("A material's kind cannot be changed after creation because its warehouse movements are classified by kind.");
+
         ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }
