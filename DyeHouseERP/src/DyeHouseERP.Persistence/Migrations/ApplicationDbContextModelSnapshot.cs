@@ -5399,7 +5399,7 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductionOrderId")
+                    b.HasIndex("ProductionOrderId", "Category")
                         .IsUnique();
 
                     b.HasIndex("StageExecutionId");
