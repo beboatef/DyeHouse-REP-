@@ -267,6 +267,11 @@ public class Phase5ReadyGoodsRawReturnTests : Phase5TestBase
         var movement = await db.ReadyGoodsRawReturns.SingleAsync();
         movement.Category.Should().Be(ReadyGoodsCategory.FirstGrade);
         movement.Reason.Should().Be("return to raw for rework");
+
+        var register = await new GetReadyGoodsRawReturnsQueryHandler(db)
+            .Handle(new GetReadyGoodsRawReturnsQuery(), CancellationToken.None);
+        register.Should().ContainSingle().Which.Category.Should().Be(nameof(ReadyGoodsCategory.FirstGrade),
+            "the category must survive persistence and remain visible in the movement register");
         movement.IsLocked.Should().BeTrue("a posted correction document is finalized immediately");
 
         var ledger = await db.InventoryTransactions
