@@ -170,9 +170,12 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             {
                 readyCategory = availableCategories[0];
             }
-            else if (availableCategories.Contains(null))
+            else if (availableCategories.Contains(null) || availableCategories.Count == 0)
             {
-                // The UI sends null for an explicitly selected historical, unclassified balance.
+                // Null is the historical/unclassified stream. If no transfer document
+                // exists for a legacy ledger-only balance, keep it returnable as that
+                // same unclassified stream rather than reporting a false multi-category
+                // ambiguity. New ready-goods postings always require a category.
                 readyCategory = null;
             }
             else
