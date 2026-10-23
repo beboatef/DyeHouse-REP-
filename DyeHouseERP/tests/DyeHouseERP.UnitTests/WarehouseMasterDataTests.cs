@@ -200,7 +200,7 @@ public class WarehouseMasterDataTests
     [Fact]
     public void WarehouseDomainEntity_RejectsProductionWipAsANewWarehouse()
     {
-        var create = () => new Warehouse("WIP-01", "Under production", WarehouseKind.ProductionWip, "tester");
+        Action create = () => { _ = new Warehouse("WIP-01", "Under production", WarehouseKind.ProductionWip, "tester"); };
         create.Should().Throw<ArgumentException>();
     }
 
