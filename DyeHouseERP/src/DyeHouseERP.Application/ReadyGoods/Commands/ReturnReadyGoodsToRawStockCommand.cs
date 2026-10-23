@@ -168,18 +168,21 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             }
             else if (availableCategories.Count == 1)
             {
+                // A single historical null category remains returnable as unclassified.
                 readyCategory = availableCategories[0];
             }
-            else if (availableCategories.Contains(null) || availableCategories.Count == 0)
+            else if (availableCategories.Count == 0)
             {
-                // Null is the historical/unclassified stream. If no transfer document
-                // exists for a legacy ledger-only balance, keep it returnable as that
-                // same unclassified stream rather than reporting a false multi-category
-                // ambiguity. New ready-goods postings always require a category.
+                // Legacy ledger-only balances may have no transfer document at all.
+                // Keep that stream returnable as unclassified; new ready-goods postings
+                // always create a category-bearing transfer document.
                 readyCategory = null;
             }
             else
             {
+                // Null/unclassified is still a category dimension. If it coexists with
+                // any named category, the caller must select explicitly rather than
+                // silently consuming one stream.
                 throw new DomainException("Select the ready-goods category to return; this order has multiple categories.");
             }
 

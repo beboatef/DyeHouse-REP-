@@ -295,6 +295,31 @@ public class Phase5ReadyGoodsRawReturnTests : Phase5TestBase
     }
 
     [Fact]
+    public async Task TheMovement_RequiresExplicitCategoryWhenUnclassifiedAndNamedStockCoexist()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        var date = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
+
+        SeedReadyBalance(db, scene, kg: 100m, meter: null, documentNumber: "RGT-LEGACY-UNCLASSIFIED");
+        SeedReadyBalance(db, scene, kg: 100m, meter: null, documentNumber: "RGT-NAMED-FIRST", category: ReadyGoodsCategory.FirstGrade);
+        db.ReadyGoodsTransfers.AddRange(
+            new ReadyGoodsTransfer("RGT-LEGACY-UNCLASSIFIED", date, scene.Order.Id, scene.Customer.Id,
+                scene.Item.Id, scene.Ready.Id, 100m, null, "seed"),
+            new ReadyGoodsTransfer("RGT-NAMED-FIRST", date, scene.Order.Id, scene.Customer.Id,
+                scene.Item.Id, scene.Ready.Id, 100m, null, "seed", category: ReadyGoodsCategory.FirstGrade));
+        await db.SaveChangesAsync();
+
+        var act = () => Handler(db).Handle(new ReturnReadyGoodsToRawStockCommand(
+            scene.Order.Id, scene.Item.Id, scene.Lot.Id, 10m, null, "return mixed legacy stock"),
+            CancellationToken.None);
+
+        await act.Should().ThrowAsync<DomainException>()
+            .WithMessage("*Select the ready-goods category*");
+        (await db.ReadyGoodsRawReturns.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task TheMovement_CanNeverOverdrawTheReadyLot()
     {
         var scene = Seed();

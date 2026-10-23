@@ -5,7 +5,7 @@ import {
   ApprovalsApi, CustomersApi, FormationRequestsApi, ItemsApi, JobOrderType,
   ProductionOrdersApi, ProductionPriority, RawMessagesApi
 } from "@/api/client";
-import { PageHeader, Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
+import { PageHeader, Card, Button, Input, Select, Badge, SearchInput, KpiCard } from "@/components/ui";
 import { ExportButtons, DocumentActions } from "@/components/ExportButtons";
 import { ProductionOrdersExports } from "@/api/exports";
 import { useI18n } from "@/i18n";
@@ -15,6 +15,7 @@ const statusTone: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> =
   // still alive and resumable, which is exactly how it differs from a cancelled one.
   Draft: "gray", RawAllocated: "blue", InProduction: "yellow", Paused: "yellow", Completed: "green", Cancelled: "red"
 };
+const priorityLabel: Record<string, string> = { Low: "منخفضة", Normal: "عادية", High: "عالية", Urgent: "عاجلة" };
 
 /**
  * Job orders (أوامر التشغيل).
@@ -72,18 +73,6 @@ export default function ProductionOrdersPage() {
     queryFn: () => ProductionOrdersApi.list({ jobOrderType: typeFilter || undefined })
   });
 
-  const visibleOrders = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase();
-    return (orders ?? []).filter((order) => {
-      const matchesStatus = !statusFilter || order.status === statusFilter;
-      const matchesSearch = !term || [
-        order.orderNumber, order.customerCode, order.customerName, order.itemCode,
-        order.itemName, order.color, order.customerReference
-      ].filter(Boolean).join(" ").toLocaleLowerCase().includes(term);
-      return matchesStatus && matchesSearch;
-    });
-  }, [orders, search, statusFilter]);
-
   // Lots of the chosen customer/item that still hold a balance - the material actually
   // available to issue from.
   const { data: lots } = useQuery({
@@ -98,6 +87,28 @@ export default function ProductionOrdersPage() {
     queryFn: () => FormationRequestsApi.list({ customerId, itemId: itemId || undefined }),
     enabled: !!customerId && !!itemId
   });
+
+  const visibleOrders = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (orders ?? []).filter((order) => {
+      const matchesStatus = !statusFilter || order.status === statusFilter;
+      const searchable = [
+        order.orderNumber, order.customerCode, order.customerName,
+        order.itemCode, order.itemName, order.color, order.customerReference
+      ].filter(Boolean).join(" ").toLocaleLowerCase();
+      return matchesStatus && (!term || searchable.includes(term));
+    });
+  }, [orders, search, statusFilter]);
+
+  const orderCounts = useMemo(() => {
+    const list = orders ?? [];
+    return {
+      total: list.length,
+      active: list.filter((o) => ["RawAllocated", "InProduction"].includes(o.status)).length,
+      paused: list.filter((o) => o.status === "Paused").length,
+      completed: list.filter((o) => o.status === "Completed").length
+    };
+  }, [orders]);
 
   const selectedRequest = useMemo(
     () => (formationRequests ?? []).find((r) => r.id === formationRequestId),
@@ -215,34 +226,36 @@ export default function ProductionOrdersPage() {
         </Card>
       )}
 
-      <Card className="card-pad mb-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div>
-            <label className="field-label">{t("jo.list.quickSearch")}</label>
-            <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("jo.list.searchPlaceholder")} />
-          </div>
-          <div>
-            <label className="field-label">{t("jo.type")}</label>
-            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")}>
-              <option value="">{t("common.all")} - {t("jo.type")}</option>
-              <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
-              <option value="OpenLine">{t("jo.type.OpenLine")}</option>
-            </Select>
-          </div>
-          <div>
-            <label className="field-label">{t("jo.list.statusFilter")}</label>
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">{t("jo.list.allStatuses")}</option>
-              <option value="Draft">مسودة</option>
-              <option value="RawAllocated">تم صرف الخام</option>
-              <option value="InProduction">تحت التشغيل</option>
-              <option value="Paused">متوقف مؤقتًا</option>
-              <option value="Completed">مكتمل</option>
-              <option value="Cancelled">ملغي</option>
-            </Select>
-          </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <KpiCard label={t("jo.summary.total", "إجمالي الأوامر")} value={orderCounts.total} />
+        <KpiCard label={t("jo.summary.active", "قيد التشغيل")} value={orderCounts.active} tone={orderCounts.active ? "info" : "neutral"} />
+        <KpiCard label={t("jo.summary.paused", "متوقفة مؤقتًا")} value={orderCounts.paused} tone={orderCounts.paused ? "warning" : "neutral"} />
+        <KpiCard label={t("jo.summary.completed", "مكتملة")} value={orderCounts.completed} tone="success" />
+      </div>
+      <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+        <div>
+          <label className="field-label">{t("common.search")}</label>
+          <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("jo.list.searchPlaceholder", "رقم الأمر أو العميل أو الصنف أو اللون")} />
+        </div>
+        <div>
+          <label className="field-label">{t("jo.type")}</label>
+          <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as JobOrderType | "")}>
+            <option value="">{t("common.all")} - {t("jo.type")}</option>
+            <option value="ClosedLine">{t("jo.type.ClosedLine")}</option>
+            <option value="OpenLine">{t("jo.type.OpenLine")}</option>
+          </Select>
+        </div>
+        <div>
+          <label className="field-label">{t("jo.list.statusFilter")}</label>
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">{t("jo.list.allStatuses", "كل الحالات")}</option>
+            {["Draft", "RawAllocated", "InProduction", "Paused", "Completed", "Cancelled"].map((status) => (
+              <option key={status} value={status}>{t(`prod.status.${status}`)}</option>
+            ))}
+          </Select>
         </div>
       </Card>
+      <p className="text-xs text-ink-muted mb-3">{t("jo.list.results")}: {visibleOrders.length} / {orders?.length ?? 0}</p>
 
       {showForm && (
         <Card className="card-pad mb-6">
@@ -417,51 +430,43 @@ export default function ProductionOrdersPage() {
         </Card>
       )}
 
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-          <h2 className="card-title">{t("jo.list.registerTitle")}</h2>
-          <span className="text-xs text-ink-muted">{t("jo.list.results")}: <b className="ltr-nums">{visibleOrders.length}</b></span>
-        </div>
-        <div className="table-wrap">
-          <table className="table table-dense">
-            <thead><tr>
-              <th>{t("jo.list.orderDate")}</th><th>{t("jo.list.customer")}</th><th>{t("jo.list.itemColor")}</th>
-              <th>{t("jo.list.requestedQuantity")}</th><th>{t("jo.list.recordedOutput")}</th><th>{t("jo.list.typePriority")}</th>
-              <th>{t("jo.list.currentStage")}</th><th>{t("jo.list.stageProgress")}</th><th>{t("jo.list.status")}</th><th>{t("jo.list.actions")}</th>
-            </tr></thead>
-            <tbody>
-              {isLoading && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
-              {!isLoading && visibleOrders.length === 0 && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">{t("jo.list.noMatchingOrders")}</td></tr>}
-              {visibleOrders.map((o) => {
-                const completedStages = o.stageExecutions.filter((stage) => stage.status === "Completed").length;
-                const currentStage = o.stageExecutions.find((stage) => stage.status !== "Completed");
-                const lastCompletedStage = [...o.stageExecutions]
-                  .filter((stage) => stage.status === "Completed")
-                  .sort((a, b) => b.sequence - a.sequence)[0];
-                const formatQty = (value: number | null | undefined, unit: string) =>
-                  value == null ? "—" : `${value.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${unit}`;
-                return (
-                  <tr key={o.id}>
-                    <td>
-                      <Link to={`/production-orders/${o.id}`} className="font-semibold ltr-nums text-brand-700 hover:underline">{o.orderNumber}</Link>
-                      <div className="text-xs text-ink-subtle ltr-nums">{new Date(o.orderDate).toLocaleDateString()}</div>
-                    </td>
-                    <td><div className="font-medium">{o.customerName}</div><div className="text-xs text-ink-subtle ltr-nums">{o.customerCode}</div></td>
-                    <td><div className="font-medium">{o.itemName}</div><div className="text-xs text-ink-subtle">{o.itemCode}{o.color ? ` · ${o.color}` : ""}</div></td>
-                    <td><div className="ltr-nums">{formatQty(o.requestedQuantityKg, t("common.kg"))}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(o.requestedQuantityMeter, t("common.meter"))}</div></td>
-                    <td><div className="ltr-nums">{formatQty(lastCompletedStage?.outputKg, t("common.kg"))}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(lastCompletedStage?.outputMeter, t("common.meter"))}</div></td>
-                    <td><div><Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge></div><div className="mt-1 text-xs text-ink-muted">{t(`jo.priority.${o.priority}`)}</div></td>
-                    <td>{currentStage?.stageName ?? (o.status === "Completed" ? t("prod.status.Completed") : "—")}</td>
-                    <td className="ltr-nums">{completedStages} / {o.stageExecutions.length}</td>
-                    <td><Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge></td>
-                    <td><DocumentActions pdf={ProductionOrdersExports.documentPdf(o.id)} printTo={`/print/production-order/${o.id}`} /></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="space-y-3">
+        {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
+        {!isLoading && orders?.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد أوامر تشغيل بعد</Card>}
+        {!isLoading && (orders?.length ?? 0) > 0 && visibleOrders.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد نتائج مطابقة للفلاتر</Card>}
+
+        {visibleOrders.map((o) => (
+          <Card key={o.id} className="p-4 hover:border-brand-300 transition-colors">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Link to={`/production-orders/${o.id}`} className="min-w-0">
+                <span className="font-bold ltr-nums">{o.orderNumber}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{o.customerCode} - {o.customerName}</span>
+                <span className="text-ink-subtle mx-2">·</span>
+                <span className="text-sm text-ink-muted">{o.itemCode} - {o.itemName}</span>
+                {o.color && <><span className="text-ink-subtle mx-2">·</span><span className="text-sm text-ink-muted">{o.color}</span></>}
+              </Link>
+              <div className="flex items-center gap-2">
+                <Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge>
+                <Badge tone="gray">{priorityLabel[o.priority]}</Badge>
+                <Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs text-ink-subtle">
+                {o.stageExecutions.filter((s) => s.status === "Completed").length} / {o.stageExecutions.length} مراحل مكتملة
+              </div>
+              {/* The job-order card, not the detail screen, is where a supervisor
+                  actually prints from - so both the PDF and the print preview
+                  have to be one click away here. */}
+              <DocumentActions
+                pdf={ProductionOrdersExports.documentPdf(o.id)}
+                printTo={`/print/production-order/${o.id}`}
+              />
+            </div>
+          </Card>
+        ))}
+      </div>
     </>
   );
 }
