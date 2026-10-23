@@ -12,7 +12,7 @@ import { useI18n } from "@/i18n";
 /**
  * BALANCES WITH THE MOVEMENTS BEHIND THEM.
  *
- * One component, three warehouses (raw material / ready goods / materials & chemicals), because the
+ * One component, four stock classes (raw material / ready goods / materials & chemicals / operating supplies), because the
  * question is the same in all of them: "this is the balance - WHICH movements is it made of, and where
  * did each one come from?"
  *
