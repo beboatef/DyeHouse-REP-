@@ -366,7 +366,11 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 readyWarehouse.Id, request.OutputKg, request.OutputMeter, _currentUser.UserName,
                 pieceCount: null,
                 notes: $"Stage transfer to ready goods ({nextStage.Name})",
-                stageExecutionId: stage.Id));
+                stageExecutionId: stage.Id,
+                // The final output quantity is the first-grade stream. Second grade and
+                // separates are recorded separately on the stage and must not be mixed
+                // into this ready-goods category.
+                category: ReadyGoodsCategory.FirstGrade));
 
             // IN into the ready dimension (RawMessageId = null, ProductionOrderId
             // set) - the same ledger shape ReadyGoods balances are read from.
@@ -375,7 +379,8 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 _clock.UtcNow, readyWarehouse.Id, order.CustomerId, order.ItemId,
                 rawMessageId: null, productionOrderId: order.Id,
                 quantityKg: request.OutputKg, quantityMeter: request.OutputMeter,
-                direction: TransactionDirection.In, createdBy: _currentUser.UserName));
+                direction: TransactionDirection.In, createdBy: _currentUser.UserName,
+                readyGoodsCategory: ReadyGoodsCategory.FirstGrade));
 
             order.Complete();
         }
