@@ -399,6 +399,35 @@ public class Phase5DeliveryStatementTests : Phase5TestBase
     }
 
     [Fact]
+    public async Task TheStatement_ExcludesCancelledReadyGoodsTransfersFromProducedOutput()
+    {
+        var scene = Seed(requestedKg: 600m, requestedMeter: 100m,
+            stageOutputKg: 520m, stageOutputMeter: 85m,
+            separatesKg: 20m, separatesMeter: 5m, secondGradeKg: 10m, secondGradeMeter: 2m);
+
+        using var db = NewDb();
+        var deliveryId = await SeedDeliveryAsync(db, scene, readyKg: 300m, readyMeter: 50m,
+            originalRawKg: 600m, originalRawMeter: 100m);
+
+        var posted = new ReadyGoodsTransfer(
+            "RGT-POSTED", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id, scene.Item.Id,
+            scene.Ready.Id, 300m, 50m, "seed", category: ReadyGoodsCategory.FirstGrade);
+        var cancelled = new ReadyGoodsTransfer(
+            "RGT-CANCELLED", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id, scene.Item.Id,
+            scene.Ready.Id, 500m, 35m, "seed", category: ReadyGoodsCategory.SecondGrade);
+        cancelled.Cancel("Correct wrong transfer", "seed");
+        db.ReadyGoodsTransfers.AddRange(posted, cancelled);
+        await db.SaveChangesAsync();
+
+        var row = (await StatementHandler(db).Handle(
+            new GetDeliveryStatementQuery(deliveryId), CancellationToken.None)).Rows.Single();
+
+        // 600 original - 300 currently posted output - 20 separates - 10 second grade = 270 KG.
+        // The cancelled 500 KG transfer stays in document history but must not inflate output.
+        row.CalculatedWasteKg.Should().Be(270m);
+    }
+
+    [Fact]
     public async Task TheStatement_CarriesEveryPrintRunsDrawingNumber_WithTheOperationsRecordedSeparatesAndSecondGrade()
     {
         // Phase 5 reads the drawing numbers, the separates/scraps and the second grade from the Job
