@@ -70,6 +70,7 @@ public class GetReadyGoodsRawReturnsQueryHandler : IRequestHandler<GetReadyGoods
             DestinationWarehouseName = warehouses.GetValueOrDefault(m.DestinationWarehouseId) ?? string.Empty,
             QuantityKg = m.QuantityKg,
             QuantityMeter = m.QuantityMeter,
+            Category = m.Category?.ToString(),
             Reason = m.Reason,
             Notes = m.Notes,
             CreatedBy = m.CreatedBy,
@@ -185,7 +186,7 @@ public class GetReadyGoodsBalanceQueryHandler : IRequestHandler<GetReadyGoodsBal
                 Kg = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityKg ?? 0) : -(t.QuantityKg ?? 0)),
                 Meter = g.Sum(t => t.Direction == TransactionDirection.In ? (t.QuantityMeter ?? 0) : -(t.QuantityMeter ?? 0))
             })
-            .Where(g => g.Kg > 0 || g.Meter > 0)
+            .Where(g => g.Kg != 0 || g.Meter != 0)
             .ToListAsync(cancellationToken);
 
         if (grouped.Count == 0) return new List<ReadyGoodsBalanceDto>();

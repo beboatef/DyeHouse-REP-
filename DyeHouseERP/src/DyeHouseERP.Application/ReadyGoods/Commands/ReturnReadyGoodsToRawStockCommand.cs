@@ -205,7 +205,8 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             var movement = new ReadyGoodsRawReturn(
                 movementNumber, _clock.UtcNow, order.Id, order.CustomerId, request.ItemId,
                 readyWarehouse.Id, message.Id, message.WarehouseId,
-                request.QuantityKg, request.QuantityMeter, request.Reason, _currentUser.UserName, request.Notes);
+                request.QuantityKg, request.QuantityMeter, request.Reason, _currentUser.UserName, request.Notes,
+                category: readyCategory);
 
             _db.ReadyGoodsRawReturns.Add(movement);
 
@@ -239,7 +240,8 @@ public class ReturnReadyGoodsToRawStockCommandHandler
                     destinationRawMessageId = message.Id,
                     destinationMessageNumber = message.MessageNumber,
                     quantityKg = request.QuantityKg,
-                    quantityMeter = request.QuantityMeter
+                    quantityMeter = request.QuantityMeter,
+                    category = readyCategory?.ToString()
                 }),
                 ipAddress: null, reason: request.Reason));
 
@@ -283,6 +285,7 @@ public class ReturnReadyGoodsToRawStockCommandHandler
                 DestinationWarehouseName = destinationWarehouse.Name,
                 QuantityKg = movement.QuantityKg,
                 QuantityMeter = movement.QuantityMeter,
+                Category = movement.Category?.ToString(),
                 Reason = movement.Reason,
                 Notes = movement.Notes,
                 CreatedBy = movement.CreatedBy,

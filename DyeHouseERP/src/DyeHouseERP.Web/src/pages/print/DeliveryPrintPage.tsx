@@ -58,10 +58,10 @@ export default function DeliveryPrintPage() {
     { header: t("prod.jobOrder", "أمر التشغيل"), render: (l) => l.productionOrderNumber },
     { header: t("common.item"), render: (l) => `${l.itemCode}${l.color ? ` (${l.color})` : ""}` },
     {
-      header: "التصنيف",
-      render: (l) => l.category === "FirstGrade" ? "درجة أولى"
-        : l.category === "SecondGrade" ? "درجة ثانية"
-        : l.category === "Separates" ? "منفصلات" : "غير مصنف"
+      header: t("readyGoods.category", "التصنيف"),
+      render: (l) => l.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى")
+        : l.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية")
+        : l.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")
     }
   ];
 

@@ -5222,6 +5222,10 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<Guid>("DestinationRawMessageId")
                         .HasColumnType("uniqueidentifier");
 

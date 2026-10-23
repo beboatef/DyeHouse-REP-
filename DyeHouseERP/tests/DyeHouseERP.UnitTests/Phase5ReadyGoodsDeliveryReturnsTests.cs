@@ -114,14 +114,98 @@ public abstract class Phase5TestBase
 
     /// <summary>Seeds an IN ledger row on the ready lot so the ready balance is what the test expects.</summary>
     protected static void SeedReadyBalance(
-        ApplicationDbContext db, Scene scene, decimal kg, decimal? meter, string documentNumber = "RGT-SEED-1")
+        ApplicationDbContext db, Scene scene, decimal kg, decimal? meter, string documentNumber = "RGT-SEED-1",
+        ReadyGoodsCategory? category = null)
     {
         db.InventoryTransactions.Add(new InventoryTransaction(
             DocumentType.ReadyGoodsTransfer, documentNumber, Guid.NewGuid(),
             new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc), scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
             rawMessageId: null, productionOrderId: scene.Order.Id,
-            quantityKg: kg, quantityMeter: meter, direction: TransactionDirection.In, createdBy: "seed"));
+            quantityKg: kg, quantityMeter: meter, direction: TransactionDirection.In, createdBy: "seed",
+            readyGoodsCategory: category));
         db.SaveChanges();
+    }
+}
+
+// ============================================================================================
+//  Ready-goods category balances: each category is an independent ledger dimension.
+// ============================================================================================
+public class Phase5ReadyGoodsCategoryBalanceTests : Phase5TestBase
+{
+    [Fact]
+    public async Task TheBalanceRegister_KeepsFirstGradeSecondGradeAndSeparatesIndependent()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        var date = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
+
+        db.InventoryTransactions.AddRange(
+            new InventoryTransaction(DocumentType.ReadyGoodsTransfer, "RGT-FIRST", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 100m, quantityMeter: 50m,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.FirstGrade),
+            new InventoryTransaction(DocumentType.ReadyGoodsTransfer, "RGT-SECOND", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 30m, quantityMeter: 20m,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.SecondGrade),
+            new InventoryTransaction(DocumentType.ReadyGoodsTransfer, "RGT-SEPARATES", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 8m, quantityMeter: null,
+                direction: TransactionDirection.In, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.Separates),
+            // Delivery consumes only the selected second-grade category; it must not change
+            // first-grade or separates balances, and KG/Meter remain independent.
+            new InventoryTransaction(DocumentType.Delivery, "DLV-SECOND", Guid.NewGuid(),
+                date, scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+                rawMessageId: null, productionOrderId: scene.Order.Id,
+                quantityKg: 10m, quantityMeter: 5m,
+                direction: TransactionDirection.Out, createdBy: "seed",
+                readyGoodsCategory: ReadyGoodsCategory.SecondGrade));
+        await db.SaveChangesAsync();
+
+        var rows = await new GetReadyGoodsBalanceQueryHandler(db)
+            .Handle(new GetReadyGoodsBalanceQuery(), CancellationToken.None);
+
+        rows.Should().HaveCount(3);
+        var first = rows.Single(r => r.Category == nameof(ReadyGoodsCategory.FirstGrade));
+        first.RemainingKg.Should().Be(100m);
+        first.RemainingMeter.Should().Be(50m);
+
+        var second = rows.Single(r => r.Category == nameof(ReadyGoodsCategory.SecondGrade));
+        second.RemainingKg.Should().Be(20m);
+        second.RemainingMeter.Should().Be(15m);
+
+        var separates = rows.Single(r => r.Category == nameof(ReadyGoodsCategory.Separates));
+        separates.RemainingKg.Should().Be(8m);
+        separates.RemainingMeter.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task TheBalanceRegister_DoesNotHideAnUnexpectedNegativeLedgerBalance()
+    {
+        var scene = Seed();
+        using var db = NewDb();
+        db.InventoryTransactions.Add(new InventoryTransaction(
+            DocumentType.Delivery, "DLV-LEGACY-NEGATIVE", Guid.NewGuid(),
+            new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+            scene.Ready.Id, scene.Customer.Id, scene.Item.Id,
+            rawMessageId: null, productionOrderId: scene.Order.Id,
+            quantityKg: 12m, quantityMeter: null,
+            direction: TransactionDirection.Out, createdBy: "seed",
+            readyGoodsCategory: ReadyGoodsCategory.SecondGrade));
+        await db.SaveChangesAsync();
+
+        var rows = await new GetReadyGoodsBalanceQueryHandler(db)
+            .Handle(new GetReadyGoodsBalanceQuery(), CancellationToken.None);
+
+        var negative = rows.Should().ContainSingle(r => r.Category == nameof(ReadyGoodsCategory.SecondGrade)).Subject;
+        negative.RemainingKg.Should().Be(-12m,
+            "an unexpected ledger inconsistency must remain visible for investigation, not disappear from the register");
     }
 }
 
@@ -164,18 +248,30 @@ public class Phase5ReadyGoodsRawReturnTests : Phase5TestBase
     {
         var scene = Seed();
         using var db = NewDb();
-        SeedReadyBalance(db, scene, kg: 500m, meter: 80m);
+        SeedReadyBalance(db, scene, kg: 500m, meter: 80m, category: ReadyGoodsCategory.FirstGrade);
+        db.ReadyGoodsTransfers.Add(new ReadyGoodsTransfer(
+            "RGT-CATEGORY", new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            scene.Order.Id, scene.Customer.Id, scene.Item.Id, scene.Ready.Id,
+            500m, 80m, "seed", category: ReadyGoodsCategory.FirstGrade));
+        await db.SaveChangesAsync();
 
         var dto = await Handler(db).Handle(new ReturnReadyGoodsToRawStockCommand(
             scene.Order.Id, scene.Item.Id, scene.Lot.Id, 120m, 30m,
-            "return to raw for rework"), CancellationToken.None);
+            "return to raw for rework", Category: ReadyGoodsCategory.FirstGrade), CancellationToken.None);
 
         dto.MovementNumber.Should().Be("ReadyGoodsRawReturn-TEST-1");
         dto.DestinationRawMessageId.Should().Be(scene.Lot.Id);
         dto.SourceWarehouseId.Should().Be(scene.Ready.Id);
+        dto.Category.Should().Be(nameof(ReadyGoodsCategory.FirstGrade));
 
         var movement = await db.ReadyGoodsRawReturns.SingleAsync();
+        movement.Category.Should().Be(ReadyGoodsCategory.FirstGrade);
         movement.Reason.Should().Be("return to raw for rework");
+
+        var register = await new GetReadyGoodsRawReturnsQueryHandler(db)
+            .Handle(new GetReadyGoodsRawReturnsQuery(), CancellationToken.None);
+        register.Should().ContainSingle().Which.Category.Should().Be(nameof(ReadyGoodsCategory.FirstGrade),
+            "the category must survive persistence and remain visible in the movement register");
         movement.IsLocked.Should().BeTrue("a posted correction document is finalized immediately");
 
         var ledger = await db.InventoryTransactions
