@@ -205,9 +205,16 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
                     // Compatibility for historical/API-created lines where the order has exactly one category.
                     selectedCategory = availableCategories[0];
                 }
+                else if (availableCategories.Count == 0)
+                {
+                    // Legacy ledger-only ready stock has no transfer document from which to
+                    // infer a grade. Keep its null/unclassified lot deliverable; the ledger
+                    // balance check below still prevents delivery beyond the actual balance.
+                    selectedCategory = null;
+                }
                 else
                 {
-                    throw new DomainException("Select the ready-goods category for each delivery line; this production order has multiple categories or no classified ready stock.");
+                    throw new DomainException("Select the ready-goods category for each delivery line; this production order has multiple categories.");
                 }
                 categoryByLine[line.Id] = selectedCategory;
             }
