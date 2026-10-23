@@ -267,7 +267,7 @@ public class InventoryTraceabilityController : ControllerBase
 
         // ONE lot from here on: its own identity, its own movements, its own closing balance.
         var lot = data.Rows[0];
-        var isMaterials = data.Scope == StockScopes.Materials;
+        var isMaterials = data.Scope is StockScopes.Materials or StockScopes.Supplies;
 
         string Number(decimal? value) =>
             value is null ? "—" : value.Value.ToString("#,0.###", CultureInfo.InvariantCulture);
