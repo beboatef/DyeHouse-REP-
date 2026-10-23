@@ -63,9 +63,10 @@ export default function ReadyGoodsPage() {
   });
 
   const rawReturnMutation = useMutation({
-    mutationFn: (vars: { productionOrderId: string; itemId: string }) => ReadyGoodsApi.returnToRaw({
+    mutationFn: (vars: { productionOrderId: string; itemId: string; category: "FirstGrade" | "SecondGrade" | "Separates" | null }) => ReadyGoodsApi.returnToRaw({
       productionOrderId: vars.productionOrderId,
       itemId: vars.itemId,
+      category: vars.category,
       rawMessageId: rawDraft.rawMessageId,
       quantityKg: rawDraft.quantityKg ? Number(rawDraft.quantityKg) : undefined,
       quantityMeter: rawDraft.quantityMeter ? Number(rawDraft.quantityMeter) : undefined,
@@ -188,7 +189,7 @@ export default function ReadyGoodsPage() {
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      const key = `${b.productionOrderId}-${b.itemId}`;
+                      const key = `${b.productionOrderId}-${b.itemId}-${b.category ?? "Unclassified"}`;
                       setRawFormFor(rawFormFor === key ? null : key);
                       setRawDraft({ rawMessageId: "", quantityKg: "", quantityMeter: "", reason: "", notes: "" });
                       setRawError(null);
@@ -205,12 +206,12 @@ export default function ReadyGoodsPage() {
         {/* Ready goods -> raw: an authorized movement of its own, with a mandatory reason. It is
             refused by the API when the quantity exceeds what is actually available on the lot. */}
         {rawFormFor && (() => {
-          const row = balance?.find((b) => `${b.productionOrderId}-${b.itemId}` === rawFormFor);
+          const row = balance?.find((b) => `${b.productionOrderId}-${b.itemId}-${b.category ?? "Unclassified"}` === rawFormFor);
           if (!row) return null;
           return (
             <div className="border-t border-line bg-surface-sunken p-4">
               <div className="text-sm font-semibold">
-                إرجاع مخزون جاهز إلى الخام — <span className="ltr-nums">{row.productionOrderNumber}</span>
+                إرجاع مخزون جاهز إلى الخام — <span className="ltr-nums">{row.productionOrderNumber}</span> — {row.category === "FirstGrade" ? "درجة أولى" : row.category === "SecondGrade" ? "درجة ثانية" : row.category === "Separates" ? "منفصلات" : "غير مصنف"}
               </div>
               <p className="kpi-footnote mb-3">
                 حركة منفصلة مصرح بها: لا يحدث هذا تلقائيًا أبدًا، ويُسجَّل السبب في المستند وفي سجل التدقيق.
@@ -248,7 +249,7 @@ export default function ReadyGoodsPage() {
                     rawReturnMutation.isPending || !rawDraft.rawMessageId ||
                     (!rawDraft.quantityKg && !rawDraft.quantityMeter) || rawDraft.reason.trim() === ""
                   }
-                  onClick={() => rawReturnMutation.mutate({ productionOrderId: row.productionOrderId, itemId: row.itemId })}
+                  onClick={() => rawReturnMutation.mutate({ productionOrderId: row.productionOrderId, itemId: row.itemId, category: row.category as "FirstGrade" | "SecondGrade" | "Separates" | null })}
                 >
                   {rawReturnMutation.isPending ? "جارٍ الحفظ..." : "تنفيذ النقل إلى الخام"}
                 </Button>
