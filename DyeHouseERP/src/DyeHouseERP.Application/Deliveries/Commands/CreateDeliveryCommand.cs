@@ -144,7 +144,7 @@ public class CreateDeliveryCommandHandler : IRequestHandler<CreateDeliveryComman
             delivery.AddLine(
                 line.ProductionOrderId, line.ItemId, lineColors[index], line.QuantityKg, line.QuantityMeter,
                 line.PieceCount, line.RawOrigin, line.Notes,
-                line.OriginalRawQuantityKg, line.OriginalRawQuantityMeter);
+                line.OriginalRawQuantityKg, line.OriginalRawQuantityMeter, line.Category);
 
         _db.Deliveries.Add(delivery);
         await _db.SaveChangesAsync(cancellationToken);
