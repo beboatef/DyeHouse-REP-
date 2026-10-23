@@ -54,6 +54,25 @@ public class SubCustomerPermitDeliveryTests
     /// unrelated customer Z. 500 KG of ready goods sit on the order's lot, and the primary permit
     /// (issued to P, line = the same order) is PREPARED and ready to be delivered.
     /// </summary>
+    [Fact]
+    public void DeliveryLine_RejectsNegativePieceCountAtDomainBoundary()
+    {
+        var delivery = new Delivery("DLV-TEST", DateTime.UtcNow, Guid.NewGuid(), "test");
+
+        Action negative = () => delivery.AddLine(
+            Guid.NewGuid(), Guid.NewGuid(), null, 10m, null, -1, null, null);
+        negative.Should().Throw<DomainException>()
+            .WithMessage("A delivery piece count cannot be negative.");
+
+        Action zero = () => delivery.AddLine(
+            Guid.NewGuid(), Guid.NewGuid(), null, 10m, null, 0, null, null);
+        zero.Should().NotThrow("zero is valid when piece count is not tracked");
+
+        Action unspecified = () => delivery.AddLine(
+            Guid.NewGuid(), Guid.NewGuid(), null, 10m, null, null, null, null);
+        unspecified.Should().NotThrow("piece count is optional");
+    }
+
     private Scene Seed()
     {
         var primary = new Customer("C-P", "Primary Buyer", "seed");
