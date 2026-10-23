@@ -82,7 +82,7 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
         // further down. So this is the movement check, not the new-document one - a retired
         // warehouse never receives new stock, while the receipts already booked into it keep
         // their lines, their ledger rows and their traceability exactly as they were.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+        var receiptWarehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, request.WarehouseId, cancellationToken, "to receive stock into it");
 
         PurchaseOrder? order = null;
@@ -122,6 +122,10 @@ public class CreatePurchaseReceiptCommandHandler : IRequestHandler<CreatePurchas
             // The receipt is the STOCK MOVEMENT of a material, so its line is recorded in the material's
             // OWN registered unit (KG / Gram / Litre) - never a unit the material does not have. A
             // different purchasing unit belongs on the purchase order, not on the movement.
+            var material = await _db.Materials.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == line.MaterialId, cancellationToken)
+                ?? throw new NotFoundException("Material", line.MaterialId);
+            WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, receiptWarehouse);
             await PurchaseRules.EnsureMaterialUnitMatchesStockAsync(
                 _db, line.MaterialId, line.Unit, cancellationToken);
 
