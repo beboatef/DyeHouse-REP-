@@ -188,6 +188,30 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
             var categoriesByOrder = transferCategoriesByOrder
                 .GroupBy(t => t.ProductionOrderId)
                 .ToDictionary(g => g.Key, g => g.Select(t => t.Category).Distinct().ToList());
+
+            // Keep historical, unclassified ledger stock deliverable even when the same order
+            // also has newly classified transfers. The delivery UI represents that legacy lot
+            // with an empty category, so resolve it against the actual null-category balance
+            // before applying the single-category compatibility fallback.
+            var orderIdsForLines = lines.Select(l => l.ProductionOrderId).Distinct().ToList();
+            var itemIdsForLines = lines.Select(l => l.ItemId).Distinct().ToList();
+            var unclassifiedRows = await _db.InventoryTransactions.AsNoTracking()
+                .Where(t => t.WarehouseId == readyWarehouse.Id
+                         && t.RawMessageId == null
+                         && t.ProductionOrderId != null
+                         && orderIdsForLines.Contains(t.ProductionOrderId.Value)
+                         && itemIdsForLines.Contains(t.ItemId)
+                         && t.ReadyGoodsCategory == null)
+                .Select(t => new { OrderId = t.ProductionOrderId!.Value, t.ItemId, t.QuantityKg, t.QuantityMeter, t.Direction })
+                .ToListAsync(cancellationToken);
+            var unclassifiedBalances = unclassifiedRows
+                .GroupBy(t => (t.OrderId, t.ItemId))
+                .ToDictionary(
+                    g => g.Key,
+                    g => (
+                        Kg: g.Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction),
+                        Meter: g.Sum(t => (t.QuantityMeter ?? 0m) * (int)t.Direction)));
+
             var categoryByLine = new Dictionary<Guid, ReadyGoodsCategory?>();
 
             foreach (var line in lines)
@@ -199,21 +223,32 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
                     if (!availableCategories.Contains(selectedCategory))
                         throw new DomainException($"Production order has no ready-goods lot classified as {selectedCategory}.");
                 }
-                else if (availableCategories.Count == 1)
-                {
-                    // Compatibility for historical/API-created lines where the order has exactly one category.
-                    selectedCategory = availableCategories[0];
-                }
-                else if (availableCategories.Count == 0)
-                {
-                    // Legacy ledger-only ready stock has no transfer document from which to
-                    // infer a grade. Keep its null/unclassified lot deliverable; the ledger
-                    // balance check below still prevents delivery beyond the actual balance.
-                    selectedCategory = null;
-                }
                 else
                 {
-                    throw new DomainException("Select the ready-goods category for each delivery line; this production order has multiple categories.");
+                    var hasUnclassifiedBalance = unclassifiedBalances.TryGetValue((line.ProductionOrderId, line.ItemId), out var unclassified);
+                    var requestedKg = line.QuantityKg ?? 0m;
+                    var requestedMeter = line.QuantityMeter ?? 0m;
+                    var fitsUnclassified = hasUnclassifiedBalance
+                        && (requestedKg <= 0 || unclassified.Kg >= requestedKg)
+                        && (requestedMeter <= 0 || unclassified.Meter >= requestedMeter)
+                        && (unclassified.Kg > 0 || unclassified.Meter > 0);
+
+                    if (fitsUnclassified || availableCategories.Count == 0)
+                    {
+                        // The UI's unclassified option is represented by null. A null-category
+                        // ledger lot remains distinct from FirstGrade/SecondGrade/Separates.
+                        selectedCategory = null;
+                    }
+                    else if (availableCategories.Count == 1)
+                    {
+                        // Backward compatibility for older API clients omitting category when
+                        // exactly one classified category exists and no matching legacy lot fits.
+                        selectedCategory = availableCategories[0];
+                    }
+                    else
+                    {
+                        throw new DomainException("Select the ready-goods category for each delivery line; this production order has multiple categories.");
+                    }
                 }
                 categoryByLine[line.Id] = selectedCategory;
             }
