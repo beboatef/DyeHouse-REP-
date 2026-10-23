@@ -32,6 +32,7 @@ public class ReadyGoodsRawReturnDto
 
     public decimal? QuantityKg { get; set; }
     public decimal? QuantityMeter { get; set; }
+    public string? Category { get; set; }
 
     /// <summary>Mandatory on the document - a reclassification of posted stock is never silent.</summary>
     public string Reason { get; set; } = string.Empty;
