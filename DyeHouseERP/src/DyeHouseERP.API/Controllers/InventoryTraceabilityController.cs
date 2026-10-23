@@ -14,8 +14,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace DyeHouseERP.API.Controllers;
 
 /// <summary>
-/// BALANCES WITH THEIR MOVEMENTS - one endpoint for the raw-material warehouse, the ready-goods
-/// warehouse and the materials/chemicals warehouse (spec sections 10, 14, 18, 25, 30, 35, 48).
+/// BALANCES WITH THEIR MOVEMENTS - one endpoint for raw fabric, ready goods, materials/chemicals,
+/// and operating supplies (spec sections 10, 14, 18, 25, 27, 30, 35, 48).
 ///
 /// Balances are never stored anywhere in the system: they are summed live from the append-only ledger
 /// at the moment the screen asks, which is what makes this response current by construction - there is
@@ -31,7 +31,7 @@ public class InventoryTraceabilityController : ControllerBase
     public InventoryTraceabilityController(ISender mediator) => _mediator = mediator;
 
     /// <summary>
-    /// <paramref name="scope"/> is raw | ready | materials. Identity filters (item, rawMessageId,
+    /// <paramref name="scope"/> is raw | ready | materials | supplies. Identity filters (item, rawMessageId,
     /// productionOrderId, materialId, warehouseId, customerId) choose WHICH lots are shown;
     /// <paramref name="from"/>, <paramref name="to"/>, <paramref name="documentNumber"/> and
     /// <paramref name="kind"/> narrow only the MOVEMENT LIST, so a filtered screen can never report a
