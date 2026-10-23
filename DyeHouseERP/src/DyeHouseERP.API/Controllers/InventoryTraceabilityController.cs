@@ -85,7 +85,7 @@ public class InventoryTraceabilityController : ControllerBase
             scope, itemId, materialId, customerId, rawMessageId, productionOrderId, warehouseId,
             documentNumber, kind, from, to, onlyWithBalance, includeDelivered));
 
-        var isMaterials = data.Scope == StockScopes.Materials;
+        var isMaterials = data.Scope is StockScopes.Materials or StockScopes.Supplies;
 
         var headers = isMaterials
             ? new List<string>
@@ -124,6 +124,7 @@ public class InventoryTraceabilityController : ControllerBase
         {
             StockScopes.Ready => "أرصدة مخزن الجاهز",
             StockScopes.Materials => "أرصدة المواد والكيماويات",
+            StockScopes.Supplies => "أرصدة مخزن مستلزمات التشغيل",
             _ => "أرصدة مخزن الخامات"
         };
 
@@ -181,11 +182,11 @@ public class InventoryTraceabilityController : ControllerBase
         [FromServices] IReportExportService export = null!)
     {
         var resolvedScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
-        if (resolvedScope is not (StockScopes.Raw or StockScopes.Ready or StockScopes.Materials))
+        if (resolvedScope is not (StockScopes.Raw or StockScopes.Ready or StockScopes.Materials or StockScopes.Supplies))
             return BadRequest(new
             {
                 error = "INVALID_SCOPE",
-                message = $"A lot lives in one of three warehouses: {StockScopes.Raw}, {StockScopes.Ready} or {StockScopes.Materials}."
+                message = $"A lot lives in one of four warehouses: {StockScopes.Raw}, {StockScopes.Ready}, {StockScopes.Materials} or {StockScopes.Supplies}."
             });
 
         // Which identifiers NAME a lot in this warehouse, and which ones are meaningless for it. An
@@ -248,7 +249,7 @@ public class InventoryTraceabilityController : ControllerBase
             {
                 error = "AMBIGUOUS_LOT",
                 message = "This identifier matches more than one independent lot; name the one you want.",
-                disambiguateBy = resolvedScope == StockScopes.Materials ? "warehouseId" : "itemId",
+                disambiguateBy = resolvedScope is StockScopes.Materials or StockScopes.Supplies ? "warehouseId" : "itemId",
                 lots = data.Rows.Select(r => new
                 {
                     lotKey = r.LotKey,
@@ -326,6 +327,7 @@ public class InventoryTraceabilityController : ControllerBase
         {
             StockScopes.Ready => "مخزن الجاهز",
             StockScopes.Materials => "مخزن المواد والكيماويات",
+            StockScopes.Supplies => "مخزن مستلزمات التشغيل",
             _ => "مخزن الخامات"
         };
         var itemLabel = isMaterials
