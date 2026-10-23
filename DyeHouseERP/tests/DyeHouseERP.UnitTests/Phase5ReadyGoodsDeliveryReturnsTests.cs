@@ -450,6 +450,32 @@ public class Phase5DeliveryStatementTests : Phase5TestBase
     }
 
     [Fact]
+    public async Task TheStatement_DoesNotUseLastStageOutputAsFirstGradeWhenOnlyOtherCategoriesWereTransferred()
+    {
+        var scene = Seed(requestedKg: 600m, requestedMeter: 100m,
+            stageOutputKg: 520m, stageOutputMeter: 85m,
+            separatesKg: 20m, separatesMeter: 5m, secondGradeKg: 10m, secondGradeMeter: 2m);
+
+        using var db = NewDb();
+        var deliveryId = await SeedDeliveryAsync(db, scene, readyKg: 20m, readyMeter: 5m,
+            originalRawKg: 600m, originalRawMeter: 100m);
+
+        db.ReadyGoodsTransfers.AddRange(
+            new ReadyGoodsTransfer("RGT-SECOND-ONLY", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id,
+                scene.Item.Id, scene.Ready.Id, 10m, 2m, "seed", category: ReadyGoodsCategory.SecondGrade),
+            new ReadyGoodsTransfer("RGT-SEPARATES-ONLY", DateTime.UtcNow, scene.Order.Id, scene.Customer.Id,
+                scene.Item.Id, scene.Ready.Id, 20m, 5m, "seed", category: ReadyGoodsCategory.Separates));
+        await db.SaveChangesAsync();
+
+        var row = (await StatementHandler(db).Handle(
+            new GetDeliveryStatementQuery(deliveryId), CancellationToken.None)).Rows.Single();
+
+        // The first-grade quantity is not recorded. Using the stage's total output here
+        // would count the second-grade and separates streams twice in the waste calculation.
+        row.CalculatedWasteKg.Should().BeNull();
+    }
+
+    [Fact]
     public async Task TheStatement_ExcludesCancelledReadyGoodsTransfersFromProducedOutput()
     {
         var scene = Seed(requestedKg: 600m, requestedMeter: 100m,
