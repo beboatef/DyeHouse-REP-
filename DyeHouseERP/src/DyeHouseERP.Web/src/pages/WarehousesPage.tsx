@@ -11,7 +11,8 @@ import { useI18n } from "@/i18n";
 const kinds = [
   { value: "RawMaterial", labelKey: "wh.kind.RawMaterial" },
   { value: "Materials", labelKey: "wh.kind.Materials" },
-  { value: "ReadyGoods", labelKey: "wh.kind.ReadyGoods" }
+  { value: "ReadyGoods", labelKey: "wh.kind.ReadyGoods" },
+  { value: "OperatingSupplies", labelKey: "wh.kind.OperatingSupplies" }
 ];
 
 export default function WarehousesPage() {
