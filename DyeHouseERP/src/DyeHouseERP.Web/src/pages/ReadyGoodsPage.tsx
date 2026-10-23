@@ -159,9 +159,9 @@ export default function ReadyGoodsPage() {
             <div>
               <label className="field-label">تصنيف القماش الجاهز</label>
               <Select value={category} onChange={(e) => setCategory(e.target.value as "FirstGrade" | "SecondGrade" | "Separates")} required>
-                <option value="FirstGrade">درجة أولى</option>
-                <option value="SecondGrade">درجة ثانية</option>
-                <option value="Separates">منفصلات</option>
+                <option value="FirstGrade">{t("readyGoods.firstGrade", "درجة أولى")}</option>
+                <option value="SecondGrade">{t("readyGoods.secondGrade", "درجة ثانية")}</option>
+                <option value="Separates">{t("readyGoods.separates", "منفصلات")}</option>
               </Select>
             </div>
             <div><label className="field-label">الكمية (كجم)</label><Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} /></div>
@@ -200,7 +200,7 @@ export default function ReadyGoodsPage() {
               <tr key={`${b.productionOrderId}-${b.itemId}-${b.category ?? "Unclassified"}`} className="border-b border-line last:border-0 hover:bg-surface-sunken">
                 <td className="font-medium ltr-nums">{b.productionOrderNumber}</td><td>{b.customerCode}</td>
                 <td>{b.itemCode}</td><td>{b.color ?? "-"}</td>
-                <td>{b.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : b.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : b.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")"}</td>
+                <td>{b.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : b.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : b.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")}</td>
                 <td className="text-end ltr-nums font-semibold">{b.remainingKg > 0 ? b.remainingKg.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td><td className="text-end ltr-nums font-semibold">{b.remainingMeter > 0 ? b.remainingMeter.toLocaleString("en-US", { maximumFractionDigits: 3 }) : "—"}</td>
                 <td className="text-end">
                   <Button
@@ -229,7 +229,7 @@ export default function ReadyGoodsPage() {
           return (
             <div className="border-t border-line bg-surface-sunken p-4">
               <div className="text-sm font-semibold">
-                إرجاع مخزون جاهز إلى الخام — <span className="ltr-nums">{row.productionOrderNumber}</span> — {row.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : row.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : row.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")"}
+                إرجاع مخزون جاهز إلى الخام — <span className="ltr-nums">{row.productionOrderNumber}</span> — {row.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : row.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : row.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")}
               </div>
               <p className="kpi-footnote mb-3">
                 حركة منفصلة مصرح بها: لا يحدث هذا تلقائيًا أبدًا، ويُسجَّل السبب في المستند وفي سجل التدقيق.
@@ -317,7 +317,7 @@ export default function ReadyGoodsPage() {
                 <td>{t.stageSequence != null ? `#${t.stageSequence} ${t.stageName ?? ""}` : "—"}</td>
                 <td>{t.customerCode}</td>
                 <td>{t.warehouseName}</td>
-                <td>{t.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : t.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : t.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")"}</td>
+                <td>{t.category === "FirstGrade" ? t("readyGoods.firstGrade", "درجة أولى") : t.category === "SecondGrade" ? t("readyGoods.secondGrade", "درجة ثانية") : t.category === "Separates" ? t("readyGoods.separates", "منفصلات") : t("readyGoods.unclassified", "غير مصنف")}</td>
                 <td className="ltr-nums">{t.quantityKg != null && `${t.quantityKg} كجم `}{t.quantityMeter != null && `${t.quantityMeter} م`}</td>
                 {/* Available is read live from the ledger - what is left after deliveries and any
                     movements back to raw stock, never a stored figure. */}
