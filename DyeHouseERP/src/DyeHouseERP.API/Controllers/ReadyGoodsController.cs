@@ -31,11 +31,11 @@ public class ReadyGoodsController : ControllerBase
     {
         var transfers = await _mediator.Send(new GetReadyGoodsTransfersQuery());
 
-        var headers = new[] { "Transfer no.", "Date", "Job order", "Customer", "Item", "Color", "Qty KG", "Qty M", "Pieces" };
+        var headers = new[] { "Transfer no.", "Date", "Job order", "Customer", "Item", "Color", "Category", "Qty KG", "Qty M", "Pieces" };
         var rows = transfers.Select(t => new object?[]
         {
             t.TransferNumber, t.TransferDate.ToString("yyyy-MM-dd"), t.ProductionOrderNumber,
-            $"{t.CustomerCode}", $"{t.ItemCode}", t.Color, t.QuantityKg, t.QuantityMeter, t.PieceCount
+            $"{t.CustomerCode}", $"{t.ItemCode}", t.Color, t.Category, t.QuantityKg, t.QuantityMeter, t.PieceCount
         }).ToList();
 
         return ExportFileHelper.ToFile(export, format, "Ready Goods Transfers", null, headers, rows, "ready-goods-transfers", "Transfers");
@@ -52,11 +52,11 @@ public class ReadyGoodsController : ControllerBase
     {
         var balances = await _mediator.Send(new GetReadyGoodsBalanceQuery(customerId));
 
-        var headers = new[] { "Job order", "Customer", "Item", "Color", "Ready KG", "Ready M" };
+        var headers = new[] { "Job order", "Customer", "Item", "Color", "Category", "Ready KG", "Ready M" };
         var rows = balances.Select(b => new object?[]
         {
             b.ProductionOrderNumber, $"{b.CustomerCode} - {b.CustomerName}", $"{b.ItemCode} - {b.ItemName}",
-            b.Color, b.RemainingKg, b.RemainingMeter
+            b.Color, b.Category, b.RemainingKg, b.RemainingMeter
         }).ToList();
 
         return ExportFileHelper.ToFile(export, format, "Ready Goods Balance", null, headers, rows, "ready-goods-balance", "Balance");
