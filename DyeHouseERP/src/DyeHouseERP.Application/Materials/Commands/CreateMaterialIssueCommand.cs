@@ -57,11 +57,15 @@ public class CreateMaterialIssueCommandHandler : IRequestHandler<CreateMaterialI
         var order = await _db.ProductionOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId, cancellationToken)
             ?? throw new NotFoundException("ProductionOrder", request.ProductionOrderId);
 
+        if (material.Kind != MaterialKind.Chemical)
+            throw new DomainException("Operating supplies are internal consumables and cannot be issued to a Production Order.");
+
         // Issuing material writes an OUT row against this warehouse, so the warehouse must
         // still be active: a deactivated one never receives a new stock row, while everything
         // already issued from it stays readable and unchanged.
-        await WarehouseGuard.EnsureUsableForNewMovementAsync(
+        var warehouse = await WarehouseGuard.EnsureUsableForNewMovementAsync(
             _db, request.WarehouseId, cancellationToken, "to issue material out of it");
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(material.Kind, warehouse);
 
         // H6: material stock is guarded by the same lock mechanism as raw
         // inventory, keyed on (warehouse, material) - the exact dimension the
