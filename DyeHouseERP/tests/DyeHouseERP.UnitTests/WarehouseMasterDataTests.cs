@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Exceptions;
+using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Warehouses.Commands;
 using DyeHouseERP.Application.Warehouses.Queries;
 using DyeHouseERP.Domain.Entities;
@@ -181,6 +182,37 @@ public class WarehouseMasterDataTests
 
         await duplicate.Should().ThrowAsync<DuplicateCodeException>();
         (await db.Warehouses.CountAsync()).Should().Be(1, "the refused create must not leave a second row behind");
+    }
+
+    [Fact]
+    public void MaterialWarehouseCompatibility_SeparatesChemicalsAndOperatingSupplies()
+    {
+        var materials = new Warehouse("MAT-01", "Chemicals", WarehouseKind.Materials, "tester");
+        var supplies = new Warehouse("SUP-01", "Operating supplies", WarehouseKind.OperatingSupplies, "tester");
+
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(MaterialKind.Chemical, materials);
+        WarehouseGuard.EnsureMaterialWarehouseCompatibility(MaterialKind.OperatingSupply, supplies);
+
+        var chemicalInSupplies = () => WarehouseGuard.EnsureMaterialWarehouseCompatibility(MaterialKind.Chemical, supplies);
+        var supplyInMaterials = () => WarehouseGuard.EnsureMaterialWarehouseCompatibility(MaterialKind.OperatingSupply, materials);
+
+        chemicalInSupplies.Should().Throw<DomainException>();
+        supplyInMaterials.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void OnlyTheFourApprovedWarehouseKindsCanBeCreated()
+    {
+        WarehouseGuard.EnsureAllowedWarehouseKind(WarehouseKind.RawMaterial);
+        WarehouseGuard.EnsureAllowedWarehouseKind(WarehouseKind.ReadyGoods);
+        WarehouseGuard.EnsureAllowedWarehouseKind(WarehouseKind.Materials);
+        WarehouseGuard.EnsureAllowedWarehouseKind(WarehouseKind.OperatingSupplies);
+
+        var wip = () => WarehouseGuard.EnsureAllowedWarehouseKind(WarehouseKind.ProductionWip);
+        var invalid = () => WarehouseGuard.EnsureAllowedWarehouseKind((WarehouseKind)999);
+
+        wip.Should().Throw<DomainException>();
+        invalid.Should().Throw<DomainException>();
     }
 
     [Fact]
