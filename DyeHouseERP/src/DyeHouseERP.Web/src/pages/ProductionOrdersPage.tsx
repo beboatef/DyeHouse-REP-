@@ -219,8 +219,8 @@ export default function ProductionOrdersPage() {
       <Card className="card-pad mb-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
-            <label className="field-label">بحث سريع</label>
-            <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم الأمر أو العميل أو الصنف أو اللون" />
+            <label className="field-label">{t("jo.list.quickSearch")}</label>
+            <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("jo.list.searchPlaceholder")} />
           </div>
           <div>
             <label className="field-label">{t("jo.type")}</label>
@@ -231,9 +231,9 @@ export default function ProductionOrdersPage() {
             </Select>
           </div>
           <div>
-            <label className="field-label">حالة أمر التشغيل</label>
+            <label className="field-label">{t("jo.list.statusFilter")}</label>
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">كل الحالات</option>
+              <option value="">{t("jo.list.allStatuses")}</option>
               <option value="Draft">مسودة</option>
               <option value="RawAllocated">تم صرف الخام</option>
               <option value="InProduction">تحت التشغيل</option>
@@ -420,19 +420,19 @@ export default function ProductionOrdersPage() {
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-          <h2 className="card-title">سجل أوامر التشغيل</h2>
-          <span className="text-xs text-ink-muted">النتائج: <b className="ltr-nums">{visibleOrders.length}</b></span>
+          <h2 className="card-title">{t("jo.list.registerTitle")}</h2>
+          <span className="text-xs text-ink-muted">{t("jo.list.results")}: <b className="ltr-nums">{visibleOrders.length}</b></span>
         </div>
         <div className="table-wrap">
           <table className="table table-dense">
             <thead><tr>
-              <th>رقم الأمر / التاريخ</th><th>العميل</th><th>الصنف / اللون</th>
-              <th>الكمية المطلوبة</th><th>الناتج المسجل</th><th>النوع / الأولوية</th>
-              <th>المرحلة الحالية</th><th>تقدم المراحل</th><th>الحالة</th><th>الإجراءات</th>
+              <th>{t("jo.list.orderDate")}</th><th>{t("jo.list.customer")}</th><th>{t("jo.list.itemColor")}</th>
+              <th>{t("jo.list.requestedQuantity")}</th><th>{t("jo.list.recordedOutput")}</th><th>{t("jo.list.typePriority")}</th>
+              <th>{t("jo.list.currentStage")}</th><th>{t("jo.list.stageProgress")}</th><th>{t("jo.list.status")}</th><th>{t("jo.list.actions")}</th>
             </tr></thead>
             <tbody>
               {isLoading && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">جارٍ التحميل...</td></tr>}
-              {!isLoading && visibleOrders.length === 0 && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">لا توجد أوامر تشغيل مطابقة للبحث</td></tr>}
+              {!isLoading && visibleOrders.length === 0 && <tr><td colSpan={10} className="px-4 py-6 text-center text-ink-subtle">{t("jo.list.noMatchingOrders")}</td></tr>}
               {visibleOrders.map((o) => {
                 const completedStages = o.stageExecutions.filter((stage) => stage.status === "Completed").length;
                 const currentStage = o.stageExecutions.find((stage) => stage.status !== "Completed");
@@ -449,10 +449,10 @@ export default function ProductionOrdersPage() {
                     </td>
                     <td><div className="font-medium">{o.customerName}</div><div className="text-xs text-ink-subtle ltr-nums">{o.customerCode}</div></td>
                     <td><div className="font-medium">{o.itemName}</div><div className="text-xs text-ink-subtle">{o.itemCode}{o.color ? ` · ${o.color}` : ""}</div></td>
-                    <td><div className="ltr-nums">{formatQty(o.requestedQuantityKg, "كجم")}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(o.requestedQuantityMeter, "م")}</div></td>
-                    <td><div className="ltr-nums">{formatQty(lastCompletedStage?.outputKg, "كجم")}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(lastCompletedStage?.outputMeter, "م")}</div></td>
+                    <td><div className="ltr-nums">{formatQty(o.requestedQuantityKg, t("common.kg"))}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(o.requestedQuantityMeter, t("common.meter"))}</div></td>
+                    <td><div className="ltr-nums">{formatQty(lastCompletedStage?.outputKg, t("common.kg"))}</div><div className="ltr-nums text-xs text-ink-muted">{formatQty(lastCompletedStage?.outputMeter, t("common.meter"))}</div></td>
                     <td><div><Badge tone={o.jobOrderType === "OpenLine" ? "yellow" : "gray"}>{t(`jo.type.${o.jobOrderType}`)}</Badge></div><div className="mt-1 text-xs text-ink-muted">{priorityLabel[o.priority]}</div></td>
-                    <td>{currentStage?.stageName ?? (o.status === "Completed" ? "مكتمل" : "—")}</td>
+                    <td>{currentStage?.stageName ?? (o.status === "Completed" ? t("prod.status.Completed") : "—")}</td>
                     <td className="ltr-nums">{completedStages} / {o.stageExecutions.length}</td>
                     <td><Badge tone={statusTone[o.status]}>{t(`prod.status.${o.status}`)}</Badge></td>
                     <td><DocumentActions pdf={ProductionOrdersExports.documentPdf(o.id)} printTo={`/print/production-order/${o.id}`} /></td>
