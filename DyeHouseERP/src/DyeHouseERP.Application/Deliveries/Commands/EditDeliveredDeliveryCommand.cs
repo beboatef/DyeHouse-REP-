@@ -194,7 +194,8 @@ public class EditDeliveredDeliveryCommandHandler
                     if (net.Value.Kg <= 0 && net.Value.Meter <= 0) continue;
 
                     var rows = await _db.InventoryTransactions.AsNoTracking()
-                        .Where(t => t.RawMessageId == null
+                        .Where(t => t.WarehouseId == readyWarehouse!.Id
+                                 && t.RawMessageId == null
                                  && t.ProductionOrderId == net.Key.OrderId
                                  && t.ItemId == net.Key.ItemId
                                  && t.ReadyGoodsCategory == net.Key.Category)
