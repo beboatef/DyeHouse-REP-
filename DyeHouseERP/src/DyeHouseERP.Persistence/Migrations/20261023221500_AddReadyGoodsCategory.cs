@@ -28,7 +28,8 @@ namespace DyeHouseERP.Persistence.Migrations
                 name: "IX_ReadyGoodsTransfers_ProductionOrderId_Category",
                 table: "ReadyGoodsTransfers",
                 columns: new[] { "ProductionOrderId", "Category" },
-                unique: true);
+                unique: true,
+                filter: "[Status] = N'Posted'");
 
             migrationBuilder.AddColumn<string>(
                 name: "Category",
