@@ -257,7 +257,7 @@ public class ReadyGoodsStageTraceabilityTests
         var dto = await TransferHandler(db).Handle(
             new CreateReadyGoodsTransferCommand(
                 f.Order.Id, f.ReadyWarehouse.Id, 400m, 100m, null, "first partial transfer",
-                StageExecutionId: f.Stage.Id),
+                StageExecutionId: f.Stage.Id, Category: ReadyGoodsCategory.FirstGrade),
             CancellationToken.None);
 
         dto.StageExecutionId.Should().Be(f.Stage.Id, "the DTO must carry the link back to the caller");
@@ -284,7 +284,7 @@ public class ReadyGoodsStageTraceabilityTests
         var act = () => TransferHandler(db).Handle(
             new CreateReadyGoodsTransferCommand(
                 f.Order.Id, f.ReadyWarehouse.Id, 501m, null, null, "too much",
-                StageExecutionId: f.Stage.Id),
+                StageExecutionId: f.Stage.Id, Category: ReadyGoodsCategory.FirstGrade),
             CancellationToken.None);
 
         (await act.Should().ThrowAsync<DomainException>())
@@ -334,7 +334,7 @@ public class ReadyGoodsStageTraceabilityTests
         var act = () => TransferHandler(db).Handle(
             new CreateReadyGoodsTransferCommand(
                 f.Order.Id, f.ReadyWarehouse.Id, 100m, null, null, "stage still running",
-                StageExecutionId: f.Stage.Id),
+                StageExecutionId: f.Stage.Id, Category: ReadyGoodsCategory.FirstGrade),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<DomainException>();
