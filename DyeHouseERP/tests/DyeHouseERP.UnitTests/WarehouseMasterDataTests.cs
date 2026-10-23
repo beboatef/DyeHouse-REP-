@@ -205,6 +205,16 @@ public class WarehouseMasterDataTests
     }
 
     [Fact]
+    public void WarehouseDomainEntity_DoesNotAllowReclassification()
+    {
+        var warehouse = new Warehouse("MAT-01", "Chemicals", WarehouseKind.Materials, "tester");
+        Action changeKind = () => warehouse.SetKind(WarehouseKind.OperatingSupplies, "tester");
+
+        changeKind.Should().Throw<InvalidOperationException>();
+        warehouse.Kind.Should().Be(WarehouseKind.Materials);
+    }
+
+    [Fact]
     public void MaterialWarehouseCompatibility_SeparatesChemicalsAndOperatingSupplies()
     {
         var materials = new Warehouse("MAT-01", "Chemicals", WarehouseKind.Materials, "tester");
