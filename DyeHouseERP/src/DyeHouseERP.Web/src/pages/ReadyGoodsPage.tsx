@@ -17,7 +17,7 @@ export default function ReadyGoodsPage() {
   const [qtyKg, setQtyKg] = useState("");
   const [qtyMeter, setQtyMeter] = useState("");
   const [pieceCount, setPieceCount] = useState("");
-  const [category, setCategory] = useState<"FirstGrade" | "SecondGrade" | "Separates">("FirstGrade");
+  const [category, setCategory] = useState<"FirstGrade" | "SecondGrade" | "Separates" | "">("");
   const [error, setError] = useState<string | null>(null);
 
   // ---- Ready goods back to RAW stock (spec section 29) ----
@@ -56,17 +56,20 @@ export default function ReadyGoodsPage() {
   const closedStages = selectedOrder?.stageExecutions.filter((s) => s.status === "Completed") ?? [];
 
   const createMutation = useMutation({
-    mutationFn: () => ReadyGoodsApi.createTransfer({
+    mutationFn: () => {
+      if (!category) throw new Error("اختر تصنيف الجاهز أولًا.");
+      return ReadyGoodsApi.createTransfer({
       productionOrderId, warehouseId, stageExecutionId, category,
       quantityKg: qtyKg ? Number(qtyKg) : undefined,
       quantityMeter: qtyMeter ? Number(qtyMeter) : undefined,
       pieceCount: pieceCount ? Number(pieceCount) : undefined
-    }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ready-goods-balance"] });
       qc.invalidateQueries({ queryKey: ["ready-goods-transfers"] });
       qc.invalidateQueries({ queryKey: ["stock-traceability"] });
-      setShowForm(false); setQtyKg(""); setQtyMeter(""); setPieceCount(""); setCategory("FirstGrade");
+      setShowForm(false); setQtyKg(""); setQtyMeter(""); setPieceCount(""); setCategory("");
       setStageExecutionId(""); setError(null);
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ أثناء الحفظ")
@@ -158,7 +161,8 @@ export default function ReadyGoodsPage() {
             </div>
             <div>
               <label className="field-label">{translate("readyGoods.category", "التصنيف")}</label>
-              <Select value={category} onChange={(e) => setCategory(e.target.value as "FirstGrade" | "SecondGrade" | "Separates")} required>
+              <Select value={category} onChange={(e) => setCategory(e.target.value as "FirstGrade" | "SecondGrade" | "Separates" | "")} required>
+                <option value="">اختر التصنيف...</option>
                 <option value="FirstGrade">{translate("readyGoods.firstGrade", "درجة أولى")}</option>
                 <option value="SecondGrade">{translate("readyGoods.secondGrade", "درجة ثانية")}</option>
                 <option value="Separates">{translate("readyGoods.separates", "منفصلات")}</option>
@@ -167,7 +171,7 @@ export default function ReadyGoodsPage() {
             <div><label className="field-label">الكمية (كجم)</label><Input type="number" step="0.001" min="0" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} /></div>
             <div><label className="field-label">الكمية (متر)</label><Input type="number" step="0.001" min="0" value={qtyMeter} onChange={(e) => setQtyMeter(e.target.value)} /></div>
             <div><label className="field-label">عدد الأتواب (وصفي)</label><Input type="number" min="0" value={pieceCount} onChange={(e) => setPieceCount(e.target.value)} /></div>
-            <Button type="submit" disabled={createMutation.isPending || !stageExecutionId}>{createMutation.isPending ? "جارٍ الحفظ..." : "ترحيل"}</Button>
+            <Button type="submit" disabled={createMutation.isPending || !category || !stageExecutionId}>{createMutation.isPending ? "جارٍ الحفظ..." : "ترحيل"}</Button>
           </form>
           {error && <p className="form-error mt-2">{error}</p>}
         </Card>
