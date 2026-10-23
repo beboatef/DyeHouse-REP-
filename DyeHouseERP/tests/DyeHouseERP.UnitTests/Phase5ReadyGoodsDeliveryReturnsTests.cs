@@ -443,9 +443,9 @@ public class Phase5DeliveryStatementTests : Phase5TestBase
         var row = (await StatementHandler(db).Handle(
             new GetDeliveryStatementQuery(deliveryId), CancellationToken.None)).Rows.Single();
 
-        // 600 original - 500 first grade - 20 separates - 10 second grade = 70? No:
-        // the operation's stage output (520) is not used when a first-grade transfer exists.
-        // The first-grade transfer is 500, so 600 - 500 - 20 - 10 = 70 KG.
+        // The posted first-grade transfer is the output denominator: 600 original - 500 first grade
+        // - 20 separates - 10 second grade = 70 KG. Second-grade and separates transfers are not
+        // added to that denominator because those streams are subtracted separately below.
         row.CalculatedWasteKg.Should().Be(70m);
     }
 
