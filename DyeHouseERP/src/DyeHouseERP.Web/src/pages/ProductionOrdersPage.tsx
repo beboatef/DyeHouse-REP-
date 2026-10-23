@@ -227,15 +227,15 @@ export default function ProductionOrdersPage() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <KpiCard label="إجمالي الأوامر" value={orderCounts.total} />
-        <KpiCard label="قيد التشغيل" value={orderCounts.active} tone={orderCounts.active ? "info" : "neutral"} />
-        <KpiCard label="متوقفة مؤقتًا" value={orderCounts.paused} tone={orderCounts.paused ? "warning" : "neutral"} />
-        <KpiCard label="مكتملة" value={orderCounts.completed} tone="success" />
+        <KpiCard label={t("jo.summary.total", "إجمالي الأوامر")} value={orderCounts.total} />
+        <KpiCard label={t("jo.summary.active", "قيد التشغيل")} value={orderCounts.active} tone={orderCounts.active ? "info" : "neutral"} />
+        <KpiCard label={t("jo.summary.paused", "متوقفة مؤقتًا")} value={orderCounts.paused} tone={orderCounts.paused ? "warning" : "neutral"} />
+        <KpiCard label={t("jo.summary.completed", "مكتملة")} value={orderCounts.completed} tone="success" />
       </div>
       <Card className="card-pad mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
         <div>
           <label className="field-label">{t("common.search")}</label>
-          <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم الأمر أو العميل أو الصنف أو اللون" />
+          <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("jo.list.searchPlaceholder", "رقم الأمر أو العميل أو الصنف أو اللون")} />
         </div>
         <div>
           <label className="field-label">{t("jo.type")}</label>
@@ -248,7 +248,7 @@ export default function ProductionOrdersPage() {
         <div>
           <label className="field-label">حالة أمر التشغيل</label>
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">{t("common.all")} - الحالة</option>
+            <option value="">{t("jo.list.allStatuses", "كل الحالات")}</option>
             {["Draft", "RawAllocated", "InProduction", "Paused", "Completed", "Cancelled"].map((status) => (
               <option key={status} value={status}>{t(`prod.status.${status}`)}</option>
             ))}
