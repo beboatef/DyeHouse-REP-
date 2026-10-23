@@ -515,7 +515,7 @@ function StageFlowPanel({ order }: { order: ProductionOrder }) {
   // Metres remain an independent length and are never converted into waste. Keep this preview aligned
   // with the delivery statement's server-side calculation.
   const wasteKg = finalRawKg != null && finalReadyKg != null
-    ? finalRawKg - finalReadyKg - (finalSeparatesKg ?? 0) - (finalSecondGradeKg ?? 0)
+    ? finalRawKg - finalReadyKg - (finalSeparatesKg ?? 0) - (finalSecondGradeKg ?? 0) - (finalSecondGradeKg ?? 0)
     : null;
   const finalWasteKg = wasteKg != null && wasteKg >= 0 ? wasteKg : null;
   const finalWasteNegativeKg = wasteKg != null && wasteKg < 0;
