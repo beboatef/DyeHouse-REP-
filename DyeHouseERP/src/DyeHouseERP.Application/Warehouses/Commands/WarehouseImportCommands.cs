@@ -8,7 +8,7 @@ namespace DyeHouseERP.Application.Warehouses.Commands;
 
 /// <summary>
 /// Excel import for the Warehouse master (spec sections 15 + 38).
-/// Columns: Code, Name, Kind (RawMaterial / Materials / ReadyGoods / ProductionWip / OperatingSupplies).
+/// Columns: Code, Name, Kind (RawMaterial / Materials / ReadyGoods / OperatingSupplies).
 ///
 /// Existing warehouse codes are ALWAYS skipped here, even for a user with full
 /// rights: changing a warehouse's Kind would silently reinterpret every
@@ -119,9 +119,12 @@ internal static class WarehouseImportValidator
             if (string.IsNullOrWhiteSpace(code)) row.Errors.Add("Code is required.");
             if (string.IsNullOrWhiteSpace(name)) row.Errors.Add("Name is required.");
 
-            if (string.IsNullOrWhiteSpace(kind)) row.Errors.Add("Kind is required (RawMaterial, Materials, ReadyGoods, ProductionWip or OperatingSupplies).");
-            else if (!Enum.TryParse<WarehouseKind>(kind, ignoreCase: true, out _))
-                row.Errors.Add($"Kind '{kind}' is not valid. Customer-owned stock uses RawMaterial/ProductionWip/ReadyGoods; factory-owned stock uses Materials/OperatingSupplies.");
+            if (string.IsNullOrWhiteSpace(kind))
+                row.Errors.Add("Kind is required (RawMaterial, Materials, ReadyGoods or OperatingSupplies).");
+            else if (!Enum.TryParse<WarehouseKind>(kind, ignoreCase: true, out var parsedKind))
+                row.Errors.Add($"Kind '{kind}' is not valid. Allowed kinds are RawMaterial, ReadyGoods, Materials and OperatingSupplies.");
+            else if (parsedKind == WarehouseKind.ProductionWip)
+                row.Errors.Add("ProductionWip is a legacy classification only and cannot be created through import.");
 
             if (!string.IsNullOrWhiteSpace(code))
             {
