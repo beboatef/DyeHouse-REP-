@@ -153,7 +153,9 @@ public class ReturnReadyGoodsToRawStockCommandHandler
             // Availability is checked on the exact dimension the ready balance is read from, so stock
             // that is already promised to a delivery is never double-spent.
             var availableCategories = await _db.ReadyGoodsTransfers.AsNoTracking()
-                .Where(t => t.ProductionOrderId == order.Id && t.ItemId == request.ItemId)
+                .Where(t => t.ProductionOrderId == order.Id
+                         && t.ItemId == request.ItemId
+                         && t.Status != ReadyGoodsTransferStatus.Cancelled)
                 .Select(t => t.Category)
                 .Distinct()
                 .ToListAsync(cancellationToken);
