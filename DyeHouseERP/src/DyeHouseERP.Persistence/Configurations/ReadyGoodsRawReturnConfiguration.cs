@@ -14,6 +14,7 @@ public class ReadyGoodsRawReturnConfiguration : IEntityTypeConfiguration<ReadyGo
         builder.Property(m => m.MovementNumber).HasMaxLength(30).IsRequired();
         builder.HasIndex(m => m.MovementNumber).IsUnique();
 
+        builder.Property(m => m.Category).HasMaxLength(20);
         builder.Property(m => m.QuantityKg).HasPrecision(18, 3);
         builder.Property(m => m.QuantityMeter).HasPrecision(18, 3);
         builder.Property(m => m.Reason).HasMaxLength(500).IsRequired();
