@@ -120,6 +120,40 @@ public class ReadyGoodsStageTraceabilityTests
             .IsValid.Should().BeTrue();
     }
 
+    [Fact]
+    public void CreateCommand_RejectsNegativePieceCount()
+    {
+        var validator = new CreateReadyGoodsTransferCommandValidator();
+
+        validator.Validate(new CreateReadyGoodsTransferCommand(
+                Guid.NewGuid(), Guid.NewGuid(), 100m, null, -1, null, StageExecutionId: Guid.NewGuid()))
+            .IsValid.Should().BeFalse("piece counts cannot be negative");
+
+        validator.Validate(new CreateReadyGoodsTransferCommand(
+                Guid.NewGuid(), Guid.NewGuid(), 100m, null, 0, null, StageExecutionId: Guid.NewGuid()))
+            .IsValid.Should().BeTrue("zero is valid when the quantity is tracked without piece count");
+    }
+
+    [Fact]
+    public void ReadyGoodsTransfer_DomainRejectsNegativePieceCountOnCreateAndUpdate()
+    {
+        var f = Seed();
+
+        Action create = () => new ReadyGoodsTransfer(
+            "RGT-TEST", DateTime.UtcNow, f.Order.Id, f.Customer.Id, f.Item.Id,
+            f.ReadyWarehouse.Id, 10m, null, "operator", pieceCount: -1,
+            stageExecutionId: f.Stage.Id);
+        create.Should().Throw<ArgumentOutOfRangeException>();
+
+        var transfer = new ReadyGoodsTransfer(
+            "RGT-TEST-2", DateTime.UtcNow, f.Order.Id, f.Customer.Id, f.Item.Id,
+            f.ReadyWarehouse.Id, 10m, null, "operator", pieceCount: 0,
+            stageExecutionId: f.Stage.Id);
+
+        Action update = () => transfer.UpdateDetails(DateTime.UtcNow, -1, null);
+        update.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     // ------------------------------------------------------- domain rule
 
     [Fact]
