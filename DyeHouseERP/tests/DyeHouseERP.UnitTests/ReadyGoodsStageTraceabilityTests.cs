@@ -317,6 +317,49 @@ public class ReadyGoodsStageTraceabilityTests
     /// recorded output, so the cap holds by construction.
     /// </summary>
     [Fact]
+    public async Task FinalCapture_PostsFirstGradeSecondGradeAndSeparatesAsSeparateStockCategories()
+    {
+        var f = Seed(closeStage: false);
+        using var db = NewDb();
+
+        var handler = new TransferToNextStageCommandHandler(
+            db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
+
+        await handler.Handle(new TransferToNextStageCommand(
+            f.Stage.Id, f.ReadyGoodsStage.Id,
+            OutputKg: 450m, OutputMeter: 100m,
+            SeparatesKg: 20m, SeparatesMeter: 5m,
+            Notes: "final classified output",
+            InputKg: 600m, InputMeter: 120m,
+            SecondGradeKg: 30m, SecondGradeMeter: 10m,
+            SecondGradePieceCount: 4), CancellationToken.None);
+
+        var transfers = await db.ReadyGoodsTransfers.OrderBy(t => t.Category).ToListAsync();
+        transfers.Should().HaveCount(3);
+        transfers.Should().ContainSingle(t => t.Category == ReadyGoodsCategory.FirstGrade
+            && t.QuantityKg == 450m && t.QuantityMeter == 100m);
+        transfers.Should().ContainSingle(t => t.Category == ReadyGoodsCategory.SecondGrade
+            && t.QuantityKg == 30m && t.QuantityMeter == 10m && t.PieceCount == 4);
+        transfers.Should().ContainSingle(t => t.Category == ReadyGoodsCategory.Separates
+            && t.QuantityKg == 20m && t.QuantityMeter == 5m);
+
+        var ledger = await db.InventoryTransactions
+            .Where(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer)
+            .ToListAsync();
+        ledger.Should().HaveCount(3);
+        ledger.Should().ContainSingle(t => t.ReadyGoodsCategory == ReadyGoodsCategory.FirstGrade);
+        ledger.Should().ContainSingle(t => t.ReadyGoodsCategory == ReadyGoodsCategory.SecondGrade);
+        ledger.Should().ContainSingle(t => t.ReadyGoodsCategory == ReadyGoodsCategory.Separates);
+        ledger.Should().NotContain(t => t.ReadyGoodsCategory.ToString() == "Waste");
+        foreach (var transfer in transfers)
+        {
+            var row = ledger.Single(t => t.ReadyGoodsCategory == transfer.Category);
+            row.SourceDocumentId.Should().Be(transfer.Id);
+            row.SourceDocumentNumber.Should().Be(transfer.TransferNumber);
+        }
+    }
+
+    [Fact]
     public async Task TheAutomaticStageTransfer_IsLinkedToTheStageWhoseOutputItMoves()
     {
         var f = Seed(closeStage: false); // stage still InProgress, ready to transfer
