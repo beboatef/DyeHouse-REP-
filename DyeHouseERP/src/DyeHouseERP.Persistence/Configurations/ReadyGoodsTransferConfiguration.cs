@@ -21,7 +21,7 @@ public class ReadyGoodsTransferConfiguration : IEntityTypeConfiguration<ReadyGoo
         builder.Property(t => t.Category).HasConversion<string>().HasMaxLength(20);
 
         // Prevent duplicate transfer for the same order (spec section 29).
-        builder.HasIndex(t => new { t.ProductionOrderId, t.Category }).IsUnique();
+        builder.HasIndex(t => new { t.ProductionOrderId, t.Category }).IsUnique().HasFilter("[Status] = N'Posted'");
 
         // Traceability (spec section 23): the stage whose output this transfer moved.
         // Mapped as a real reference (never a cascade) so the chain
