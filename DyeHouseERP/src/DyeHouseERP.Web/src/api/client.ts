@@ -1850,7 +1850,7 @@ export interface InventoryMovement {
 // null rather than a zero that would read as a real measurement.
 // ===================================================================
 
-export type StockScope = "raw" | "ready" | "materials";
+export type StockScope = "raw" | "ready" | "materials" | "supplies";
 
 export interface StockTraceRow {
   scope: StockScope;
