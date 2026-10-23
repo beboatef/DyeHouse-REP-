@@ -21,6 +21,8 @@ public class Warehouse : AuditableEntity
     {
         if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Warehouse code is required.", nameof(code));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Warehouse name is required.", nameof(name));
+        if (!Enum.IsDefined(typeof(WarehouseKind), kind) || kind == WarehouseKind.ProductionWip)
+            throw new ArgumentException("Only RawMaterial, ReadyGoods, Materials, and OperatingSupplies warehouses can be created.", nameof(kind));
 
         Code = code.Trim();
         Name = name.Trim();
@@ -51,8 +53,8 @@ public class Warehouse : AuditableEntity
     /// </summary>
     public void SetKind(WarehouseKind kind, string modifiedBy)
     {
-        if (!Enum.IsDefined(typeof(WarehouseKind), kind))
-            throw new ArgumentException("Unknown warehouse kind.", nameof(kind));
+        if (!Enum.IsDefined(typeof(WarehouseKind), kind) || kind == WarehouseKind.ProductionWip)
+            throw new ArgumentException("Only RawMaterial, ReadyGoods, Materials, and OperatingSupplies are allowed warehouse kinds.", nameof(kind));
 
         Kind = kind;
         ModifiedBy = modifiedBy;
@@ -82,11 +84,10 @@ public class Warehouse : AuditableEntity
 }
 
 /// <summary>
-/// Warehouse kinds (spec section 15). The structure stays configurable -
-/// an admin can add as many warehouses of any kind as the factory needs;
-/// these are only the defaults that make the two ownership worlds explicit:
-/// RawMaterial / ProductionWip / ReadyGoods hold CUSTOMER-owned material,
-/// Materials / OperatingSupplies hold FACTORY-owned stock.
+/// Warehouse kinds retained by the data model for compatibility with historical records.
+/// New warehouses are limited to RawMaterial, ReadyGoods, Materials and OperatingSupplies.
+/// ProductionWip remains readable for legacy rows only; it is not a fifth user-manageable store.
+/// RawMaterial / ReadyGoods hold CUSTOMER-owned material, Materials / OperatingSupplies hold FACTORY-owned stock.
 /// </summary>
 public enum WarehouseKind
 {
