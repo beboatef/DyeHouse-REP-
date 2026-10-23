@@ -71,10 +71,17 @@ public class ProductionOrdersController : ControllerBase
     {
         var order = await _mediator.Send(new GetProductionOrderByIdQuery(id));
 
-        var headers = new List<string> { "Stage", "Status", "Input", "Output", "Loss", "Separates", "Drawing number / رقم الرسمة" };
+        var headers = new List<string>
+        {
+            "Stage / المرحلة", "Status / الحالة", "Input KG", "Input Meter", "Output KG", "Output Meter",
+            "Second Grade KG", "Second Grade Meter", "Second Grade Rolls / عدد الأتواب",
+            "Separates KG", "Separates Meter", "Waste KG", "Drawing number / رقم الرسمة"
+        };
         var rows = order.StageExecutions.Select(s => new object?[]
         {
-            s.StageName, s.Status, s.InputKg, s.OutputKg, s.LossKg, s.SeparatesKg, s.DrawingNumber
+            s.StageName, s.Status, s.InputKg, s.InputMeter, s.OutputKg, s.OutputMeter,
+            s.SecondGradeKg, s.SecondGradeMeter, s.SecondGradePieceCount,
+            s.SeparatesKg, s.SeparatesMeter, s.WasteKg, s.DrawingNumber
         }).ToList();
 
         var subtitle = $"{order.CustomerCode} - {order.CustomerName}  |  {order.ItemCode} - {order.ItemName}{(order.Color is null ? "" : $" ({order.Color})")}  |  {order.Status}";
@@ -173,7 +180,7 @@ public class ProductionOrdersController : ControllerBase
             request.OutputKg, request.OutputMeter, request.SeparatesKg, request.SeparatesMeter, request.Notes, request.DrawingNumber,
             request.InputKg, request.InputMeter,
             request.SecondGradeKg, request.SecondGradeMeter,
-            request.MachineId, request.ProductionShiftId)));
+            request.MachineId, request.ProductionShiftId, request.SecondGradePieceCount)));
 
     /// <summary>
     /// Edits the OPEN stage's output weight (spec section 16). No approval needed,
@@ -227,6 +234,8 @@ public record TransferStageRequest(
     decimal? InputKg = null, decimal? InputMeter = null,
     // Second-grade material is its own quantity: it is neither the output nor the waste.
     decimal? SecondGradeKg = null, decimal? SecondGradeMeter = null,
+    // Number of fabric rolls (أتواب) produced as second grade; this is a count, not a KG/Meter quantity.
+    int? SecondGradePieceCount = null,
     // Where the operation ran. Validated for suitability (linked to this stage) and availability (active).
     Guid? MachineId = null, Guid? ProductionShiftId = null);
 
