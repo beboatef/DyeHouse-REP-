@@ -134,6 +134,7 @@ public class DeliveryStatementRowDto
     /// <summary>Second-grade material recorded by the order's operations, per unit.</summary>
     public decimal? SecondGradeKg { get; set; }
     public decimal? SecondGradeMeter { get; set; }
+    public int? SecondGradePieceCount { get; set; }
 
     /// <summary>
     /// Calculated waste = original raw - ready goods - scraps/separates - second grade, computed
