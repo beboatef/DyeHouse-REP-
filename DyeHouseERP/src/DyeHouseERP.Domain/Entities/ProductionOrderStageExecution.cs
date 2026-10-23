@@ -37,6 +37,9 @@ public class ProductionOrderStageExecution : BaseEntity
     public decimal? SecondGradeKg { get; private set; }
     public decimal? SecondGradeMeter { get; private set; }
 
+    /// <summary>Number of independent pieces produced as second-grade material; not inferred from weight or length.</summary>
+    public int? SecondGradePieceCount { get; private set; }
+
     /// <summary>
     /// The IMMUTABLE weight this stage started from (spec section 15).
     /// For the first stage it is the Job Order's actual weight; for every later
@@ -166,7 +169,7 @@ public class ProductionOrderStageExecution : BaseEntity
         string? notes, string completedBy,
         decimal? inputKg = null, decimal? inputMeter = null,
         decimal? secondGradeKg = null, decimal? secondGradeMeter = null,
-        Guid? machineId = null, Guid? productionShiftId = null)
+        Guid? machineId = null, Guid? productionShiftId = null, int? secondGradePieceCount = null)
     {
         if (Status == StageExecutionStatus.Completed)
             throw new DomainException(
@@ -177,7 +180,7 @@ public class ProductionOrderStageExecution : BaseEntity
 
         EnsureDrawingNumber();
         if (outputKg is < 0 || outputMeter is < 0 || separatesKg is < 0 || separatesMeter is < 0 ||
-            inputKg is < 0 || inputMeter is < 0 || secondGradeKg is < 0 || secondGradeMeter is < 0)
+            inputKg is < 0 || inputMeter is < 0 || secondGradeKg is < 0 || secondGradeMeter is < 0 || secondGradePieceCount is < 0)
             throw new DomainException("Stage quantities cannot be negative.");
         InputKg = inputKg;
         InputMeter = inputMeter;
@@ -187,6 +190,7 @@ public class ProductionOrderStageExecution : BaseEntity
         SeparatesMeter = separatesMeter;
         SecondGradeKg = secondGradeKg;
         SecondGradeMeter = secondGradeMeter;
+        SecondGradePieceCount = secondGradePieceCount;
         MachineId = machineId ?? MachineId;
         ProductionShiftId = productionShiftId ?? ProductionShiftId;
         Notes = notes;
