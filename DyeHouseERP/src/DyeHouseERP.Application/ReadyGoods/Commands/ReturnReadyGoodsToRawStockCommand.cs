@@ -151,10 +151,16 @@ public class ReturnReadyGoodsToRawStockCommandHandler
         {
             // Availability is checked on the exact dimension the ready balance is read from, so stock
             // that is already promised to a delivery is never double-spent.
+            var readyCategory = await _db.ReadyGoodsTransfers.AsNoTracking()
+                .Where(t => t.ProductionOrderId == order.Id)
+                .Select(t => t.Category)
+                .FirstOrDefaultAsync(cancellationToken);
+
             var readyRows = await _db.InventoryTransactions.AsNoTracking()
                 .Where(t => t.RawMessageId == null
                          && t.ProductionOrderId == order.Id
-                         && t.ItemId == request.ItemId)
+                         && t.ItemId == request.ItemId
+                         && t.ReadyGoodsCategory == readyCategory)
                 .Select(t => new { t.QuantityKg, t.QuantityMeter, t.Direction })
                 .ToListAsync(cancellationToken);
 
@@ -182,7 +188,8 @@ public class ReturnReadyGoodsToRawStockCommandHandler
                 readyWarehouse.Id, order.CustomerId, request.ItemId,
                 rawMessageId: null, productionOrderId: order.Id,
                 quantityKg: request.QuantityKg, quantityMeter: request.QuantityMeter,
-                direction: TransactionDirection.Out, createdBy: _currentUser.UserName));
+                direction: TransactionDirection.Out, createdBy: _currentUser.UserName,
+                readyGoodsCategory: readyCategory));
 
             // ...and INTO the raw material lot, in the same transaction.
             _db.InventoryTransactions.Add(new InventoryTransaction(
