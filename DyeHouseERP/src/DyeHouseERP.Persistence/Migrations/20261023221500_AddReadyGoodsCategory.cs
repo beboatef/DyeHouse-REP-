@@ -47,9 +47,9 @@ namespace DyeHouseERP.Persistence.Migrations
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropIndex(name: "IX_ReadyGoodsTransfers_ProductionOrderId_Category", table: "ReadyGoodsTransfers");
             migrationBuilder.DropColumn(name: "Category", table: "DeliveryLines");
             migrationBuilder.DropColumn(name: "Category", table: "ReadyGoodsTransfers");
-            migrationBuilder.DropIndex(name: "IX_ReadyGoodsTransfers_ProductionOrderId_Category", table: "ReadyGoodsTransfers");
             migrationBuilder.CreateIndex(name: "IX_ReadyGoodsTransfers_ProductionOrderId", table: "ReadyGoodsTransfers", column: "ProductionOrderId", unique: true);
             migrationBuilder.DropColumn(name: "ReadyGoodsCategory", table: "InventoryTransactions");
         }
