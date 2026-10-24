@@ -197,8 +197,8 @@ public class ReprocessSeparateCommandHandler : IRequestHandler<ReprocessSeparate
 
     private static string ComposeNotes(string? notes, IReadOnlyCollection<Separate> separates)
     {
-        var ids = string.Join(", ", separates.Select(s => s.Id.ToString("D")));
-        var trace = $"Reprocessing batch. Source separate IDs: {ids}.";
+        // Each Separate stores the new order ID directly; avoid copying an unbounded ID list into notes.
+        var trace = $"Reprocessing batch ({separates.Count} separates).";
         return string.IsNullOrWhiteSpace(notes) ? trace : $"{notes.Trim()}\n{trace}";
     }
 
