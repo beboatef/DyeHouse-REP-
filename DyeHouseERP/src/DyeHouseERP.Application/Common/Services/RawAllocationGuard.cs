@@ -48,17 +48,8 @@ public static class RawAllocationGuard
             .Select(a => new { a.QuantityKg, a.QuantityMeter })
             .ToListAsync(cancellationToken);
 
-        // A reprocessing order consumes a previously recorded Separate, not a new raw-message
-        // allocation. Count that linked, stock-posted source as its allocation so the ordinary
-        // production gates still enforce 100% allocation without fabricating a RawMessage link.
-        var separateInputs = await db.Separates.AsNoTracking()
-            .Where(s => s.ReprocessingProductionOrderId == order.Id
-                     && s.Status == DyeHouseERP.Domain.Enums.SeparateStatus.Reprocessing)
-            .Select(s => new { s.QuantityKg, s.QuantityMeter })
-            .ToListAsync(cancellationToken);
-
         order.EnsureRawAllocationComplete(
-            allocated.Sum(a => a.QuantityKg ?? 0m) + separateInputs.Sum(s => s.QuantityKg ?? 0m) + additionalQuantityKg,
-            allocated.Sum(a => a.QuantityMeter ?? 0m) + separateInputs.Sum(s => s.QuantityMeter ?? 0m) + additionalQuantityMeter);
+            allocated.Sum(a => a.QuantityKg ?? 0m) + additionalQuantityKg,
+            allocated.Sum(a => a.QuantityMeter ?? 0m) + additionalQuantityMeter);
     }
 }
