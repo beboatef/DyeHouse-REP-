@@ -38,6 +38,19 @@ public class SeparatesController : ControllerBase
     public async Task<ActionResult<ProductionOrderDto>> Reprocess(Guid id, [FromBody] ReprocessSeparateRequest request)
         => Ok(await _mediator.Send(new ReprocessSeparateCommand(id, request.OrderDate, request.Notes, request.StartingStageId)));
 
+    /// <summary>Creates one reprocessing order from several posted separates of the same customer and item.</summary>
+    [HttpPost("reprocess-batch")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionReprocess)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> ReprocessBatch([FromBody] ReprocessSeparatesBatchRequest request)
+    {
+        if (request.SeparateIds is null || request.SeparateIds.Count == 0)
+            return BadRequest("Select at least one separate.");
+        return Ok(await _mediator.Send(new ReprocessSeparateCommand(
+            request.SeparateIds[0], request.OrderDate, request.Notes, request.StartingStageId,
+            request.SeparateIds.Skip(1).ToArray())));
+    }
+
     [HttpPost("{id:guid}/scrap")]
     // Its own right (decided in Phase 4, Phase 1 §G.1): writing material off as waste must never be
     // implied by the ability to edit a Job Order.
@@ -47,5 +60,5 @@ public class SeparatesController : ControllerBase
         => Ok(await _mediator.Send(new ScrapSeparateCommand(id, request.Reason)));
 }
 
-public record ReprocessSeparateRequest(DateTime OrderDate, string? Notes, Guid? StartingStageId = null);
+public record ReprocessSeparateRequest(DateTime OrderDate, string? Notes, Guid? StartingStageId = null);\npublic record ReprocessSeparatesBatchRequest(IReadOnlyList<Guid> SeparateIds, DateTime OrderDate, string? Notes = null, Guid? StartingStageId = null);
 public record ScrapSeparateRequest(string Reason);
