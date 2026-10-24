@@ -55,7 +55,8 @@ public class GetSeparatesQueryHandler : IRequestHandler<GetSeparatesQuery, List<
                 QuantityMeter = s.QuantityMeter,
                 Reason = s.Reason,
                 Notes = s.Notes,
-                Status = s.Status,\n                ReadyForReprocessing = orders.GetValueOrDefault(s.OriginalProductionOrderId)?.Status == DyeHouseERP.Domain.Enums.ProductionOrderStatus.Completed,
+                Status = s.Status,
+                ReadyForReprocessing = orders.GetValueOrDefault(s.OriginalProductionOrderId)?.Status == DyeHouseERP.Domain.Enums.ProductionOrderStatus.Completed,
                 ReprocessingProductionOrderId = s.ReprocessingProductionOrderId,
                 ReprocessingOrderNumber = s.ReprocessingProductionOrderId.HasValue
                     ? orders.GetValueOrDefault(s.ReprocessingProductionOrderId.Value)?.OrderNumber
