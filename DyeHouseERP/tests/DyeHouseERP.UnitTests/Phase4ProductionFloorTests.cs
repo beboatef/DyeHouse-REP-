@@ -257,6 +257,27 @@ public class Phase4FloorCaptureTests
     }
 
     [Fact]
+    public async Task ScrappingAnUnpostedSeparate_TakesTheReadyLotLockBeforeChangingStatus()
+    {
+        using var db = NewDb();
+        var scene = SeedOrderOnFirstStage(db, UnitOfMeasure.KG);
+        await Transfer(db).Handle(CloseFirstOperation(scene, outputKg: 950m, separatesKg: 15m), CancellationToken.None);
+        var separate = await db.Separates.SingleAsync();
+        var stockLock = new RecordingStockLock();
+        var handler = new ScrapSeparateCommandHandler(
+            db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), stockLock);
+
+        await handler.Handle(
+            new ScrapSeparateCommand(separate.Id, "منفصل لم يرحل للجاهز"), CancellationToken.None);
+
+        stockLock.Dimensions.Should().Contain(
+            DyeHouseERP.Application.Common.Interfaces.StockLockKey.ReadyLot(scene.ItemId, scene.OrderId),
+            "the no-transfer decision must be made while serialized against a concurrent Ready Goods posting");
+        (await db.Separates.AsNoTracking().SingleAsync(s => s.Id == separate.Id))
+            .Status.Should().Be(SeparateStatus.Scrapped);
+    }
+
+    [Fact]
     public async Task ScrappingASeparateAfterReadyGoodsPosting_WritesAnOutLedgerMovement()
     {
         using var db = NewDb();
