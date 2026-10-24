@@ -278,11 +278,9 @@ public class Phase4FloorCaptureTests
         await Transfer(db).Handle(
             CloseFirstOperation(scene, inputKg: 1010m, outputKg: 950m, separatesKg: 15m),
             CancellationToken.None);
-        var separate = await db.Separates.AsNoTracking().SingleAsync();
-
-        await Reprocessor(db).Handle(
-            new ReprocessSeparateCommand(separate.Id, DateTime.UtcNow, "إعادة تشغيل"),
-            CancellationToken.None);
+        var separate = await db.Separates.SingleAsync();
+        separate.StartReprocessing(Guid.NewGuid());
+        await db.SaveChangesAsync();
 
         Func<Task> scrap = () => Scrapper(db).Handle(
             new ScrapSeparateCommand(separate.Id, "إلغاء المنفصل وتحويله لهالك"),
@@ -325,32 +323,27 @@ public class Phase4FloorCaptureTests
     // =====================================================================================
 
     [Fact]
-    public async Task ReprocessingASeparate_CreatesANewLinkedOrder_AndLeavesTheOriginalUntouched()
+    public async Task ReprocessingASeparate_BeforeReadyGoodsIsRejected_AndOriginalHistoryRemainsUntouched()
     {
         using var db = NewDb();
         var scene = SeedOrderOnFirstStage(db, UnitOfMeasure.KG);
         await Transfer(db).Handle(CloseFirstOperation(scene,
             inputKg: 1010m, outputKg: 950m, separatesKg: 15m), CancellationToken.None);
         var separate = await db.Separates.AsNoTracking().SingleAsync();
+        var ledgerBefore = await db.InventoryTransactions.CountAsync();
 
-        var newOrder = await Reprocessor(db).Handle(
+        Func<Task> act = () => Reprocessor(db).Handle(
             new ReprocessSeparateCommand(separate.Id, DateTime.UtcNow, "إعادة تشغيل المنفصلات"), CancellationToken.None);
 
-        newOrder.CustomerId.Should().Be(scene.CustomerId);
-        newOrder.ItemId.Should().Be(scene.ItemId);
-        newOrder.RequestedQuantityKg.Should().Be(15m, "the reprocessing order is raised on the separate's own quantity");
-        newOrder.ReprocessingOfProductionOrderId.Should().Be(scene.OrderId,
-            "genealogy is preserved by pointing back - the original order is never edited");
-
+        (await act.Should().ThrowAsync<DomainException>())
+            .WithMessage("*original production order is completed*");
+        (await db.ProductionOrders.CountAsync()).Should().Be(1);
+        (await db.InventoryTransactions.CountAsync()).Should().Be(ledgerBefore);
         var stored = await db.Separates.AsNoTracking().SingleAsync(s => s.Id == separate.Id);
-        stored.Status.Should().Be(SeparateStatus.Reprocessing);
-        stored.ReprocessingProductionOrderId.Should().Be(newOrder.Id);
-
+        stored.Status.Should().Be(SeparateStatus.PendingReprocessing);
+        stored.ReprocessingProductionOrderId.Should().BeNull();
         var original = await db.ProductionOrders.AsNoTracking().SingleAsync(o => o.Id == scene.OrderId);
-        original.OrderNumber.Should().Be("PRD-P4-000001");
-        original.RequestedQuantityKg.Should().Be(1000m, "reprocessing never rewrites the original order's figures");
-        (await db.ProductionOrderStageExecutions.CountAsync(s => s.ProductionOrderId == scene.OrderId))
-            .Should().Be(2, "the original order keeps its own operations");
+        original.RequestedQuantityKg.Should().Be(1000m);
     }
 
     [Fact]
@@ -407,82 +400,28 @@ public class Phase4FloorCaptureTests
     /// reprocessing order's claim is the separate's own quantity (15 kg), never the original 1000.
     /// </summary>
     [Fact]
-    public async Task ReprocessingASeparate_PostsNoSecondRawDeduction_AndLeavesTheOriginalIssueIntact()
+    public async Task ReprocessingBeforeReadyGoods_DoesNotCreateAnOrderOrDeductTheOriginalRawAgain()
     {
         using var db = NewDb();
-
-        // A REAL raw issue creates the original order: one OUT ledger row of 1000 kg from the
-        // customer's lot, and the order's opening quantity is the ACTUAL issued figure.
-        var customer = new Customer("C-P4R", "Customer", "seed");
-        var item = new Item("IT-P4R", "Item", UnitOfMeasure.KG, "seed");
-        var raw = new Warehouse("RAWR", "Raw Material", WarehouseKind.RawMaterial, "seed");
-        var formation = new ProductionStageDefinition("PSR1", "التشكيل", 1, "seed", isFormationStage: true);
-        var next = new ProductionStageDefinition("PSR2", "التجهيز", 2, "seed");
-        var message = new RawMessage("RMSG-P4R", DateTime.UtcNow, customer.Id, raw.Id, "seed", "seed");
-        message.AddLine(item.Id, 100_000m, null, null, null);
-        db.AddRange(customer, item, raw, formation, next, message);
-        db.InventoryTransactions.Add(new InventoryTransaction(
-            DocumentType.RawReceiptMessage, message.MessageNumber, message.Id, DateTime.UtcNow,
-            raw.Id, customer.Id, item.Id, rawMessageId: message.Id, productionOrderId: null,
-            quantityKg: 100_000m, quantityMeter: null, direction: TransactionDirection.In, createdBy: "seed"));
-        await db.SaveChangesAsync();
-
-        var issued = await new IssueRawMaterialCommandHandler(
-                db, new StubCurrentUser("operator"), new InventoryLedgerService(db), new FixedNumberGenerator(),
-                new FixedClock(), new OpenPeriod(), new RecordingStockLock())
-            .Handle(new IssueRawMaterialCommand(customer.Id, item.Id, message.Id, DateTime.UtcNow,
-                ActualQuantityKg: 1000m, ActualQuantityMeter: null, Notes: "raw issue"), CancellationToken.None);
-
-        var firstExecutionId = await db.ProductionOrderStageExecutions
-            .Where(s => s.ProductionOrderId == issued.Id).Select(s => s.Id).FirstAsync();
-
-        // Close the formation operation and record separates, so a Separate enters the register.
-        await Transfer(db).Handle(
-            new TransferToNextStageCommand(firstExecutionId, next.Id, 950m, null, 15m, null,
-                Notes: "floor entry", DrawingNumber: null, InputKg: 1010m, InputMeter: null,
-                SecondGradeKg: null, SecondGradeMeter: null), CancellationToken.None);
-
+        var scene = SeedOrderOnFirstStage(db, UnitOfMeasure.KG);
+        await Transfer(db).Handle(CloseFirstOperation(scene,
+            inputKg: 1010m, outputKg: 950m, separatesKg: 15m), CancellationToken.None);
         var separate = await db.Separates.AsNoTracking().SingleAsync();
+        var rawOutBefore = await db.InventoryTransactions.CountAsync(t =>
+            t.ProductionOrderId == scene.OrderId && t.RawMessageId != null && t.Direction == TransactionDirection.Out);
+        var ledgerBefore = await db.InventoryTransactions.CountAsync();
 
-        // --- BEFORE: the original order's raw-deduction rows, and the whole ledger size ----------
-        var deductionsBefore = await db.InventoryTransactions.AsNoTracking()
-            .Where(t => t.ProductionOrderId == issued.Id && t.Direction == TransactionDirection.Out)
-            .OrderBy(t => t.Id)
-            .Select(t => new { t.Id, t.QuantityKg, t.QuantityMeter, t.SourceDocumentType, t.SourceDocumentNumber })
-            .ToListAsync();
-
-        deductionsBefore.Should().ContainSingle("the original order has exactly one raw deduction");
-        deductionsBefore.Single().QuantityKg.Should().Be(1000m);
-        var ledgerRowsBefore = await db.InventoryTransactions.CountAsync();
-
-        // --- Reprocess the separate into a NEW linked order -------------------------------------
-        var newOrder = await Reprocessor(db).Handle(
+        Func<Task> act = () => Reprocessor(db).Handle(
             new ReprocessSeparateCommand(separate.Id, DateTime.UtcNow, "إعادة تشغيل المنفصلات"), CancellationToken.None);
 
-        // --- AFTER: comparable ledger -----------------------------------------------------------
-        (await db.InventoryTransactions.CountAsync()).Should().Be(ledgerRowsBefore,
-            "reprocessing only raises a new linked order - it must post NO inventory movement at all");
-
-        var deductionsAfter = await db.InventoryTransactions.AsNoTracking()
-            .Where(t => t.ProductionOrderId == issued.Id && t.Direction == TransactionDirection.Out)
-            .OrderBy(t => t.Id)
-            .Select(t => new { t.Id, t.QuantityKg, t.QuantityMeter, t.SourceDocumentType, t.SourceDocumentNumber })
-            .ToListAsync();
-
-        deductionsAfter.Should().BeEquivalentTo(deductionsBefore,
-            "the original order's raw deduction is byte-for-byte unchanged - never deducted again");
-
-        // The reprocessing order owns no raw deduction, and its claim is the separate's own 15 kg.
-        (await db.InventoryTransactions.CountAsync(t => t.ProductionOrderId == newOrder.Id))
-            .Should().Be(0, "raising the reprocessing order must not invent a raw issue for it");
-        newOrder.RequestedQuantityKg.Should().Be(15m, "the new order is sized by the separate, not the original 1000 kg");
-
-        // The lot balance is exactly what the ONE original issue left - reprocessing consumed nothing.
-        var lotBalanceKg = db.InventoryTransactions.AsNoTracking()
-            .Where(t => t.RawMessageId == message.Id)
-            .AsEnumerable()
-            .Sum(t => (t.QuantityKg ?? 0m) * (t.Direction == TransactionDirection.In ? 1m : -1m));
-        lotBalanceKg.Should().Be(100_000m - 1000m,
-            "only the original 1000 kg issue deducted stock - reprocessing is not a second deduction");
+        (await act.Should().ThrowAsync<DomainException>())
+            .WithMessage("*posted to Ready Goods*");
+        (await db.ProductionOrders.CountAsync()).Should().Be(1);
+        (await db.InventoryTransactions.CountAsync()).Should().Be(ledgerBefore);
+        (await db.InventoryTransactions.CountAsync(t =>
+            t.ProductionOrderId == scene.OrderId && t.RawMessageId != null && t.Direction == TransactionDirection.Out))
+            .Should().Be(rawOutBefore);
+        (await db.Separates.AsNoTracking().SingleAsync(s => s.Id == separate.Id))
+            .Status.Should().Be(SeparateStatus.PendingReprocessing);
     }
 }
