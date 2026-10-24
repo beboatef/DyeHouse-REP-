@@ -396,6 +396,16 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 ReadyGoodsCategory.Separates, request.SeparatesKg, request.SeparatesMeter, null);
 
             order.Complete();
+
+            // The final-stage transfer completes reprocessing orders through this handler rather than
+            // CompleteProductionOrderCommand. Close the separate's lifecycle in the same save so it
+            // cannot remain marked as actively reprocessing after its linked order has finished.
+            if (order.ReprocessingOfProductionOrderId.HasValue)
+            {
+                var reprocessedSeparate = await _db.Separates.FirstOrDefaultAsync(
+                    s => s.ReprocessingProductionOrderId == order.Id, cancellationToken);
+                reprocessedSeparate?.MarkReprocessed();
+            }
         }
         else
         {
