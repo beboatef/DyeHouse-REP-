@@ -27,10 +27,9 @@ public class SeparatesController : ControllerBase
         => Ok(await _mediator.Send(new GetSeparatesQuery(status)));
 
     /// <summary>
-    /// Creates the reprocessing Job Order (spec section 23). <c>startingStageId</c> is optional:
-    /// reprocessed material is already past formation, so the job may start at an existing, ACTIVE
-    /// stage other than التشكيل. Omitting it keeps the ordinary formation start, and no start moves
-    /// stock - the raw issue is still the one and only deduction.
+    /// Creates a reprocessing Job Order from one separate. The material must already be posted
+    /// to Ready Goods; the handler posts the linked stock OUT and order atomically. <c>startingStageId</c>
+    /// is optional and must identify an existing, active stage.
     /// </summary>
     [HttpPost("{id:guid}/reprocess")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionReprocess)]
