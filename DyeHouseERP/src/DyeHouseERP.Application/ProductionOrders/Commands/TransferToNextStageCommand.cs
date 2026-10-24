@@ -392,8 +392,22 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             await PostReadyCategoryAsync(
                 ReadyGoodsCategory.SecondGrade, request.SecondGradeKg, request.SecondGradeMeter,
                 request.SecondGradePieceCount);
+            // Every separate recorded on this order is posted when the original order reaches
+            // Ready Goods, not only the quantity entered on the final stage. This is the stock gate
+            // that makes every pending separate eligible for reprocessing only after completion.
+            var priorSeparatesKg = await _db.Separates.AsNoTracking()
+                .Where(s => s.OriginalProductionOrderId == order.Id)
+                .SumAsync(s => s.QuantityKg ?? 0m, cancellationToken);
+            var priorSeparatesMeter = await _db.Separates.AsNoTracking()
+                .Where(s => s.OriginalProductionOrderId == order.Id)
+                .SumAsync(s => s.QuantityMeter ?? 0m, cancellationToken);
+            var allSeparatesKg = priorSeparatesKg + (request.SeparatesKg ?? 0m);
+            var allSeparatesMeter = priorSeparatesMeter + (request.SeparatesMeter ?? 0m);
             await PostReadyCategoryAsync(
-                ReadyGoodsCategory.Separates, request.SeparatesKg, request.SeparatesMeter, null);
+                ReadyGoodsCategory.Separates,
+                allSeparatesKg > 0m ? allSeparatesKg : null,
+                allSeparatesMeter > 0m ? allSeparatesMeter : null,
+                null);
 
             order.Complete();
 
@@ -402,9 +416,10 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             // cannot remain marked as actively reprocessing after its linked order has finished.
             if (order.ReprocessingOfProductionOrderId.HasValue)
             {
-                var reprocessedSeparate = await _db.Separates.FirstOrDefaultAsync(
-                    s => s.ReprocessingProductionOrderId == order.Id, cancellationToken);
-                reprocessedSeparate?.MarkReprocessed();
+                var reprocessedSeparates = await _db.Separates
+                    .Where(s => s.ReprocessingProductionOrderId == order.Id).ToListAsync(cancellationToken);
+                foreach (var reprocessedSeparate in reprocessedSeparates)
+                    reprocessedSeparate.MarkReprocessed();
             }
         }
         else
