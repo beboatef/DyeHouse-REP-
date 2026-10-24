@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Separates.DTOs;
+using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +52,18 @@ public class GetSeparatesQueryHandler : IRequestHandler<GetSeparatesQuery, List<
             .ToDictionary(g => g.Key, g => (
                 Kg: g.Sum(s => s.QuantityKg ?? 0m),
                 Meter: g.Sum(s => s.QuantityMeter ?? 0m)));
+        var readyFlags = separates.ToDictionary(s => s.Id, s =>
+        {
+            if (s.Status != SeparateStatus.PendingReprocessing
+                || orders.GetValueOrDefault(s.OriginalProductionOrderId)?.Status != ProductionOrderStatus.Completed)
+                return false;
+            var key = (s.OriginalProductionOrderId, s.ItemId, s.CustomerId);
+            if (!pendingTotals.TryGetValue(key, out var pending)
+                || !postedBalances.TryGetValue(key, out var posted))
+                return false;
+            return (pending.Kg > 0m || pending.Meter > 0m)
+                && posted.Kg >= pending.Kg && posted.Meter >= pending.Meter;
+        });
 
         return separates.Select(s =>
         {
@@ -74,12 +87,7 @@ public class GetSeparatesQueryHandler : IRequestHandler<GetSeparatesQuery, List<
                 Reason = s.Reason,
                 Notes = s.Notes,
                 Status = s.Status,
-                ReadyForReprocessing = s.Status == SeparateStatus.PendingReprocessing
-                    && orders.GetValueOrDefault(s.OriginalProductionOrderId)?.Status == DyeHouseERP.Domain.Enums.ProductionOrderStatus.Completed
-                    && pendingTotals.TryGetValue((s.OriginalProductionOrderId, s.ItemId, s.CustomerId), out var pending)
-                    && postedBalances.TryGetValue((s.OriginalProductionOrderId, s.ItemId, s.CustomerId), out var posted)
-                    && (pending.Kg > 0m || pending.Meter > 0m)
-                    && posted.Kg >= pending.Kg && posted.Meter >= pending.Meter,
+                ReadyForReprocessing = readyFlags.GetValueOrDefault(s.Id),
                 ReprocessingProductionOrderId = s.ReprocessingProductionOrderId,
                 ReprocessingOrderNumber = s.ReprocessingProductionOrderId.HasValue
                     ? orders.GetValueOrDefault(s.ReprocessingProductionOrderId.Value)?.OrderNumber
