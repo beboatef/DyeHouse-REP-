@@ -19,6 +19,7 @@ public class SeparateDto
     public string? Reason { get; set; }
     public string? Notes { get; set; }
     public SeparateStatus Status { get; set; }
+    public bool ReadyForReprocessing { get; set; }
     public Guid? ReprocessingProductionOrderId { get; set; }
     public string? ReprocessingOrderNumber { get; set; }
 }

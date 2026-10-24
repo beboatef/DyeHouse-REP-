@@ -27,16 +27,28 @@ public class SeparatesController : ControllerBase
         => Ok(await _mediator.Send(new GetSeparatesQuery(status)));
 
     /// <summary>
-    /// Creates the reprocessing Job Order (spec section 23). <c>startingStageId</c> is optional:
-    /// reprocessed material is already past formation, so the job may start at an existing, ACTIVE
-    /// stage other than التشكيل. Omitting it keeps the ordinary formation start, and no start moves
-    /// stock - the raw issue is still the one and only deduction.
+    /// Creates a reprocessing Job Order from one separate. The material must already be posted
+    /// to Ready Goods; the handler posts the linked stock OUT and order atomically. <c>startingStageId</c>
+    /// is optional and must identify an existing, active stage.
     /// </summary>
     [HttpPost("{id:guid}/reprocess")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionReprocess)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductionOrderDto>> Reprocess(Guid id, [FromBody] ReprocessSeparateRequest request)
         => Ok(await _mediator.Send(new ReprocessSeparateCommand(id, request.OrderDate, request.Notes, request.StartingStageId)));
+
+    /// <summary>Creates one reprocessing order from several posted separates of the same customer and item.</summary>
+    [HttpPost("reprocess-batch")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionReprocess)]
+    [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductionOrderDto>> ReprocessBatch([FromBody] ReprocessSeparatesBatchRequest request)
+    {
+        if (request.SeparateIds is null || request.SeparateIds.Count == 0)
+            return BadRequest("Select at least one separate.");
+        return Ok(await _mediator.Send(new ReprocessSeparateCommand(
+            request.SeparateIds[0], request.OrderDate, request.Notes, request.StartingStageId,
+            request.SeparateIds.Skip(1).ToArray())));
+    }
 
     [HttpPost("{id:guid}/scrap")]
     // Its own right (decided in Phase 4, Phase 1 §G.1): writing material off as waste must never be
@@ -48,4 +60,5 @@ public class SeparatesController : ControllerBase
 }
 
 public record ReprocessSeparateRequest(DateTime OrderDate, string? Notes, Guid? StartingStageId = null);
+public record ReprocessSeparatesBatchRequest(IReadOnlyList<Guid> SeparateIds, DateTime OrderDate, string? Notes = null, Guid? StartingStageId = null);
 public record ScrapSeparateRequest(string Reason);

@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Separates.DTOs;
+using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,36 @@ public class GetSeparatesQueryHandler : IRequestHandler<GetSeparatesQuery, List<
         var customers = await _db.Customers.AsNoTracking().Where(c => separates.Select(s => s.CustomerId).Contains(c.Id)).ToDictionaryAsync(c => c.Id, cancellationToken);
         var items = await _db.Items.AsNoTracking().Where(i => separates.Select(s => s.ItemId).Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
 
+        var originalOrderIds = separates.Select(s => s.OriginalProductionOrderId).Distinct().ToArray();
+        var separateLedgerRows = await _db.InventoryTransactions.AsNoTracking()
+            .Where(t => t.RawMessageId == null && t.ProductionOrderId.HasValue
+                && originalOrderIds.Contains(t.ProductionOrderId.Value)
+                && t.ReadyGoodsCategory == ReadyGoodsCategory.Separates)
+            .Select(t => new { OrderId = t.ProductionOrderId!.Value, t.ItemId, t.CustomerId, t.QuantityKg, t.QuantityMeter, t.Direction })
+            .ToListAsync(cancellationToken);
+        var postedBalances = separateLedgerRows
+            .GroupBy(t => (t.OrderId, t.ItemId, t.CustomerId))
+            .ToDictionary(g => g.Key, g => (
+                Kg: g.Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction),
+                Meter: g.Sum(t => (t.QuantityMeter ?? 0m) * (int)t.Direction)));
+        var pendingTotals = separates.Where(s => s.Status == SeparateStatus.PendingReprocessing)
+            .GroupBy(s => (s.OriginalProductionOrderId, s.ItemId, s.CustomerId))
+            .ToDictionary(g => g.Key, g => (
+                Kg: g.Sum(s => s.QuantityKg ?? 0m),
+                Meter: g.Sum(s => s.QuantityMeter ?? 0m)));
+        var readyFlags = separates.ToDictionary(s => s.Id, s =>
+        {
+            if (s.Status != SeparateStatus.PendingReprocessing
+                || orders.GetValueOrDefault(s.OriginalProductionOrderId)?.Status != ProductionOrderStatus.Completed)
+                return false;
+            var key = (s.OriginalProductionOrderId, s.ItemId, s.CustomerId);
+            if (!pendingTotals.TryGetValue(key, out var pending)
+                || !postedBalances.TryGetValue(key, out var posted))
+                return false;
+            return (pending.Kg > 0m || pending.Meter > 0m)
+                && posted.Kg >= pending.Kg && posted.Meter >= pending.Meter;
+        });
+
         return separates.Select(s =>
         {
             stageExecs.TryGetValue(s.StageExecutionId, out var stageExec);
@@ -56,6 +87,7 @@ public class GetSeparatesQueryHandler : IRequestHandler<GetSeparatesQuery, List<
                 Reason = s.Reason,
                 Notes = s.Notes,
                 Status = s.Status,
+                ReadyForReprocessing = readyFlags.GetValueOrDefault(s.Id),
                 ReprocessingProductionOrderId = s.ReprocessingProductionOrderId,
                 ReprocessingOrderNumber = s.ReprocessingProductionOrderId.HasValue
                     ? orders.GetValueOrDefault(s.ReprocessingProductionOrderId.Value)?.OrderNumber

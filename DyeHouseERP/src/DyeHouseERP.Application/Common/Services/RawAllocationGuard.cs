@@ -43,6 +43,21 @@ public static class RawAllocationGuard
         IApplicationDbContext db, ProductionOrder order, CancellationToken cancellationToken,
         decimal additionalQuantityKg = 0m, decimal additionalQuantityMeter = 0m)
     {
+        if (order.ReprocessingOfProductionOrderId.HasValue)
+        {
+            // Reprocessing consumes the selected Ready Goods separates, not raw allocations.
+            // Their own quantities are the allocation evidence for this new order.
+            var separates = await db.Separates.AsNoTracking()
+                .Where(s => s.ReprocessingProductionOrderId == order.Id
+                    && s.Status == DyeHouseERP.Domain.Enums.SeparateStatus.Reprocessing)
+                .Select(s => new { s.QuantityKg, s.QuantityMeter })
+                .ToListAsync(cancellationToken);
+            order.EnsureRawAllocationComplete(
+                separates.Sum(s => s.QuantityKg ?? 0m) + additionalQuantityKg,
+                separates.Sum(s => s.QuantityMeter ?? 0m) + additionalQuantityMeter);
+            return;
+        }
+
         var allocated = await db.RawAllocations.AsNoTracking()
             .Where(a => a.ProductionOrderId == order.Id)
             .Select(a => new { a.QuantityKg, a.QuantityMeter })

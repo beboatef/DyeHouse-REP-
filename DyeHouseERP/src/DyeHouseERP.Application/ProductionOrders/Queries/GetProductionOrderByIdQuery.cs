@@ -54,8 +54,23 @@ public class GetProductionOrderByIdQueryHandler : IRequestHandler<GetProductionO
         // taken over the allocation ROWS that were just read back, and completeness is judged
         // by the domain's own rule - the very same call RawAllocationGuard makes before it
         // lets production start - so the figure shown here is the figure enforced.
-        var allocatedKg = allocations.Sum(a => a.QuantityKg ?? 0m);
-        var allocatedMeter = allocations.Sum(a => a.QuantityMeter ?? 0m);
+        decimal allocatedKg;
+        decimal allocatedMeter;
+        if (order.ReprocessingOfProductionOrderId.HasValue)
+        {
+            var reprocessingSeparates = await db.Separates.AsNoTracking()
+                .Where(s => s.ReprocessingProductionOrderId == order.Id
+                    && s.Status == SeparateStatus.Reprocessing)
+                .Select(s => new { s.QuantityKg, s.QuantityMeter })
+                .ToListAsync(cancellationToken);
+            allocatedKg = reprocessingSeparates.Sum(s => s.QuantityKg ?? 0m);
+            allocatedMeter = reprocessingSeparates.Sum(s => s.QuantityMeter ?? 0m);
+        }
+        else
+        {
+            allocatedKg = allocations.Sum(a => a.QuantityKg ?? 0m);
+            allocatedMeter = allocations.Sum(a => a.QuantityMeter ?? 0m);
+        }
 
         // Original raw accounting across partial deliveries (spec section 31). The original quantity is
         // the order's own fixed figure; what has been settled is summed from the lines of every

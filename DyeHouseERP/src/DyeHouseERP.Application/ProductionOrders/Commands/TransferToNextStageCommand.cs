@@ -356,33 +356,71 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             await WarehouseGuard.EnsureUsableForNewMovementAsync(
                 _db, readyWarehouse.Id, cancellationToken, "to post ready-goods stock into it");
 
-            var transferNumber = await _numberGenerator.NextAsync(
-                DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
+            // Final-stage quantities are posted as independent customer-owned stock categories.
+            // Waste remains a production loss and is never posted as deliverable stock.
+            async Task PostReadyCategoryAsync(
+                ReadyGoodsCategory category, decimal? quantityKg, decimal? quantityMeter, int? pieceCount,
+                bool postWhenZero = false)
+            {
+                if (!postWhenZero && quantityKg is not > 0 && quantityMeter is not > 0)
+                    return;
 
-            // Spec section 23: the automatic transfer carries the same stage link a manual
-            // one does - the quantity it posts IS this stage's recorded output.
-            _db.ReadyGoodsTransfers.Add(new ReadyGoodsTransfer(
-                transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId,
-                readyWarehouse.Id, request.OutputKg, request.OutputMeter, _currentUser.UserName,
-                pieceCount: null,
-                notes: $"Stage transfer to ready goods ({nextStage.Name})",
-                stageExecutionId: stage.Id,
-                // The final output quantity is the first-grade stream. Second grade and
-                // separates are recorded separately on the stage and must not be mixed
-                // into this ready-goods category.
-                category: ReadyGoodsCategory.FirstGrade));
+                var transferNumber = await _numberGenerator.NextAsync(
+                    DocumentType.ReadyGoodsTransfer, cancellationToken: cancellationToken);
 
-            // IN into the ready dimension (RawMessageId = null, ProductionOrderId
-            // set) - the same ledger shape ReadyGoods balances are read from.
-            _db.InventoryTransactions.Add(new InventoryTransaction(
-                DocumentType.ReadyGoodsTransfer, order.OrderNumber, order.Id,
-                _clock.UtcNow, readyWarehouse.Id, order.CustomerId, order.ItemId,
-                rawMessageId: null, productionOrderId: order.Id,
-                quantityKg: request.OutputKg, quantityMeter: request.OutputMeter,
-                direction: TransactionDirection.In, createdBy: _currentUser.UserName,
-                readyGoodsCategory: ReadyGoodsCategory.FirstGrade));
+                var transfer = new ReadyGoodsTransfer(
+                    transferNumber, _clock.UtcNow, order.Id, order.CustomerId, order.ItemId,
+                    readyWarehouse.Id, quantityKg, quantityMeter, _currentUser.UserName,
+                    pieceCount: pieceCount,
+                    notes: $"Stage transfer to ready goods ({nextStage.Name}) - {category}",
+                    stageExecutionId: stage.Id,
+                    category: category);
+                _db.ReadyGoodsTransfers.Add(transfer);
+
+                // Each ledger movement points to its own transfer document, preserving auditable traceability.
+                _db.InventoryTransactions.Add(new InventoryTransaction(
+                    DocumentType.ReadyGoodsTransfer, transfer.TransferNumber, transfer.Id,
+                    _clock.UtcNow, readyWarehouse.Id, order.CustomerId, order.ItemId,
+                    rawMessageId: null, productionOrderId: order.Id,
+                    quantityKg: quantityKg, quantityMeter: quantityMeter,
+                    direction: TransactionDirection.In, createdBy: _currentUser.UserName,
+                    readyGoodsCategory: category));
+            }
+
+            await PostReadyCategoryAsync(
+                ReadyGoodsCategory.FirstGrade, request.OutputKg, request.OutputMeter, null, postWhenZero: true);
+            await PostReadyCategoryAsync(
+                ReadyGoodsCategory.SecondGrade, request.SecondGradeKg, request.SecondGradeMeter,
+                request.SecondGradePieceCount);
+            // Every separate recorded on this order is posted when the original order reaches
+            // Ready Goods, not only the quantity entered on the final stage. This is the stock gate
+            // that makes every pending separate eligible for reprocessing only after completion.
+            var priorSeparatesKg = await _db.Separates.AsNoTracking()
+                .Where(s => s.OriginalProductionOrderId == order.Id && s.Status == SeparateStatus.PendingReprocessing)
+                .SumAsync(s => s.QuantityKg ?? 0m, cancellationToken);
+            var priorSeparatesMeter = await _db.Separates.AsNoTracking()
+                .Where(s => s.OriginalProductionOrderId == order.Id && s.Status == SeparateStatus.PendingReprocessing)
+                .SumAsync(s => s.QuantityMeter ?? 0m, cancellationToken);
+            var allSeparatesKg = priorSeparatesKg + (request.SeparatesKg ?? 0m);
+            var allSeparatesMeter = priorSeparatesMeter + (request.SeparatesMeter ?? 0m);
+            await PostReadyCategoryAsync(
+                ReadyGoodsCategory.Separates,
+                allSeparatesKg > 0m ? allSeparatesKg : null,
+                allSeparatesMeter > 0m ? allSeparatesMeter : null,
+                null);
 
             order.Complete();
+
+            // The final-stage transfer completes reprocessing orders through this handler rather than
+            // CompleteProductionOrderCommand. Close the separate's lifecycle in the same save so it
+            // cannot remain marked as actively reprocessing after its linked order has finished.
+            if (order.ReprocessingOfProductionOrderId.HasValue)
+            {
+                var reprocessedSeparates = await _db.Separates
+                    .Where(s => s.ReprocessingProductionOrderId == order.Id).ToListAsync(cancellationToken);
+                foreach (var reprocessedSeparate in reprocessedSeparates)
+                    reprocessedSeparate.MarkReprocessed();
+            }
         }
         else
         {

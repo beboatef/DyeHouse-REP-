@@ -121,16 +121,20 @@ export default function DeliveriesPage() {
     });
 
     if (!primaryPermit) {
-      return (readyBalance ?? []).map((b) =>
-        asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, b.category as "FirstGrade" | "SecondGrade" | "Separates" | null, false));
+      return (readyBalance ?? [])
+        .filter((b) => b.category !== "Separates")
+        .map((b) =>
+          asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, b.category as "FirstGrade" | "SecondGrade" | null, false));
     }
 
-    const fromPrimary = primaryPermit.lines.map((l) =>
+    // Separates are reprocessing input, never a customer-delivery source - even when a legacy
+    // primary permit still contains one, do not offer it as a sub-customer delivery line.
+    const fromPrimary = primaryPermit.lines.filter((l) => l.category !== "Separates").map((l) =>
       asOption(l.productionOrderId, l.itemId, l.productionOrderNumber, l.itemCode, l.color, l.category, true));
 
     const own = (readyBalance ?? [])
-      .filter((b) => b.customerId === customerId)
-      .map((b) => asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, b.category as "FirstGrade" | "SecondGrade" | "Separates" | null, false));
+      .filter((b) => b.customerId === customerId && b.category !== "Separates")
+      .map((b) => asOption(b.productionOrderId, b.itemId, b.productionOrderNumber, b.itemCode, b.color, b.category as "FirstGrade" | "SecondGrade" | null, false));
 
     const seen = new Set(fromPrimary.map((o) => o.key));
     return [...fromPrimary, ...own.filter((o) => !seen.has(o.key))];
