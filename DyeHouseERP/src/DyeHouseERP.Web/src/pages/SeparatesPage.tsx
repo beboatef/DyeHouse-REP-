@@ -73,30 +73,21 @@ export default function SeparatesPage() {
 
             {s.status === "PendingReprocessing" && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                {/* Optional starting stage for the new Job Order (spec section 23). */}
-                <Select
-                  aria-label={t("prod.startingStage", "مرحلة البداية")}
-                  value={startStageById[s.id] ?? ""}
-                  onChange={(e) => setStartStageById((p) => ({ ...p, [s.id]: e.target.value }))}
-                  className="min-w-[12rem] max-w-full"
-                >
-                  <option value="">{t("prod.startingStageDefault", "التشكيل (الافتراضي)")}</option>
-                  {(stages ?? []).map((st) => (
-                    <option key={st.id} value={st.id}>{st.code} - {st.name}</option>
-                  ))}
-                </Select>
-                <Button variant="secondary" onClick={() => reprocessMutation.mutate(s.id)}>إنشاء أمر إعادة تشغيل</Button>
+                {s.readyForReprocessing ? (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={selectedSeparateIds.includes(s.id)} onChange={(e) => toggleSeparate(s.id, e.target.checked)} />
+                    اختيار لأمر إعادة التشغيل
+                  </label>
+                ) : (
+                  <span className="text-sm text-ink-muted">متاحة لإعادة التشغيل بعد اكتمال الأمر الأصلي وترحيل المنفصلات إلى مخزن الجاهز</span>
+                )}
                 <Input
                   placeholder="سبب الإتلاف..."
                   value={scrapReasonById[s.id] ?? ""}
                   onChange={(e) => setScrapReasonById((p) => ({ ...p, [s.id]: e.target.value }))}
                   className="min-w-[12rem] max-w-full flex-1 sm:max-w-xs"
                 />
-                <Button
-                  variant="ghost"
-                  disabled={!scrapReasonById[s.id]}
-                  onClick={() => scrapMutation.mutate({ id: s.id, reason: scrapReasonById[s.id] })}
-                >
+                <Button variant="ghost" disabled={!scrapReasonById[s.id] || scrapMutation.isPending} onClick={() => scrapMutation.mutate({ id: s.id, reason: scrapReasonById[s.id] })}>
                   إتلاف
                 </Button>
               </div>
