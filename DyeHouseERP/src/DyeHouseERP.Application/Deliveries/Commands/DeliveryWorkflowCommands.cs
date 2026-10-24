@@ -113,6 +113,16 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
         if (delivery.Status != DeliveryStatus.Prepared)
             throw new DomainException($"Delivery is {delivery.Status}, expected Prepared.");
 
+        // A draft created before the separates rule changed, or a manually submitted document,
+        // must not bypass the rule at posting time. Separates are reprocessed, never delivered.
+        var containsSeparates = await _db.DeliveryLines.AsNoTracking()
+            .AnyAsync(line => line.DeliveryId == delivery.Id
+                           && line.Category == ReadyGoodsCategory.Separates,
+                cancellationToken);
+        if (containsSeparates)
+            throw new DomainException(
+                "This delivery contains separates, which cannot be delivered to the customer. Create a linked reprocessing production order instead. المنفصلات مخصصة لإعادة التشغيل ولا تُسلَّم للعميل.");
+
         // ---- Sub-customer permit (spec section 31) -----------------------------------
         // The PRIMARY permit is the sole owner of the physical inventory movement. A sub-customer
         // permit is a LINKED document: confirming it records the document's own state and posts
