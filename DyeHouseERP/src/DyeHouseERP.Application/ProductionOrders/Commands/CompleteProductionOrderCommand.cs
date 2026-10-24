@@ -56,8 +56,10 @@ public class CompleteProductionOrderCommandHandler : IRequestHandler<CompletePro
 
         if (order.ReprocessingOfProductionOrderId.HasValue)
         {
-            var separate = await _db.Separates.FirstOrDefaultAsync(s => s.ReprocessingProductionOrderId == order.Id, cancellationToken);
-            separate?.MarkReprocessed();
+            var separates = await _db.Separates
+                .Where(s => s.ReprocessingProductionOrderId == order.Id).ToListAsync(cancellationToken);
+            foreach (var separate in separates)
+                separate.MarkReprocessed();
         }
 
         await _db.SaveChangesAsync(cancellationToken);
