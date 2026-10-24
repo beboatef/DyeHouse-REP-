@@ -257,7 +257,7 @@ public class ProductionStageAdministrationTests
             .SingleAsync(e => e.ProductionOrderId == orderId);
 
         var transfer = new TransferToNextStageCommandHandler(
-            db, new StubCurrentUser("tester"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
+            db, new StubCurrentUser("tester"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock());
 
         Func<Task> act = () => transfer.Handle(new TransferToNextStageCommand(
             execution.Id, parked.Id, 100m, null, null, null, null), CancellationToken.None);
