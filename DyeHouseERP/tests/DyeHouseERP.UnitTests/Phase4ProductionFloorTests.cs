@@ -52,7 +52,7 @@ public class Phase4FloorCaptureTests
     private ApplicationDbContext NewDb() => new(_options);
 
     private static TransferToNextStageCommandHandler Transfer(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
+        new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock());
 
     private static ScrapSeparateCommandHandler Scrapper(ApplicationDbContext db) =>
         new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new RecordingStockLock());
