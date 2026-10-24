@@ -35,6 +35,9 @@ public class CreateDeliveryCommandValidator : AbstractValidator<CreateDeliveryCo
         {
             l.RuleFor(x => x.ProductionOrderId).NotEmpty();
             l.RuleFor(x => x.ItemId).NotEmpty();
+            l.RuleFor(x => x.Category)
+                .NotEqual(ReadyGoodsCategory.Separates)
+                .WithMessage("Separates are reprocessed through a new production order and cannot be delivered to the customer.");
             // Null is reserved for legacy, unclassified ready stock. The delivery handler
             // resolves it against the actual ledger balance; classified lots still require
             // an explicit category whenever more than one category is available.
@@ -59,6 +62,12 @@ public class CreateDeliveryCommandHandler : IRequestHandler<CreateDeliveryComman
 
     public async Task<DeliveryDto> Handle(CreateDeliveryCommand request, CancellationToken cancellationToken)
     {
+        // Separates are customer-owned material reserved for reprocessing, never a customer-delivery category.
+        // Enforce this in the handler as well as validation so direct command invocation cannot bypass the rule.
+        if (request.Lines.Any(line => line.Category == ReadyGoodsCategory.Separates))
+            throw new DomainException(
+                "Separates cannot be delivered to the customer; create a linked reprocessing production order instead. المنفصلات مخصصة لإعادة التشغيل ولا تُسلَّم للعميل.");
+
         // R2: a delivery line names a production order, and finished goods belong
         // to the order's own customer. Accepting an order that belongs to a
         // DIFFERENT customer would let a delivery (and its ledger rows, which are
