@@ -863,9 +863,8 @@ export interface Separate {
 export const SeparatesApi = {
   list: (params?: { status?: SeparateStatus }) => api.get<Separate[]>("/separates", { params }).then((r) => r.data),
   /**
-   * Creates the reprocessing Job Order. `startingStageId` is optional: reprocessed material is
-   * already past formation, so the job may start at an existing, ACTIVE stage other than formation.
-   * It moves no stock - the raw issue stays the single deduction.
+   * Creates one reprocessing Job Order from multiple posted Ready Goods separates. The server
+   * validates stock and atomically posts OUT movements for the selected separate balances.
    */
   reprocess: (id: string, body: { orderDate: string; notes?: string; startingStageId?: string | null }) =>
     api.post<ProductionOrder>(`/separates/${id}/reprocess`, body).then((r) => r.data),
