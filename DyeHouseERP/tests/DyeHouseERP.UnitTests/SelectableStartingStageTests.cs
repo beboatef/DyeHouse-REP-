@@ -82,6 +82,7 @@ public class SelectableStartingStageTests
         var originalOrder = new ProductionOrder("PRD-ORIG", customer.Id, item.Id, DateTime.UtcNow, "seed",
             requestedQuantityKg: 100m);
         originalOrder.BuildStageRoute(new[] { formation }, "seed");
+        originalOrder.StageExecutions.Single().CloseWithOutput(50m, null, 50m, null, "seed", "seed");
         originalOrder.Complete();
 
         using var db = NewDb();
