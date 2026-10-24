@@ -58,7 +58,7 @@ public class Phase4FloorCaptureTests
         new(db, new StubCurrentUser("operator"));
 
     private static ReprocessSeparateCommandHandler Reprocessor(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"), new FixedNumberGenerator());
+        new(db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new RecordingStockLock());
 
     /// <summary>
     /// A fully-allocated Job Order on its first (formation) operation, ready to be transferred
