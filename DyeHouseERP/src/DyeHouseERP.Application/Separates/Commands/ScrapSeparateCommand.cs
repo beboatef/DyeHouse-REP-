@@ -121,9 +121,6 @@ public class ScrapSeparateCommandHandler : IRequestHandler<ScrapSeparateCommand,
             await _db.SaveChangesAsync(cancellationToken);
         }
 
-        separate.Scrap(request.Reason, _currentUser.UserName);
-        await _db.SaveChangesAsync(cancellationToken);
-
         return new SeparateDto
         {
             Id = separate.Id, OriginalProductionOrderId = separate.OriginalProductionOrderId,
