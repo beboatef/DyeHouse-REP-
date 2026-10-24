@@ -2,6 +2,8 @@ using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.Separates.DTOs;
+using DyeHouseERP.Domain.Entities;
+using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
