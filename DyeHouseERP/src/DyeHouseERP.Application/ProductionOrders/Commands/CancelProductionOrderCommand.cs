@@ -131,12 +131,10 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
 
         // A reprocessing order consumes Ready Goods separates rather than raw-message lots.
         // Lock every original order/item balance it may need to return if cancelled before production.
-        var linkedSeparateLocks = order.ReprocessingOfProductionOrderId.HasValue
-            ? await _db.Separates.AsNoTracking()
-                .Where(s => s.ReprocessingProductionOrderId == order.Id)
-                .Select(s => new { s.OriginalProductionOrderId, s.ItemId })
-                .ToListAsync(cancellationToken)
-            : new List<dynamic>();
+        var linkedSeparateLocks = await _db.Separates.AsNoTracking()
+            .Where(s => s.ReprocessingProductionOrderId == order.Id)
+            .Select(s => new { s.OriginalProductionOrderId, s.ItemId })
+            .ToListAsync(cancellationToken);
         lockKeys.AddRange(linkedSeparateLocks
             .Select(s => StockLockKey.ReadyLot(s.ItemId, s.OriginalProductionOrderId)));
         lockKeys = lockKeys.Distinct().ToList();
