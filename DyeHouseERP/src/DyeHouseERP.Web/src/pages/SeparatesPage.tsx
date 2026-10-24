@@ -23,9 +23,8 @@ export default function SeparatesPage() {
   const [selectedSeparateIds, setSelectedSeparateIds] = useState<string[]>([]);
   const [startingStageId, setStartingStageId] = useState("");
 
-  // The stage the reprocessing Job Order actually begins at. Only ACTIVE stages are offered; empty
-  // keeps the ordinary formation start. Reprocessed material is already past formation, so starting
-  // later is the normal case - and it never posts stock (the raw issue is the single deduction).
+  // A batch shares one starting stage. Only ACTIVE stages are offered; the backend verifies the
+  // selected separate balances and posts their Ready Goods OUT movements atomically.
 
   const { data: stages } = useQuery({
     queryKey: ["production-stages", "active"],
