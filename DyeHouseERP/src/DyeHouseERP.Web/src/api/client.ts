@@ -870,8 +870,6 @@ export const SeparatesApi = {
     api.post<ProductionOrder>(`/separates/${id}/reprocess`, body).then((r) => r.data),
   reprocessBatch: (body: { separateIds: string[]; orderDate: string; notes?: string; startingStageId?: string | null }) =>
     api.post<ProductionOrder>("/separates/reprocess-batch", body).then((r) => r.data),
-  reprocessBatch: (body: { separateIds: string[]; orderDate: string; notes?: string; startingStageId?: string | null }) =>
-    api.post<ProductionOrder>("/separates/reprocess-batch", body).then((r) => r.data),
   scrap: (id: string, reason: string) => api.post<Separate>(`/separates/${id}/scrap`, { reason }).then((r) => r.data)
 };
 
