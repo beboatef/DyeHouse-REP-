@@ -81,7 +81,7 @@ public class PrintingWorkflowTests
             db.ProductionOrders.Add(order);
             db.RawAllocations.Add(order.AllocateRaw(Guid.NewGuid(), order.ItemId, 100m, null, "operator"));
             await db.SaveChangesAsync();
-            await new TransferToNextStageCommandHandler(db, user, new FixedClock(), new OpenPeriod(), new FixedNumberGenerator())
+            await new TransferToNextStageCommandHandler(db, user, new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock())
                 .Handle(new(stage.Id, finishing.Id, 95m, null, null, null, null), default);
         }
         await using var verify = new ApplicationDbContext(options);
@@ -89,7 +89,7 @@ public class PrintingWorkflowTests
         dto.StageExecutions.Single(s => s.StageDefinitionId == printing.Id).DrawingNumber.Should().Be("DR-123");
         dto.StageExecutions.Single(s => s.StageDefinitionId == finishing.Id).DrawingNumber.Should().BeNull();
         var finishingExecution = dto.StageExecutions.Single(s => s.StageDefinitionId == finishing.Id);
-        await new TransferToNextStageCommandHandler(verify, user, new FixedClock(), new OpenPeriod(), new FixedNumberGenerator())
+        await new TransferToNextStageCommandHandler(verify, user, new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock())
             .Handle(new(finishingExecution.Id, printing.Id, 90m, null, null, null, null), default);
         verify.ProductionOrderStageExecutions.Where(s => s.ProductionOrderId == order.Id && s.RequiresDrawingNumber)
             .Should().OnlyContain(s => s.DrawingNumber == "DR-123");
