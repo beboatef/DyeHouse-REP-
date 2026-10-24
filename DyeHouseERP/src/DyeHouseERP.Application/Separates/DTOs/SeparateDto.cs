@@ -18,7 +18,7 @@ public class SeparateDto
     public decimal? QuantityMeter { get; set; }
     public string? Reason { get; set; }
     public string? Notes { get; set; }
-    public SeparateStatus Status { get; set; }
+    public SeparateStatus Status { get; set; }\n    public bool ReadyForReprocessing { get; set; }
     public Guid? ReprocessingProductionOrderId { get; set; }
     public string? ReprocessingOrderNumber { get; set; }
 }
