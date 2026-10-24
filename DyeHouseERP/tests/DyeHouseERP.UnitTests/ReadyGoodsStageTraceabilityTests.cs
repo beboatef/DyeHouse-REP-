@@ -352,8 +352,9 @@ public class ReadyGoodsStageTraceabilityTests
         var f = Seed(closeStage: false); // stage still InProgress, ready to transfer
         using var db = NewDb();
 
+        var stockLock = new RecordingStockLock();
         var handler = new TransferToNextStageCommandHandler(
-            db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock());
+            db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), stockLock);
 
         // The FINAL capture on the last operation before the warehouse: the original raw it started from
         // (input), the ready weight it produced (output) and the final metres. The waste is derived from them.
@@ -362,6 +363,9 @@ public class ReadyGoodsStageTraceabilityTests
             InputKg: 520m, InputMeter: 120m), CancellationToken.None);
 
         var transfer = await db.ReadyGoodsTransfers.SingleAsync();
+        stockLock.Dimensions.Should().Contain(
+            DyeHouseERP.Application.Common.Interfaces.StockLockKey.ReadyLot(f.Order.ItemId, f.Order.Id),
+            "final Ready Goods posting must serialize with separate scrapping and other stock movements");
         transfer.StageExecutionId.Should().Be(f.Stage.Id);
         transfer.QuantityKg.Should().Be(480m);
         transfer.QuantityMeter.Should().Be(115m);
