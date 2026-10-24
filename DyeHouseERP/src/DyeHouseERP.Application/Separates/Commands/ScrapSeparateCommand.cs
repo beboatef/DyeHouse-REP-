@@ -43,24 +43,26 @@ public class ScrapSeparateCommandHandler : IRequestHandler<ScrapSeparateCommand,
         var separate = await _db.Separates.FirstOrDefaultAsync(s => s.Id == request.SeparateId, cancellationToken)
             ?? throw new NotFoundException("Separate", request.SeparateId);
 
-        // A separate created on the production floor is only a register entry until its
-        // stage's Separates category is actually posted to Ready Goods. Once posted, scrapping
-        // must consume that customer-owned stock through append-only ledger OUT movements.
-        var postedSeparateTransfers = await _db.ReadyGoodsTransfers.AsNoTracking()
-            .Where(t => t.ProductionOrderId == separate.OriginalProductionOrderId
-                     && t.StageExecutionId == separate.StageExecutionId
-                     && t.Category == ReadyGoodsCategory.Separates
-                     && t.Status == ReadyGoodsTransferStatus.Posted)
-            .Select(t => new { t.WarehouseId })
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        if (postedSeparateTransfers.Count > 0)
+        // Always take the period guard and the same Ready Goods lot lock used by posting
+        // BEFORE deciding whether this separate has reached Ready Goods. Otherwise a concurrent
+        // transfer can post after a "no transfer" read and leave scrapped material in stock.
+        var postingDate = _clock.UtcNow;
+        await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
+        await using (await _stockLock.AcquireAsync(
+            StockLockKey.ReadyLot(separate.ItemId, separate.OriginalProductionOrderId), cancellationToken))
         {
-            var postingDate = _clock.UtcNow;
-            await using var periodGuard = await _periodClose.BeginPostingAsync(postingDate, cancellationToken);
-            await using (await _stockLock.AcquireAsync(
-                StockLockKey.ReadyLot(separate.ItemId, separate.OriginalProductionOrderId), cancellationToken))
+            // This read is authoritative only while holding the stock lock: Ready Goods posting
+            // and scrapping for the same item/order cannot cross each other.
+            var postedSeparateTransfers = await _db.ReadyGoodsTransfers.AsNoTracking()
+                .Where(t => t.ProductionOrderId == separate.OriginalProductionOrderId
+                         && t.StageExecutionId == separate.StageExecutionId
+                         && t.Category == ReadyGoodsCategory.Separates
+                         && t.Status == ReadyGoodsTransferStatus.Posted)
+                .Select(t => new { t.WarehouseId })
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (postedSeparateTransfers.Count > 0)
             {
                 // Re-read the live category balance while holding the same lot lock used by
                 // ready-goods posting and delivery. Never change a stored balance or erase history.
@@ -112,6 +114,11 @@ public class ScrapSeparateCommandHandler : IRequestHandler<ScrapSeparateCommand,
                 if (remainingKg > 0 || remainingMeter > 0)
                     throw new DomainException("Cannot scrap this separate: the posted separates balance could not cover its full quantity.");
             }
+
+            // If no transfer exists, this is still a production-floor register entry; the
+            // status change is saved under the same lot lock so a transfer cannot race it.
+            separate.Scrap(request.Reason, _currentUser.UserName);
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
         separate.Scrap(request.Reason, _currentUser.UserName);
