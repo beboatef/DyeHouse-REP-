@@ -41,7 +41,7 @@ public class MultiplePrintingExecutionsTests
     private ApplicationDbContext NewDb() => new(_options);
 
     private static TransferToNextStageCommandHandler Transfer(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
+        new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock());
 
     private static async Task<ProductionOrderStatus> StatusOf(ApplicationDbContext db, Guid orderId) =>
         (await db.ProductionOrders.AsNoTracking().SingleAsync(o => o.Id == orderId)).Status;
