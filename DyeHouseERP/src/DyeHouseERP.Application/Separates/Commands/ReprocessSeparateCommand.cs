@@ -97,6 +97,11 @@ public class ReprocessSeparateCommandHandler : IRequestHandler<ReprocessSeparate
         // Load the authoritative ledger balance by original order and warehouse. No editable
         // balance is consulted; only posted Separates-category movements are considered.
         var originalOrderIds = separates.Select(s => s.OriginalProductionOrderId).Distinct().ToArray();
+        var sourceOrders = await _db.ProductionOrders.AsNoTracking()
+            .Where(o => originalOrderIds.Contains(o.Id)).ToListAsync(cancellationToken);
+        if (sourceOrders.Count != originalOrderIds.Length
+            || sourceOrders.Any(o => o.Status != ProductionOrderStatus.Completed))
+            throw new DomainException("Separates can only be reprocessed after their original production order is completed and the separates have been posted to Ready Goods.");
         var ledgerRows = await _db.InventoryTransactions.AsNoTracking()
             .Where(t => t.RawMessageId == null
                 && t.ProductionOrderId.HasValue
