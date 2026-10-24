@@ -129,6 +129,18 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
             .Distinct()
             .ToList();
 
+        // A reprocessing order consumes Ready Goods separates rather than raw-message lots.
+        // Lock every original order/item balance it may need to return if cancelled before production.
+        var linkedSeparateLocks = order.ReprocessingOfProductionOrderId.HasValue
+            ? await _db.Separates.AsNoTracking()
+                .Where(s => s.ReprocessingProductionOrderId == order.Id)
+                .Select(s => new { s.OriginalProductionOrderId, s.ItemId })
+                .ToListAsync(cancellationToken)
+            : new List<dynamic>();
+        lockKeys.AddRange(linkedSeparateLocks
+            .Select(s => StockLockKey.ReadyLot(s.ItemId, s.OriginalProductionOrderId)));
+        lockKeys = lockKeys.Distinct().ToList();
+
         await using (await _stockLock.AcquireManyAsync(lockKeys, cancellationToken))
         {
             // R3: the live status is re-read INSIDE the lock, so a second
@@ -170,6 +182,43 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
                     _db, warehouseId, cancellationToken, "to reverse outstanding raw material back into it");
 
             var returned = new List<object>();
+            if (order.ReprocessingOfProductionOrderId.HasValue)
+            {
+                var reprocessingSeparates = await _db.Separates
+                    .Where(s => s.ReprocessingProductionOrderId == order.Id)
+                    .ToListAsync(cancellationToken);
+                var separateOutRows = await _db.InventoryTransactions
+                    .Where(t => t.SourceDocumentType == DocumentType.ProductionOrder
+                        && t.SourceDocumentId == order.Id
+                        && t.RawMessageId == null
+                        && t.Direction == TransactionDirection.Out
+                        && t.ReadyGoodsCategory == ReadyGoodsCategory.Separates)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var movement in separateOutRows)
+                {
+                    _db.InventoryTransactions.Add(new InventoryTransaction(
+                        DocumentType.ProductionOrder, order.OrderNumber, order.Id,
+                        postingDate, movement.WarehouseId, movement.CustomerId, movement.ItemId,
+                        rawMessageId: null, productionOrderId: movement.ProductionOrderId,
+                        quantityKg: movement.QuantityKg, quantityMeter: movement.QuantityMeter,
+                        direction: TransactionDirection.In, createdBy: _currentUser.UserName,
+                        reversesTransactionId: movement.Id,
+                        readyGoodsCategory: ReadyGoodsCategory.Separates));
+                    returned.Add(new
+                    {
+                        originalProductionOrderId = movement.ProductionOrderId,
+                        itemId = movement.ItemId,
+                        quantityKg = movement.QuantityKg,
+                        quantityMeter = movement.QuantityMeter,
+                        category = ReadyGoodsCategory.Separates.ToString()
+                    });
+                }
+
+                foreach (var separate in reprocessingSeparates)
+                    separate.CancelReprocessing(order.Id, _currentUser.UserName);
+            }
+
             foreach (var lot in outstanding.Where(l => l.Value.Kg > 0 || l.Value.Meter > 0))
             {
                 var message = messages[lot.Key.MessageId];
@@ -205,17 +254,6 @@ public class CancelProductionOrderCommandHandler : IRequestHandler<CancelProduct
             // cancelled order. Nothing has been saved yet, so a refusal here
             // leaves the ledger untouched.
             order.Cancel(request.Reason, _currentUser.UserName);
-
-            // If this is a reprocessing order that has not entered production,
-            // release its linked separate back to the pending register in the
-            // same unit of work as the cancellation and raw-ledger reversal.
-            if (order.ReprocessingOfProductionOrderId.HasValue)
-            {
-                var linkedSeparate = await _db.Separates.FirstOrDefaultAsync(
-                    s => s.ReprocessingProductionOrderId == order.Id,
-                    cancellationToken);
-                linkedSeparate?.CancelReprocessing(order.Id, _currentUser.UserName);
-            }
 
             // The state change and every returned lot are audited with who/when/
             // why and the exact quantities - a cancellation is never a silent
