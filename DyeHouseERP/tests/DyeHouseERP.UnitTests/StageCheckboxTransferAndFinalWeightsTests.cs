@@ -72,7 +72,7 @@ public class StageCheckboxTransferAndFinalWeightsTests
     }
 
     private static TransferToNextStageCommandHandler Transferrer(ApplicationDbContext db) => new(
-        db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
+        db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock());
 
     private static Task<ProductionOrderStageExecution> CurrentStageAsync(ApplicationDbContext db, Guid orderId)
         => db.ProductionOrderStageExecutions
