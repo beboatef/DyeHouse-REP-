@@ -103,7 +103,7 @@ public class SelectableStartingStageTests
     }
 
     private static ReprocessSeparateCommandHandler Reprocessor(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"), new FixedNumberGenerator());
+        new(db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new RecordingStockLock());
 
     private static IssueRawMaterialCommandHandler Issuer(ApplicationDbContext db) => new(
         db, new StubCurrentUser("operator"), new InventoryLedgerService(db), new FixedNumberGenerator(),
