@@ -204,6 +204,58 @@ public class SelectableStartingStageTests
         separate.Status.Should().Be(SeparateStatus.PendingReprocessing);
     }
 
+    [Fact]
+    public async Task Reprocessing_MultiplePostedSeparates_CreateOneOrderAndDeductEachSeparateOnce()
+    {
+        var scene = Seed();
+        Guid secondSeparateId;
+
+        using (var db = NewDb())
+        {
+            var readyWarehouseId = await db.Warehouses
+                .Where(w => w.Kind == WarehouseKind.ReadyGoods)
+                .Select(w => w.Id).SingleAsync();
+            var secondSeparate = new Separate(
+                scene.Separate.OriginalProductionOrderId, scene.Separate.StageExecutionId,
+                scene.Customer.Id, scene.Item.Id, 20m, null, "seed", notes: "second separate");
+            db.Separates.Add(secondSeparate);
+            db.InventoryTransactions.Add(new InventoryTransaction(
+                DocumentType.ReadyGoodsTransfer, "RGT-SEP-2", Guid.NewGuid(), DateTime.UtcNow,
+                readyWarehouseId, scene.Customer.Id, scene.Item.Id, rawMessageId: null,
+                productionOrderId: scene.Separate.OriginalProductionOrderId,
+                quantityKg: 20m, quantityMeter: null, direction: TransactionDirection.In,
+                createdBy: "seed", readyGoodsCategory: ReadyGoodsCategory.Separates));
+            await db.SaveChangesAsync();
+            secondSeparateId = secondSeparate.Id;
+        }
+
+        using (var db = NewDb())
+        {
+            var dto = await Reprocessor(db).Handle(new ReprocessSeparateCommand(
+                scene.Separate.Id, DateTime.UtcNow, "batch reprocessing",
+                StartingStageId: scene.Dyeing.Id, AdditionalSeparateIds: new[] { secondSeparateId }),
+                CancellationToken.None);
+
+            dto.RequestedQuantityKg.Should().Be(70m);
+            dto.ReprocessingOfProductionOrderId.Should().Be(scene.Separate.OriginalProductionOrderId);
+        }
+
+        using var verify = NewDb();
+        (await verify.ProductionOrders.CountAsync(o => o.ReprocessingOfProductionOrderId == scene.Separate.OriginalProductionOrderId))
+            .Should().Be(1, "one batch creates one reprocessing order");
+        var linkedSeparates = await verify.Separates
+            .Where(s => s.ReprocessingProductionOrderId != null)
+            .ToListAsync();
+        linkedSeparates.Should().HaveCount(2);
+        linkedSeparates.Should().OnlyContain(s => s.Status == SeparateStatus.Reprocessing);
+        var outRows = await verify.InventoryTransactions
+            .Where(t => t.Direction == TransactionDirection.Out && t.ReadyGoodsCategory == ReadyGoodsCategory.Separates)
+            .ToListAsync();
+        outRows.Should().HaveCount(2, "each separate is deducted as its own traceable movement");
+        outRows.Sum(t => t.QuantityKg ?? 0m).Should().Be(70m);
+        outRows.Should().OnlyContain(t => t.ProductionOrderId == scene.Separate.OriginalProductionOrderId);
+    }
+
     // ---------------------------------------------------- orders raised from returns (spec section 33)
 
     [Fact]
