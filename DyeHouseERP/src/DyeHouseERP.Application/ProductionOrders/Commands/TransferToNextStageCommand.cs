@@ -80,12 +80,14 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
     private readonly IDateTime _clock;
     private readonly IPeriodCloseService _periodClose;
     private readonly IDocumentNumberGenerator _numberGenerator;
+    private readonly IAllocationLockService _stockLock;
 
     public TransferToNextStageCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IDateTime clock, IPeriodCloseService periodClose, IDocumentNumberGenerator numberGenerator)
+        IDateTime clock, IPeriodCloseService periodClose, IDocumentNumberGenerator numberGenerator,
+        IAllocationLockService stockLock)
     {
         _db = db; _currentUser = currentUser; _clock = clock; _periodClose = periodClose;
-        _numberGenerator = numberGenerator;
+        _numberGenerator = numberGenerator; _stockLock = stockLock;
     }
 
     /// <summary>
@@ -337,11 +339,16 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             ipAddress: null,
             reason: request.Notes));
 
+        var readyGoodsSaved = false;
         if (nextStage.IsReadyGoodsStage)
         {
             // Spec 17: the final stage moves the output to Ready Goods and completes
             // the order. The transfer IS the completion - there is no other button.
+            // Keep both guards through SaveChanges: the lot lock serializes this posting
+            // with separate scrapping/reprocessing and the period guard excludes period close.
             await using var periodGuard = await _periodClose.BeginPostingAsync(_clock.UtcNow, cancellationToken);
+            await using var readyLotLock = await _stockLock.AcquireAsync(
+                StockLockKey.ReadyLot(order.ItemId, order.Id), cancellationToken);
 
             var readyWarehouse = await _db.Warehouses.AsNoTracking()
                 .Where(w => w.Kind == WarehouseKind.ReadyGoods)
@@ -421,6 +428,11 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 foreach (var reprocessedSeparate in reprocessedSeparates)
                     reprocessedSeparate.MarkReprocessed();
             }
+
+            // Save stage closure, separate registration, category transfers, ledger rows and
+            // completion atomically while both the lot lock and period guard are still held.
+            await _db.SaveChangesAsync(cancellationToken);
+            readyGoodsSaved = true;
         }
         else
         {
@@ -444,7 +456,8 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
                 order.MarkInProduction();
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        if (!readyGoodsSaved)
+            await _db.SaveChangesAsync(cancellationToken);
         return await GetProductionOrderByIdQueryHandler.LoadDtoAsync(_db, order.Id, cancellationToken);
     }
 }
