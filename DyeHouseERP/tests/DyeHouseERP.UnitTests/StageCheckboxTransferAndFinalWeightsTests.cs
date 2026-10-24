@@ -193,7 +193,7 @@ public class StageCheckboxTransferAndFinalWeightsTests
         closed.WasteKg.Should().Be(60m, "1000 - 900 - 40");
 
         // The ready-goods mechanism is unchanged: one transfer row and one IN movement.
-        var transfer = await db.ReadyGoodsTransfers.SingleAsync();
+        var transfer = await db.ReadyGoodsTransfers.SingleAsync(t => t.Category == ReadyGoodsCategory.FirstGrade);
         transfer.StageExecutionId.Should().Be(current.Id);
         transfer.Category.Should().Be(ReadyGoodsCategory.FirstGrade,
             "the final output is the first-grade stream, separate from second grade and separates");
@@ -201,11 +201,13 @@ public class StageCheckboxTransferAndFinalWeightsTests
         transfer.QuantityMeter.Should().Be(115m);
 
         var movement = await db.InventoryTransactions
-            .SingleAsync(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer);
+            .SingleAsync(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer && t.ReadyGoodsCategory == ReadyGoodsCategory.FirstGrade);
         movement.Direction.Should().Be(TransactionDirection.In);
         movement.ReadyGoodsCategory.Should().Be(ReadyGoodsCategory.FirstGrade);
         movement.QuantityKg.Should().Be(900m);
         movement.QuantityMeter.Should().Be(115m);
+        (await db.ReadyGoodsTransfers.SingleAsync(t => t.Category == ReadyGoodsCategory.Separates)).QuantityKg.Should().Be(40m);
+        (await db.InventoryTransactions.SingleAsync(t => t.SourceDocumentType == DocumentType.ReadyGoodsTransfer && t.ReadyGoodsCategory == ReadyGoodsCategory.Separates)).Direction.Should().Be(TransactionDirection.In);
         (await db.ProductionOrders.FirstAsync(o => o.Id == scene.OrderId)).Status
             .Should().Be(ProductionOrderStatus.Completed);
     }
