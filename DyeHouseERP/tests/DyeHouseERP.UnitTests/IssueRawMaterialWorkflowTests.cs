@@ -195,7 +195,7 @@ public class IssueRawMaterialWorkflowTests
         // Phase 4: the operation is advanced and closed by the single TRANSFER transaction - the legacy
         // start/complete/skip paths were deleted - so that is the production step that must not deduct.
         await new TransferToNextStageCommandHandler(
-                db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator())
+                db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock())
             .Handle(new TransferToNextStageCommand(stageId, nextStage.Id, 108m, null, null, null, null),
                 CancellationToken.None);
 
