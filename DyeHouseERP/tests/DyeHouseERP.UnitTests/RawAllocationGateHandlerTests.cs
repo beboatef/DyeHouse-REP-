@@ -117,7 +117,7 @@ public class RawAllocationGateHandlerTests
         new(db, new StubCurrentUser("operator"), new FixedClock());
 
     private static TransferToNextStageCommandHandler TransferHandler(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
+        new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock());
 
     private static CreateReadyGoodsTransferCommandHandler ReadyGoodsHandler(ApplicationDbContext db) =>
         new(db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new FixedClock(), new OpenPeriod(),
