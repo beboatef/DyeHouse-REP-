@@ -60,5 +60,6 @@ public class SeparatesController : ControllerBase
         => Ok(await _mediator.Send(new ScrapSeparateCommand(id, request.Reason)));
 }
 
-public record ReprocessSeparateRequest(DateTime OrderDate, string? Notes, Guid? StartingStageId = null);\npublic record ReprocessSeparatesBatchRequest(IReadOnlyList<Guid> SeparateIds, DateTime OrderDate, string? Notes = null, Guid? StartingStageId = null);
+public record ReprocessSeparateRequest(DateTime OrderDate, string? Notes, Guid? StartingStageId = null);
+public record ReprocessSeparatesBatchRequest(IReadOnlyList<Guid> SeparateIds, DateTime OrderDate, string? Notes = null, Guid? StartingStageId = null);
 public record ScrapSeparateRequest(string Reason);
