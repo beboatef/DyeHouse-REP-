@@ -55,7 +55,7 @@ public class Phase4FloorCaptureTests
         new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
 
     private static ScrapSeparateCommandHandler Scrapper(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("operator"));
+        new(db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new RecordingStockLock());
 
     private static ReprocessSeparateCommandHandler Reprocessor(ApplicationDbContext db) =>
         new(db, new StubCurrentUser("operator"), new FixedNumberGenerator(), new RecordingStockLock());
@@ -254,6 +254,39 @@ public class Phase4FloorCaptureTests
 
         await again.Should().ThrowAsync<DomainException>(
             "an already-decided separate can never be written off twice");
+    }
+
+    [Fact]
+    public async Task ScrappingASeparateAfterReadyGoodsPosting_WritesAnOutLedgerMovement()
+    {
+        using var db = NewDb();
+        var scene = SeedOrderOnFirstStage(db, UnitOfMeasure.KG);
+        await Transfer(db).Handle(CloseFirstOperation(scene, outputKg: 950m, separatesKg: 15m), CancellationToken.None);
+        var separate = await db.Separates.SingleAsync();
+
+        var ready = new Warehouse("RDY-P4", "Ready Goods", WarehouseKind.ReadyGoods, "seed");
+        db.Warehouses.Add(ready);
+        var transfer = new ReadyGoodsTransfer("RGT-P4-SEP", DateTime.UtcNow, scene.OrderId,
+            scene.CustomerId, scene.ItemId, ready.Id, 15m, null, "seed",
+            stageExecutionId: scene.FirstExecutionId, category: ReadyGoodsCategory.Separates);
+        db.ReadyGoodsTransfers.Add(transfer);
+        db.InventoryTransactions.Add(new InventoryTransaction(
+            DocumentType.ReadyGoodsTransfer, transfer.TransferNumber, transfer.Id, DateTime.UtcNow,
+            ready.Id, scene.CustomerId, scene.ItemId, rawMessageId: null, productionOrderId: scene.OrderId,
+            quantityKg: 15m, quantityMeter: null, direction: TransactionDirection.In, createdBy: "seed",
+            readyGoodsCategory: ReadyGoodsCategory.Separates));
+        await db.SaveChangesAsync();
+
+        await Scrapper(db).Handle(new ScrapSeparateCommand(separate.Id, "تالف لا يصلح لإعادة التشغيل"), CancellationToken.None);
+
+        var ledger = await db.InventoryTransactions.AsNoTracking()
+            .Where(t => t.WarehouseId == ready.Id && t.ProductionOrderId == scene.OrderId
+                     && t.ReadyGoodsCategory == ReadyGoodsCategory.Separates)
+            .ToListAsync();
+        ledger.Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction).Should().Be(0m);
+        ledger.Should().ContainSingle(t => t.Direction == TransactionDirection.Out
+            && t.SourceDocumentType == DocumentType.StockAdjustment
+            && t.QuantityKg == 15m);
     }
 
     [Fact]

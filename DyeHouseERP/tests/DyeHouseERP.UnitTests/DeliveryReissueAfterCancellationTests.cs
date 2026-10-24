@@ -32,7 +32,7 @@ public class DeliveryReissueAfterCancellationTests
 
     private sealed record Scene(Guid CustomerId, Guid ItemId, Guid OrderId, Guid ReadyWarehouseId);
 
-    private Scene Seed(decimal readyKg = 500m, decimal requestedKg = 600m)
+    private Scene Seed(decimal readyKg = 500m, decimal requestedKg = 600m, ReadyGoodsCategory? category = null)
     {
         var customer = new Customer("C-1", "Buyer", "seed");
         var item = new Item("IT-1", "Fabric", UnitOfMeasure.KG, "seed");
@@ -47,7 +47,14 @@ public class DeliveryReissueAfterCancellationTests
         db.InventoryTransactions.Add(new InventoryTransaction(
             DocumentType.ReadyGoodsTransfer, "RGT-1", Guid.NewGuid(), DateTime.UtcNow,
             warehouse.Id, customer.Id, item.Id, rawMessageId: null, productionOrderId: order.Id,
-            quantityKg: readyKg, quantityMeter: null, direction: TransactionDirection.In, createdBy: "seed"));
+            quantityKg: readyKg, quantityMeter: null, direction: TransactionDirection.In, createdBy: "seed",
+            readyGoodsCategory: category));
+        if (category.HasValue)
+        {
+            db.ReadyGoodsTransfers.Add(new ReadyGoodsTransfer(
+                "RGT-CATEGORY-SEED", DateTime.UtcNow, order.Id, customer.Id, item.Id, warehouse.Id,
+                readyKg, null, "seed", category: category));
+        }
         db.SaveChanges();
 
         return new Scene(customer.Id, item.Id, order.Id, warehouse.Id);
@@ -88,6 +95,23 @@ public class DeliveryReissueAfterCancellationTests
             .Select(t => new { t.QuantityKg, t.Direction })
             .AsEnumerable()
             .Sum(t => (t.QuantityKg ?? 0m) * (int)t.Direction);
+
+    [Fact]
+    public async Task DeliveryWithMissingCategory_CannotFallBackToSeparates()
+    {
+        var scene = Seed(readyKg: 15m, requestedKg: 15m, category: ReadyGoodsCategory.Separates);
+        using var db = NewDb();
+        var deliveryId = await IssueAsync(db, scene, kg: 10m, originalRawKg: 15m);
+        var before = db.InventoryTransactions.Count();
+
+        Func<Task> deliver = () => Deliverer(db).Handle(
+            new MarkDeliveryDeliveredCommand(deliveryId, Guid.NewGuid()), CancellationToken.None);
+
+        await deliver.Should().ThrowAsync<DomainException>()
+            .WithMessage("*Separates cannot be delivered*");
+        db.InventoryTransactions.Count().Should().Be(before, "rejected delivery posts no ledger movement");
+        ReadyBalance(db, scene).Should().Be(15m);
+    }
 
     [Fact]
     public async Task ACancelledDelivery_DoesNotBlockANewDeliveryOfTheSameLot()

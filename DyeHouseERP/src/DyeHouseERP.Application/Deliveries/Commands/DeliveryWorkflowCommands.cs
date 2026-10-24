@@ -256,6 +256,13 @@ public class MarkDeliveryDeliveredCommandHandler : IRequestHandler<MarkDeliveryD
                         throw new DomainException("Select the ready-goods category for each delivery line; this production order has multiple categories.");
                     }
                 }
+                // A legacy client may omit Category. Never use the single-category
+                // compatibility fallback to silently turn that null into Separates: those
+                // lots are for reprocessing only and must never be delivered to a customer.
+                if (!line.Category.HasValue && selectedCategory == ReadyGoodsCategory.Separates)
+                    throw new DomainException(
+                        "Select an eligible delivery category. Separates cannot be delivered to the customer; create a linked reprocessing production order instead. المنفصلات مخصصة لإعادة التشغيل ولا تُسلَّم للعميل.");
+
                 categoryByLine[line.Id] = selectedCategory;
             }
 
