@@ -353,7 +353,7 @@ public class ReadyGoodsStageTraceabilityTests
         using var db = NewDb();
 
         var handler = new TransferToNextStageCommandHandler(
-            db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator());
+            db, new StubCurrentUser("operator"), new FixedClock(), new OpenPeriod(), new FixedNumberGenerator(), new RecordingStockLock());
 
         // The FINAL capture on the last operation before the warehouse: the original raw it started from
         // (input), the ready weight it produced (output) and the final metres. The waste is derived from them.
