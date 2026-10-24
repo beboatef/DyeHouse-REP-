@@ -396,10 +396,10 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
             // Ready Goods, not only the quantity entered on the final stage. This is the stock gate
             // that makes every pending separate eligible for reprocessing only after completion.
             var priorSeparatesKg = await _db.Separates.AsNoTracking()
-                .Where(s => s.OriginalProductionOrderId == order.Id)
+                .Where(s => s.OriginalProductionOrderId == order.Id && s.Status == SeparateStatus.PendingReprocessing)
                 .SumAsync(s => s.QuantityKg ?? 0m, cancellationToken);
             var priorSeparatesMeter = await _db.Separates.AsNoTracking()
-                .Where(s => s.OriginalProductionOrderId == order.Id)
+                .Where(s => s.OriginalProductionOrderId == order.Id && s.Status == SeparateStatus.PendingReprocessing)
                 .SumAsync(s => s.QuantityMeter ?? 0m, cancellationToken);
             var allSeparatesKg = priorSeparatesKg + (request.SeparatesKg ?? 0m);
             var allSeparatesMeter = priorSeparatesMeter + (request.SeparatesMeter ?? 0m);
