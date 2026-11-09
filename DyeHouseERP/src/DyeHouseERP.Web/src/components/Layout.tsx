@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { SettingsApi } from "@/api/client";
 import { useI18n } from "@/i18n";
 import { useTheme, type Theme } from "@/components/ThemeProvider";
+import RouteFallback from "@/components/RouteFallback";
 import {
   LayoutDashboard, Users, Package, Warehouse,
   ClipboardList, Layers3, GitBranch, FlaskConical, PackageCheck, Truck, Receipt,
@@ -519,7 +520,13 @@ export default function Layout() {
                 replays the entrance; a query-only change (?tab=...) keeps the
                 same pathname and correctly does NOT replay it. */}
             <div key={location.pathname} className="animate-page-enter">
-              <Outlet />
+              {/* Closer boundary than the one in App, on purpose: a lazily
+                  loaded page suspends HERE, inside the shell, so the sidebar
+                  and header stay mounted and only the page area shows the
+                  fallback. */}
+              <Suspense fallback={<RouteFallback />}>
+                <Outlet />
+              </Suspense>
             </div>
           </div>
         </main>

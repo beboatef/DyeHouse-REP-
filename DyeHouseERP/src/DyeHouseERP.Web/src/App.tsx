@@ -1,128 +1,149 @@
+import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
-import LoginPage from "@/pages/LoginPage";
-import DashboardPage from "@/pages/DashboardPage";
-import CustomersPage from "@/pages/CustomersPage";
-import SuppliersPage from "@/pages/SuppliersPage";
-import ItemsPage from "@/pages/ItemsPage";
-import WarehousesPage from "@/pages/WarehousesPage";
-import WarehouseHubPage from "@/pages/WarehouseHubPage";
-import RawMessagesPage from "@/pages/RawMessagesPage";
-import ProductionStagesPage from "@/pages/ProductionStagesPage";
-import ProductionOrdersPage from "@/pages/ProductionOrdersPage";
-import ProductionOrderDetailPage from "@/pages/ProductionOrderDetailPage";
-import RawExternalReleasesPage from "@/pages/RawExternalReleasesPage";
-import CustomerTransfersPage from "@/pages/CustomerTransfersPage";
-import StockAdjustmentsPage from "@/pages/StockAdjustmentsPage";
-import SeparatesPage from "@/pages/SeparatesPage";
-import MaterialsPage from "@/pages/MaterialsPage";
-import ReadyGoodsPage from "@/pages/ReadyGoodsPage";
-import DeliveriesPage from "@/pages/DeliveriesPage";
-import InvoicesPage from "@/pages/InvoicesPage";
-import TreasuryPage from "@/pages/TreasuryPage";
-import ChecksPage from "@/pages/ChecksPage";
-import FormationRequestsPage from "@/pages/FormationRequestsPage";
-import FormationRequestDetailPage from "@/pages/FormationRequestDetailPage";
-import FormationSpecificationsPage from "@/pages/FormationSpecificationsPage";
-import ProductionFloorPage from "@/pages/ProductionFloorPage";
-import UsersPage from "@/pages/UsersPage";
-import ReportsPage from "@/pages/ReportsPage";
-import AuditLogPage from "@/pages/AuditLogPage";
-import SettingsPage from "@/pages/SettingsPage";
-import InvoicePrintPage from "@/pages/print/InvoicePrintPage";
-import DeliveryPrintPage from "@/pages/print/DeliveryPrintPage";
-import DeliveryStatementPrintPage from "@/pages/print/DeliveryStatementPrintPage";
-import ProductionOrderPrintPage from "@/pages/print/ProductionOrderPrintPage";
-import RawMessagePrintPage from "@/pages/print/RawMessagePrintPage";
-import StockTraceabilityPrintPage from "@/pages/print/StockTraceabilityPrintPage";
-import ScanViewPage from "@/pages/scan/ScanViewPage";
-import ReportBuilderPage from "@/pages/ReportBuilderPage";
-import PeriodClosingPage from "@/pages/PeriodClosingPage";
-import NotFoundPage from "@/pages/NotFoundPage";
-import PurchasesPage from "@/pages/PurchasesPage";
-import PayrollPage from "@/pages/PayrollPage";
-import HrPage from "@/pages/HrPage";
-import ApprovalCenterPage from "@/pages/ApprovalCenterPage";
-import SuppliesPage from "@/pages/SuppliesPage";
-import MaterialSalesPage from "@/pages/MaterialSalesPage";
-import PurchaseUnitsPage from "@/pages/PurchaseUnitsPage";
-import CustomerReturnsPage from "@/pages/CustomerReturnsPage";
-import PriceListsPage from "@/pages/PriceListsPage";
+import RouteFallback from "@/components/RouteFallback";
+
+/*
+ * Route-level code splitting. Every page is its own chunk, fetched when the
+ * route is first visited, instead of one entry bundle containing all 50
+ * screens. The shell (Layout, RequireAuth, the router and the providers in
+ * main.tsx) stays eager so navigation keeps its instant frame, and Rollup
+ * still hoists what two pages share into a common chunk rather than copying
+ * it into both.
+ *
+ * The print and scan views are lazy for the same reason: they are reached by
+ * deep link (a printed sheet, a QR scan), so a shop-floor phone should not
+ * download them to open the dashboard.
+ */
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
+const SuppliersPage = lazy(() => import("@/pages/SuppliersPage"));
+const ItemsPage = lazy(() => import("@/pages/ItemsPage"));
+const WarehousesPage = lazy(() => import("@/pages/WarehousesPage"));
+const WarehouseHubPage = lazy(() => import("@/pages/WarehouseHubPage"));
+const RawMessagesPage = lazy(() => import("@/pages/RawMessagesPage"));
+const ProductionStagesPage = lazy(() => import("@/pages/ProductionStagesPage"));
+const ProductionOrdersPage = lazy(() => import("@/pages/ProductionOrdersPage"));
+const ProductionOrderDetailPage = lazy(() => import("@/pages/ProductionOrderDetailPage"));
+const RawExternalReleasesPage = lazy(() => import("@/pages/RawExternalReleasesPage"));
+const CustomerTransfersPage = lazy(() => import("@/pages/CustomerTransfersPage"));
+const StockAdjustmentsPage = lazy(() => import("@/pages/StockAdjustmentsPage"));
+const SeparatesPage = lazy(() => import("@/pages/SeparatesPage"));
+const MaterialsPage = lazy(() => import("@/pages/MaterialsPage"));
+const ReadyGoodsPage = lazy(() => import("@/pages/ReadyGoodsPage"));
+const DeliveriesPage = lazy(() => import("@/pages/DeliveriesPage"));
+const InvoicesPage = lazy(() => import("@/pages/InvoicesPage"));
+const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
+const ChecksPage = lazy(() => import("@/pages/ChecksPage"));
+const FormationRequestsPage = lazy(() => import("@/pages/FormationRequestsPage"));
+const FormationRequestDetailPage = lazy(() => import("@/pages/FormationRequestDetailPage"));
+const FormationSpecificationsPage = lazy(() => import("@/pages/FormationSpecificationsPage"));
+const ProductionFloorPage = lazy(() => import("@/pages/ProductionFloorPage"));
+const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
+const AuditLogPage = lazy(() => import("@/pages/AuditLogPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const InvoicePrintPage = lazy(() => import("@/pages/print/InvoicePrintPage"));
+const DeliveryPrintPage = lazy(() => import("@/pages/print/DeliveryPrintPage"));
+const DeliveryStatementPrintPage = lazy(() => import("@/pages/print/DeliveryStatementPrintPage"));
+const ProductionOrderPrintPage = lazy(() => import("@/pages/print/ProductionOrderPrintPage"));
+const RawMessagePrintPage = lazy(() => import("@/pages/print/RawMessagePrintPage"));
+const StockTraceabilityPrintPage = lazy(() => import("@/pages/print/StockTraceabilityPrintPage"));
+const ScanViewPage = lazy(() => import("@/pages/scan/ScanViewPage"));
+const ReportBuilderPage = lazy(() => import("@/pages/ReportBuilderPage"));
+const PeriodClosingPage = lazy(() => import("@/pages/PeriodClosingPage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
+const PurchasesPage = lazy(() => import("@/pages/PurchasesPage"));
+const PayrollPage = lazy(() => import("@/pages/PayrollPage"));
+const HrPage = lazy(() => import("@/pages/HrPage"));
+const ApprovalCenterPage = lazy(() => import("@/pages/ApprovalCenterPage"));
+const SuppliesPage = lazy(() => import("@/pages/SuppliesPage"));
+const MaterialSalesPage = lazy(() => import("@/pages/MaterialSalesPage"));
+const PurchaseUnitsPage = lazy(() => import("@/pages/PurchaseUnitsPage"));
+const CustomerReturnsPage = lazy(() => import("@/pages/CustomerReturnsPage"));
+const PriceListsPage = lazy(() => import("@/pages/PriceListsPage"));
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route element={<RequireAuth />}>
-        <Route element={<Layout />}>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/suppliers" element={<SuppliersPage />} />
-        <Route path="/items" element={<ItemsPage />} />
-        <Route path="/warehouses" element={<WarehousesPage />} />
-        {/* One Warehouse module (spec section 14). The individual routes below stay
-            working inside its tabs and for existing deep links. */}
-        <Route path="/warehouse" element={<WarehouseHubPage />} />
-        <Route path="/raw-messages" element={<RawMessagesPage />} />
-        <Route path="/raw-external-releases" element={<RawExternalReleasesPage />} />
-        <Route path="/customer-transfers" element={<CustomerTransfersPage />} />
-        <Route path="/stock-adjustments" element={<StockAdjustmentsPage />} />
-        <Route path="/customer-returns" element={<CustomerReturnsPage />} />
-        <Route path="/purchase-units" element={<PurchaseUnitsPage />} />
-        {/* Actual cost list + customer service price list (spec sections 34 + 36). */}
-        <Route path="/price-lists" element={<PriceListsPage />} />
-        <Route path="/separates" element={<SeparatesPage />} />
-        <Route path="/materials" element={<MaterialsPage />} />
-        <Route path="/ready-goods" element={<ReadyGoodsPage />} />
-        <Route path="/deliveries" element={<DeliveriesPage />} />
-        <Route path="/invoices" element={<InvoicesPage />} />
-        <Route path="/treasury" element={<TreasuryPage />} />
-        <Route path="/checks" element={<ChecksPage />} />
-        <Route path="/formation-requests" element={<FormationRequestsPage />} />
-        <Route path="/formation-requests/:id" element={<FormationRequestDetailPage />} />
-        <Route path="/formation-specifications" element={<FormationSpecificationsPage />} />
-        <Route path="/purchases" element={<PurchasesPage />} />
-        <Route path="/payroll" element={<PayrollPage />} />
-        <Route path="/hr" element={<HrPage />} />
-        <Route path="/approvals" element={<ApprovalCenterPage />} />
-        {/* Operating supplies and material sales live under Materials & supplies
-            (spec sections 26 + 27) - they are factory-owned stock, not custodies. */}
-        <Route path="/supplies" element={<SuppliesPage />} />
-        <Route path="/material-sales" element={<MaterialSalesPage />} />
-        <Route path="/production-floor" element={<ProductionFloorPage />} />
-        <Route path="/production-stages" element={<ProductionStagesPage />} />
-        <Route path="/production-orders" element={<ProductionOrdersPage />} />
-        <Route path="/production-orders/:id" element={<ProductionOrderDetailPage />} />
-        <Route path="/users" element={<UsersPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/audit-log" element={<AuditLogPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/reports/builder" element={<ReportBuilderPage />} />
-        <Route path="/period-closing" element={<PeriodClosingPage />} />
+    /* Outer boundary: covers the standalone routes (/login, /print/*, /scan/*,
+       and the catch-all) plus the shell's own first paint. Pages inside the
+       authenticated group hit the closer boundary in Layout instead, so the
+       sidebar and header never unmount while a page chunk loads. */
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<Layout />}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/suppliers" element={<SuppliersPage />} />
+          <Route path="/items" element={<ItemsPage />} />
+          <Route path="/warehouses" element={<WarehousesPage />} />
+          {/* One Warehouse module (spec section 14). The individual routes below stay
+              working inside its tabs and for existing deep links. */}
+          <Route path="/warehouse" element={<WarehouseHubPage />} />
+          <Route path="/raw-messages" element={<RawMessagesPage />} />
+          <Route path="/raw-external-releases" element={<RawExternalReleasesPage />} />
+          <Route path="/customer-transfers" element={<CustomerTransfersPage />} />
+          <Route path="/stock-adjustments" element={<StockAdjustmentsPage />} />
+          <Route path="/customer-returns" element={<CustomerReturnsPage />} />
+          <Route path="/purchase-units" element={<PurchaseUnitsPage />} />
+          {/* Actual cost list + customer service price list (spec sections 34 + 36). */}
+          <Route path="/price-lists" element={<PriceListsPage />} />
+          <Route path="/separates" element={<SeparatesPage />} />
+          <Route path="/materials" element={<MaterialsPage />} />
+          <Route path="/ready-goods" element={<ReadyGoodsPage />} />
+          <Route path="/deliveries" element={<DeliveriesPage />} />
+          <Route path="/invoices" element={<InvoicesPage />} />
+          <Route path="/treasury" element={<TreasuryPage />} />
+          <Route path="/checks" element={<ChecksPage />} />
+          <Route path="/formation-requests" element={<FormationRequestsPage />} />
+          <Route path="/formation-requests/:id" element={<FormationRequestDetailPage />} />
+          <Route path="/formation-specifications" element={<FormationSpecificationsPage />} />
+          <Route path="/purchases" element={<PurchasesPage />} />
+          <Route path="/payroll" element={<PayrollPage />} />
+          <Route path="/hr" element={<HrPage />} />
+          <Route path="/approvals" element={<ApprovalCenterPage />} />
+          {/* Operating supplies and material sales live under Materials & supplies
+              (spec sections 26 + 27) - they are factory-owned stock, not custodies. */}
+          <Route path="/supplies" element={<SuppliesPage />} />
+          <Route path="/material-sales" element={<MaterialSalesPage />} />
+          <Route path="/production-floor" element={<ProductionFloorPage />} />
+          <Route path="/production-stages" element={<ProductionStagesPage />} />
+          <Route path="/production-orders" element={<ProductionOrdersPage />} />
+          <Route path="/production-orders/:id" element={<ProductionOrderDetailPage />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/audit-log" element={<AuditLogPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/reports/builder" element={<ReportBuilderPage />} />
+          <Route path="/period-closing" element={<PeriodClosingPage />} />
+          </Route>
+
+          {/* Full-page routes: no sidebar, so printing only includes the document itself */}
+          <Route path="/print/invoice/:id" element={<InvoicePrintPage />} />
+          <Route path="/print/delivery/:id" element={<DeliveryPrintPage />} />
+          {/* The delivery STATEMENT (بيان تسليم) - the production accounting per delivered line,
+              with configurable columns (spec section 31). */}
+          <Route path="/print/delivery-statement/:id" element={<DeliveryStatementPrintPage />} />
+          <Route path="/print/production-order/:id" element={<ProductionOrderPrintPage />} />
+          <Route path="/print/raw-message/:id" element={<RawMessagePrintPage />} />
+          {/* بطاقة تتبع اللوط - the lot's ledger movements with the cumulative balance after each one,
+              as an official document. The :scope switch names the lot's identity the way the screen does
+              (raw = receipt message, ready = job order, materials = material lot), and ?lots=id,id,id
+              prints SEVERAL lots as independent cards, one per sheet. */}
+          <Route path="/print/stock-traceability/:scope" element={<StockTraceabilityPrintPage />} />
+          <Route path="/scan/:type/:id" element={<ScanViewPage />} />
         </Route>
 
-        {/* Full-page routes: no sidebar, so printing only includes the document itself */}
-        <Route path="/print/invoice/:id" element={<InvoicePrintPage />} />
-        <Route path="/print/delivery/:id" element={<DeliveryPrintPage />} />
-        {/* The delivery STATEMENT (بيان تسليم) - the production accounting per delivered line,
-            with configurable columns (spec section 31). */}
-        <Route path="/print/delivery-statement/:id" element={<DeliveryStatementPrintPage />} />
-        <Route path="/print/production-order/:id" element={<ProductionOrderPrintPage />} />
-        <Route path="/print/raw-message/:id" element={<RawMessagePrintPage />} />
-        {/* بطاقة تتبع اللوط - the lot's ledger movements with the cumulative balance after each one,
-            as an official document. The :scope switch names the lot's identity the way the screen does
-            (raw = receipt message, ready = job order, materials = material lot), and ?lots=id,id,id
-            prints SEVERAL lots as independent cards, one per sheet. */}
-        <Route path="/print/stock-traceability/:scope" element={<StockTraceabilityPrintPage />} />
-        <Route path="/scan/:type/:id" element={<ScanViewPage />} />
-      </Route>
-
-      {/* Last route on purpose: without it an unknown URL renders a blank
-          page inside the shell, with no message and no way back. Kept outside
-          the authenticated group so a bad link is still recoverable when
-          signed out. */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+        {/* Last route on purpose: without it an unknown URL renders a blank
+            page inside the shell, with no message and no way back. Kept outside
+            the authenticated group so a bad link is still recoverable when
+            signed out. */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </Suspense>
   );
 }
