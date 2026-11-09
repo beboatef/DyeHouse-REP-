@@ -225,32 +225,32 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// ---------- Apply migrations + seed the numbering engine on startup ----------
-// NOTE: for production, prefer running migrations as an explicit deploy
-// step rather than on app start. Left here for local/dev convenience.
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    if (app.Environment.IsDevelopment())
-    {
-        await db.Database.MigrateAsync();
-        await DocumentSequenceSeeder.SeedAsync(db);
-        await DyeHouseERP.Persistence.Seeding.WarehouseSeeder.SeedAsync(db);
-        await DyeHouseERP.Persistence.Seeding.PurchaseUnitSeeder.SeedAsync(db);
-        await DyeHouseERP.Persistence.Seeding.ProductionStageSeeder.SeedAsync(
-            db, app.Services.GetRequiredService<ILogger<Program>>());
-        // Initial machine master data + stage mapping: depends on the stages
-        // above (it is a no-op when they are absent), and is idempotent by
-        // machine code.
-        await DyeHouseERP.Persistence.Seeding.MachineSeeder.SeedAsync(
-            db, app.Services.GetRequiredService<ILogger<Program>>());
-        // Initial production execution shifts (master data, not a fixed limit).
-        await DyeHouseERP.Persistence.Seeding.ProductionShiftSeeder.SeedAsync(
-            db, app.Services.GetRequiredService<ILogger<Program>>());
+// ---------- Database bootstrap: schema, master data and the first administrator ----------
+// One path for every environment (see Startup/DatabaseBootstrap.cs). This used to be a
+// Development-only block, which is why a Production deployment started against an empty
+// database - no tables, no warehouses, no login - with nothing saying why.
+var bootstrapOptions = DyeHouseERP.API.Startup.DatabaseBootstrap.Options.FromConfiguration(
+    builder.Configuration, app.Environment);
+var bootstrapLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Bootstrap");
 
-        var passwordHasher = scope.ServiceProvider.GetRequiredService<DyeHouseERP.Application.Common.Interfaces.IPasswordHasher>();
-        await UserSeeder.SeedAsync(db, passwordHasher);
-    }
+// Explicit deploy step: prepare the database and exit WITHOUT starting the web server.
+//   dotnet run --project src/DyeHouseERP.API -- --bootstrap
+// Forces the schema step on and turns a missing administrator credential into a failure instead
+// of a warning, because an operator running this is asking for a ready database.
+if (args.Contains("--bootstrap"))
+{
+    await DyeHouseERP.API.Startup.DatabaseBootstrap.RunAsync(
+        app.Services,
+        bootstrapLogger,
+        bootstrapOptions with { Migrate = true, SeedMasterData = true },
+        forceAdminCheck: true);
+    return;
+}
+
+if (DyeHouseERP.API.Startup.DatabaseBootstrap.ShouldRunOnStartup(app.Environment, bootstrapOptions))
+{
+    await DyeHouseERP.API.Startup.DatabaseBootstrap.RunAsync(
+        app.Services, bootstrapLogger, bootstrapOptions);
 }
 
 app.Run();
