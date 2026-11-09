@@ -8,6 +8,7 @@ import {
 import { PageHeader, Card, Button, Input, Select, Badge } from "@/components/ui";
 import { InventoryTraceabilityExports, ReportsExports } from "@/api/exports";
 import StockTraceability from "@/components/StockTraceability";
+import RequestFailure, { RequestFailureRow } from "@/components/RequestFailure";
 import { useI18n } from "@/i18n";
 
 /**
@@ -50,7 +51,7 @@ export default function WarehouseHubPage() {
   const [search] = useSearchParams();
   const [section, setSection] = useState<Section>("overview");
 
-  const { data: warehouses, isLoading } = useQuery({
+  const { data: warehouses, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["warehouses", "active"],
     queryFn: () => WarehousesApi.list({ activeOnly: true })
   });
@@ -85,6 +86,22 @@ export default function WarehouseHubPage() {
       <>
         <PageHeader title={t("nav.warehouseHub")} subtitle={t("wh.subtitle")} />
         <Card className="card-pad text-sm text-ink-subtle">{t("common.loading", "جارٍ التحميل...")}</Card>
+      </>
+    );
+  }
+
+  // A failed warehouses read is NOT "no warehouse is defined": nothing is known about the master
+  // data, so the page says the request failed and offers a retry instead of sending the user to
+  // create a warehouse that probably already exists.
+  if (isError) {
+    return (
+      <>
+        <PageHeader title={t("nav.warehouseHub")} subtitle={t("wh.subtitle")} />
+        <RequestFailure
+          error={error}
+          title={t("wh.loadFailed", "تعذّر تحميل قائمة المخازن")}
+          onRetry={() => void refetch()}
+        />
       </>
     );
   }
@@ -180,7 +197,7 @@ export default function WarehouseHubPage() {
 
 function Overview({ warehouse, scope }: { warehouse: Warehouse; scope: StockScope }) {
   const { t } = useI18n();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["warehouse-overview", warehouse.id, scope],
     queryFn: () => InventoryTraceabilityApi.get({ scope, warehouseId: warehouse.id }),
     refetchInterval: 15000
@@ -190,6 +207,12 @@ function Overview({ warehouse, scope }: { warehouse: Warehouse; scope: StockScop
   // Three decimals: a stock figure is a measurement, never rounded to a whole number for display.
   const number = (v: number | null | undefined) =>
     (v === null || v === undefined ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 3 }));
+
+  // The KPIs below are computed from THIS read: when it failed they would all read "—", which looks
+  // like a warehouse with no stock instead of a request that never completed.
+  if (isError) {
+    return <RequestFailure error={error} onRetry={() => void refetch()} />;
+  }
 
   return (
     <>
@@ -242,7 +265,7 @@ function WarehouseMovements({ warehouse, scope, initialKind = "" }: {
   const { t } = useI18n();
   const [filters, setFilters] = useState({ from: "", to: "", kind: initialKind, documentNumber: "" });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["warehouse-movements", warehouse.id, scope, filters],
     queryFn: () => InventoryTraceabilityApi.get({
       scope,
@@ -292,9 +315,21 @@ function WarehouseMovements({ warehouse, scope, initialKind = "" }: {
           />
         </div>
         <div className="text-xs text-ink-muted">
-          {t("wh.tab.movements")}: <span className="ltr-nums font-semibold">{movements.length}</span>
+          {t("wh.tab.movements")}: {isError || isLoading
+            ? "—"
+            : <span className="ltr-nums font-semibold">{movements.length}</span>}
         </div>
       </Card>
+
+      {/* The table below is empty in TWO different situations; only one of them is "no movements". */}
+      {isError && (
+        <RequestFailure
+          error={error}
+          title={t("wh.movements.failed", "تعذّر تحميل حركات هذا المخزن")}
+          onRetry={() => void refetch()}
+          className="mb-3"
+        />
+      )}
 
       <Card className="overflow-x-auto">
         <table className="table">
@@ -315,7 +350,8 @@ function WarehouseMovements({ warehouse, scope, initialKind = "" }: {
             {isLoading && (
               <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading")}</td></tr>
             )}
-            {!isLoading && movements.length === 0 && (
+            {!isLoading && isError && <RequestFailureRow error={error} colSpan={isMaterials ? 8 : 9} />}
+            {!isLoading && !isError && movements.length === 0 && (
               <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty")}</td></tr>
             )}
             {movements.map((m) => (
@@ -454,10 +490,14 @@ function ItemCardPanel({ warehouse, scope, isMaterials }: {
         </div>
       </Card>
 
+      {/* A card was ASKED for, so a failure here is the card's failure - the API's own message
+          (an invalid identifier, a unit the item does not have) is more useful than a generic line. */}
       {error != null && (
-        <Card className="card-pad mb-4 text-sm text-danger-ink">
-          {t("wh.itemCardError", "تعذّر إنشاء الكارت - راجع المخزن والصنف المختارين.")}
-        </Card>
+        <RequestFailure
+          error={error}
+          title={t("wh.itemCardError", "تعذّر إنشاء الكارت - راجع المخزن والصنف المختارين.")}
+          className="mb-4"
+        />
       )}
 
       {identityChosen && card && (

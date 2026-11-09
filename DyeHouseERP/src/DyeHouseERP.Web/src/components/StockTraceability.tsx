@@ -8,6 +8,7 @@ import {
 import { Card, Button, Input, Select, Badge, SearchInput } from "@/components/ui";
 import { downloadFile, InventoryTraceabilityExports, lotToken, type LotCardIdentity } from "@/api/exports";
 import { useI18n } from "@/i18n";
+import RequestFailure, { RequestFailureRow } from "@/components/RequestFailure";
 
 /**
  * BALANCES WITH THE MOVEMENTS BEHIND THEM.
@@ -75,7 +76,7 @@ export default function StockTraceability({ scope, compact = false, warehouseId,
   const isMaterials = scope === "materials" || scope === "supplies";
   const isRaw = scope === "raw";
 
-  const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery({
+  const { data, isLoading, isError, error, isFetching, refetch, dataUpdatedAt } = useQuery({
     // Nothing is memoised on the server: every key change is a fresh read of the ledger.
     queryKey: ["stock-traceability", scope, filters, lot],
     queryFn: () => InventoryTraceabilityApi.get({
@@ -359,6 +360,18 @@ export default function StockTraceability({ scope, compact = false, warehouseId,
         </div>
       </Card>
 
+      {/* A failed read is shown as a failed read. Without this, the totals and both tables below render
+          their empty states and the whole screen reads as "this warehouse holds nothing" - the one
+          conclusion a stock screen must never draw from a dropped request. */}
+      {isError && (
+        <RequestFailure
+          error={error}
+          title={t("stock.loadFailed", "تعذّر تحميل الأرصدة والحركات")}
+          onRetry={() => void refetch()}
+          className="mb-4"
+        />
+      )}
+
       {/* ---- totals: per unit, never merged into one number ---- */}
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <TotalCard
@@ -434,7 +447,8 @@ export default function StockTraceability({ scope, compact = false, warehouseId,
           </thead>
           <tbody>
             {isLoading && <tr><td colSpan={13} className="px-4 py-6 text-center text-ink-subtle">{t("common.loading", "جارٍ التحميل...")}</td></tr>}
-            {!isLoading && rows.length === 0 && (
+            {!isLoading && isError && <RequestFailureRow error={error} colSpan={13} />}
+            {!isLoading && !isError && rows.length === 0 && (
               <tr><td colSpan={13} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty", "لا توجد بيانات")}</td></tr>
             )}
             {rows.map((row, index) => (
@@ -572,9 +586,10 @@ export default function StockTraceability({ scope, compact = false, warehouseId,
             </tr>
           </thead>
           <tbody>
-            {movements.length === 0 && (
+            {!isError && movements.length === 0 && (
               <tr><td colSpan={8} className="px-4 py-6 text-center text-ink-subtle">{t("common.empty", "لا توجد حركات")}</td></tr>
             )}
+            {isError && <RequestFailureRow error={error} colSpan={8} />}
             {movements.map((m) => <MovementRow key={m.id} movement={m} scope={scope} formatter={number} hasMeter={hasMeter} />)}
           </tbody>
         </table>

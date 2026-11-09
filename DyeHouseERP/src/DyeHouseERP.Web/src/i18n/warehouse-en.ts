@@ -6,6 +6,21 @@
  * here, and no untranslated key can leak onto the page.
  */
 export const warehouseEn: Record<string, string> = {
+  // What a request that FAILED says, everywhere it is rendered. The screen passes its Arabic wording
+  // as the t() fallback, so only the English side is needed here.
+  "req.failed.title": "Could not load the data",
+  "req.failed.network": "The server could not be reached. Check the connection and try again.",
+  "req.failed.session": "Your session ended or your permissions changed. Sign in again.",
+  "req.failed.forbidden": "You do not have permission to view this data.",
+  "req.failed.missing": "The requested record does not exist - it may have been deleted, or the link is wrong.",
+  "req.failed.server": "The server could not complete the request. Try again, and check the server log if it keeps happening.",
+  "req.failed.generic": "The request failed. Try again.",
+  "req.failed.notEmpty": "This is not an empty list: the request itself failed, so nothing can be confirmed either way.",
+  "req.failed.row": "Could not load the data - this is not an empty list",
+  "req.failed.retry": "Try again",
+  "wh.loadFailed": "Could not load the warehouses",
+  "wh.movements.failed": "Could not load this warehouse's movements",
+  "stock.loadFailed": "Could not load the balances and their movements",
   "wh.choose": "Choose a warehouse",
   "wh.chooseHint": "Every balance, movement, item card and report below belongs to this warehouse alone, read from its own ledger.",
   "wh.scopeLabel": "Ledger",
