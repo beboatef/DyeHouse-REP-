@@ -1,13 +1,22 @@
 name: ERP CI
 
+# The repository's verification story:
+#   frontend    - typecheck, lint, production build, i18n key parity and the structural sweeps in tools/;
+#   backend     - Release build + the domain tests (no database needed);
+#   integration - the API suite against a real SQL Server, because the numbering engine uses
+#                 sp_getapplock and has no in-memory equivalent.
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, "codex/**"]
+    branches: [main, "codex/**", "feat/**"]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   frontend:
@@ -25,12 +34,27 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: DyeHouseERP/src/DyeHouseERP.Web/package-lock.json
+      # `npm ci` (never `npm install`): the lockfile is the contract, and a drifted tree must fail here.
       - name: Install dependencies
         run: npm ci
+      - name: Typecheck frontend
+        run: npx tsc -b
       - name: Build frontend
         run: npm run build
       - name: Lint frontend
         run: npm run lint
+      - name: i18n key parity
+        # The checker and the sweeps read the repository from its root and reuse the
+        # frontend's typescript package, so they run from DyeHouseERP/, not from the web app.
+        working-directory: DyeHouseERP
+        run: node tools/i18n-parity-check.cjs
+      - name: Structural sweeps
+        working-directory: DyeHouseERP
+        run: |
+          node tools/hooks-check.js
+          node tools/wiring-sweep.js
+          node tools/duplicate-sweep.js
+          node tools/permissions-parity-check.cjs
 
   backend:
     name: .NET 9 unit tests
@@ -44,5 +68,52 @@ jobs:
           dotnet-version: 9.0.318
       - name: Restore solution
         run: dotnet restore DyeHouseERP/DyeHouseERP.sln
+      - name: Build solution (Release)
+        run: dotnet build DyeHouseERP/DyeHouseERP.sln --configuration Release --no-restore
       - name: Run unit tests
-        run: dotnet test DyeHouseERP/tests/DyeHouseERP.UnitTests/DyeHouseERP.UnitTests.csproj --configuration Release --no-restore
+        run: dotnet test DyeHouseERP/tests/DyeHouseERP.UnitTests/DyeHouseERP.UnitTests.csproj --configuration Release --no-build --no-restore
+
+  integration:
+    name: Integration tests (real SQL Server)
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          # Protects a throwaway container that lives for one CI job; it is not a deployment
+          # credential and nothing outside this file uses it.
+          MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # The suite DROPS and recreates this database per test class: never point it at real data.
+      DYEHOUSE_TEST_CONNECTION: "Server=127.0.0.1,1433;Database=DyeHouseERP_IntegrationTests;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Connect Timeout=30;"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.318
+      - name: Wait for SQL Server
+        # The runner starts the step as soon as the container is running, not when it is ready: the
+        # port opens first and the engine accepts logins a little later.
+        run: |
+          for _ in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null; then
+              echo "SQL Server port 1433 is open"
+              break
+            fi
+            sleep 2
+          done
+          sleep 20
+      - name: Integration tests
+        run: >-
+          dotnet test DyeHouseERP/tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj
+          --nologo
