@@ -150,7 +150,8 @@ public class TransferToNextStageCommandHandler : IRequestHandler<TransferToNextS
 
         if (!nextStage.IsActive)
             throw new DomainException($"Stage '{nextStage.Name}' is inactive and cannot be selected.");
-        // A Job Order may take a PRINTING stage more than once: one execution per drawing, each with
+        // الطباعة is a separate, repeatable printing RUN - not one of the twenty-one approved operations -
+        // so a Job Order may take it more than once: one execution per drawing, each with
         // its own drawing number and its own recorded quantities (spec sections 19-22). The ability is
         // derived from the stage's OWN semantics - a stage that requires a drawing number - so no new
         // capability flag is introduced, and it stays the same transfer workflow every other stage uses:

@@ -54,17 +54,32 @@ public class ProductionStageSeedTests
     }
 
     [Fact]
-    public async Task Seeder_IsIdempotent_AndPreservesTwentyOneStagesPlusPrinting()
+    public async Task Seeder_SeedsTheTwentyOneOperations_PlusTheSeparatePrintingRun()
     {
         await using var db = NewDb();
 
         await ProductionStageSeeder.SeedAsync(db, NullLogger.Instance);
         await ProductionStageSeeder.SeedAsync(db, NullLogger.Instance); // re-run must not duplicate
 
-        (await db.ProductionStageDefinitions.CountAsync()).Should().Be(22);
-        var printing = await db.ProductionStageDefinitions.SingleAsync(s => s.Code == "PRINTING");
-        printing.RequiresDrawingNumber.Should().BeTrue();
-        printing.Name.Should().Be("الطباعة");
+        var stages = await db.ProductionStageDefinitions.AsNoTracking().ToListAsync();
+
+        // الطباعة is a separate printing run, never operation #22: the approved list keeps its
+        // twenty-one positional codes, and the run is the only row outside it.
+        var operations = stages.Where(s => s.Code.StartsWith("PS")).ToList();
+        operations.Should().HaveCount(ProductionStageSeeder.ApprovedOperationCount);
+        operations.Select(s => s.Sequence).Should().BeEquivalentTo(Enumerable.Range(1, 21));
+        operations.Should().NotContain(s => s.Code == ProductionStageSeeder.PrintingRunCode,
+            "a printing run is not a numbered operation");
+
+        var printing = stages.Single(s => s.Code == ProductionStageSeeder.PrintingRunCode);
+        printing.Name.Should().Be(ProductionStageSeeder.PrintingRunName);
+        printing.RequiresDrawingNumber.Should().BeTrue("a printing run is the only row that names a drawing");
+        stages.Single(s => s.RequiresDrawingNumber).Id.Should().Be(printing.Id);
+        printing.IsFormationStage.Should().BeFalse("a run is never the route's start");
+        printing.IsReadyGoodsStage.Should().BeFalse("a run is never the route's end");
+
+        stages.Should().HaveCount(ProductionStageSeeder.ApprovedOperationCount + 1,
+            "the twenty-one operations plus the separate printing run, seeded once");
     }
 
     [Fact]

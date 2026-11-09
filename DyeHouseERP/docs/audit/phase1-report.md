@@ -229,7 +229,7 @@ Base controllers all carry a class-level `[Authorize]`; each action carries its 
 
 | Seeder | Content |
 |---|---|
-| `ProductionStageSeeder` | 21 Arabic stage names (`استلام`, `التشكيل`, `الجاهز`, `الجيت`, `الرام التثبيت`, `الرام التجهيز`, `الفرادة`, `اللف`, `انكماش وتكسير`, `بيتش`, `روتاري`, `سوفلينا`, `غسيل سوفلينا`, `عصارة مفتوح`, `عصارة مقفول`, `كسترا`, `كلندر`, `كومباكتور`, `مثبت حراري`, `مثبت مائي`, `مجفف`) coded `PS001…`, plus `PRINTING / الطباعة` with `requiresDrawingNumber: true`. `التشكيل` → formation stage; `الجاهز` → ready-goods stage. |
+| `ProductionStageSeeder` | 21 Arabic stage names (`استلام`, `التشكيل`, `الجاهز`, `الجيت`, `الرام التثبيت`, `الرام التجهيز`, `الفرادة`, `اللف`, `انكماش وتكسير`, `بيتش`, `روتاري`, `سوفلينا`, `غسيل سوفلينا`, `عصارة مفتوح`, `عصارة مقفول`, `كسترا`, `كلندر`, `كومباكتور`, `مثبت حراري`, `مثبت مائي`, `مجفف`) coded `PS001…` — these are the twenty-one approved operations. `PRINTING / الطباعة` is seeded separately as a repeatable **printing run**, not operation #22 (its own stable code, never `PS022`) with `requiresDrawingNumber: true`. `التشكيل` → formation stage; `الجاهز` → ready-goods stage. |
 | `MachineSeeder` | machines per stage mapping (`PS004` الجيت ×15, `PS005` ×4, `PS006` ×4, `PS020` ×2, `PS019` ×1), codes `MC001…` |
 | `ProductionShiftSeeder` | `SHIFT-1` الوردية الأولى, `SHIFT-2`, `SHIFT-3` |
 | `WarehouseSeeder` / `PurchaseUnitSeeder` | default warehouses and purchase units |

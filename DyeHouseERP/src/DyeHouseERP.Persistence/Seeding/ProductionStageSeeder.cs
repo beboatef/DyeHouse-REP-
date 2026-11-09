@@ -11,6 +11,14 @@ namespace DyeHouseERP.Persistence.Seeding;
 /// is a stage row: the "اعادة" (redo) and "وردية" (shift) variants are deliberately not
 /// seeded (spec sections 18 and 54).
 ///
+/// الطباعة (PRINTING) is NOT one of those twenty-one operations. It is a SEPARATE,
+/// REPEATABLE PRINTING RUN recorded against a Job Order - one execution per drawing, each
+/// carrying its own drawing number - so it is seeded under its own stable code
+/// (<see cref="PrintingRunCode"/>, deliberately never <c>PS022</c>) and it never counts
+/// towards <see cref="ApprovedOperationCount"/>. The approved operations are run once each
+/// per order and carry no drawing number; the printing run is the only row that may repeat
+/// and the only row that demands one.
+///
 /// These are not a mandatory route. Only two stages carry a route marker: التشكيل
 /// (every Job Order starts there) and الجاهز (the stage that moves output to Ready
 /// Goods). Every other stage is simply available for the operator to select at transfer
@@ -62,6 +70,16 @@ public static class ProductionStageSeeder
     /// </summary>
     public static int ApprovedOperationCount => StageNames.Length;
 
+    /// <summary>
+    /// Stable code of the separate printing run. Deliberately NOT a position code: the
+    /// printing run is not operation number twenty-two, and adding or renaming it must never
+    /// renumber the approved twenty-one.
+    /// </summary>
+    public const string PrintingRunCode = "PRINTING";
+
+    /// <summary>The printing run's name. It is a run, not one of the approved operations.</summary>
+    public const string PrintingRunName = "الطباعة";
+
     public static async Task SeedAsync(
         ApplicationDbContext db, ILogger logger, CancellationToken cancellationToken = default)
     {
@@ -98,11 +116,16 @@ public static class ProductionStageSeeder
             sequence++;
         }
 
-        // Separate stable code: adding Printing never renumbers the original 21 operations.
-        if (!existingCodes.Contains("PRINTING"))
+        // The printing run is seeded AFTER the approved list and under its own code, so it is
+        // never mistaken for operation #22 and the twenty-one keep their positional codes. Its
+        // Sequence is display order only, like every other stage's - it imposes no route and is
+        // copied onto an execution only for ordering. What makes it a run rather than an
+        // operation is behaviour, not a number: it is the only stage that demands a drawing
+        // number, and therefore the only one the transfer workflow lets a Job Order repeat.
+        if (!existingCodes.Contains(PrintingRunCode))
         {
             db.ProductionStageDefinitions.Add(new ProductionStageDefinition(
-                "PRINTING", "الطباعة", sequence, "seed", requiresDrawingNumber: true));
+                PrintingRunCode, PrintingRunName, sequence, "seed", requiresDrawingNumber: true));
             added++;
         }
 

@@ -417,11 +417,11 @@ public class SelectableStartingStageTests
     [Fact]
     public async Task StartingAtAStageThatRequiresADrawingNumber_IsRefusedByTheExistingDomainRule()
     {
-        // LIMITATION (reported, not invented): the printing operation DEMANDS a drawing number, and
-        // the reprocess/return commands carry none, so the domain refuses to activate it as a starting
-        // stage - loudly, instead of starting the job with a missing drawing number. Where that number
-        // would come from at reprocess time is an open business decision, so this sub-case is left
-        // blocked rather than guessed at.
+        // RESOLVED: الطباعة is a separate, repeatable printing run, not one of the twenty-one
+        // operations, so a route never STARTS at it. The reprocess/return commands carry no drawing
+        // number and a print run may never borrow another order's, so the domain refuses this starting
+        // stage loudly instead of starting a job with a missing (or borrowed) number. That refusal is
+        // the model working, not a gap.
         var scene = Seed();
         using var db = NewDb();
 
