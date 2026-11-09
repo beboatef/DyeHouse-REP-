@@ -1,3 +1,4 @@
+using DyeHouseERP.Application.Common;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Application.Deliveries.DTOs;
@@ -190,7 +191,7 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
                 // against, and null when the recorded streams would make it negative - that means the
                 // figures overlap or the original quantity is understated, which is a data problem and not
                 // a waste figure to print on a permit.
-                CalculatedWasteKg = WasteKg(originalKg, producedKg, scrapsKg, secondKg),
+                CalculatedWasteKg = WasteMath.Kg(originalKg, producedKg, scrapsKg, secondKg),
                 DrawingNumbers = stages.Where(s => s.RequiresDrawingNumber && s.DrawingNumber != null)
                     .Select(s => s.DrawingNumber!).Distinct().ToList(),
                 LineNotes = line.Notes
@@ -227,19 +228,4 @@ public class GetDeliveryStatementQueryHandler : IRequestHandler<GetDeliveryState
         return list.Count == 0 || list.All(v => v is null) ? null : list.Sum(v => v ?? 0m);
     }
 
-    /// <summary>
-    /// waste = original raw KG - ready goods KG - scraps/separates KG - second grade KG.
-    ///
-    /// KILOGRAMS ONLY, deliberately: the waste is a weight, the metre figures on the same lines are a
-    /// length, and there is no conversion between the two anywhere in this system - so there is no
-    /// "metre waste" and nothing is inferred to produce one. Null when the KG streams are missing, or when
-    /// the difference would be negative (an impossible "waste" is not printed - see the class documentation).
-    /// </summary>
-    private static decimal? WasteKg(decimal? original, decimal? readyGoods, decimal? scraps, decimal? secondGrade)
-    {
-        if (original is null || readyGoods is null) return null;
-
-        var waste = original.Value - readyGoods.Value - (scraps ?? 0m) - (secondGrade ?? 0m);
-        return waste < 0m ? null : waste;
-    }
 }

@@ -151,6 +151,20 @@ public class ReportsController : ControllerBase
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "negative-stock-overrides.xlsx");
     }
 
+    /// <summary>
+    /// الهالك report (approved policy): waste is a COMPUTED LOSS, never a posted balance, so this endpoint
+    /// reads only - it creates no ledger row and no warehouse balance. Each order's waste is derived from
+    /// its original raw weight minus first grade, second grade and separates, using the same definition
+    /// the delivery statement prints.
+    /// </summary>
+    [HttpGet("waste")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsView)]
+    [ProducesResponseType(typeof(WasteReportDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<WasteReportDto>> GetWasteReport(
+        [FromQuery] Guid? customerId, [FromQuery] Guid? productionOrderId,
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to)
+        => Ok(await _mediator.Send(new GetWasteReportQuery(customerId, productionOrderId, from, to)));
+
     private async Task<(List<string> Headers, List<object?[]> Rows)> BuildNegativeStockReportDataAsync(DateTime? from, DateTime? to)
     {
         var items = await _mediator.Send(new GetNegativeStockOverridesQuery(from, to));
