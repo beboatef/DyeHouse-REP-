@@ -12,6 +12,9 @@ logs/
 node_modules/
 dist/
 *.tsbuildinfo
+
+## On-demand Puppeteer install for the UI smoke scripts (`npm run smoke:install`)
+tools/.puppeteer/
 .env
 .env.local
 

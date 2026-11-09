@@ -8,9 +8,11 @@
  * tab via ?tab= and re-checks, and additionally CLICKS the buttons to prove
  * they actually fire a request to a real endpoint rather than doing nothing.
  *
- * Run: node tools/ui-smoke-tabs.js
+ * Run: cd src/DyeHouseERP.Web && npm run smoke:tabs
  */
-const puppeteer = require("/tmp/uitest/node_modules/puppeteer");
+const { loadPuppeteer } = require("./puppeteer-loader");
+
+const puppeteer = loadPuppeteer();
 
 const BASE = process.env.SMOKE_BASE || "http://127.0.0.1:5173";
 

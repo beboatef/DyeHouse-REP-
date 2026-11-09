@@ -11,9 +11,11 @@
  * The API is still down, so lists stay empty and the console fills with
  * connection errors. Those are counted separately and are not UI failures.
  *
- * Run: node tools/ui-smoke-authed.js
+ * Run: cd src/DyeHouseERP.Web && npm run smoke:authed
  */
-const puppeteer = require("/tmp/uitest/node_modules/puppeteer");
+const { loadPuppeteer } = require("./puppeteer-loader");
+
+const puppeteer = loadPuppeteer();
 
 const BASE = process.env.SMOKE_BASE || "http://127.0.0.1:5173";
 
