@@ -11,10 +11,10 @@ The customer owns the fabric; the factory receives it, inspects it, processes it
 | Backend | ASP.NET Core, .NET 9, CQRS via MediatR, FluentValidation |
 | Architecture | Clean Architecture: Domain → Application → Infrastructure / Persistence → API |
 | Data | EF Core 9 + SQL Server (append-only ledger tables, no stored balance columns) |
-| Frontend | React 19 + TypeScript + Vite + Tailwind, TanStack Query/Router |
-| i18n | Arabic (RTL, default) + English (LTR) — `Web/src/i18n/index.tsx`, 557/557 key parity |
+| Frontend | React 19 + TypeScript + Vite + Tailwind, TanStack Query + React Router |
+| i18n | Arabic (RTL, default) + English (LTR) — `Web/src/i18n/index.tsx`, 1090/1090 key parity |
 | Reports | PDF (QuestPDF) + Excel (ClosedXML) export on every list/report; printable single documents |
-| Auth | JWT, per-user granular permissions (95 constants, server-enforced on every action), audit log |
+| Auth | JWT, per-user granular permissions (118 constants, server-enforced on every action), audit log |
 
 ## Terminology
 
@@ -65,7 +65,7 @@ tools/                            structural verification sweeps + headless UI s
 - **Reversals, not edits.** Cancelling a delivered delivery or issued invoice posts an equal-and-opposite row referencing the original; finalized documents are locked (`AuditableEntity.Lock()`).
 - **Optimistic concurrency.** Transactional entities carry EF `[Timestamp]` `RowVersion` tokens (16 tokens across 15 entity files); `DbUpdateConcurrencyException` maps to HTTP 409 CONCURRENT_UPDATE.
 - **Global stock lock.** Allocation/issue flows serialize through `IAllocationLockService` (`sp_getapplock`, key `Stock:{warehouse}:{item}:{customer}:{product}:{meter}`) instead of relying on row locks; lock timeouts map to HTTP 409 LOCK_TIMEOUT.
-- **Server-enforced permissions.** 95 permission constants (`Domain/Common/Permissions.cs`); every controller action carries its own `[Authorize]` policy; the Users screen mirrors the full list. Deactivated users / changed permissions are rejected on already-issued tokens by a live session check.
+- **Server-enforced permissions.** 118 permission constants (`Domain/Common/Permissions.cs`); every controller action carries its own `[Authorize]` policy; the Users screen mirrors the full list. Deactivated users / changed permissions are rejected on already-issued tokens by a live session check.
 - **Everything is audited.** `AuditSaveChangesInterceptor` records every Create/Update/Delete plus login events.
 - **Numbering engine.** Sequential document numbers generated through `sp_getapplock` (`SqlDocumentNumberGenerator`) — safe under concurrency.
 - **Hardened auth.** JWT with no development fallback key (`JwtKeyValidator` rejects placeholder keys), login throttling middleware (case-insensitive, 4 KB body cap), forwarded headers only from trusted proxies.
@@ -112,9 +112,40 @@ dotnet ef migrations add InitialCreate \
 dotnet run --project src/DyeHouseERP.API
 ```
 
-Swagger UI opens at `https://localhost:7100/swagger`. In Development the API applies migrations and seeds document-numbering sequences, default warehouses, and a default admin login (`admin` / `Admin@12345`, created by `UserSeeder` only when no user exists — change the password immediately after first login).
+Swagger UI opens at `https://localhost:7100/swagger`. In Development the API applies migrations and seeds document-numbering sequences, default warehouses, purchase units, production stages, machines and shifts, plus a default admin login (`admin` / `Admin@12345`, created by `UserSeeder` only when no user exists — change the password immediately after first login).
 
-> **Production note.** `Program.cs` applies migrations on startup for development convenience; in production prefer running migrations as an explicit deploy step and do not rely on the Development seeder.
+### 1b. First run on a production database
+
+Every environment runs the same bootstrap (`src/DyeHouseERP.API/Startup/DatabaseBootstrap.cs`): **schema → master data → first administrator**. Prepare the database as an explicit deploy step — it exits without starting the web server:
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Production
+export ConnectionStrings__DefaultConnection='Server=<host>;Database=DyeHouseERP;User Id=<login>;Password=<pw>;TrustServerCertificate=True;'
+export Jwt__Key='<64 random characters>'
+export Bootstrap__AdminUsername='<the first admin login>'
+export Bootstrap__AdminPasswordFile=/run/secrets/dyehouse-admin   # or Bootstrap__AdminPassword='<12+ chars>'
+
+dotnet run --project src/DyeHouseERP.API -c Release -- --bootstrap
+
+unset Bootstrap__AdminUsername Bootstrap__AdminPassword Bootstrap__AdminPasswordFile
+dotnet run --project src/DyeHouseERP.API -c Release      # normal start, without --bootstrap
+```
+
+What `--bootstrap` guarantees:
+
+- **Schema** — applies the pending EF migrations (and falls back to creating it from the model only if the repository ever ships no migration).
+- **Master data** — document numbering, the four warehouses `WH-RAW` / `WH-RDY` / `WH-MAT` / `WH-SUP`, purchase units, production stages, machines and shifts. Every seeder inserts only what is missing; nothing an administrator changed is overwritten.
+- **First administrator** — created **only** while the `Users` table is empty, **only** from credentials you supply. There is no default production password, the password is never logged, and once any user exists the step is skipped permanently — so leaving the variables in the environment cannot add another account later. The password must be at least 12 characters and must not be the development default.
+- On a missing credential the `--bootstrap` run **fails** with instructions instead of leaving a database nobody can sign into; during a normal (non-`--bootstrap`) start the same condition is logged as an error and the API still comes up.
+
+Boot-time behaviour, when a deployment needs it different:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Database:MigrateOnStartup` | on in Development, **off** in Production | apply migrations on every start (handy for a single-instance deployment) |
+| `Database:SeedMasterDataOnStartup` | on in Development **and** Production | ensure the master data on every start (idempotent) |
+
+With `MigrateOnStartup` off, a start against a database that has no schema stops the API with a message naming `--bootstrap`, instead of failing on the first query. The `Testing` environment and EF design-time tooling run none of the bootstrap.
 
 ### 2. Frontend
 
@@ -154,10 +185,12 @@ DYEHOUSE_TEST_CONNECTION="Server=localhost,1433;Database=DyeHouseERP_Integration
   dotnet test tests/DyeHouseERP.IntegrationTests
 ```
 
+CI (`.github/workflows/ci.yml`) runs the same commands on every push and pull request: the backend build plus the 1007 domain tests, the integration suite against a real SQL Server service container, and the frontend typecheck, lint, build, i18n parity and the structural sweeps in `tools/`. A plain `dotnet test DyeHouseERP.sln` locally still reports the integration tests as failures unless `DYEHOUSE_TEST_CONNECTION` is set — run the unit test project on its own when no SQL Server is available.
+
 ## Verification performed in this repository
 
 - `dotnet build --configuration Release` — 0 errors / 0 warnings from project code.
-- `dotnet test tests/DyeHouseERP.UnitTests` — **133/133 passing**.
+- `dotnet test tests/DyeHouseERP.UnitTests` — **1007/1007 passing**.
 - Integration tests compile; they require a reachable SQL Server and cannot run in this repo's dev environment. **No SQL Server integration testing has been performed here.**
 - `dotnet ef migrations has-pending-model-changes` — clean (model snapshot in sync).
 - Frontend: `npx tsc -b --noEmit` — clean.
@@ -165,8 +198,8 @@ DYEHOUSE_TEST_CONNECTION="Server=localhost,1433;Database=DyeHouseERP_Integration
   - `node tools/wiring-sweep.js` — every UI download/import call resolves to a real controller action; no action lacks a permission policy (only login and public company settings are intentionally anonymous); no duplicate routes.
   - `node tools/duplicate-sweep.js` — no duplicate permission values, i18n keys, entity names, or indexes; `DbSet`s match the persistence interface in both directions.
   - `node tools/hooks-check.js` — TypeScript-AST check for React rule violations a compiler misses (hooks in branches/loops/callbacks, hook-name shadowing).
-  - `node tools/ui-smoke.js` / `ui-smoke-tabs.js` — headless-Chromium pass over the real routes (mount, RTL/LTR flip, export/import controls), counting backend-less API failures separately.
-- i18n: both dictionaries in `Web/src/i18n/index.tsx` at **557/557 key parity**. Some pages still carry inline Arabic literals alongside the dictionary; completing that extraction is mechanical work, not new architecture.
+  - `node tools/ui-smoke.js` / `ui-smoke-tabs.js` — headless-Chromium pass over the real routes (mount, RTL/LTR flip, export/import controls), counting backend-less API failures separately. Puppeteer is deliberately not a project dependency: the script resolves it from `$PUPPETEER_DIR`, `/tmp/uitest` or the local `node_modules`, uses `$PUPPETEER_EXECUTABLE_PATH` / `$CHROME_PATH` when the browser lives elsewhere, and exits with code 2 and the install commands when either is missing (instead of a stack trace).
+- i18n: both dictionaries in `Web/src/i18n/index.tsx` at **1090/1090 key parity**. Some pages still carry inline Arabic literals alongside the dictionary; completing that extraction is mechanical work, not new architecture.
 
 ## Known operational notes
 

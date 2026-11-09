@@ -2,7 +2,7 @@
 #
 # Runs the DyeHouseERP test suites against a REAL SQL Server.
 #
-# The integration suite (33 tests, including the H7 concurrency ones) owns the
+# The integration suite (34 tests, including the H7 concurrency ones) owns the
 # database it is pointed at: CustomWebApplicationFactory does
 # EnsureDeletedAsync() + EnsureCreatedAsync() per test class. Never point this
 # at a database whose data matters.

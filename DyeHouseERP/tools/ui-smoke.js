@@ -1,10 +1,16 @@
 /**
  * Headless-browser smoke test against the running preview.
  *
- * Puppeteer lives in /tmp (see the header note in the runbook), not in the
- * project, so package.json is untouched:
+ * Puppeteer lives OUTSIDE the project (it downloads a browser, so package.json stays untouched).
+ * Resolved from, in order: $PUPPETEER_DIR, /tmp/uitest, the local node_modules.
  *     mkdir -p /tmp/uitest && cd /tmp/uitest && npm i puppeteer@23
  *     node tools/ui-smoke.js
+ *
+ * The browser binary: an explicit $PUPPETEER_EXECUTABLE_PATH / $CHROME_PATH wins; otherwise the
+ * Chrome that puppeteer downloaded for its pinned version is used. "Could not find Chrome (ver. X)"
+ * means the two are out of step - install the matching one with
+ *     cd /tmp/uitest && npx puppeteer browsers install chrome
+ * Either requirement missing exits with code 2 and the command to run, never a raw stack trace.
  *
  * The backend API is NOT running in this environment (no SQL Server), so every
  * /api call legitimately fails. The point of this test is to catch defects in
@@ -13,7 +19,38 @@
  * to nothing. Failed /api requests are counted and reported separately, never
  * treated as UI failures.
  */
-const puppeteer = require("/tmp/uitest/node_modules/puppeteer");
+const path = require("path");
+
+const PUPPETEER_HINT = [
+  "Puppeteer is not installed, so the UI smoke test cannot run.",
+  "Install it once, outside the repository so package.json stays untouched:",
+  "  mkdir -p /tmp/uitest && cd /tmp/uitest && npm i puppeteer@23",
+  "If it lives somewhere else, point PUPPETEER_DIR at that folder."
+].join("\n");
+
+function loadPuppeteer() {
+  const candidates = [
+    process.env.PUPPETEER_DIR ? path.join(process.env.PUPPETEER_DIR, "node_modules", "puppeteer") : null,
+    "/tmp/uitest/node_modules/puppeteer",
+    "puppeteer"
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      return require(candidate);
+    } catch {
+      // Try the next location; the message below names all of them.
+    }
+  }
+
+  console.error(PUPPETEER_HINT);
+  process.exit(2);
+}
+
+const puppeteer = loadPuppeteer();
+
+/** Set only when the caller names the binary; otherwise puppeteer uses the Chrome it installed. */
+const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || undefined;
 
 const BASE = process.env.SMOKE_BASE || "http://127.0.0.1:5173";
 
@@ -34,7 +71,7 @@ const ROUTES = [
   { path: "/treasury", name: "Treasury" },
   { path: "/checks", name: "Checks" },
   { path: "/formation-requests", name: "Formation Requests" },
-  { path: "/external-releases", name: "External Processing" },
+  { path: "/raw-external-releases", name: "External Processing" },
   { path: "/customer-transfers", name: "Customer Transfers" },
   { path: "/stock-adjustments", name: "Stock Adjustments" },
   { path: "/material-sales", name: "Material Sales" },
@@ -64,6 +101,7 @@ const isFailure = (type, text) =>
 (async () => {
   const browser = await puppeteer.launch({
     headless: "new",
+    ...(executablePath ? { executablePath } : {}),
     protocolTimeout: 180000,
     args: [
       "--no-sandbox",
@@ -73,6 +111,17 @@ const isFailure = (type, text) =>
       // connection and the run takes minutes instead of seconds.
       "--host-resolver-rules=MAP localhost 127.0.0.1, EXCLUDE 127.0.0.1"
     ]
+  }).catch((error) => {
+    console.error(
+      [
+        "Could not start Chrome, so the UI smoke test cannot run.",
+        `  ${String(error.message).split("\n")[0]}`,
+        "Install the browser that matches the installed puppeteer:",
+        "  cd /tmp/uitest && npx puppeteer browsers install chrome",
+        "or point PUPPETEER_EXECUTABLE_PATH / CHROME_PATH at an existing Chrome binary."
+      ].join("\n")
+    );
+    process.exit(2);
   });
 
   let totalFailures = 0;
