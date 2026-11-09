@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Inventory.Queries;
 using DyeHouseERP.Application.Reports.DTOs;
 using DyeHouseERP.Application.ReadyGoods.Queries;
 using DyeHouseERP.Application.RawReceipts.Queries;
@@ -97,34 +98,119 @@ public class ReportsController : ControllerBase
     }
 
     /// <summary>
-    /// Warehouse balances report (spec sections 18 + 30) as Excel or PDF: the live
-    /// remaining quantity per raw-receipt message line, plus the ready-goods balance
-    /// per job order. Both are summed from the ledgers, never from a stored balance.
+    /// Warehouse balances report (spec sections 18 + 30 + 48) as Excel or PDF: EVERY stock warehouse
+    /// separately, each read from its OWN ledger, followed by a total for that warehouse and a grand
+    /// total that never mixes two ledgers into one figure.
+    ///
+    /// The rows come from the same traceability read the balances screen uses - one row per balance,
+    /// with its warehouse - so the report cannot disagree with the screen, and no figure is stored or
+    /// cached. A warehouse holding stock of one receipt message or job order keeps its own row: the
+    /// warehouse is part of the balance's identity, never a label printed next to a combined total.
+    /// KG and Meter stay in their own columns, and materials (which have their own unit) are totalled per
+    /// unit rather than added into the fabric figures.
     /// </summary>
     [HttpGet("warehouse-balances/export")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportWarehouseBalances([FromQuery] Guid? customerId,
-        [FromQuery] string format = "excel")
+        [FromQuery] Guid? warehouseId, [FromQuery] string format = "excel")
     {
-        var messages = await _mediator.Send(new GetRawMessagesQuery(customerId, null, true));
-        var ready = await _mediator.Send(new GetReadyGoodsBalanceQuery(customerId));
-
-        var headers = new[] { "Kind", "Reference", "Customer", "Item", "Warehouse / Job order", "Balance KG", "Balance M" };
+        var headers = new[]
+        {
+            "Warehouse", "Kind", "Reference", "Customer / supplier", "Item / material", "Unit",
+            "Balance KG", "Balance M", "Balance"
+        };
         var rows = new List<object?[]>();
 
-        rows.AddRange(messages.SelectMany(m => m.Lines.Select(l => new object?[]
+        string ScopeLabel(string scope) => scope switch
         {
-            "Raw material", m.MessageNumber, $"{m.CustomerCode} - {m.CustomerName}", $"{l.ItemCode} - {l.ItemName}",
-            m.WarehouseName, l.RemainingKg, l.RemainingMeter
-        })));
+            StockScopes.Ready => "أرصدة المخزن الجاهز",
+            StockScopes.Materials => "أرصدة المواد والكيماويات",
+            StockScopes.Supplies => "أرصدة مستلزمات التشغيل",
+            _ => "أرصدة مخزن الخامات"
+        };
 
-        rows.AddRange(ready.Select(r => new object?[]
+        // Grand totals, kept per ledger and per unit: adding a material's KG to a fabric's KG, or a
+        // material's litres to its kilograms, would be a number with no physical meaning.
+        decimal fabricKg = 0m, fabricMeter = 0m;
+        var hasFabricKg = false; var hasFabricMeter = false;
+        var materialTotals = new Dictionary<string, decimal>(StringComparer.Ordinal);
+
+        foreach (var scope in new[] { StockScopes.Raw, StockScopes.Ready, StockScopes.Materials, StockScopes.Supplies })
         {
-            "Ready goods", r.ProductionOrderNumber, $"{r.CustomerCode} - {r.CustomerName}", $"{r.ItemCode} - {r.ItemName}",
-            r.ProductionOrderNumber, r.RemainingKg, r.RemainingMeter
-        }));
+            var data = await _mediator.Send(new GetStockTraceabilityQuery(
+                Scope: scope, CustomerId: customerId, WarehouseId: warehouseId, OnlyWithBalance: true));
+            if (data.Rows.Count == 0) continue;
 
-        return ExportFileHelper.ToFile(_export, format, "Warehouse Balances", null, headers, rows, "warehouse-balances", "Balances");
+            var isMaterials = data.Scope is StockScopes.Materials or StockScopes.Supplies;
+
+            foreach (var r in data.Rows)
+            {
+                rows.Add(isMaterials
+                    ? new object?[]
+                    {
+                        r.WarehouseName, ScopeLabel(scope), r.MaterialCode, r.SupplierName,
+                        $"{r.MaterialCode} - {r.MaterialName}", r.MaterialUnit, null, null, r.RemainingQuantity
+                    }
+                    : new object?[]
+                    {
+                        r.WarehouseName, ScopeLabel(scope), r.MessageNumber ?? r.OrderNumber,
+                        $"{r.CustomerCode} - {r.CustomerName}", $"{r.ItemCode} - {r.ItemName}",
+                        r.SecondaryUnit is null ? r.BaseUnit : $"{r.BaseUnit} / {r.SecondaryUnit}",
+                        r.RemainingKg, r.RemainingMeter, null
+                    });
+            }
+
+            // A total for EACH warehouse of this ledger - so "the warehouse total" is a figure that
+            // exists in that warehouse, not a share of a combined stock level.
+            foreach (var grp in data.Rows.GroupBy(r => new
+                     {
+                         r.WarehouseId, r.WarehouseName,
+                         Unit = isMaterials ? r.MaterialUnit : null
+                     }))
+            {
+                if (isMaterials)
+                {
+                    var sum = grp.Sum(r => r.RemainingQuantity ?? 0m);
+                    var unit = grp.Key.Unit ?? "—";
+                    rows.Add(new object?[]
+                    {
+                        grp.Key.WarehouseName, $"إجمالي — {ScopeLabel(scope)}", null, null,
+                        $"إجمالي المخزن ({unit})", unit, null, null, sum
+                    });
+                    materialTotals[unit] = materialTotals.GetValueOrDefault(unit) + sum;
+                }
+                else
+                {
+                    var kg = grp.Sum(r => r.RemainingKg ?? 0m);
+                    var meter = grp.Sum(r => r.RemainingMeter ?? 0m);
+                    var kgSeen = grp.Any(r => r.RemainingKg.HasValue);
+                    var meterSeen = grp.Any(r => r.RemainingMeter.HasValue);
+                    rows.Add(new object?[]
+                    {
+                        grp.Key.WarehouseName, $"إجمالي — {ScopeLabel(scope)}", null, null,
+                        "إجمالي المخزن", "KG / M", kgSeen ? kg : null, meterSeen ? meter : null, null
+                    });
+                    if (kgSeen) { fabricKg += kg; hasFabricKg = true; }
+                    if (meterSeen) { fabricMeter += meter; hasFabricMeter = true; }
+                }
+            }
+        }
+
+        if (hasFabricKg || hasFabricMeter)
+            rows.Add(new object?[]
+            {
+                "—", "إجمالي عام", null, null, "إجمالي عام — الأقمشة (كل مخازن القماش)", "KG / M",
+                hasFabricKg ? fabricKg : null, hasFabricMeter ? fabricMeter : null, null
+            });
+
+        foreach (var unit in materialTotals.Keys.OrderBy(k => k, StringComparer.Ordinal))
+            rows.Add(new object?[]
+            {
+                "—", "إجمالي عام", null, null, $"إجمالي عام — المواد ({unit})", unit, null, null,
+                materialTotals[unit]
+            });
+
+        return ExportFileHelper.ToFile(_export, format, "أرصدة المخازن", null, headers, rows, "warehouse-balances", "Balances");
     }
 
     /// <summary>Negative Stock / Balance Override Report (spec section 17).</summary>

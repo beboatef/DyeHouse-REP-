@@ -81,9 +81,12 @@ export default function App() {
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/items" element={<ItemsPage />} />
           <Route path="/warehouses" element={<WarehousesPage />} />
-          {/* One Warehouse module (spec section 14). The individual routes below stay
-              working inside its tabs and for existing deep links. */}
+          {/* One Warehouse module (spec section 14): a DROPDOWN chooses the warehouse, and every
+              balance, movement, item card and report on the page is scoped to it. The id in the URL
+              makes the chosen warehouse shareable and refresh-safe; the individual document routes
+              below stay working for the screens that create and print the documents themselves. */}
           <Route path="/warehouse" element={<WarehouseHubPage />} />
+          <Route path="/warehouse/:warehouseId" element={<WarehouseHubPage />} />
           <Route path="/raw-messages" element={<RawMessagesPage />} />
           <Route path="/raw-external-releases" element={<RawExternalReleasesPage />} />
           <Route path="/customer-transfers" element={<CustomerTransfersPage />} />

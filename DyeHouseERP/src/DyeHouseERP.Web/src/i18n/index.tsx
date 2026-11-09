@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { warehouseEn } from "./warehouse-en";
 
 /**
  * Bilingual Arabic/English UI (spec section 3).
@@ -2336,7 +2337,9 @@ const en: Record<string, string> = {
   "stg.flag.requiresOutputQuantity": "Requires output quantity",
 };
 
-const dictionaries: Record<Lang, Record<string, string>> = { ar, en };
+// English labels for the unified warehouse screen live beside this file; Arabic uses the inline
+// fallbacks the page passes, so neither language can show a raw key.
+const dictionaries: Record<Lang, Record<string, string>> = { ar, en: { ...en, ...warehouseEn } };
 
 interface I18nContextValue {
   lang: Lang;

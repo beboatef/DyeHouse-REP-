@@ -27,12 +27,22 @@ import { useI18n } from "@/i18n";
  *   * drilling into a lot shows exactly that lot's movements WITH the balance as it stood after each one,
  *     which is what proves the total is made of those rows and nothing else.
  */
-export default function StockTraceability({ scope, compact = false }: { scope: StockScope; compact?: boolean }) {
+export default function StockTraceability({ scope, compact = false, warehouseId, lockWarehouse = false }: {
+  scope: StockScope;
+  compact?: boolean;
+  /**
+   * The warehouse this screen was opened FOR: it travels to the query, the export and the drill-down,
+   * so everything shown belongs to that warehouse and not to a cosmetic filter over all of them.
+   */
+  warehouseId?: string;
+  /** Hide the warehouse picker - the warehouse is chosen once, above this screen, not re-filtered here. */
+  lockWarehouse?: boolean;
+}) {
   const { t } = useI18n();
   const navigate = useNavigate();
 
   const [filters, setFilters] = useState({
-    customerId: "", itemId: "", materialId: "", warehouseId: "",
+    customerId: "", itemId: "", materialId: "", warehouseId: warehouseId ?? "",
     documentNumber: "", kind: "", from: "", to: "",
     onlyWithBalance: false, includeDelivered: true
   });
@@ -128,8 +138,9 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
   const lotOf = (row: StockTraceRow): LotCardIdentity => (isMaterials
     ? { materialId: row.materialId ?? undefined, warehouseId: row.warehouseId ?? undefined }
     : isRaw
-      ? { rawMessageId: row.rawMessageId ?? undefined, itemId: row.itemId || undefined }
-      : { productionOrderId: row.productionOrderId ?? undefined, itemId: row.itemId || undefined });
+      // The warehouse travels with the identity: a balance is always one warehouse's balance.
+      ? { rawMessageId: row.rawMessageId ?? undefined, itemId: row.itemId || undefined, warehouseId: row.warehouseId ?? undefined }
+      : { productionOrderId: row.productionOrderId ?? undefined, itemId: row.itemId || undefined, warehouseId: row.warehouseId ?? undefined });
 
   const openLot = (row: StockTraceRow) => setLot(lotOf(row));
 
@@ -281,13 +292,17 @@ export default function StockTraceability({ scope, compact = false }: { scope: S
           </div>
         )}
 
-        <div>
-          <label className="field-label">{t("wh.master", "المخزن")}</label>
-          <Select value={filters.warehouseId} onChange={(e) => setFilters({ ...filters, warehouseId: e.target.value })}>
-            <option value="">{t("common.all", "الكل")}</option>
-            {(warehouses ?? []).map((w) => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
-          </Select>
-        </div>
+        {/* A screen opened for ONE warehouse does not offer to widen itself to all of them: the
+            warehouse is chosen above, and every figure here belongs to it. */}
+        {!lockWarehouse && (
+          <div>
+            <label className="field-label">{t("wh.master", "المخزن")}</label>
+            <Select value={filters.warehouseId} onChange={(e) => setFilters({ ...filters, warehouseId: e.target.value })}>
+              <option value="">{t("common.all", "الكل")}</option>
+              {(warehouses ?? []).map((w) => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
+            </Select>
+          </div>
+        )}
 
         <div>
           <label className="field-label">{t("stock.movementKind", "نوع الحركة")}</label>

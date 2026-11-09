@@ -177,11 +177,19 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
         }
 
         // ---- classify every row, then build the movement list with its running balance ----------
-        // The identity of a lot is computed in exactly ONE place and stamped on both the balance row and
-        // every movement of it, so the two can never disagree about which lot a movement belongs to.
+        // The identity of a balance row is computed in exactly ONE place and stamped on both the row and
+        // every movement of it, so the two can never disagree about which balance a movement belongs to.
+        //
+        // The WAREHOUSE is part of that identity. Each warehouse keeps its own balance and its own running
+        // balance: stock of one receipt message (raw) or one job order (ready) that sits in two warehouses
+        // is TWO balances, never one figure named after whichever warehouse happened to come first. This
+        // is a GROUPING key built at read time - it is not a lot number, a roll number or a document
+        // number, it is not stored anywhere, and it changes nothing about how fabric is received, issued,
+        // produced or owned. The identity of what the fabric IS stays: receipt message + item + customer
+        // for raw material, job order + item for ready goods.
         string LotKeyOf(InventoryTransaction t) => isRaw
-            ? $"R|{t.RawMessageId}|{t.ItemId}|{t.CustomerId}"
-            : $"D|{t.ProductionOrderId}|{t.ItemId}";
+            ? $"R|{t.RawMessageId}|{t.ItemId}|{t.CustomerId}|{t.WarehouseId}"
+            : $"D|{t.ProductionOrderId}|{t.ItemId}|{t.WarehouseId}";
 
         var ordered = rows.OrderBy(t => t.TransactionDate).ThenBy(t => t.CreatedAtUtc).ThenBy(t => t.Id).ToList();
         var running = new Dictionary<string, (decimal Kg, decimal Meter)>();
@@ -711,42 +719,19 @@ public class GetStockTraceabilityQueryHandler : IRequestHandler<GetStockTraceabi
 
     // ================================================================= helpers
 
+    // The movement vocabulary lives in ONE place (StockMovementKinds) so that the balance screen, its
+    // export, the printed lot card and the per-warehouse item card can never disagree about what the
+    // same ledger row was.
+
     /// <summary>
     /// What a raw-material ledger row MEANS. The classification is the movement's own document type and
     /// direction - never a screen's assumption - and a compensating row stays a reversal of its original.
     /// </summary>
-    private static string ClassifyRaw(InventoryTransaction t) => t.SourceDocumentType switch
-    {
-        DocumentType.RawReceiptMessage => t.Direction == TransactionDirection.In ? "Received" : "Returned",
-        DocumentType.ProductionOrder => t.Direction == TransactionDirection.Out ? "Issued" : "Returned",
-        DocumentType.RawIssueExternalRelease => t.Direction == TransactionDirection.Out ? "IssuedExternal" : "Returned",
-        DocumentType.CustomerReturn => "Returned",
-        DocumentType.ReadyGoodsRawReturn => "Returned",
-        DocumentType.ProductionOrderPause => "Returned",
-        DocumentType.CustomerTransfer => t.Direction == TransactionDirection.In ? "TransferredIn" : "TransferredOut",
-        DocumentType.StockAdjustment => t.Direction == TransactionDirection.In ? "AdjustedIn" : "AdjustedOut",
-        _ => t.Direction == TransactionDirection.In ? "In" : "Out"
-    };
+    private static string ClassifyRaw(InventoryTransaction t) => StockMovementKinds.Raw(t);
 
-    private static string ClassifyReady(InventoryTransaction t) => t.SourceDocumentType switch
-    {
-        DocumentType.ReadyGoodsTransfer => t.Direction == TransactionDirection.In ? "Produced" : "TransferredOut",
-        DocumentType.Delivery => t.Direction == TransactionDirection.Out ? "Delivered" : "Reversal",
-        DocumentType.ReadyGoodsRawReturn => "Returned",
-        DocumentType.StockAdjustment => t.Direction == TransactionDirection.In ? "AdjustedIn" : "AdjustedOut",
-        _ => t.Direction == TransactionDirection.In ? "In" : "Out"
-    };
+    private static string ClassifyReady(InventoryTransaction t) => StockMovementKinds.Ready(t);
 
-    private static string ClassifyMaterial(MaterialTransaction t) => t.SourceDocumentType switch
-    {
-        DocumentType.PurchaseReceipt => "Received",
-        DocumentType.MaterialIssue => t.Direction == MaterialTransactionDirection.Out ? "Issued" : "Returned",
-        DocumentType.SupplyIssue => t.Direction == MaterialTransactionDirection.Out ? "Issued" : "Returned",
-        DocumentType.MaterialSale => t.Direction == MaterialTransactionDirection.Out ? "Issued" : "Returned",
-        DocumentType.MaterialTransfer => t.Direction == MaterialTransactionDirection.Out ? "TransferredOut" : "TransferredIn",
-        DocumentType.PreparationDilution => t.Direction == MaterialTransactionDirection.Out ? "Issued" : "Received",
-        _ => t.Direction == MaterialTransactionDirection.In ? "Received" : "Issued"
-    };
+    private static string ClassifyMaterial(MaterialTransaction t) => StockMovementKinds.Material(t);
 
     /// <summary>
     /// The units an item is ACTUALLY configured for, as one label (e.g. "KG" or "KG/Meter"). Never a

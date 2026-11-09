@@ -287,9 +287,10 @@ export interface LotCardIdentity {
  */
 const lotCardParams = (scope: StockScope, lot: LotCardIdentity): QueryParams =>
   scope === "raw"
-    ? { rawMessageId: lot.rawMessageId, itemId: lot.itemId }
+    // The warehouse names the balance too: one message held in two warehouses is two cards.
+    ? { rawMessageId: lot.rawMessageId, itemId: lot.itemId, warehouseId: lot.warehouseId }
     : scope === "ready"
-      ? { productionOrderId: lot.productionOrderId, itemId: lot.itemId }
+      ? { productionOrderId: lot.productionOrderId, itemId: lot.itemId, warehouseId: lot.warehouseId }
       : { materialId: lot.materialId, warehouseId: lot.warehouseId };
 
 /**

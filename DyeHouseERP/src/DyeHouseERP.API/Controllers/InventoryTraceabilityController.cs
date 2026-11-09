@@ -59,6 +59,32 @@ public class InventoryTraceabilityController : ControllerBase
             documentNumber, kind, from, to, onlyWithBalance, includeDelivered)));
 
     /// <summary>
+    /// كارت الصنف لمخزن واحد: opening balance, the period's movements, closing balance - read from ONE
+    /// warehouse's ledger. <paramref name="warehouseId"/> is REQUIRED and is applied in the query, not
+    /// on screen, so the card of one warehouse can never contain another warehouse's movement. The item
+    /// (or the material, for the factory-owned ledger) is required too: without it this is a warehouse
+    /// listing, which the balances endpoint already answers.
+    ///
+    /// KG and Meter are returned in their own fields and are never converted into one another; a unit
+    /// the item does not have stays null rather than printing a zero that would read as a measurement.
+    /// READ-ONLY: a card posts nothing and moves no stock.
+    /// </summary>
+    [HttpGet("item-card")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
+    [ProducesResponseType(typeof(ItemCardDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ItemCardDto>> GetItemCard(
+        [FromQuery] Guid warehouseId,
+        [FromQuery] Guid? itemId = null,
+        [FromQuery] Guid? materialId = null,
+        [FromQuery] Guid? customerId = null,
+        [FromQuery] Guid? rawMessageId = null,
+        [FromQuery] Guid? productionOrderId = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+        => Ok(await _mediator.Send(new GetItemCardQuery(
+            warehouseId, itemId, materialId, customerId, rawMessageId, productionOrderId, from, to)));
+
+    /// <summary>
     /// The same balances and movements as an Excel file or a PDF, honouring the same filters - so what
     /// the screen shows is exactly what the report contains (spec section 39).
     /// </summary>
@@ -192,10 +218,12 @@ public class InventoryTraceabilityController : ControllerBase
         // Which identifiers NAME a lot in this warehouse, and which ones are meaningless for it. An
         // identifier the scope does not use is refused instead of ignored: the query would drop it and
         // answer about some other lot entirely.
+        // A balance lives in exactly ONE warehouse, so the warehouse always names a lot - it is accepted
+        // for every scope, not only for materials.
         var identifies = resolvedScope switch
         {
-            StockScopes.Raw => new[] { "rawMessageId", "itemId", "customerId" },
-            StockScopes.Ready => new[] { "productionOrderId", "itemId" },
+            StockScopes.Raw => new[] { "rawMessageId", "itemId", "customerId", "warehouseId" },
+            StockScopes.Ready => new[] { "productionOrderId", "itemId", "warehouseId" },
             _ => new[] { "materialId", "warehouseId" }
         };
         var supplied = new (string Name, Guid? Value)[]
@@ -249,7 +277,9 @@ public class InventoryTraceabilityController : ControllerBase
             {
                 error = "AMBIGUOUS_LOT",
                 message = "This identifier matches more than one independent lot; name the one you want.",
-                disambiguateBy = resolvedScope is StockScopes.Materials or StockScopes.Supplies ? "warehouseId" : "itemId",
+                // The rows differ by item inside the document, or by the warehouse the balance sits in
+                // (one message or job order held in two warehouses is two independent lots).
+                disambiguateBy = data.Rows.Select(r => r.ItemId).Distinct().Count() > 1 ? "itemId" : "warehouseId",
                 lots = data.Rows.Select(r => new
                 {
                     lotKey = r.LotKey,

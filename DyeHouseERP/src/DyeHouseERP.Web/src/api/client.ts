@@ -1863,9 +1863,11 @@ export interface StockTraceRow {
   scope: StockScope;
   /**
    * The identity of THIS balance row, and the key that ties it to its own movements (every movement
-   * carries its row's value). Two rows never share it: a raw lot is (receipt message, item, customer),
-   * a ready lot is (job order, item), a material lot is (material, warehouse). Opaque - compare it,
-   * do not parse it; the readable identity is in the fields below.
+   * carries its row's value). Two rows never share it: a raw lot is (receipt message, item, customer,
+   * warehouse), a ready lot is (job order, item, warehouse), a material lot is (material, warehouse) -
+   * so one document's stock sitting in two warehouses is two balances. Opaque, read-time only: it is not
+   * a lot/roll/document number and nothing about receiving, issuing or owning fabric depends on it.
+   * Compare it, do not parse it; the readable identity is in the fields below.
    */
   lotKey: string;
   itemId: string;
@@ -2008,9 +2010,66 @@ export interface StockTraceabilityFilters {
   includeDelivered?: boolean;
 }
 
+/**
+ * كارت الصنف لمخزن واحد: الرصيد الافتتاحي، حركات الفترة، الرصيد الختامي. The warehouse is part of the
+ * request (not a screen filter), so a card can only ever contain that warehouse's own movements.
+ */
+export interface ItemCard {
+  warehouseId: string;
+  warehouseCode: string;
+  warehouseName: string;
+  warehouseKind: string;
+  scope: StockScope;
+  isMaterials: boolean;
+  itemId: string | null;
+  itemCode: string | null;
+  itemName: string | null;
+  baseUnit: string | null;
+  secondaryUnit: string | null;
+  materialId: string | null;
+  materialCode: string | null;
+  materialName: string | null;
+  materialUnit: string | null;
+  customerId: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  rawMessageId: string | null;
+  productionOrderId: string | null;
+  from: string | null;
+  to: string | null;
+  openingKg: number | null;
+  openingMeter: number | null;
+  openingQuantity: number | null;
+  inKg: number | null;
+  inMeter: number | null;
+  inQuantity: number | null;
+  outKg: number | null;
+  outMeter: number | null;
+  outQuantity: number | null;
+  closingKg: number | null;
+  closingMeter: number | null;
+  closingQuantity: number | null;
+  movements: StockTraceMovement[];
+  movementCount: number;
+  generatedAtUtc: string;
+}
+
+export interface ItemCardFilters {
+  warehouseId: string;
+  itemId?: string;
+  materialId?: string;
+  customerId?: string;
+  rawMessageId?: string;
+  productionOrderId?: string;
+  from?: string;
+  to?: string;
+}
+
 export const InventoryTraceabilityApi = {
   get: (filters: StockTraceabilityFilters) =>
-    api.get<StockTraceability>("/inventory/traceability", { params: filters }).then((r) => r.data)
+    api.get<StockTraceability>("/inventory/traceability", { params: filters }).then((r) => r.data),
+  itemCard: (filters: ItemCardFilters) =>
+    api.get<ItemCard>("/inventory/item-card", { params: filters }).then((r) => r.data)
 };
 
 export const InventoryLedgerApi = {

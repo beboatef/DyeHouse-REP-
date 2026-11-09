@@ -7,7 +7,7 @@ import { useTheme, type Theme } from "@/components/ThemeProvider";
 import RouteFallback from "@/components/RouteFallback";
 import {
   LayoutDashboard, Users, Package, Warehouse,
-  ClipboardList, Layers3, GitBranch, FlaskConical, PackageCheck, Truck, Receipt,
+  ClipboardList, Layers3, GitBranch, PackageCheck, Truck, Receipt,
   Wallet, FileBarChart, ScrollText, UserCog, Settings, LogOut, Factory,
   FormInput, Ruler, BadgeDollarSign, LifeBuoy, Languages, ShieldCheck, PackageOpen,
   ShoppingCart, Banknote, Handshake, ClipboardCheck, Tags, Database,
@@ -55,10 +55,10 @@ const navGroups: NavGroup[] = [
     titleKey: "nav.group.warehouse",
     icon: <Warehouse size={18} />,
     items: [
+      // ONE warehouse entry: the warehouse itself is chosen from a dropdown INSIDE the page, not from
+      // a sidebar link per warehouse. Keeping four links here was how the module kept behaving like
+      // four separate screens over one combined view.
       { to: "/warehouse", labelKey: "nav.warehouseHub", icon: <Warehouse size={16} /> },
-      { to: "/warehouse?tab=ready", labelKey: "nav.readyGoods", icon: <PackageCheck size={16} /> },
-      { to: "/warehouse?tab=materials", labelKey: "nav.materials", icon: <FlaskConical size={16} /> },
-      { to: "/warehouse?tab=supplies", labelKey: "nav.operatingSupplies", icon: <LifeBuoy size={16} /> },
       { to: "/supplies", labelKey: "nav.supplies", icon: <LifeBuoy size={16} /> },
       // المنفصلات sits with the warehouses: a separate is MATERIAL HELD ON SITE, tracked by the
       // warehouse register (it is reprocessed into a new job or scrapped), not a production stage -
