@@ -1,8 +1,9 @@
 import { Suspense, lazy } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
 import RouteFallback from "@/components/RouteFallback";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 /*
  * Route-level code splitting. Every page is its own chunk, fetched when the
@@ -66,12 +67,17 @@ const CustomerReturnsPage = lazy(() => import("@/pages/CustomerReturnsPage"));
 const PriceListsPage = lazy(() => import("@/pages/PriceListsPage"));
 
 export default function App() {
+  // A navigation is the user's own retry: change the key and the boundary clears itself.
+  const location = useLocation();
+
   return (
     /* Outer boundary: covers the standalone routes (/login, /print/*, /scan/*,
-       and the catch-all) plus the shell's own first paint. Pages inside the
-       authenticated group hit the closer boundary in Layout instead, so the
-       sidebar and header never unmount while a page chunk loads. */
-    <Suspense fallback={<RouteFallback />}>
+       and the catch-all) plus the shell's own first paint, so a page that throws
+       while rendering never leaves a white screen. Pages inside the
+       authenticated group also hit the closer boundary in Layout, so there the
+       sidebar and header survive the crash and only the page area is replaced. */
+    <ErrorBoundary resetKey={location.key}>
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth />}>
@@ -146,7 +152,8 @@ export default function App() {
             the authenticated group so a bad link is still recoverable when
             signed out. */}
         <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </Suspense>
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }

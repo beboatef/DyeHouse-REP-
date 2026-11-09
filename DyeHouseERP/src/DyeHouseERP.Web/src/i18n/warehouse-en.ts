@@ -18,6 +18,13 @@ export const warehouseEn: Record<string, string> = {
   "req.failed.notEmpty": "This is not an empty list: the request itself failed, so nothing can be confirmed either way.",
   "req.failed.row": "Could not load the data - this is not an empty list",
   "req.failed.retry": "Try again",
+  // What a page that THREW while rendering says (components/ErrorBoundary.tsx). The Arabic wording
+  // is the t() fallback passed by the component, so only the English side lives here.
+  "error.boundary.title": "This page could not be displayed",
+  "error.boundary.body": "Something failed while rendering this page, and no saved data was lost. The rest of the app still works: try again, open another page, or reload.",
+  "error.boundary.retry": "Try again",
+  "error.boundary.reload": "Reload page",
+  "error.boundary.details": "Technical details",
   "wh.loadFailed": "Could not load the warehouses",
   "wh.movements.failed": "Could not load this warehouse's movements",
   "stock.loadFailed": "Could not load the balances and their movements",

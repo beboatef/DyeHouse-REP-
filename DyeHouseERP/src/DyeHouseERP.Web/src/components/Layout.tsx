@@ -5,6 +5,7 @@ import { SettingsApi } from "@/api/client";
 import { useI18n } from "@/i18n";
 import { useTheme, type Theme } from "@/components/ThemeProvider";
 import RouteFallback from "@/components/RouteFallback";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import {
   LayoutDashboard, Users, Package, Warehouse,
   ClipboardList, Layers3, GitBranch, PackageCheck, Truck, Receipt,
@@ -523,10 +524,14 @@ export default function Layout() {
               {/* Closer boundary than the one in App, on purpose: a lazily
                   loaded page suspends HERE, inside the shell, so the sidebar
                   and header stay mounted and only the page area shows the
-                  fallback. */}
-              <Suspense fallback={<RouteFallback />}>
-                <Outlet />
-              </Suspense>
+                  fallback - and a page that THROWS while rendering is replaced
+                  by its failure card in the same place, leaving the navigation
+                  usable instead of blanking the whole window. */}
+              <ErrorBoundary resetKey={`${location.pathname}${location.search}`}>
+                <Suspense fallback={<RouteFallback />}>
+                  <Outlet />
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
         </main>
