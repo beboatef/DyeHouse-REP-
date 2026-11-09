@@ -86,6 +86,20 @@ Point the API at your server — edit `src/DyeHouseERP.API/appsettings.Developme
 
 (`Trusted_Connection=True` for Windows/LocalDB integrated auth, or `User Id=...;Password=...;` for SQL login.)
 
+**A signing key is mandatory.** `appsettings.json` ships only the literal placeholder
+`CHANGE_ME…`, and `JwtKeyValidator` deliberately rejects it — a key published in a
+repository can never be allowed to sign a token. The API therefore refuses to start
+until a real key is supplied through user secrets (development) or the `Jwt__Key`
+environment variable (any environment):
+
+```bash
+dotnet user-secrets init  --project src/DyeHouseERP.API
+dotnet user-secrets set "Jwt:Key" "<32+ random characters>" --project src/DyeHouseERP.API
+```
+
+`src/DyeHouseERP.API/appsettings.Example.json` is the complete configuration shape with
+placeholder values and no real credentials; copy the keys you need, never the values.
+
 ```bash
 dotnet build
 

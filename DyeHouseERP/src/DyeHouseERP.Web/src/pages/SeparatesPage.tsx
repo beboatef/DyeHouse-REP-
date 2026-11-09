@@ -72,7 +72,7 @@ export default function SeparatesPage() {
       />
       <div className="space-y-3">
         {selectedSeparateIds.length > 0 && (
-          <Card className="p-4">
+          <Card className="card-pad">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium">عدد المنفصلات المحددة: {selectedSeparateIds.length}</span>
               <Select aria-label={t("prod.startingStage", "مرحلة البداية")} value={startingStageId} onChange={(e) => setStartingStageId(e.target.value)} className="min-w-[12rem] max-w-full">
@@ -84,13 +84,13 @@ export default function SeparatesPage() {
               </Button>
               <Button variant="ghost" onClick={() => setSelectedSeparateIds([])}>إلغاء التحديد</Button>
             </div>
-            {reprocessMutation.isError && <p className="text-sm text-red-600 mt-2">تعذر إنشاء أمر إعادة التشغيل. تحقق من رصيد المنفصلات في مخزن الجاهز ثم أعد المحاولة.</p>}
+            {reprocessMutation.isError && <p className="text-sm text-danger-ink mt-2">تعذر إنشاء أمر إعادة التشغيل. تحقق من رصيد المنفصلات في مخزن الجاهز ثم أعد المحاولة.</p>}
           </Card>
         )}
         {isLoading && <Card className="card-pad text-center text-ink-subtle">جارٍ التحميل...</Card>}
         {!isLoading && separates?.length === 0 && <Card className="card-pad text-center text-ink-subtle">لا توجد منفصلات مسجلة بعد</Card>}
         {separates?.map((s) => (
-          <Card key={s.id} className="p-4">
+          <Card key={s.id} className="card-pad">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-sm text-ink-muted">من أمر <span className="ltr-nums font-medium">{s.originalOrderNumber}</span> · مرحلة {s.stageName}</span>
