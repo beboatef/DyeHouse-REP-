@@ -56,6 +56,50 @@ jobs:
           node tools/duplicate-sweep.js
           node tools/permissions-parity-check.cjs
 
+      # The only check that actually RUNS the built app: it catches a crash on mount, an invalid hook
+      # call, an unstyled white screen or a route that resolves to nothing - none of which typechecking
+      # or linting can see. It needs a real browser, so Chrome for Testing is downloaded on demand
+      # here instead of being declared a dependency (that would make every `npm ci` pull ~150 MB).
+      - name: Install the browser for the UI smoke test
+        env:
+          PUPPETEER_CACHE_DIR: ${{ github.workspace }}/DyeHouseERP/tools/.puppeteer/browsers
+        run: |
+          npm run smoke:install
+          # Chrome for Testing needs the same shared libraries Chrome itself does. Asking puppeteer
+          # for them keeps the package list out of this file; the runner image usually already has
+          # them, in which case apt changes nothing.
+          # Best effort: the runner image ships Chrome's libraries already, so a missing apt package
+          # must not fail the job here. If a library really is missing, the smoke step below fails
+          # with the exact command that fixes it.
+          sudo env "PATH=$PATH" "PUPPETEER_CACHE_DIR=$PUPPETEER_CACHE_DIR" \
+            "$(command -v npx)" --prefix ../../tools/.puppeteer puppeteer browsers install chrome --install-deps \
+            || echo "::warning::Chrome's system libraries could not be installed; using the image's own"
+
+      - name: UI smoke test against the production build
+        env:
+          # `vite preview` serves the dist/ the build step just produced, with the same SPA fallback
+          # a deployed host needs, so a deep link such as /warehouse loads the app a user would get.
+          SMOKE_BASE: http://127.0.0.1:4173
+          PUPPETEER_CACHE_DIR: ${{ github.workspace }}/DyeHouseERP/tools/.puppeteer/browsers
+        run: |
+          npx vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/preview.log 2>&1 &
+          preview=$!
+          trap 'kill "$preview" 2>/dev/null || true' EXIT
+
+          # A readiness poll, not a fixed sleep: the server is up when it ANSWERS, and a preview that
+          # never came up fails here with its own log instead of as a browser timeout.
+          for _ in $(seq 1 30); do
+            if curl -fsS "$SMOKE_BASE/login" > /dev/null; then break; fi
+            sleep 1
+          done
+          if ! curl -fsS "$SMOKE_BASE/login" > /dev/null; then
+            echo "vite preview never answered on $SMOKE_BASE"
+            cat /tmp/preview.log
+            exit 1
+          fi
+
+          npm run smoke
+
   backend:
     name: .NET 9 unit tests
     runs-on: ubuntu-latest
