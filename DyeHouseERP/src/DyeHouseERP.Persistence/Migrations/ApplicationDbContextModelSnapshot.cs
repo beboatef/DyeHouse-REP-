@@ -2333,10 +2333,6 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
-                    b.Property<string>("ReadyGoodsCategory")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2353,6 +2349,10 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.Property<Guid?>("RawMessageId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReadyGoodsCategory")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid?>("ReversesTransactionId")
                         .HasColumnType("uniqueidentifier");
@@ -4321,10 +4321,12 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal?>("BaselineKg")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<decimal?>("BaselineMeter")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("datetime2");
@@ -4350,9 +4352,11 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasColumnType("decimal(18,3)");
 
                     b.Property<decimal?>("LossPercentKg")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("LossPercentMeter")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid?>("MachineId")
@@ -5211,6 +5215,10 @@ namespace DyeHouseERP.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -5221,10 +5229,6 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Category")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid>("DestinationRawMessageId")
                         .HasColumnType("uniqueidentifier");
@@ -5334,6 +5338,10 @@ namespace DyeHouseERP.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -5344,10 +5352,6 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Category")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("IsLocked")
                         .HasColumnType("bit");
@@ -5407,14 +5411,14 @@ namespace DyeHouseERP.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductionOrderId", "Category")
-                        .IsUnique()
-                        .HasFilter("[Status] = N'Posted'");
-
                     b.HasIndex("StageExecutionId");
 
                     b.HasIndex("TransferNumber")
                         .IsUnique();
+
+                    b.HasIndex("ProductionOrderId", "Category")
+                        .IsUnique()
+                        .HasFilter("[Status] = N'Posted'");
 
                     b.ToTable("ReadyGoodsTransfers", (string)null);
                 });
@@ -6498,6 +6502,47 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.UserRefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReplacedByTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserRefreshTokens", (string)null);
+                });
+
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.Warehouse", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6781,6 +6826,15 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasOne("DyeHouseERP.Domain.Entities.SupplyIssue", null)
                         .WithMany("Lines")
                         .HasForeignKey("SupplyIssueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.UserRefreshToken", b =>
+                {
+                    b.HasOne("DyeHouseERP.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

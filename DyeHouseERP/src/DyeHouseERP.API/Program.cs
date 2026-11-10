@@ -10,7 +10,9 @@ using DyeHouseERP.Infrastructure;
 using DyeHouseERP.Persistence;
 using DyeHouseERP.Persistence.Numbering;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using DyeHouseERP.API.Health;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
@@ -76,6 +78,18 @@ builder.Services
         // primary-key lookup and runs before the controller, not after.
         options.Events = new JwtBearerEvents
         {
+            // The SPA authenticates with the HttpOnly cookie set by AuthController. A bearer header
+            // still wins when present, so Swagger and non-browser clients are unchanged.
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token) &&
+                    context.Request.Cookies.TryGetValue(DyeHouseERP.API.Auth.AuthCookies.AccessToken, out var cookieToken))
+                {
+                    context.Token = cookieToken;
+                }
+
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var validator = context.HttpContext.RequestServices.GetRequiredService<IUserSessionValidator>();
@@ -158,6 +172,13 @@ builder.Services.AddControllers()
         // back as a number and silently break the UI.
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
+// ---------- Health probes ----------
+// A database the API cannot reach used to be visible only as every request failing. The probe
+// answers it in one anonymous call (see Health/DatabaseHealthCheck.cs); the "ready" tag separates
+// "this box is alive" from "this box can actually serve requests" for an orchestrator.
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" });
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -205,6 +226,14 @@ if (knownProxies.Length > 0)
     app.UseForwardedHeaders(forwardedOptions);
 }
 
+// ---------- Response hardening headers ----------
+// Before the exception middleware, so failures carry the same headers as successes.
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+// ---------- CSRF protection for the cookie session ----------
+// Clears unsafe requests that carry the session cookie but not the readable double-submit token.
+app.UseMiddleware<DyeHouseERP.API.Auth.CsrfProtectionMiddleware>();
+
 // ---------- Global exception handling -> consistent JSON error envelope ----------
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
@@ -219,11 +248,26 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseSerilogRequestLogging();
+if (!app.Environment.IsDevelopment())
+{
+    // HSTS only where HTTPS is real: in development the app is reached over plain http behind the
+    // Vite proxy, and pinning https there would break the local preview.
+    app.UseHsts();
+}
 app.UseHttpsRedirection();
 app.UseCors("DyeHouseERPClients");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// ---------- Health probes ----------
+// Anonymous on purpose: a probe has no credentials, and the check reads no business data.
+// /health is liveness (the process answers); /health/ready includes the database check.
+app.MapHealthChecks("/health").AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+}).AllowAnonymous();
 
 // ---------- Database bootstrap: schema, master data and the first administrator ----------
 // One path for every environment (see Startup/DatabaseBootstrap.cs). This used to be a

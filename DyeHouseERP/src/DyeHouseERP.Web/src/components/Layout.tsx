@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { SettingsApi } from "@/api/client";
+import { AuthApi, SettingsApi } from "@/api/client";
 import { useI18n } from "@/i18n";
 import { useTheme, type Theme } from "@/components/ThemeProvider";
 import RouteFallback from "@/components/RouteFallback";
@@ -229,8 +229,13 @@ export default function Layout() {
     });
   };
 
-  const logout = () => {
-    localStorage.removeItem("dyehouse_token");
+  const logout = async () => {
+    try {
+      // Only the server can expire the HttpOnly session cookie.
+      await AuthApi.logout();
+    } catch {
+      // Even if the call fails, this browser must stop presenting itself as signed in.
+    }
     localStorage.removeItem("dyehouse_user");
     navigate("/login");
   };

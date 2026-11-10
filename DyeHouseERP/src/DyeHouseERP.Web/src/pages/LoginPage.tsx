@@ -14,8 +14,9 @@ import {
 /**
  * Login screen (spec sections 43 + 40).
  *
- * Presentation only: the mutation, the credentials, the token storage and the
- * navigation target are untouched. Every user-facing string now comes from the
+ * Presentation only: the mutation, the credentials and the navigation target are
+ * untouched; the token is no longer stored here because the API now sets it as an
+ * HttpOnly cookie. Every user-facing string now comes from the
  * i18n dictionary in both languages (previously this screen carried hardcoded
  * Arabic literals and had no language switch, so an English user could not
  * switch language before signing in), and the screen carries the same
@@ -37,8 +38,17 @@ export default function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: () => AuthApi.login(username, password),
     onSuccess: (result) => {
-      localStorage.setItem("dyehouse_token", result.token);
-      localStorage.setItem("dyehouse_user", JSON.stringify({ username: result.username, displayName: result.displayName, roles: result.roles }));
+      // The token is NOT stored: the API delivered it as an HttpOnly cookie, which no script (and
+      // therefore no injected script) can read. Only the profile the shell renders is cached.
+      localStorage.setItem(
+        "dyehouse_user",
+        JSON.stringify({
+          username: result.username,
+          displayName: result.displayName,
+          roles: result.roles,
+          expiresAtUtc: result.expiresAtUtc
+        })
+      );
       navigate("/");
     },
     onError: () => setError(t("login.error"))

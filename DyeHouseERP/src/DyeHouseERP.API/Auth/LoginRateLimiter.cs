@@ -50,9 +50,22 @@ public class LoginThrottleOptions
 /// </summary>
 public class LoginRateLimiter
 {
+    /// <summary>
+    /// Hard ceiling on tracked keys. Without it an unauthenticated caller creates one entry per
+    /// (IP, username) pair for free, and the throttle itself becomes the memory-exhaustion vector
+    /// it exists to prevent. A key beyond the ceiling is simply not tracked (its login still fails
+    /// authentication); keys already tracked keep counting.
+    /// </summary>
+    private const int MaxTrackedPairs = 20_000;
+    private const int MaxTrackedIps = 10_000;
+
+    /// <summary>Cleanup cadence - once a minute instead of once per failed request.</summary>
+    private static readonly long EvictionIntervalTicks = TimeSpan.FromMinutes(1).Ticks;
+
     private readonly LoginThrottleOptions _options;
     private readonly ConcurrentDictionary<(string Ip, string Username), FailureRecord> _perPair = new();
     private readonly ConcurrentDictionary<string, IpFailureRecord> _perIp = new();
+    private long _lastEvictionTicksUtc;
 
     private sealed class FailureRecord
     {
@@ -89,32 +102,38 @@ public class LoginRateLimiter
     /// <summary>Records one failed authentication for both dimensions.</summary>
     public void RecordFailure(string ip, string username, DateTime nowUtc)
     {
+        MaybeEvictExpired(nowUtc);
+
         if (_options.MaxFailedAttempts > 0)
         {
             var key = (ip, username);
-            _perPair.AddOrUpdate(
-                key,
-                _ => new FailureRecord { Count = 1, WindowStartUtc = nowUtc, LockedUntilUtc = DateTime.MinValue },
-                (_, record) =>
-                {
-                    if (!IsLive(record.WindowStartUtc, nowUtc))
+            if (_perPair.ContainsKey(key) || _perPair.Count < MaxTrackedPairs)
+            {
+                _perPair.AddOrUpdate(
+                    key,
+                    _ => new FailureRecord { Count = 1, WindowStartUtc = nowUtc, LockedUntilUtc = DateTime.MinValue },
+                    (_, record) =>
                     {
-                        record.Count = 1;
-                        record.WindowStartUtc = nowUtc;
-                    }
-                    else
-                    {
-                        record.Count++;
-                    }
+                        if (!IsLive(record.WindowStartUtc, nowUtc))
+                        {
+                            record.Count = 1;
+                            record.WindowStartUtc = nowUtc;
+                        }
+                        else
+                        {
+                            record.Count++;
+                        }
 
-                    if (record.Count >= _options.MaxFailedAttempts)
-                        record.LockedUntilUtc = nowUtc.AddMinutes(_options.LockoutMinutes);
+                        if (record.Count >= _options.MaxFailedAttempts)
+                            record.LockedUntilUtc = nowUtc.AddMinutes(_options.LockoutMinutes);
 
-                    return record;
-                });
+                        return record;
+                    });
+            }
         }
 
-        if (_options.MaxFailedAttemptsPerIp > 0)
+        if (_options.MaxFailedAttemptsPerIp > 0 &&
+            (_perIp.ContainsKey(ip) || _perIp.Count < MaxTrackedIps))
         {
             _perIp.AddOrUpdate(
                 ip,
@@ -133,8 +152,6 @@ public class LoginRateLimiter
                     return record;
                 });
         }
-
-        EvictExpired(nowUtc);
     }
 
     /// <summary>
@@ -149,6 +166,26 @@ public class LoginRateLimiter
     /// <summary>Exposed for tests.</summary>
     internal int PairFailureCountForTest(string ip, string username)
         => _perPair.TryGetValue((ip, username), out var r) && IsLive(r.WindowStartUtc, DateTime.UtcNow) ? r.Count : 0;
+
+    /// <summary>
+    /// Runs the eviction at most once a minute, and only on one thread. Doing it inline on every
+    /// failed login made each request O(tracked keys) - a CPU amplifier on the very endpoint that
+    /// is supposed to absorb the attack.
+    /// </summary>
+    private void MaybeEvictExpired(DateTime nowUtc)
+    {
+        var last = Interlocked.Read(ref _lastEvictionTicksUtc);
+        if (nowUtc.Ticks - last < EvictionIntervalTicks) return;
+        if (Interlocked.CompareExchange(ref _lastEvictionTicksUtc, nowUtc.Ticks, last) != last) return;
+
+        EvictExpired(nowUtc);
+    }
+
+    /// <summary>Diagnostics/tests: proves the tracked state cannot grow without bound.</summary>
+    public int TrackedPairCount => _perPair.Count;
+
+    /// <summary>Diagnostics/tests: proves the tracked state cannot grow without bound.</summary>
+    public int TrackedIpCount => _perIp.Count;
 
     private bool IsLive(DateTime windowStartUtc, DateTime nowUtc)
         => nowUtc - windowStartUtc < TimeSpan.FromMinutes(_options.FailureWindowMinutes);

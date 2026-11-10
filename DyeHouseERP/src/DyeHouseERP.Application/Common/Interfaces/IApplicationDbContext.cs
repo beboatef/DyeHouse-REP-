@@ -57,6 +57,7 @@ public interface IApplicationDbContext
     DbSet<TreasuryTransfer> TreasuryTransfers { get; }
     DbSet<CostEntry> CostEntries { get; }
     DbSet<User> Users { get; }
+    DbSet<UserRefreshToken> UserRefreshTokens { get; }
     DbSet<AuditLogEntry> AuditLogEntries { get; }
     DbSet<CompanySettings> CompanySettings { get; }
     DbSet<PeriodClose> PeriodCloses { get; }

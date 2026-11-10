@@ -62,6 +62,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<TreasuryTransfer> TreasuryTransfers => Set<TreasuryTransfer>();
     public DbSet<CostEntry> CostEntries => Set<CostEntry>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserRefreshToken> UserRefreshTokens => Set<UserRefreshToken>();
     public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<PeriodClose> PeriodCloses => Set<PeriodClose>();

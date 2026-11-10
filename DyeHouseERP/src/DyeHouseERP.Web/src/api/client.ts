@@ -1,29 +1,89 @@
-import axios from "axios";
+import axios, { type AxiosError } from "axios";
 
 export const api = axios.create({
   baseURL: "/api",
+  // The session is an HttpOnly cookie, so every call must be allowed to send it.
+  withCredentials: true,
   headers: { "Content-Type": "application/json" }
 });
 
-// Attach the bearer token, once a real login flow exists. For now it reads
-// a token that a future login page would store here.
+/**
+ * The access token lives in an HttpOnly cookie set by POST /api/auth/login: no script can read it,
+ * which is what localStorage could never guarantee. What the page CAN read is the double-submit
+ * cookie, and it must echo it in X-CSRF-Token on every state-changing request - that is the proof,
+ * to the API, that the request came from this app rather than from another site riding the cookie.
+ */
+const CSRF_COOKIE = "dyehouse_csrf";
+const CSRF_HEADER = "X-CSRF-Token";
+const UNSAFE_METHODS = new Set(["post", "put", "patch", "delete"]);
+
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("dyehouse_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const method = (config.method ?? "get").toLowerCase();
+  if (UNSAFE_METHODS.has(method)) {
+    const csrf = readCookie(CSRF_COOKIE);
+    if (csrf) config.headers[CSRF_HEADER] = csrf;
+  }
   return config;
 });
 
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error?.response?.status === 401 && window.location.pathname !== "/login") {
-      localStorage.removeItem("dyehouse_token");
-      localStorage.removeItem("dyehouse_user");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
+api.interceptors.response.use((response) => response, (error) =>
+  handleUnauthorized(error).catch(() => Promise.reject(error))
 );
+
+// One in-flight refresh at a time: parallel 401s share it instead of racing rotations against each
+// other (a raced rotation looks exactly like token theft to the server, which would burn the family).
+let refreshPromise: Promise<LoginResult> | null = null;
+const retriedWithoutRefresh = new WeakSet<object>();
+
+function refreshSession(): Promise<LoginResult> {
+  if (!refreshPromise) {
+    refreshPromise = AuthApi.refresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+async function handleUnauthorized(error: unknown): Promise<unknown> {
+  const axiosError = error as AxiosError;
+  const original = axiosError.config;
+  const status = axiosError.response?.status;
+  const url = original?.url ?? "";
+  const onLoginPage = window.location.pathname === "/login";
+  const isAuthCall = url.includes("/auth/login") || url.includes("/auth/refresh");
+
+  if (status === 401 && !isAuthCall && !onLoginPage && original && !retriedWithoutRefresh.has(original)) {
+    retriedWithoutRefresh.add(original);
+    try {
+      const result = await refreshSession();
+      // The fresh tokens arrived as HttpOnly cookies; only the cached profile needs the new
+      // expiry and roles before the original request is replayed.
+      localStorage.setItem(
+        "dyehouse_user",
+        JSON.stringify({
+          username: result.username,
+          displayName: result.displayName,
+          roles: result.roles,
+          expiresAtUtc: result.expiresAtUtc
+        })
+      );
+      return api(original);
+    } catch {
+      // The refresh itself failed: the session is gone, not just the access token.
+    }
+  }
+
+  if (status === 401 && !onLoginPage) {
+    localStorage.removeItem("dyehouse_user");
+    window.location.href = "/login";
+  }
+  throw error;
+}
 
 export type UnitOfMeasure = "KG" | "Meter";
 
@@ -1776,7 +1836,11 @@ export interface LoginResult {
 }
 
 export const AuthApi = {
-  login: (username: string, password: string) => api.post<LoginResult>("/auth/login", { username, password }).then((r) => r.data)
+  login: (username: string, password: string) => api.post<LoginResult>("/auth/login", { username, password }).then((r) => r.data),
+  /** Rotates the session; the fresh tokens arrive as HttpOnly cookies, the body carries the profile. */
+  refresh: () => api.post<LoginResult>("/auth/refresh").then((r) => r.data),
+  /** Revokes every refresh token server-side and expires the cookies; the tokens themselves are never accessible to this code. */
+  logout: () => api.post("/auth/logout")
 };
 
 // ---------------- Users (admin only) ----------------

@@ -67,12 +67,22 @@ public interface IPasswordHasher
 {
     string Hash(string password);
     bool Verify(string password, string passwordHash);
+
+    /// <summary>
+    /// Verifies against <paramref name="passwordHash"/>, or against an internal decoy hash when it
+    /// is null. Login uses this so an unknown username costs exactly the same PBKDF2 work as a
+    /// wrong password - otherwise the response time tells an attacker which accounts exist.
+    /// </summary>
+    bool VerifyOrDecoy(string password, string? passwordHash);
 }
 
 /// <summary>Issues signed JWTs for authenticated users - see Infrastructure.Services.JwtTokenService.</summary>
 public interface ITokenService
 {
     string GenerateToken(Guid userId, string username, IEnumerable<string> roles, out DateTime expiresAtUtc);
+
+    /// <summary>How long a refresh token - and therefore a login session - lives. Configuration, not a constant.</summary>
+    TimeSpan RefreshTokenLifetime { get; }
 }
 
 /// <summary>

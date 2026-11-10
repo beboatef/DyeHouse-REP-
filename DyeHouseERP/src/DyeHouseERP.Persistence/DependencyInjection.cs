@@ -4,6 +4,7 @@ using DyeHouseERP.Persistence.Numbering;
 using DyeHouseERP.Persistence.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,6 +30,12 @@ public static class DependencyInjection
                 // Enable retries only around a future whole-operation transaction/lock scope.
             });
             options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
+
+            // A decimal without HasPrecision is silently rounded by SQL Server to its default
+            // precision (18,2), which is how a quantity loses its third decimal without anyone
+            // noticing. EF's warning at every start was easy to scroll past, so here it stops the
+            // application instead: a new decimal column must state the precision it needs.
+            options.ConfigureWarnings(w => w.Throw(SqlServerEventId.DecimalTypeDefaultWarning));
         });
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());

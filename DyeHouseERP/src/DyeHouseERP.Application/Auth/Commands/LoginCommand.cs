@@ -1,3 +1,4 @@
+using DyeHouseERP.Application.Auth;
 using DyeHouseERP.Application.Auth.DTOs;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Domain.Entities;
@@ -47,7 +48,13 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResultDto>
     public async Task<LoginResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username && u.IsActive, cancellationToken);
-        if (user is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
+
+        // Exactly one PBKDF2 verification runs either way. Short-circuiting on a missing user made
+        // an unknown username answer measurably faster than a wrong password, which told an
+        // attacker which accounts exist before they had guessed anything.
+        var passwordMatches = _passwordHasher.VerifyOrDecoy(request.Password, user?.PasswordHash);
+
+        if (user is null || !passwordMatches)
         {
             // A failed attempt is itself an auditable security event (spec section 42
             // "Login" coverage) - recorded even though no LoginResultDto is returned.
@@ -60,6 +67,12 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResultDto>
         var roles = user.RoleList.ToList();
         var token = _tokenService.GenerateToken(user.Id, user.Username, roles, out var expiresAtUtc);
 
+        // A fresh opaque refresh token is minted with every successful login. Only its SHA-256 hash
+        // is stored, so a database read never yields a usable session.
+        var refreshToken = RefreshTokenCodec.NewToken();
+        var refreshExpiresAtUtc = DateTime.UtcNow.Add(_tokenService.RefreshTokenLifetime);
+        _db.UserRefreshTokens.Add(new UserRefreshToken(user.Id, RefreshTokenCodec.Hash(refreshToken), refreshExpiresAtUtc));
+
         _db.AuditLogEntries.Add(new AuditLogEntry(
             DateTime.UtcNow, user.Username, "Login", nameof(User), user.Id.ToString(), null, null, SafeIp(), null));
         await _db.SaveChangesAsync(cancellationToken);
@@ -67,6 +80,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResultDto>
         return new LoginResultDto
         {
             Token = token, ExpiresAtUtc = expiresAtUtc,
+            RefreshToken = refreshToken, RefreshExpiresAtUtc = refreshExpiresAtUtc,
             Username = user.Username, DisplayName = user.DisplayName, Roles = roles
         };
     }

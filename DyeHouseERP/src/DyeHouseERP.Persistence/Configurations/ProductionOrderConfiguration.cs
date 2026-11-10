@@ -116,6 +116,29 @@ public class ProductionOrderStageExecutionConfiguration : IEntityTypeConfigurati
             builder.Property(qty).HasPrecision(18, 3);
         }
 
+        // Baselines are quantities exactly like the measurements above, but they were missing from
+        // this list: EF warned "no store type was specified" on every start and SQL Server fell back
+        // to decimal(18,2), silently dropping the third decimal of a baseline the floor had entered.
+        foreach (var baseline in new[]
+        {
+            nameof(ProductionOrderStageExecution.BaselineKg),
+            nameof(ProductionOrderStageExecution.BaselineMeter)
+        })
+        {
+            builder.Property(baseline).HasPrecision(18, 3);
+        }
+
+        // The loss percentages are produced rounded to two decimals (RecalculateLoss in the entity),
+        // so they keep a two-decimal store type - now declared explicitly instead of assumed.
+        foreach (var percent in new[]
+        {
+            nameof(ProductionOrderStageExecution.LossPercentKg),
+            nameof(ProductionOrderStageExecution.LossPercentMeter)
+        })
+        {
+            builder.Property(percent).HasPrecision(18, 2);
+        }
+
         builder.HasIndex(s => new { s.ProductionOrderId, s.Sequence });
         builder.HasIndex(s => s.StageDefinitionId);
 
