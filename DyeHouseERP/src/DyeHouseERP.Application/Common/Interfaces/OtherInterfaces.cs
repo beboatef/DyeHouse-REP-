@@ -83,6 +83,13 @@ public interface ITokenService
 
     /// <summary>How long a refresh token - and therefore a login session - lives. Configuration, not a constant.</summary>
     TimeSpan RefreshTokenLifetime { get; }
+
+    /// <summary>
+    /// How long a refresh token that was just rotated is still accepted, so two tabs refreshing at
+    /// the same instant do not burn each other's session. Zero disables the grace and restores the
+    /// strict "any reuse is theft" rule.
+    /// </summary>
+    TimeSpan RefreshReuseGrace { get; }
 }
 
 /// <summary>

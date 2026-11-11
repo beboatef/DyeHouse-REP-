@@ -29,6 +29,23 @@ public class JwtTokenService : ITokenService
         }
     }
 
+    /// <summary>
+    /// The race window for concurrent refreshes. Browsers share cookies across tabs, so two tabs
+    /// that 401 at the same moment both present the token that was current when their requests
+    /// left; one rotation wins and the loser looks exactly like a stolen token. 30 seconds covers
+    /// that race without giving a real attacker a useful window. 0 turns the grace off.
+    /// </summary>
+    public TimeSpan RefreshReuseGrace
+    {
+        get
+        {
+            var seconds = int.TryParse(_configuration.GetSection("Jwt")["RefreshReuseGraceSeconds"], out var configured) && configured >= 0
+                ? configured
+                : 30;
+            return TimeSpan.FromSeconds(seconds);
+        }
+    }
+
     public string GenerateToken(Guid userId, string username, IEnumerable<string> roles, out DateTime expiresAtUtc)
     {
         // Mandatory, fail-fast: the signing key must come from configuration.

@@ -34,6 +34,7 @@ public class RefreshSessionCommandTests
     {
         var mock = new Mock<ITokenService>();
         mock.SetupGet(s => s.RefreshTokenLifetime).Returns(TimeSpan.FromDays(7));
+        mock.SetupGet(s => s.RefreshReuseGrace).Returns(TimeSpan.FromSeconds(30));
         DateTime expires = DateTime.UtcNow.AddMinutes(30);
         mock.Setup(s => s.GenerateToken(
                 It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), out expires))
@@ -98,11 +99,13 @@ public class RefreshSessionCommandTests
     }
 
     [Fact]
-    public async Task Reusing_a_rotated_token_revokes_the_whole_family()
+    public async Task Reusing_a_rotated_token_after_the_grace_window_revokes_the_whole_family()
     {
         using var db = NewDb();
         SeedUser(db, "sara", "Secret-123");
         var tokens = TokenService();
+        // The grace is what makes an immediate replay benign; with it off this is the theft case.
+        tokens.SetupGet(s => s.RefreshReuseGrace).Returns(TimeSpan.Zero);
         var first = await LoginAsync(db, tokens, "sara", "Secret-123");
         var rotated = await Refresher(db, tokens).Handle(new RefreshSessionCommand(first), CancellationToken.None);
 
@@ -174,6 +177,89 @@ public class RefreshSessionCommandTests
             .Handle(new RevokeUserRefreshTokensCommand(user.Id, "Logout"), CancellationToken.None);
 
         Assert.Equal(2, revoked);
+        Assert.Empty(await db.UserRefreshTokens.Where(t => t.RevokedAtUtc == null).ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_concurrent_tab_replaying_the_just_rotated_token_is_served_instead_of_logged_out()
+    {
+        using var db = NewDb();
+        SeedUser(db, "sara", "Secret-123");
+        var tokens = TokenService();
+        var shared = await LoginAsync(db, tokens, "sara", "Secret-123");
+
+        // Tab A wins the race and rotates the cookie the two tabs were both holding.
+        var winner = await Refresher(db, tokens).Handle(new RefreshSessionCommand(shared), CancellationToken.None);
+
+        // Tab B's request left before that response landed, so it presents the same old token.
+        var loser = await Refresher(db, tokens).Handle(new RefreshSessionCommand(shared), CancellationToken.None);
+
+        Assert.False(string.IsNullOrEmpty(loser.Token));
+        // No second refresh token: the winner already set that cookie.
+        Assert.Equal(string.Empty, loser.RefreshToken);
+        Assert.Equal(2, await db.UserRefreshTokens.CountAsync());
+
+        // The family is intact - the tab that rotated keeps working.
+        var next = await Refresher(db, tokens).Handle(new RefreshSessionCommand(winner.RefreshToken), CancellationToken.None);
+        Assert.NotEqual(winner.RefreshToken, next.RefreshToken);
+
+        var actions = await db.AuditLogEntries.Select(a => a.Action).ToListAsync();
+        Assert.Contains(actions, a => a == "RefreshTokenReuseWithinGrace");
+        Assert.DoesNotContain(actions, a => a == "RefreshTokenReuseDetected");
+    }
+
+    [Fact]
+    public async Task The_grace_window_cannot_revive_a_session_that_was_already_closed()
+    {
+        using var db = NewDb();
+        var user = SeedUser(db, "sara", "Secret-123");
+        var tokens = TokenService();
+        var shared = await LoginAsync(db, tokens, "sara", "Secret-123");
+        await Refresher(db, tokens).Handle(new RefreshSessionCommand(shared), CancellationToken.None);
+
+        // Logout kills the successor, so the replayed token has no live chain behind it.
+        await new RevokeUserRefreshTokensCommandHandler(db)
+            .Handle(new RevokeUserRefreshTokensCommand(user.Id, "Logout"), CancellationToken.None);
+
+        await Assert.ThrowsAsync<InvalidCredentialsException>(
+            () => Refresher(db, tokens).Handle(new RefreshSessionCommand(shared), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Logout_by_refresh_cookie_revokes_the_live_session_when_the_access_token_expired()
+    {
+        using var db = NewDb();
+        SeedUser(db, "sara", "Secret-123");
+        var tokens = TokenService();
+        var live = await LoginAsync(db, tokens, "sara", "Secret-123");
+
+        var revoked = await new RevokeSessionByRefreshTokenCommandHandler(db)
+            .Handle(new RevokeSessionByRefreshTokenCommand(live, "Logout"), CancellationToken.None);
+
+        Assert.Equal(1, revoked);
+        Assert.Empty(await db.UserRefreshTokens.Where(t => t.RevokedAtUtc == null).ToListAsync());
+
+        // An unknown or empty cookie is a silent no-op, never an error: the browser still clears.
+        Assert.Equal(0, await new RevokeSessionByRefreshTokenCommandHandler(db)
+            .Handle(new RevokeSessionByRefreshTokenCommand("not-a-real-token", "Logout"), CancellationToken.None));
+        Assert.Equal(0, await new RevokeSessionByRefreshTokenCommandHandler(db)
+            .Handle(new RevokeSessionByRefreshTokenCommand(string.Empty, "Logout"), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Logout_by_an_old_cookie_ends_the_session_its_rotation_created()
+    {
+        using var db = NewDb();
+        SeedUser(db, "sara", "Secret-123");
+        var tokens = TokenService();
+        var before = await LoginAsync(db, tokens, "sara", "Secret-123");
+        await Refresher(db, tokens).Handle(new RefreshSessionCommand(before), CancellationToken.None);
+
+        // The cookie the browser still shows in a stale tab is the superseded one.
+        var revoked = await new RevokeSessionByRefreshTokenCommandHandler(db)
+            .Handle(new RevokeSessionByRefreshTokenCommand(before, "Logout"), CancellationToken.None);
+
+        Assert.Equal(1, revoked);
         Assert.Empty(await db.UserRefreshTokens.Where(t => t.RevokedAtUtc == null).ToListAsync());
     }
 }

@@ -43,7 +43,9 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Rotates the session without asking for the password again: the refresh cookie presented here
     /// dies and a fresh pair takes its place. A failure answers 401 with no further detail.
-    /// Presenting an already-rotated token is treated as theft and revokes every session of the user.
+    /// Presenting an already-rotated token is treated as theft and revokes every session of the
+    /// user - unless it arrives inside the short reuse grace, where a concurrent tab race is the
+    /// benign explanation; that case returns a new access token and leaves the refresh cookie alone.
     /// </summary>
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(RefreshSessionResultDto), StatusCodes.Status200OK)]
@@ -70,13 +72,25 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout()
     {
-        // The JWT maps "sub" to NameIdentifier, so this is the user id from a still-valid cookie.
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (Guid.TryParse(userId, out var id))
+        try
         {
-            try { await _mediator.Send(new RevokeUserRefreshTokensCommand(id, "Logout")); }
-            catch { /* Logout must clear the browser even if revocation fails. */ }
+            // The JWT maps "sub" to NameIdentifier, so this is the user id from a still-valid cookie.
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (Guid.TryParse(userId, out var id))
+            {
+                await _mediator.Send(new RevokeUserRefreshTokensCommand(id, "Logout"));
+            }
+            else
+            {
+                // No identity means the access token has expired - the ordinary case after a tab
+                // idled past its 30 minutes. The refresh cookie still identifies the session, so
+                // it is revoked by token instead of being left alive for the rest of its week.
+                var presented = Request.Cookies[AuthCookies.RefreshToken];
+                if (!string.IsNullOrEmpty(presented))
+                    await _mediator.Send(new RevokeSessionByRefreshTokenCommand(presented, "Logout"));
+            }
         }
+        catch { /* Logout must clear the browser even if revocation fails. */ }
 
         Response.Cookies.Delete(AuthCookies.AccessToken, SessionCookie(httpOnly: true, DateTimeOffset.UtcNow));
         Response.Cookies.Delete(AuthCookies.RefreshToken, SessionCookie(httpOnly: true, DateTimeOffset.UtcNow));
@@ -84,17 +98,22 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    private void SetSessionCookies(string accessToken, DateTime accessExpiresAtUtc, string refreshToken, DateTime refreshExpiresAtUtc)
+    private void SetSessionCookies(string accessToken, DateTime accessExpiresAtUtc, string? refreshToken, DateTime refreshExpiresAtUtc)
     {
         Response.Cookies.Append(AuthCookies.AccessToken, accessToken, SessionCookie(httpOnly: true, accessExpiresAtUtc));
-        Response.Cookies.Append(AuthCookies.RefreshToken, refreshToken, SessionCookie(httpOnly: true, refreshExpiresAtUtc));
+
+        // Empty means "the browser already holds the rotated cookie": a refresh that landed inside
+        // the reuse grace (concurrent tabs) must not hand out a second refresh token.
+        if (!string.IsNullOrEmpty(refreshToken))
+            Response.Cookies.Append(AuthCookies.RefreshToken, refreshToken, SessionCookie(httpOnly: true, refreshExpiresAtUtc));
 
         // Readable half of the double-submit pair; see CsrfProtectionMiddleware. Kept stable across
         // refreshes when it already exists, so concurrent tabs never invalidate each other.
         var csrf = Request.Cookies[AuthCookies.Csrf];
         if (string.IsNullOrEmpty(csrf))
             csrf = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        Response.Cookies.Append(AuthCookies.Csrf, csrf, SessionCookie(httpOnly: false, refreshExpiresAtUtc));
+        var csrfExpiry = refreshExpiresAtUtc > DateTime.UtcNow ? refreshExpiresAtUtc : accessExpiresAtUtc;
+        Response.Cookies.Append(AuthCookies.Csrf, csrf, SessionCookie(httpOnly: false, csrfExpiry));
     }
 
     private CookieOptions SessionCookie(bool httpOnly, DateTimeOffset expiresAtUtc) => new()
