@@ -73,8 +73,14 @@ async function handleUnauthorized(error: unknown): Promise<unknown> {
         })
       );
       return api(original);
-    } catch {
-      // The refresh itself failed: the session is gone, not just the access token.
+    } catch (refreshError) {
+      // The refresh itself failed. Only an explicit 401/403 from the server proves the session
+      // is dead. A failure with no usable verdict - a network error, a timeout, a 5xx, ... -
+      // means the server never rejected the session, so the user stays signed in and the
+      // failure surfaces to the caller instead of throwing them to the login page.
+      const refreshStatus = (refreshError as AxiosError).response?.status;
+      if (refreshStatus !== 401 && refreshStatus !== 403) throw refreshError;
+      // The server explicitly rejected the session: fall through to the logout below.
     }
   }
 
@@ -823,18 +829,8 @@ export const ProductionOrdersApi = {
   ) => api.put<ProductionOrder>(`/production-orders/${id}`, body).then((r) => r.data),
   // `allocateRaw` was removed with the endpoint it called: raw material is no longer allocated to an
   // existing Job Order. The deduction is made once, by the raw issue that creates the order (`issue`).
-  startStage: (stageExecutionId: string) =>
-    api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/start`).then((r) => r.data),
-  completeStage: (
-    stageExecutionId: string,
-    body: {
-      inputKg?: number; inputMeter?: number; outputKg?: number; outputMeter?: number;
-      lossKg?: number; lossMeter?: number; separatesKg?: number; separatesMeter?: number;
-      notes?: string;
-    }
-  ) => api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/complete`, body).then((r) => r.data),
-  skipStage: (stageExecutionId: string, reason: string) =>
-    api.post<ProductionOrder>(`/production-orders/stage-executions/${stageExecutionId}/skip`, { reason }).then((r) => r.data),
+  // startStage / completeStage / skipStage were removed with the endpoints they called: a
+  // stage is ended only by `transferStage`, which moves the order to the stage the user picks.
   /**
    * Moves the order to the stage the user selects (spec sections 13-17). This IS
    * the end of a stage - there is no separate "End Stage" button. Passing the
