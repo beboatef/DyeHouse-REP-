@@ -1,4 +1,5 @@
 using DyeHouseERP.Persistence;
+using DyeHouseERP.Application.Common.Monitoring;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -25,12 +26,14 @@ public sealed class DatabaseHealthCheck : IHealthCheck
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<DatabaseHealthCheck> _logger;
 
+    /// <summary>Initializes a new instance of the DatabaseHealthCheck class.</summary>
     public DatabaseHealthCheck(IServiceScopeFactory scopes, ILogger<DatabaseHealthCheck> logger)
     {
         _scopes = scopes;
         _logger = logger;
     }
 
+    /// <summary>Reports healthy when the database answers a trivial query.</summary>
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
@@ -54,7 +57,8 @@ public sealed class DatabaseHealthCheck : IHealthCheck
         {
             // Reported as unhealthy with the reason attached - never as a healthy process that
             // happens to be unable to do any work.
-            _logger.LogError(ex, "Health check: the database could not be reached.");
+            _logger.LogError(ex, "EventName: {EventName}. Health check: the database could not be reached.",
+                LogEvents.DatabaseConnectionFailed);
             return HealthCheckResult.Unhealthy("The database could not be reached.", ex);
         }
     }

@@ -95,7 +95,7 @@ public class AuthorizationPolicyTests
             (typeof(UsersController), nameof(UsersController.Create), Permissions.UsersManage),
             (typeof(UsersController), nameof(UsersController.Update), Permissions.RolesManage),
             (typeof(UsersController), nameof(UsersController.Deactivate), Permissions.UsersManage),
-            (typeof(UsersController), nameof(UsersController.ChangePassword), Permissions.UsersManage),
+            (typeof(UsersController), nameof(UsersController.ChangePassword), Permissions.ResetPassword),
             (typeof(AuditLogController), nameof(AuditLogController.Get), Permissions.AuditView),
             (typeof(PeriodClosingController), nameof(PeriodClosingController.Get), Permissions.SettingsManage),
             (typeof(PeriodClosingController), nameof(PeriodClosingController.Close), Permissions.SettingsManage),

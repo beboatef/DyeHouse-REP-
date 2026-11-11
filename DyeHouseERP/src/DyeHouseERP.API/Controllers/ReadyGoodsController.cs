@@ -11,20 +11,28 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Hosts the ready goods endpoints.</summary>
 [ApiController]
 [Route("api/ready-goods")]
 [Authorize]
 public class ReadyGoodsController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the ReadyGoodsController class.</summary>
     public ReadyGoodsController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Gets transfers.</summary>
+    /// <remarks>Route: GET api/ready-goods/transfers. Requires the 'ready.view' permission.</remarks>
     [HttpGet("transfers")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
     public async Task<ActionResult<List<ReadyGoodsTransferDto>>> GetTransfers() => Ok(await _mediator.Send(new GetReadyGoodsTransfersQuery()));
 
     /// <summary>Ready-goods transfers (the "ترحيل" register) as Excel or PDF (spec section 29).</summary>
     [HttpGet("transfers/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportTransfers([FromQuery] string format = "excel",
         [FromServices] IReportExportService export = null!)
@@ -46,6 +54,8 @@ public class ReadyGoodsController : ControllerBase
     /// Order - the same traceable view the screen shows, never a flat item total.
     /// </summary>
     [HttpGet("balance/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportBalance([FromQuery] Guid? customerId, [FromQuery] string format = "excel",
         [FromServices] IReportExportService export = null!)
@@ -62,12 +72,23 @@ public class ReadyGoodsController : ControllerBase
         return ExportFileHelper.ToFile(export, format, "Ready Goods Balance", null, headers, rows, "ready-goods-balance", "Balance");
     }
 
+    /// <summary>Gets balance.</summary>
+    /// <remarks>Route: GET api/ready-goods/balance. Requires the 'ready.view' permission.</remarks>
     [HttpGet("balance")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
     public async Task<ActionResult<List<ReadyGoodsBalanceDto>>> GetBalance([FromQuery] Guid? customerId)
         => Ok(await _mediator.Send(new GetReadyGoodsBalanceQuery(customerId)));
 
+    /// <summary>Creates transfer.</summary>
+    /// <remarks>Route: POST api/ready-goods/transfers. Requires the 'ready.transfer' permission.</remarks>
     [HttpPost("transfers")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyTransfer)]
     public async Task<ActionResult<ReadyGoodsTransferDto>> CreateTransfer([FromBody] CreateReadyGoodsTransferCommand command)
     {
@@ -82,6 +103,8 @@ public class ReadyGoodsController : ControllerBase
     [HttpGet("raw-returns")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
     [ProducesResponseType(typeof(List<ReadyGoodsRawReturnDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<ReadyGoodsRawReturnDto>>> GetRawReturns([FromQuery] Guid? customerId)
         => Ok(await _mediator.Send(new GetReadyGoodsRawReturnsQuery(customerId)));
 
@@ -94,12 +117,25 @@ public class ReadyGoodsController : ControllerBase
     [HttpPost("raw-returns")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyReturnToRaw)]
     [ProducesResponseType(typeof(ReadyGoodsRawReturnDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ReadyGoodsRawReturnDto>> ReturnToRaw([FromBody] ReturnReadyGoodsToRawStockCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetRawReturns), new { }, result);
     }
+    /// <summary>Updates transfer.</summary>
+    /// <remarks>Route: PUT api/ready-goods/transfers/{id:guid}. Requires the 'inventory.edit' permission.</remarks>
     [HttpPut("transfers/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryEdit)]
     public async Task<ActionResult<ReadyGoodsTransferDto>> UpdateTransfer(
         Guid id,
@@ -123,6 +159,10 @@ public class ReadyGoodsController : ControllerBase
     /// removed - the transfer stays listed with status Cancelled.
     /// </summary>
     [HttpDelete("transfers/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryDelete)]
     public async Task<IActionResult> DeleteTransfer(Guid id, [FromQuery] string reason)
     {
@@ -132,6 +172,10 @@ public class ReadyGoodsController : ControllerBase
 
 }
 
+/// <summary>Request payload to update ready goods transfer.</summary>
+/// <param name="TransferDate">The transfer date.</param>
+/// <param name="PieceCount">The piece count.</param>
+/// <param name="Notes">The notes.</param>
 public sealed record UpdateReadyGoodsTransferRequest(
     DateTime TransferDate,
     int? PieceCount,

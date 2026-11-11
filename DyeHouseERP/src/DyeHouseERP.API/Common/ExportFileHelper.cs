@@ -12,12 +12,15 @@ namespace DyeHouseERP.API.Common;
 /// </summary>
 public static class ExportFileHelper
 {
+    /// <summary>The MIME type sent for generated Excel workbooks.</summary>
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    /// <summary>Renders report rows through the export service and returns them as a downloadable file.</summary>
     public static IActionResult ToFile(IReportExportService export, string format, string title, string? subtitle,
         IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows, string fileStem)
         => ToFile(export, format, title, subtitle, headers, rows, fileStem, null);
 
+    /// <summary>Renders report rows through the export service and returns them as a downloadable file.</summary>
     public static IActionResult ToFile(IReportExportService export, string format, string title, string? subtitle,
         IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows, string fileStem, string? excelSheetName)
     {
@@ -41,6 +44,7 @@ public static class ExportFileHelper
         => new FileContentResult(export.GenerateExcel(sheetName, headers, sampleRows), ExcelContentType)
         { FileDownloadName = $"{fileStem}.xlsx" };
 
+    /// <summary>Reads an uploaded file into memory with a bounded size.</summary>
     public static async Task<byte[]> ReadUploadAsync(IFormFile file)
     {
         await using var stream = new MemoryStream();

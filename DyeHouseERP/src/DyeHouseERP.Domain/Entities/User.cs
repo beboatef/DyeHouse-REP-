@@ -16,6 +16,17 @@ public class User : AuditableEntity
     public string Roles { get; private set; } = string.Empty; // comma-separated, e.g. "admin,inventory.allow_negative_stock"
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>
+    /// Part 2 (password policy): while set, the API middleware blocks every endpoint except
+    /// change-password, logout and the current-user read. Set for the bootstrap admin, for
+    /// every user an administrator creates or resets, and when the password age exceeds
+    /// CompanySettings.PasswordMaxAgeDays. Only a successful password change clears it.
+    /// </summary>
+    public bool MustChangePassword { get; private set; }
+
+    /// <summary>UTC timestamp of the last creation/reset/change - the base for password expiry.</summary>
+    public DateTime? PasswordChangedAtUtc { get; private set; }
+
     private User() { } // EF Core
 
     public User(string username, string passwordHash, string displayName, string roles, string createdBy)
@@ -36,6 +47,36 @@ public class User : AuditableEntity
     public void ChangePassword(string newPasswordHash, string modifiedBy)
     {
         PasswordHash = newPasswordHash;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Records a password set outside the user's own change (bootstrap, admin create/reset):
+    /// the password is new, but the user must still pick their own at the next sign-in.
+    /// </summary>
+    public void MarkPasswordSetByAdministrator(string modifiedBy)
+    {
+        MustChangePassword = true;
+        PasswordChangedAtUtc = DateTime.UtcNow;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Clears the forced-change flag after the user successfully picked their own password.</summary>
+    public void MarkPasswordChangedByUser(string newPasswordHash, string modifiedBy)
+    {
+        PasswordHash = newPasswordHash;
+        MustChangePassword = false;
+        PasswordChangedAtUtc = DateTime.UtcNow;
+        ModifiedBy = modifiedBy;
+        ModifiedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Flags the user when the password age exceeds the configured maximum (login still succeeds).</summary>
+    public void FlagExpiredPassword(string modifiedBy)
+    {
+        MustChangePassword = true;
         ModifiedBy = modifiedBy;
         ModifiedAtUtc = DateTime.UtcNow;
     }

@@ -19,6 +19,7 @@ namespace DyeHouseERP.API.Auth;
 /// </summary>
 public sealed class CsrfProtectionMiddleware
 {
+    /// <summary>The header the SPA must echo the CSRF cookie value back into.</summary>
     public const string HeaderName = "X-CSRF-Token";
 
     private static readonly HashSet<string> SafeMethods = new(StringComparer.OrdinalIgnoreCase)
@@ -35,8 +36,10 @@ public sealed class CsrfProtectionMiddleware
 
     private readonly RequestDelegate _next;
 
+    /// <summary>Initializes a new instance of the CsrfProtectionMiddleware class.</summary>
     public CsrfProtectionMiddleware(RequestDelegate next) => _next = next;
 
+    /// <summary>Rejects cookie-authenticated unsafe requests whose CSRF header does not match the cookie.</summary>
     public async Task InvokeAsync(HttpContext context)
     {
         if (SafeMethods.Contains(context.Request.Method) ||

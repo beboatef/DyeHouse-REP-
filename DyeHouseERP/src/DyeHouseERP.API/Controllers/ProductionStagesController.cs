@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DyeHouseERP.API.Controllers;
 
 /// <summary>Body of the activate/deactivate request (spec section 19).</summary>
+/// <param name="IsActive">Whether is active.</param>
 public record SetStageActiveRequest(bool IsActive);
 
 /// <summary>
@@ -24,18 +25,30 @@ public record SetStageActiveRequest(bool IsActive);
 public class ProductionStagesController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the ProductionStagesController class.</summary>
     public ProductionStagesController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists production stage definitions.</summary>
+    /// <remarks>Route: GET api/production-stages. Requires the 'production.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
     [ProducesResponseType(typeof(List<ProductionStageDefinitionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<ProductionStageDefinitionDto>>> Get(
         [FromQuery] bool? activeOnly, [FromQuery] string? search)
         => Ok(await _mediator.Send(new GetProductionStageDefinitionsQuery(activeOnly, search)));
 
+    /// <summary>Creates production stage definitions.</summary>
+    /// <remarks>Route: POST api/production-stages. Requires the 'settings.manage' permission.</remarks>
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionStageDefinitionDto>> Create([FromBody] CreateProductionStageDefinitionCommand command)
     {
         var result = await _mediator.Send(command);
@@ -50,6 +63,11 @@ public class ProductionStagesController : ControllerBase
     [HttpPost("{id:guid}/formation-stage")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionStageDefinitionDto>> SetFormationStage(Guid id)
         => Ok(await _mediator.Send(new SetFormationStageCommand(id)));
 
@@ -62,6 +80,11 @@ public class ProductionStagesController : ControllerBase
     [HttpPost("{id:guid}/ready-goods-stage")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionStageDefinitionDto>> SetReadyGoodsStage(Guid id)
         => Ok(await _mediator.Send(new SetReadyGoodsStageCommand(id)));
 
@@ -73,6 +96,12 @@ public class ProductionStagesController : ControllerBase
     [HttpPut("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionStageDefinitionDto>> Update(
         Guid id, [FromBody] UpdateProductionStageDefinitionCommand command)
         => Ok(await _mediator.Send(command with { StageDefinitionId = id }));
@@ -86,6 +115,12 @@ public class ProductionStagesController : ControllerBase
     [HttpPost("{id:guid}/active")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     [ProducesResponseType(typeof(ProductionStageDefinitionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionStageDefinitionDto>> SetActive(Guid id, [FromBody] SetStageActiveRequest request)
         => Ok(await _mediator.Send(new SetProductionStageActiveCommand(id, request.IsActive)));
 }

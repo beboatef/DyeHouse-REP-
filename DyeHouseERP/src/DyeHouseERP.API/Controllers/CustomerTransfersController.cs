@@ -18,10 +18,13 @@ namespace DyeHouseERP.API.Controllers;
 public class CustomerTransfersController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the CustomerTransfersController class.</summary>
     public CustomerTransfersController(ISender mediator) => _mediator = mediator;
 
     /// <summary>Customer-to-customer raw material transfers as Excel or PDF (spec section 15).</summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] string format = "excel",
         [FromServices] IReportExportService export = null!)
@@ -43,12 +46,21 @@ public class CustomerTransfersController : ControllerBase
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawTransfer)]
     [ProducesResponseType(typeof(List<CustomerTransferDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<CustomerTransferDto>>> Get([FromQuery] Guid? customerId)
         => Ok(await _mediator.Send(new GetCustomerTransfersQuery(customerId)));
 
+    /// <summary>Creates customer-to-customer stock transfers.</summary>
+    /// <remarks>Route: POST api/customer-transfers. Requires the 'raw.transfer' permission.</remarks>
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawTransfer)]
     [ProducesResponseType(typeof(CustomerTransferDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CustomerTransferDto>> Create([FromBody] CreateCustomerTransferCommand command)
     {
         var result = await _mediator.Send(command);

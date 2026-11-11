@@ -24,24 +24,36 @@ namespace DyeHouseERP.API.Controllers;
 public class MaterialSalesController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the MaterialSalesController class.</summary>
     public MaterialSalesController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists material (chemical) sales.</summary>
+    /// <remarks>Route: GET api/material-sales. Requires the 'material_sales.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesView)]
     [ProducesResponseType(typeof(List<MaterialSaleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<MaterialSaleDto>>> Get(
         [FromQuery] MaterialSaleStatus? status, [FromQuery] Guid? customerId,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? search)
         => Ok(await _mediator.Send(new GetMaterialSalesQuery(status, customerId, from, to, search)));
 
+    /// <summary>Gets by id.</summary>
+    /// <remarks>Route: GET api/material-sales/{id:guid}. Requires the 'material_sales.view' permission.</remarks>
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesView)]
     [ProducesResponseType(typeof(MaterialSaleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MaterialSaleDto>> GetById(Guid id)
         => Ok(await _mediator.Send(new GetMaterialSaleByIdQuery(id)));
 
     /// <summary>Material sales as Excel or PDF, honouring the same filters as the list (spec section 26).</summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] MaterialSaleStatus? status, [FromQuery] Guid? customerId,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string format = "excel",
@@ -63,6 +75,9 @@ public class MaterialSalesController : ControllerBase
 
     /// <summary>One material sale as a printable invoice-style document (spec section 39).</summary>
     [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetPdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -83,44 +98,90 @@ public class MaterialSalesController : ControllerBase
         return ExportFileHelper.ToPdf(export, $"بيع مواد رقم {sale.SaleNumber}", subtitle, headers, rows, $"material-sale-{sale.SaleNumber}");
     }
 
+    /// <summary>Creates material (chemical) sales.</summary>
+    /// <remarks>Route: POST api/material-sales. Requires the 'material_sales.create' permission.</remarks>
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesCreate)]
     [ProducesResponseType(typeof(MaterialSaleDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<MaterialSaleDto>> Create([FromBody] CreateMaterialSaleCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    /// <summary>Adds line.</summary>
+    /// <remarks>Route: POST api/material-sales/{id:guid}/lines. Requires the 'material_sales.create' permission.</remarks>
     [HttpPost("{id:guid}/lines")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesCreate)]
     [ProducesResponseType(typeof(MaterialSaleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<MaterialSaleDto>> AddLine(Guid id, [FromBody] AddMaterialSaleLineCommand command)
         => Ok(await _mediator.Send(command with { MaterialSaleId = id }));
 
+    /// <summary>Removes line.</summary>
+    /// <remarks>Route: DELETE api/material-sales/{id:guid}/lines/{lineId:guid}. Requires the 'material_sales.create' permission.</remarks>
     [HttpDelete("{id:guid}/lines/{lineId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesCreate)]
     [ProducesResponseType(typeof(MaterialSaleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<MaterialSaleDto>> RemoveLine(Guid id, Guid lineId)
         => Ok(await _mediator.Send(new RemoveMaterialSaleLineCommand(id, lineId)));
 
+    /// <summary>Sets terms.</summary>
+    /// <remarks>Route: PUT api/material-sales/{id:guid}/terms. Requires the 'material_sales.create' permission.</remarks>
     [HttpPut("{id:guid}/terms")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesCreate)]
     [ProducesResponseType(typeof(MaterialSaleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<MaterialSaleDto>> SetTerms(Guid id, [FromBody] SetMaterialSaleTermsCommand command)
         => Ok(await _mediator.Send(command with { Id = id }));
 
+    /// <summary>Posts material (chemical) sales.</summary>
+    /// <remarks>Route: POST api/material-sales/{id:guid}/post. Requires the 'material_sales.post' permission.</remarks>
     [HttpPost("{id:guid}/post")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesPost)]
     [ProducesResponseType(typeof(MaterialSaleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<MaterialSaleDto>> Post(Guid id)
         => Ok(await _mediator.Send(new PostMaterialSaleCommand(id)));
 
+    /// <summary>Cancels material (chemical) sales.</summary>
+    /// <remarks>Route: POST api/material-sales/{id:guid}/cancel. Requires the 'material_sales.cancel' permission.</remarks>
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MaterialSalesCancel)]
     [ProducesResponseType(typeof(MaterialSaleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<MaterialSaleDto>> Cancel(Guid id, [FromBody] CancelMaterialSaleBody body)
         => Ok(await _mediator.Send(new CancelMaterialSaleCommand(id, body.Reason)));
 }
 
+/// <summary>Request payload to cancel material sale.</summary>
+/// <param name="Reason">The reason.</param>
 public record CancelMaterialSaleBody(string Reason);

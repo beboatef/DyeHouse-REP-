@@ -640,6 +640,12 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int>("PasswordMaxAgeDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SessionIdleMinutes")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.ToTable("CompanySettings", (string)null);
@@ -3558,6 +3564,45 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.ToTable("OvertimeEntries", (string)null);
                 });
 
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.PasswordHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.ToTable("PasswordHistories", (string)null);
+                });
+
             modelBuilder.Entity("DyeHouseERP.Domain.Entities.PayComponent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4457,6 +4502,10 @@ namespace DyeHouseERP.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("HoursPerDay")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -6479,6 +6528,12 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("PasswordChangedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -6512,6 +6567,9 @@ namespace DyeHouseERP.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("LastActivityAtUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("ReplacedByTokenHash")
@@ -6702,6 +6760,15 @@ namespace DyeHouseERP.Persistence.Migrations
                     b.HasOne("DyeHouseERP.Domain.Entities.MaterialSale", null)
                         .WithMany("Lines")
                         .HasForeignKey("MaterialSaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DyeHouseERP.Domain.Entities.PasswordHistory", b =>
+                {
+                    b.HasOne("DyeHouseERP.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

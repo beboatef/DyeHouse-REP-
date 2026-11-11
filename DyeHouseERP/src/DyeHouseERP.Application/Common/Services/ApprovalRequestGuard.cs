@@ -1,10 +1,12 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace DyeHouseERP.Application.Common.Services;
 
@@ -45,7 +47,8 @@ public static class ApprovalRequestGuard
         ICurrentUserService currentUser,
         Guid? approvalRequestId,
         IApprovalBoundOperation operation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILogger? logger = null)
     {
         if (!approvalRequestId.HasValue || approvalRequestId.Value == Guid.Empty)
             throw new UnauthorizedAccessException(
@@ -79,6 +82,13 @@ public static class ApprovalRequestGuard
         var decider = await EnsureDeciderAsync(db, currentUser, request, cancellationToken);
 
         request.Approve(decider, DateTime.UtcNow);
+
+        // A single-use approval just authorised an exception to a guard: always
+        // worth an alert. The logger is optional so existing call sites and tests
+        // keep compiling; production handlers always pass theirs.
+        logger?.LogInformation(
+            "EventName: {EventName}. Approval {DocumentNumber} consumed by {ApprovedBy} (requested by {RequestedBy}).",
+            LogEvents.ApprovalConsumed, request.DocumentNumber, decider, request.RequestedBy);
 
         return new ApprovalDecision(request.Id, request.RequestedBy, decider);
     }

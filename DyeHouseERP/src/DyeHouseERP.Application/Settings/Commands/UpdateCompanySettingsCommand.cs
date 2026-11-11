@@ -71,6 +71,7 @@ public class UpdateCompanySettingsCommandHandler : IRequestHandler<UpdateCompany
         settings.Update(request.CompanyNameAr, request.CompanyNameEn, request.LogoDataUrl, _currentUser.UserName);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return new CompanySettingsDto { CompanyNameAr = settings.CompanyNameAr, CompanyNameEn = settings.CompanyNameEn, LogoDataUrl = settings.LogoDataUrl };
+        return new CompanySettingsDto { CompanyNameAr = settings.CompanyNameAr, CompanyNameEn = settings.CompanyNameEn, LogoDataUrl = settings.LogoDataUrl,
+            PasswordMaxAgeDays = settings.PasswordMaxAgeDays, SessionIdleMinutes = settings.SessionIdleMinutes };
     }
 }

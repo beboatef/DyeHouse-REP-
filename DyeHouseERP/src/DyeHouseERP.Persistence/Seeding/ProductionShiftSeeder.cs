@@ -18,11 +18,11 @@ namespace DyeHouseERP.Persistence.Seeding;
 /// </summary>
 public static class ProductionShiftSeeder
 {
-    private static readonly (string Code, string Name)[] Shifts =
+    private static readonly (string Code, string Name, decimal HoursPerDay)[] Shifts =
     {
-        ("SHIFT-1", "الوردية الأولى"),
-        ("SHIFT-2", "الوردية الثانية"),
-        ("SHIFT-3", "الوردية الثالثة")
+        ("SHIFT-1", "الوردية الأولى", 8m),
+        ("SHIFT-2", "الوردية الثانية", 8m),
+        ("SHIFT-3", "الوردية الثالثة", 8m)
     };
 
     public static async Task SeedAsync(
@@ -33,11 +33,11 @@ public static class ProductionShiftSeeder
         var added = 0;
         var sequence = 1;
 
-        foreach (var (code, name) in Shifts)
+        foreach (var (code, name, hoursPerDay) in Shifts)
         {
             if (!existingCodes.Contains(code))
             {
-                db.ProductionShifts.Add(new ProductionShift(code, name, sequence, createdBy: "seed"));
+                db.ProductionShifts.Add(new ProductionShift(code, name, sequence, createdBy: "seed", hoursPerDay: hoursPerDay));
                 added++;
             }
 

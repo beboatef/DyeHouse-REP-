@@ -20,14 +20,19 @@ public static class UserSeeder
     {
         if (await context.Users.AnyAsync(cancellationToken)) return;
 
+        var adminPasswordHash = passwordHasher.Hash(DefaultPassword);
         var admin = new User(
             DefaultUsername,
-            passwordHasher.Hash(DefaultPassword),
+            adminPasswordHash,
             "Administrator",
             roles: $"admin,{Permissions.InventoryAllowNegativeStock}",
             createdBy: "system");
 
+        // Part 2: the development default password is public knowledge (it is in this
+        // file). The account starts flagged so the first thing anyone must do is replace it.
+        admin.MarkPasswordSetByAdministrator("system");
         context.Users.Add(admin);
+        context.PasswordHistories.Add(new PasswordHistory(admin.Id, adminPasswordHash, "system"));
         await context.SaveChangesAsync(cancellationToken);
     }
 }

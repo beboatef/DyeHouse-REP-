@@ -24,7 +24,9 @@ public class GetCompanySettingsQueryHandler : IRequestHandler<GetCompanySettings
         {
             CompanyNameAr = settings?.CompanyNameAr ?? "DyeHouse ERP",
             CompanyNameEn = settings?.CompanyNameEn ?? "DyeHouse ERP",
-            LogoDataUrl = settings?.LogoDataUrl
+            LogoDataUrl = settings?.LogoDataUrl,
+            PasswordMaxAgeDays = settings?.PasswordMaxAgeDays ?? 0,
+            SessionIdleMinutes = settings?.SessionIdleMinutes is > 0 ? settings.SessionIdleMinutes : 30
         };
     }
 }

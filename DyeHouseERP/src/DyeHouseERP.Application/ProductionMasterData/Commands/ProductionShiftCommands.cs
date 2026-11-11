@@ -23,6 +23,7 @@ public static class ProductionShiftMapper
         Name = s.Name,
         Sequence = s.Sequence,
         IsActive = s.IsActive,
+        HoursPerDay = s.HoursPerDay,
         CreatedAtUtc = s.CreatedAtUtc,
         CreatedBy = s.CreatedBy,
         ModifiedAtUtc = s.ModifiedAtUtc,
@@ -30,7 +31,7 @@ public static class ProductionShiftMapper
     };
 }
 
-public record CreateProductionShiftCommand(string Code, string Name, int Sequence) : IRequest<ProductionShiftDto>;
+public record CreateProductionShiftCommand(string Code, string Name, int Sequence, decimal HoursPerDay = 8m) : IRequest<ProductionShiftDto>;
 
 public class CreateProductionShiftCommandValidator : AbstractValidator<CreateProductionShiftCommand>
 {
@@ -39,6 +40,7 @@ public class CreateProductionShiftCommandValidator : AbstractValidator<CreatePro
         RuleFor(x => x.Code).NotEmpty().MaximumLength(30);
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Sequence).GreaterThan(0);
+        RuleFor(x => x.HoursPerDay).GreaterThan(0).LessThanOrEqualTo(24);
     }
 }
 
@@ -57,7 +59,7 @@ public class CreateProductionShiftCommandHandler : IRequestHandler<CreateProduct
         if (await _db.ProductionShifts.AnyAsync(s => s.Code == request.Code, cancellationToken))
             throw new DuplicateCodeException("Production Shift", request.Code);
 
-        var shift = new ProductionShift(request.Code, request.Name, request.Sequence, _currentUser.UserName);
+        var shift = new ProductionShift(request.Code, request.Name, request.Sequence, _currentUser.UserName, hoursPerDay: request.HoursPerDay);
         _db.ProductionShifts.Add(shift);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -65,7 +67,7 @@ public class CreateProductionShiftCommandHandler : IRequestHandler<CreateProduct
     }
 }
 
-public record UpdateProductionShiftCommand(Guid Id, string Name, int Sequence) : IRequest<ProductionShiftDto>;
+public record UpdateProductionShiftCommand(Guid Id, string Name, int Sequence, decimal? HoursPerDay = null) : IRequest<ProductionShiftDto>;
 
 public class UpdateProductionShiftCommandValidator : AbstractValidator<UpdateProductionShiftCommand>
 {
@@ -74,6 +76,7 @@ public class UpdateProductionShiftCommandValidator : AbstractValidator<UpdatePro
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Sequence).GreaterThan(0);
+        RuleFor(x => x.HoursPerDay).GreaterThan(0).LessThanOrEqualTo(24).When(x => x.HoursPerDay.HasValue);
     }
 }
 
@@ -92,7 +95,7 @@ public class UpdateProductionShiftCommandHandler : IRequestHandler<UpdateProduct
         var shift = await _db.ProductionShifts.FirstOrDefaultAsync(s => s.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("ProductionShift", request.Id);
 
-        shift.Update(request.Name, request.Sequence, _currentUser.UserName);
+        shift.Update(request.Name, request.Sequence, _currentUser.UserName, request.HoursPerDay);
 
         await _db.SaveChangesAsync(cancellationToken);
         return ProductionShiftMapper.Map(shift);

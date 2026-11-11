@@ -4,6 +4,7 @@ import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
 import RouteFallback from "@/components/RouteFallback";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import ServiceWorkerUpdatePrompt from "@/components/ServiceWorkerUpdatePrompt";
 
 /*
  * Route-level code splitting. Every page is its own chunk, fetched when the
@@ -18,6 +19,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
  * download them to open the dashboard.
  */
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const ChangePasswordPage = lazy(() => import("@/pages/ChangePasswordPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
 const SuppliersPage = lazy(() => import("@/pages/SuppliersPage"));
@@ -42,6 +44,7 @@ const FormationRequestsPage = lazy(() => import("@/pages/FormationRequestsPage")
 const FormationRequestDetailPage = lazy(() => import("@/pages/FormationRequestDetailPage"));
 const FormationSpecificationsPage = lazy(() => import("@/pages/FormationSpecificationsPage"));
 const ProductionFloorPage = lazy(() => import("@/pages/ProductionFloorPage"));
+const FloorMobilePage = lazy(() => import("@/pages/FloorMobilePage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 const AuditLogPage = lazy(() => import("@/pages/AuditLogPage"));
@@ -81,6 +84,9 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth />}>
+          {/* Part 2: outside Layout (no nav/sidebar) so a flagged session cannot reach any
+              business screen from here; the API gate enforces the same server-side. */}
+          <Route path="/change-password" element={<ChangePasswordPage />} />
           <Route element={<Layout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/customers" element={<CustomersPage />} />
@@ -120,6 +126,10 @@ export default function App() {
           <Route path="/supplies" element={<SuppliesPage />} />
           <Route path="/material-sales" element={<MaterialSalesPage />} />
           <Route path="/production-floor" element={<ProductionFloorPage />} />
+          {/* The phone-first floor screen: one card per live order with its
+              next action, no admin tables. A separate route (not a breakpoint
+              restyle) so a home-screen shortcut opens it directly. */}
+          <Route path="/floor/m" element={<FloorMobilePage />} />
           <Route path="/production-stages" element={<ProductionStagesPage />} />
           <Route path="/production-orders" element={<ProductionOrdersPage />} />
           <Route path="/production-orders/:id" element={<ProductionOrderDetailPage />} />
@@ -154,6 +164,9 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
+      {/* New-deployment refresh prompt (Part 3): outside the routes so it can
+          appear on any screen, including /login and /scan/*. */}
+      <ServiceWorkerUpdatePrompt />
     </ErrorBoundary>
   );
 }

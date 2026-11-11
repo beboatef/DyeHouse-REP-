@@ -16,8 +16,10 @@ public sealed class SecurityHeadersMiddleware
 {
     private readonly RequestDelegate _next;
 
+    /// <summary>Initializes a new instance of the SecurityHeadersMiddleware class.</summary>
     public SecurityHeadersMiddleware(RequestDelegate next) => _next = next;
 
+    /// <summary>Adds the standard security response headers.</summary>
     public async Task InvokeAsync(HttpContext context)
     {
         var headers = context.Response.Headers;

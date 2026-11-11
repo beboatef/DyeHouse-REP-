@@ -29,6 +29,14 @@ const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHRO
 
 const BASE = process.env.SMOKE_BASE || "http://127.0.0.1:5173";
 
+/** SMOKE_VIEWPORT=mobile re-runs the pass at a phone viewport (390x844 with
+    touch), so the floor and scan screens are exercised the way a shop-floor
+    phone sees them. Desktop (1280x800) is the default. */
+const MOBILE = process.env.SMOKE_VIEWPORT === "mobile";
+const VIEWPORT = MOBILE
+  ? { width: 390, height: 844, isMobile: true, hasTouch: true }
+  : { width: 1280, height: 800 };
+
 /** Routes that must render something, keyed by the app's own paths. */
 const ROUTES = [
   { path: "/login", name: "Login" },
@@ -57,7 +65,12 @@ const ROUTES = [
   { path: "/users", name: "Users / Permissions" },
   { path: "/settings", name: "Settings" },
   { path: "/period-closing", name: "Period Closing" },
-  { path: "/audit-log", name: "Audit Log" }
+  { path: "/audit-log", name: "Audit Log" },
+  // Part 1 + 2: the phone-first floor screen and the QR scan pages. Signed
+  // out they redirect to /login (which still renders); signed in they fetch.
+  { path: "/floor/m", name: "Floor (mobile)" },
+  { path: "/scan/production-order/00000000-0000-0000-0000-000000000000", name: "Scan job order" },
+  { path: "/scan/invoice/00000000-0000-0000-0000-000000000000", name: "Scan invoice" }
 ];
 
 /** Console noise that is not a defect. */
@@ -103,8 +116,11 @@ const isFailure = (type, text) =>
   let totalApiFailures = 0;
   const summary = [];
 
+  console.log(`viewport: ${MOBILE ? "mobile 390x844 (touch)" : "desktop 1280x800"}`);
+
   for (const route of ROUTES) {
     const page = await browser.newPage();
+    await page.setViewport(VIEWPORT);
     const errors = [];
     let apiFailures = 0;
 
@@ -179,6 +195,7 @@ const isFailure = (type, text) =>
   // --- the shell: fonts, Tailwind, RTL, language switching -------------
   console.log("\n== shell checks ==");
   const shell = await browser.newPage();
+  await shell.setViewport(VIEWPORT);
   const shellErrors = [];
   shell.on("pageerror", (e) => shellErrors.push(e.message));
   shell.on("console", (m) => { if (m.type() === "error" && !IGNORE.some((r) => r.test(m.text()))) shellErrors.push(m.text()); });

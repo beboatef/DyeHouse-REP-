@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { DashboardApi } from "@/api/client";
+import { DashboardApi, KpisApi } from "@/api/client";
 import { Card, Badge, KpiCard, QuickTile, fmt, type BadgeTone } from "@/components/ui";
 import { revealStyle } from "@/components/motion";
 import { useI18n } from "@/i18n";
@@ -76,6 +76,38 @@ function DistributionPanel({ items }: { items: { name: string; value: number; co
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Management KPI headlines (spec Part 1). One request to the summary endpoint
+ * for the current month; renders nothing while loading or when the server
+ * refuses (no kpis.view) - the 403 simply leaves this section out.
+ */
+function KpiSection({ delay }: { delay?: number }) {
+  const { t } = useI18n();
+  const now = new Date();
+  const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const { data } = useQuery({
+    queryKey: ["kpis-summary"],
+    queryFn: () => KpisApi.summary({ from }),
+    retry: false
+  });
+  if (!data) return null;
+  const na = t("dash.reference", "—");
+  return (
+    <Section title={t("kpi.section")} delay={delay}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard tone="warning" icon={<TrendingDown size={18} />} label={t("kpi.wasteRate")} value={data.overallWasteRatePct == null ? na : `${data.overallWasteRatePct}%`} footnote={`${t("kpi.totalWaste")}: ${fmt(Math.round(data.totalWasteKg))}`} />
+        <KpiCard tone="info" icon={<ClipboardCheck size={18} />} label={t("kpi.leadTime")} value={data.averageLeadTimeDays == null ? na : data.averageLeadTimeDays} footnote={`${t("kpi.finishedOrders")}: ${fmt(data.finishedOrders)}`} />
+        <KpiCard tone="brand" icon={<Layers size={18} />} label={t("kpi.utilisation")} value={data.overallUtilisationPct == null ? na : `${data.overallUtilisationPct}%`} footnote={`${t("kpi.runningHours")}: ${fmt(Math.round(data.totalRunningHours * 10) / 10)}`} />
+        <KpiCard tone="success" icon={<PackageCheck size={18} />} label={t("kpi.throughput")} value={fmt(Math.round(data.totalThroughputKg))} />
+        <KpiCard tone="warning" icon={<Wallet size={18} />} label={t("kpi.exposure")} value={fmt(Math.round(data.totalCustomerExposure))} />
+        <KpiCard tone="danger" icon={<BadgeDollarSign size={18} />} label={t("kpi.chequesDue")} value={fmt(data.chequesDueCount)} footnote={`${fmt(Math.round(data.chequesDueTotal))}`} />
+        <KpiCard tone="danger" icon={<FileWarning size={18} />} label={t("kpi.overrides")} value={fmt(data.overridesCount)} />
+        <KpiCard tone="warning" icon={<AlertTriangle size={18} />} label={t("kpi.reopenings")} value={fmt(data.reopeningsCount)} />
+      </div>
+    </Section>
   );
 }
 
@@ -346,6 +378,9 @@ export default function DashboardPage() {
           <KpiCard tone="warning" icon={<BadgeDollarSign size={18} />} label={t("dash.checksDueSoon")} value={data.checksDueSoonCount} />
         </div>
       </Section>
+
+      {/* ---- Management KPIs (spec Part 1): hidden without kpis.view, the server decides ---- */}
+      <KpiSection delay={482} />
 
       {/* ---- Master data ---- */}
       <Section title={t("nav.group.master")} delay={498}>

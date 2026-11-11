@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.StockAdjustments.DTOs;
 using DyeHouseERP.Domain.Common;
@@ -7,6 +8,7 @@ using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Enums;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.StockAdjustments.Commands;
@@ -60,13 +62,16 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
     private readonly IPeriodCloseService _periodClose;
     private readonly IAllocationLockService _stockLock;
 
+    private readonly ILogger<CreateStockAdjustmentCommandHandler>? _logger;
+
     public CreateStockAdjustmentCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
         IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
-        IAllocationLockService stockLock)
+        IAllocationLockService stockLock,
+        ILogger<CreateStockAdjustmentCommandHandler>? logger = null)
     {
         _db = db; _currentUser = currentUser; _numberGenerator = numberGenerator; _ledger = ledger; _clock = clock;
-        _periodClose = periodClose; _stockLock = stockLock;
+        _periodClose = periodClose; _stockLock = stockLock; _logger = logger;
     }
 
     public async Task<StockAdjustmentDto> Handle(CreateStockAdjustmentCommand request, CancellationToken cancellationToken)
@@ -118,11 +123,16 @@ public class CreateStockAdjustmentCommandHandler : IRequestHandler<CreateStockAd
                 // recorded the caller as both requester and approver - the
                 // self-approval the separation of duties forbids.
                 var decision = await ApprovalRequestGuard.ConsumeAsync(
-                    _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+                    _db, _currentUser, request.ApprovalRequestId, request, cancellationToken, _logger);
 
                 _db.NegativeStockOverrides.Add(new NegativeStockOverride(
                     message.Id, request.ItemId, request.CustomerId, requested, available,
                     request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
+
+                _logger?.LogWarning(
+                    "EventName: {EventName}. Negative-stock override recorded for message {RawMessageId} "
+                    + "item {ItemId} customer {CustomerId}: requested {Requested}, available {Available}.",
+                    LogEvents.NegativeStockOverrideCreated, message.Id, request.ItemId, request.CustomerId, requested, available);
 
                 // The adjustment stores who authorised it: on the override path
                 // that is the real approver account from the approval, never the

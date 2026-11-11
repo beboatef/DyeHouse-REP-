@@ -9,4 +9,6 @@ public class LoginResultDto
     public string Username { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public List<string> Roles { get; set; } = new();
+    /// <summary>Part 2: while true the API only answers change-password, logout and self-read.</summary>
+    public bool MustChangePassword { get; set; }
 }

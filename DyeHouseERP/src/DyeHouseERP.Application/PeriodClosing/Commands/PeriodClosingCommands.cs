@@ -1,11 +1,13 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Application.PeriodClosing.DTOs;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace DyeHouseERP.Application.PeriodClosing.Commands;
 
@@ -21,9 +23,10 @@ public class ClosePeriodCommandHandler : IRequestHandler<ClosePeriodCommand, Per
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IAllocationLockService _lockService;
+    private readonly ILogger<ClosePeriodCommandHandler> _logger;
     public ClosePeriodCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IAllocationLockService lockService)
-    { _db = db; _currentUser = currentUser; _lockService = lockService; }
+        IAllocationLockService lockService, ILogger<ClosePeriodCommandHandler> logger)
+    { _db = db; _currentUser = currentUser; _lockService = lockService; _logger = logger; }
 
     public async Task<PeriodCloseDto> Handle(ClosePeriodCommand request, CancellationToken cancellationToken)
     {
@@ -59,6 +62,9 @@ public class ClosePeriodCommandHandler : IRequestHandler<ClosePeriodCommand, Per
             _db.PeriodCloses.Add(period);
             await _db.SaveChangesAsync(cancellationToken);
 
+            _logger.LogInformation(
+                "EventName: {EventName}. Period {PeriodStart} to {PeriodEnd} closed by {ClosedBy}.",
+                LogEvents.PeriodClosed, period.PeriodStart, period.PeriodEnd, period.CreatedBy);
             return Map(period);
         }
     }
@@ -84,9 +90,10 @@ public class ReopenPeriodCommandHandler : IRequestHandler<ReopenPeriodCommand, P
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IAllocationLockService _lockService;
+    private readonly ILogger<ReopenPeriodCommandHandler> _reopenLogger;
     public ReopenPeriodCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
-        IAllocationLockService lockService)
-    { _db = db; _currentUser = currentUser; _lockService = lockService; }
+        IAllocationLockService lockService, ILogger<ReopenPeriodCommandHandler> reopenLogger)
+    { _db = db; _currentUser = currentUser; _lockService = lockService; _reopenLogger = reopenLogger; }
 
     public async Task<PeriodCloseDto> Handle(ReopenPeriodCommand request, CancellationToken cancellationToken)
     {
@@ -101,6 +108,10 @@ public class ReopenPeriodCommandHandler : IRequestHandler<ReopenPeriodCommand, P
             period.Reopen(request.Reason, _currentUser.UserName);
             await _db.SaveChangesAsync(cancellationToken);
 
+            // Reopening re-admits postings into a range that was sealed: always worth an alert.
+            _reopenLogger.LogWarning(
+                "EventName: {EventName}. Period {PeriodStart} to {PeriodEnd} reopened by {ReopenedBy}: {Reason}.",
+                LogEvents.PeriodReopened, period.PeriodStart, period.PeriodEnd, _currentUser.UserName, request.Reason);
             return ClosePeriodCommandHandler.Map(period);
         }
     }

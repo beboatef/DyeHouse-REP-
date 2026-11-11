@@ -1,6 +1,8 @@
 using System.Text;
+using DyeHouseERP.Application.Common.Monitoring;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace DyeHouseERP.API.Auth;
 
@@ -42,13 +44,20 @@ public class LoginThrottleMiddleware
 
     private readonly RequestDelegate _next;
     private readonly LoginRateLimiter _limiter;
+    private readonly ILogger<LoginThrottleMiddleware> _logger;
 
-    public LoginThrottleMiddleware(RequestDelegate next, LoginRateLimiter limiter)
+    /// <summary>Initializes a new instance of the LoginThrottleMiddleware class.</summary>
+    public LoginThrottleMiddleware(
+        RequestDelegate next,
+        LoginRateLimiter limiter,
+        ILogger<LoginThrottleMiddleware> logger)
     {
         _next = next;
         _limiter = limiter;
+        _logger = logger;
     }
 
+    /// <summary>Rejects login attempts that exceed the throttle budget before authentication runs.</summary>
     public async Task InvokeAsync(HttpContext context)
     {
         var isLoginPost =
@@ -78,6 +87,9 @@ public class LoginThrottleMiddleware
 
         if (_limiter.IsLockedOut(ip, username, now))
         {
+            _logger.LogWarning(
+                "EventName: {EventName}. The login throttle rejected an attempt.",
+                LogEvents.LoginThrottleTripped);
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             context.Response.Headers.RetryAfter = ((int)TimeSpan
                 .FromMinutes(GetOptions(context).LockoutMinutes)

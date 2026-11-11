@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Domain.Entities;
 using DyeHouseERP.Persistence;
@@ -50,12 +51,15 @@ public static class DatabaseBootstrap
         /// <summary>Development only: seed the documented local login when no user exists, as before.</summary>
         public bool DevelopmentDefaultAdmin { get; init; }
 
+        /// <summary>The bootstrap administrator username, from configuration.</summary>
         public string? AdminUsername { get; init; }
+        /// <summary>The bootstrap administrator password, from configuration (never logged).</summary>
         public string? AdminPassword { get; init; }
 
         /// <summary>A file holding the password, for operators who do not want it in the environment.</summary>
         public string? AdminPasswordFile { get; init; }
 
+        /// <summary>Reads the bootstrap options from configuration and environment.</summary>
         public static Options FromConfiguration(IConfiguration configuration, IHostEnvironment environment)
         {
             var isDevelopment = environment.IsDevelopment();
@@ -140,10 +144,18 @@ public static class DatabaseBootstrap
             }
 
             if (!reachable)
+            {
+                // Startup cannot proceed without the database: this is the loudest, earliest
+                // DatabaseConnectionFailed - a deploy that points at the wrong server fails here,
+                // visibly, instead of serving 500s. The message carries no credential.
+                logger.LogCritical(
+                    "EventName: {EventName}. Startup cannot reach the configured database.",
+                    LogEvents.DatabaseConnectionFailed);
                 throw new InvalidOperationException(
                     "Cannot reach the database configured in ConnectionStrings:DefaultConnection. Check the server, " +
                     "the credentials and that the database exists, then prepare it with " +
                     "'dotnet run --project src/DyeHouseERP.API -- --bootstrap' and start the API again.");
+            }
 
             if (!await SchemaExistsAsync(db, cancellationToken))
                 throw new InvalidOperationException(
@@ -225,14 +237,19 @@ public static class DatabaseBootstrap
 
         ValidateAdminPassword(username!, password!);
 
+        var bootstrapPasswordHash = passwordHasher.Hash(password!);
         var admin = new User(
             username!,
-            passwordHasher.Hash(password!),
+            bootstrapPasswordHash,
             "Administrator",
             roles: $"admin,{Permissions.InventoryAllowNegativeStock}",
             createdBy: "bootstrap");
 
+        // Part 2: a bootstrap-supplied password arrives through configuration, not from the
+        // user's own choice. The account starts flagged and the password lands in history.
+        admin.MarkPasswordSetByAdministrator("bootstrap");
         db.Users.Add(admin);
+        db.PasswordHistories.Add(new PasswordHistory(admin.Id, bootstrapPasswordHash, "bootstrap"));
         await db.SaveChangesAsync(cancellationToken);
 
         // Only the username is logged: the password came from configuration and is never repeated.

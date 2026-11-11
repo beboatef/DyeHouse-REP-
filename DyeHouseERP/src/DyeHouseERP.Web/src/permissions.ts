@@ -182,8 +182,11 @@ export const Permissions: PermissionOption[] = [
 
   { value: "reports.view", group: "التقارير", label: "عرض التقارير" },
   { value: "reports.export", group: "التقارير", label: "تصدير التقارير" },
+  { value: "kpis.view", group: "التقارير", label: "عرض مؤشرات الأداء" },
+  { value: "accounting.export", group: "التقارير", label: "التصدير المحاسبي" },
 
   { value: "users.manage", group: "المستخدمون والأدوار", label: "إدارة المستخدمين" },
+  { value: "users.reset_password", group: "المستخدمون والأدوار", label: "إعادة تعيين كلمات المرور" },
   { value: "roles.manage", group: "المستخدمون والأدوار", label: "إدارة الأدوار والصلاحيات" },
 
   { value: "settings.manage", group: "الإعدادات", label: "إعدادات الشركة" },

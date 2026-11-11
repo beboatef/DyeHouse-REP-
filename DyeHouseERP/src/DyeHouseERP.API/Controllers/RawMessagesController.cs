@@ -11,12 +11,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Hosts the raw fabric messages (customer receipts) endpoints.</summary>
 [ApiController]
 [Route("api/raw-messages")]
 [Authorize]
 public class RawMessagesController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the RawMessagesController class.</summary>
     public RawMessagesController(ISender mediator) => _mediator = mediator;
 
     /// <summary>
@@ -27,6 +29,8 @@ public class RawMessagesController : ControllerBase
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReceive)]
     [ProducesResponseType(typeof(List<RawMessageDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<RawMessageDto>>> Get(
         [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] bool onlyWithBalance = false)
         => Ok(await _mediator.Send(new GetRawMessagesQuery(customerId, itemId, onlyWithBalance)));
@@ -37,6 +41,8 @@ public class RawMessagesController : ControllerBase
     /// balances report: one row per message line with its live remaining KG/Meter.
     /// </summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] Guid? itemId,
         [FromQuery] bool onlyWithBalance = false, [FromQuery] string format = "excel",
@@ -60,6 +66,9 @@ public class RawMessagesController : ControllerBase
 
     /// <summary>Single-message lookup - feeds the print-preview screen and the QR scan view (spec sections 39-40).</summary>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReceive)]
     public async Task<ActionResult<RawMessageDto>> GetById(Guid id) => Ok(await _mediator.Send(new GetRawMessageByIdQuery(id)));
 
@@ -70,6 +79,11 @@ public class RawMessagesController : ControllerBase
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReceive)]
     [ProducesResponseType(typeof(RawMessageDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<RawMessageDto>> Create([FromBody] CreateRawMessageCommand command)
     {
         var result = await _mediator.Send(command);
@@ -80,6 +94,12 @@ public class RawMessagesController : ControllerBase
     [HttpPost("{id:guid}/inspection")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawInspect)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> RecordInspection(Guid id, [FromBody] RecordInspectionRequest request)
     {
         await _mediator.Send(new RecordInspectionCommand(id, request.Result, request.Notes, request.Rejections));
@@ -96,6 +116,12 @@ public class RawMessagesController : ControllerBase
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReceiptCancel)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelRawMessageRequest request)
     {
         await _mediator.Send(new CancelRawMessageCommand(id, request.Reason));
@@ -104,6 +130,9 @@ public class RawMessagesController : ControllerBase
 
     /// <summary>Printable raw receipt/message PDF (spec section 39) - the central traceability document for this batch of customer-owned fabric.</summary>
     [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetPdf(Guid id, [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export)
     {
@@ -122,6 +151,9 @@ public class RawMessagesController : ControllerBase
 }
 
 /// <summary>
+/// <param name="Result">The result.</param>
+/// <param name="Notes">The notes.</param>
+/// <param name="Rejections">The rejections.</param>
 /// Optional receiving-inspection information (spec section 9 - recorded, never a
 /// blocking approval step). Rejections carry the per-line rejected quantity that
 /// must stop being allocatable while staying traceable to this receipt.
@@ -132,6 +164,7 @@ public record RecordInspectionRequest(
     List<DyeHouseERP.Application.RawReceipts.DTOs.RawMessageLineRejectionInput>? Rejections = null);
 
 /// <summary>
+/// <param name="Reason">The reason.</param>
 /// A cancellation always carries a reason: it is stored on the receipt and written to the
 /// audit trail, so a corrected mistake is explainable later.
 /// </summary>

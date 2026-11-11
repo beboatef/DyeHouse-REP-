@@ -23,18 +23,30 @@ namespace DyeHouseERP.API.Controllers;
 public class ItemsController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the ItemsController class.</summary>
     public ItemsController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists fabric items.</summary>
+    /// <remarks>Route: GET api/Items. Requires the 'items.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsView)]
     [ProducesResponseType(typeof(List<ItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<ItemDto>>> Get(
         [FromQuery] bool? activeOnly, [FromQuery] string? search, [FromQuery] string? category)
         => Ok(await _mediator.Send(new GetItemsQuery(activeOnly, search, category)));
 
+    /// <summary>Creates fabric items.</summary>
+    /// <remarks>Route: POST api/Items. Requires the 'items.create' permission.</remarks>
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsCreate)]
     [ProducesResponseType(typeof(ItemDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ItemDto>> Create([FromBody] CreateItemCommand command)
     {
         var result = await _mediator.Send(command);
@@ -43,6 +55,12 @@ public class ItemsController : ControllerBase
 
     /// <summary>Edits an item master record. Changing the base unit is refused once inventory history exists.</summary>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsEdit)]
     public async Task<ActionResult<ItemDto>> Update(Guid id, [FromBody] UpdateItemCommand command)
     {
@@ -57,6 +75,9 @@ public class ItemsController : ControllerBase
     [HttpGet("{id:guid}/conversions")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsView)]
     [ProducesResponseType(typeof(List<ItemUnitConversionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<List<ItemUnitConversionDto>>> GetConversions(
         Guid id, [FromQuery] string? operation)
         => Ok(await _mediator.Send(new GetItemUnitConversionsQuery(id, operation)));
@@ -68,6 +89,12 @@ public class ItemsController : ControllerBase
     [HttpPost("{id:guid}/conversions")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsEdit)]
     [ProducesResponseType(typeof(ItemUnitConversionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ItemUnitConversionDto>> SetConversion(
         Guid id, [FromBody] SetItemUnitConversionRequest request)
         => Ok(await _mediator.Send(new SetItemUnitConversionCommand(
@@ -76,6 +103,10 @@ public class ItemsController : ControllerBase
 
     /// <summary>Removes the explicit conversion rule for an (item + operation) pair.</summary>
     [HttpDelete("{id:guid}/conversions/{operation}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsEdit)]
     public async Task<IActionResult> RemoveConversion(Guid id, string operation)
     {
@@ -85,6 +116,8 @@ public class ItemsController : ControllerBase
 
     /// <summary>Excel export of the current item list (spec section 7) - same filters as GET.</summary>
     [HttpGet("export/excel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportExcel(
         [FromQuery] bool? activeOnly, [FromQuery] string? search,
@@ -106,6 +139,8 @@ public class ItemsController : ControllerBase
 
     /// <summary>The same list as a printable document (spec section 39), driven by the same filters.</summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export(
         [FromQuery] bool? activeOnly, [FromQuery] string? search,
@@ -126,6 +161,8 @@ public class ItemsController : ControllerBase
 
     /// <summary>Step 1 of the import workflow (spec section 7): the empty template with the exact expected columns.</summary>
     [HttpGet("import/template")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsView)]
     public IActionResult ImportTemplate([FromServices] IReportExportService export)
     {
@@ -139,6 +176,10 @@ public class ItemsController : ControllerBase
     /// which is only reachable through the items.edit-protected endpoint below.
     /// </summary>
     [HttpPost("import/preview")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsCreate)]
     public async Task<ActionResult<ItemImportPreviewDto>> PreviewImport(IFormFile file)
     {
@@ -149,6 +190,10 @@ public class ItemsController : ControllerBase
 
     /// <summary>Step 3: confirm - re-validates from scratch and creates only the valid, new rows.</summary>
     [HttpPost("import/execute")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsCreate)]
     public async Task<ActionResult<ItemImportExecuteResultDto>> ExecuteImport(IFormFile file)
     {
@@ -162,6 +207,10 @@ public class ItemsController : ControllerBase
     /// items.edit permission on purpose: spec section 7 requires an explicit right to overwrite existing items.
     /// </summary>
     [HttpPost("import/execute-update")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsEdit)]
     public async Task<ActionResult<ItemImportExecuteResultDto>> ExecuteImportWithUpdate(IFormFile file)
     {
@@ -172,6 +221,10 @@ public class ItemsController : ControllerBase
 
     /// <summary>Preview of the same update-capable import, so the UI can show what will be updated before confirming.</summary>
     [HttpPost("import/preview-update")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ItemsEdit)]
     public async Task<ActionResult<ItemImportPreviewDto>> PreviewImportWithUpdate(IFormFile file)
     {
@@ -182,6 +235,12 @@ public class ItemsController : ControllerBase
 }
 
 /// <summary>Body for an explicit item-scoped unit conversion rule (see <see cref="SetItemUnitConversionCommand"/>).</summary>
+/// <param name="FromUnit">The from unit.</param>
+/// <param name="ToUnit">The to unit.</param>
+/// <param name="Factor">The factor.</param>
+/// <param name="Operation">The operation.</param>
+/// <param name="Notes">The notes.</param>
+/// <param name="IsActive">Whether is active.</param>
 public record SetItemUnitConversionRequest(
     UnitOfMeasure FromUnit, UnitOfMeasure ToUnit, decimal Factor, string Operation,
     string? Notes = null, bool IsActive = true);

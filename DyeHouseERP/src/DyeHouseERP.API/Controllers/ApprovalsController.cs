@@ -31,11 +31,16 @@ namespace DyeHouseERP.API.Controllers;
 public class ApprovalsController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the ApprovalsController class.</summary>
     public ApprovalsController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists approval requests (approval-center inbox).</summary>
+    /// <remarks>Route: GET api/approvals. Requires the 'approvals.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ApprovalsView)]
     [ProducesResponseType(typeof(ApprovalCenterDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ApprovalCenterDto>> Get([FromQuery] int recentDays = 30)
         => Ok(await _mediator.Send(new GetApprovalCenterQuery(recentDays)));
 
@@ -46,6 +51,8 @@ public class ApprovalsController : ControllerBase
     [HttpGet("requests")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ApprovalsView)]
     [ProducesResponseType(typeof(List<ApprovalRequestDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<ApprovalRequestDto>>> GetRequests(
         [FromQuery] ApprovalRequestStatus? status, [FromQuery] ApprovalRequestType? type)
         => Ok(await _mediator.Send(new GetApprovalRequestsQuery(status, type)));
@@ -57,6 +64,10 @@ public class ApprovalsController : ControllerBase
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(ApprovalRequestDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ApprovalRequestDto>> Submit([FromBody] SubmitApprovalRequestCommand command)
     {
         var result = await _mediator.Send(command);
@@ -71,6 +82,11 @@ public class ApprovalsController : ControllerBase
     [HttpPost("{id:guid}/approve")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryApproveNegativeStock)]
     [ProducesResponseType(typeof(ApprovalRequestDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ApprovalRequestDto>> Approve(Guid id)
         => Ok(await _mediator.Send(new ApproveApprovalRequestCommand(id)));
 
@@ -78,8 +94,16 @@ public class ApprovalsController : ControllerBase
     [HttpPost("{id:guid}/reject")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryApproveNegativeStock)]
     [ProducesResponseType(typeof(ApprovalRequestDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ApprovalRequestDto>> Reject(Guid id, [FromBody] RejectApprovalRequestBody body)
         => Ok(await _mediator.Send(new RejectApprovalRequestCommand(id, body.Reason)));
 }
 
+/// <summary>Request payload to reject approval request.</summary>
+/// <param name="Reason">The reason.</param>
 public record RejectApprovalRequestBody(string Reason);

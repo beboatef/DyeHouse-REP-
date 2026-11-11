@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using DyeHouseERP.Application.Accounting.DTOs;
 using DyeHouseERP.Application.Common.Interfaces;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -126,10 +127,63 @@ public class ReportExportService : IReportExportService
 
     public byte[] GenerateExcel(string sheetName, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows)
     {
-        var company = _identityProvider.Get();
-
         using var workbook = new XLWorkbook();
-        var worksheet = workbook.Worksheets.Add(string.IsNullOrWhiteSpace(sheetName) ? "Sheet1" : sheetName);
+        FillWorksheet(workbook.Worksheets.Add(SanitizeSheetName(sheetName)), headers, rows);
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    public byte[] GenerateExcelWorkbook(IReadOnlyList<ExportWorksheet> sheets)
+    {
+        using var workbook = new XLWorkbook();
+        foreach (var sheet in sheets)
+            FillWorksheet(workbook.Worksheets.Add(SanitizeSheetName(sheet.SheetName)), sheet.Headers, sheet.Rows);
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    public byte[] GenerateCsv(IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows)
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.AppendLine(string.Join(",", headers.Select(EscapeCsv)));
+        foreach (var row in rows)
+            builder.AppendLine(string.Join(",", row.Select(FormatCsv)));
+        return System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(builder.ToString())).ToArray();
+    }
+
+    /// <summary>ClosedXML sheet names: at most 31 chars, none of []:*?/\.</summary>
+    private static string SanitizeSheetName(string sheetName)
+    {
+        var clean = new string((string.IsNullOrWhiteSpace(sheetName) ? "Sheet1" : sheetName)
+            .Where(c => c != '[' && c != ']' && c != ':' && c != '*' && c != '?' && c != '/' && c != '\\').ToArray());
+        return clean.Length > 31 ? clean[..31] : clean;
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        value ??= string.Empty;
+        return value.Any(c => c == ',' || c == '"' || c == '\r' || c == '\n')
+            ? "\"" + value.Replace("\"", "\"\"") + "\""
+            : value;
+    }
+
+    private static string FormatCsv(object? value) => value switch
+    {
+        null => string.Empty,
+        DateTime dt => EscapeCsv(dt.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)),
+        decimal dec => dec.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        double dbl => dbl.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        float flt => flt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        _ => EscapeCsv(value.ToString())
+    };
+
+    private void FillWorksheet(IXLWorksheet worksheet, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows)
+    {
+        var company = _identityProvider.Get();
 
         // The sheet's identity comes from settings, carried in the print header/footer so the
         // data rows (row 1 = header) are never shifted - the import templates depend on that.
@@ -164,9 +218,5 @@ public class ReportExportService : IReportExportService
         }
 
         worksheet.Columns().AdjustToContents();
-
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-        return stream.ToArray();
     }
 }

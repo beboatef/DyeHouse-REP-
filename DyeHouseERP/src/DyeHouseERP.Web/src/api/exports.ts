@@ -216,6 +216,13 @@ export const StatementsExports = {
   })
 };
 
+export const AccountingExports = {
+  csv: (params?: QueryParams) =>
+    downloadFile("/accounting/export", "accounting-export.csv", { ...params, format: "csv" }),
+  xlsx: (params?: QueryParams) =>
+    downloadFile("/accounting/export", "accounting-export.xlsx", { ...params, format: "xlsx" })
+};
+
 export const ReportsExports = {
   inventoryMovements: {
     excel: download("/reports/inventory-movements/excel", "inventory-movements.xlsx"),

@@ -22,18 +22,28 @@ namespace DyeHouseERP.API.Controllers;
 public class CustomerReturnsController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the CustomerReturnsController class.</summary>
     public CustomerReturnsController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists customer returns.</summary>
+    /// <remarks>Route: GET api/customer-returns. Requires the 'inventory.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     [ProducesResponseType(typeof(List<CustomerReturnDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<CustomerReturnDto>>> Get(
         [FromQuery] Guid? customerId, [FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate, [FromQuery] string? search)
         => Ok(await _mediator.Send(new GetCustomerReturnsQuery(customerId, fromDate, toDate, search)));
 
+    /// <summary>Gets by id.</summary>
+    /// <remarks>Route: GET api/customer-returns/{id:guid}. Requires the 'inventory.view' permission.</remarks>
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     [ProducesResponseType(typeof(CustomerReturnDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CustomerReturnDto>> GetById(Guid id)
         => Ok(await _mediator.Send(new GetCustomerReturnByIdQuery(id)));
 
@@ -46,6 +56,11 @@ public class CustomerReturnsController : ControllerBase
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReturn)]
     [ProducesResponseType(typeof(CustomerReturnDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CustomerReturnDto>> Create([FromBody] CreateCustomerReturnCommand command)
     {
         var result = await _mediator.Send(command);
@@ -64,6 +79,12 @@ public class CustomerReturnsController : ControllerBase
     [HttpPost("{id:guid}/production-order")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawConsume)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> CreateProductionOrder(
         Guid id, [FromBody] CreateOrderFromReturnRequest request)
     {
@@ -85,17 +106,34 @@ public class CustomerReturnsController : ControllerBase
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawReturnCancel)]
     [ProducesResponseType(typeof(CustomerReturnDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CustomerReturnDto>> Cancel(Guid id, [FromBody] CancelCustomerReturnRequest request)
         => Ok(await _mediator.Send(new CancelCustomerReturnCommand(id, request.Reason)));
 }
 
 /// <summary>
+/// <param name="Reason">The reason.</param>
 /// A cancellation always carries a reason: it is stored on the return and written to the audit
 /// trail, so a corrected mistake is explainable later.
 /// </summary>
 public record CancelCustomerReturnRequest(string Reason);
 
 /// <summary>
+/// <param name="ItemId">The item id.</param>
+/// <param name="RawMessageId">The raw message id.</param>
+/// <param name="OrderDate">The order date.</param>
+/// <param name="ActualQuantityKg">The actual quantity kg.</param>
+/// <param name="ActualQuantityMeter">The actual quantity meter.</param>
+/// <param name="CostBearer">The cost bearer.</param>
+/// <param name="Color">The color.</param>
+/// <param name="Notes">The notes.</param>
+/// <param name="RequestId">The request id.</param>
+/// <param name="StartingStageId">The starting stage id.</param>
 /// Body of the "new Job Order from a return" request (spec section 33). The account choice is nullable
 /// on purpose so that an omitted value is a validation error naming the choice, never a silent default.
 /// </summary>
@@ -109,5 +147,5 @@ public record CreateOrderFromReturnRequest(
     string? Color = null,
     string? Notes = null,
     Guid? RequestId = null,
-    /// <summary>Optional starting stage: returned material may be reworked from the operation it failed at (spec section 33). Must be an existing, active stage.</summary>
+    // Optional starting stage: returned material may be reworked from the operation it failed at (spec section 33). Must be an existing, active stage.
     Guid? StartingStageId = null);

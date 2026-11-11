@@ -19,9 +19,14 @@ namespace DyeHouseERP.API.Controllers;
 public class AuditLogController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the AuditLogController class.</summary>
     public AuditLogController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists audit-log entries.</summary>
+    /// <remarks>Route: GET api/audit-log. Requires the 'audit.view' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AuditView)]
     public async Task<ActionResult<List<AuditLogEntryDto>>> Get(
         [FromQuery] string? entityName, [FromQuery] string? userName, [FromQuery] DateTime? from, [FromQuery] DateTime? to)

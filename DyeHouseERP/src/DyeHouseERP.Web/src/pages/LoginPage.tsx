@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { resolveReturnUrl } from "@/utils/returnUrl";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AuthApi, SettingsApi } from "@/api/client";
 import { Button, Input } from "@/components/ui";
@@ -25,7 +26,12 @@ import {
  */
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t, lang, setLang } = useI18n();
+  // Where to go after sign-in: the scanned/bookmarked URL that bounced here,
+  // validated so only a same-origin application path survives (open redirects
+  // off this origin are rejected inside resolveReturnUrl).
+  const returnUrl = resolveReturnUrl(searchParams.get("returnUrl"));
   // No default username is pre-filled: the UI must never hint at any real or
   // seeded credential - the user types their own login.
   const [username, setUsername] = useState("");
@@ -49,7 +55,9 @@ export default function LoginPage() {
           expiresAtUtc: result.expiresAtUtc
         })
       );
-      navigate("/");
+      // Part 2: a flagged account (bootstrap, admin reset, expired password) must pick a
+      // new password first - the API would answer 403 to everything else anyway.
+      navigate(result.mustChangePassword ? "/change-password" : returnUrl);
     },
     onError: () => setError(t("login.error"))
   });

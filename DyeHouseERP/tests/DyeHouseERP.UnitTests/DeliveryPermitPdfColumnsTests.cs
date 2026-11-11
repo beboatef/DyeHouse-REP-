@@ -48,6 +48,12 @@ public class DeliveryPermitPdfColumnsTests
 
         public byte[] GenerateExcel(string sheetName, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows)
             => Array.Empty<byte>();
+
+        public byte[] GenerateCsv(IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows)
+            => Array.Empty<byte>();
+
+        public byte[] GenerateExcelWorkbook(IReadOnlyList<DyeHouseERP.Application.Accounting.DTOs.ExportWorksheet> sheets)
+            => Array.Empty<byte>();
     }
 
     private static DeliveryDto Permit() => new()

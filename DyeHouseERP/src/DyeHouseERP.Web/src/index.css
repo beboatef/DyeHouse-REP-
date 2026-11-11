@@ -357,6 +357,13 @@
     height: var(--control-h-lg);
     @apply px-5;
   }
+  /* Floor and scan primary actions: the 44px minimum touch target from the
+     viewports skill, with room to spare for gloved hands. Same tokens as
+     .btn-lg, so the theme and the consistency check see nothing new. */
+  .btn-floor {
+    min-height: 48px;
+    @apply px-5;
+  }
   /* NOTE: the foreground of a filled button is literal #fff, not `text-white`.
      tailwind.config.js remaps the `white` name onto --surface so the existing
      pages theme automatically - which would make `text-white` render dark on a

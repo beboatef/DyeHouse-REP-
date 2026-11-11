@@ -24,37 +24,65 @@ namespace DyeHouseERP.API.Controllers;
 public class FormationRequestsController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the FormationRequestsController class.</summary>
     public FormationRequestsController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists formation requests.</summary>
+    /// <remarks>Route: GET api/formation-requests. Requires the 'formation.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationView)]
     [ProducesResponseType(typeof(List<FormationRequestDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<FormationRequestDto>>> Get(
         [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] Guid? rawMessageId,
         [FromQuery] FormationRequestStatus? status, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetFormationRequestsQuery(customerId, itemId, rawMessageId, status, from, to)));
 
+    /// <summary>Gets by id.</summary>
+    /// <remarks>Route: GET api/formation-requests/{id:guid}. Requires the 'formation.view' permission.</remarks>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationView)]
     public async Task<ActionResult<FormationRequestDto>> GetById(Guid id)
         => Ok(await _mediator.Send(new GetFormationRequestByIdQuery(id)));
 
     /// <summary>The request's chain: Customer -&gt; Raw Material Message -&gt; Formation Request (independent of production).</summary>
     [HttpGet("{id:guid}/traceability")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationViewTraceability)]
     public async Task<ActionResult<FormationTraceabilityDto>> GetTraceability(Guid id)
         => Ok(await _mediator.Send(new GetFormationRequestTraceabilityQuery(id)));
 
+    /// <summary>Creates formation requests.</summary>
+    /// <remarks>Route: POST api/formation-requests. Requires the 'formation.create' permission.</remarks>
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationCreate)]
     [ProducesResponseType(typeof(FormationRequestDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<FormationRequestDto>> Create([FromBody] CreateFormationRequestCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    /// <summary>Updates formation requests.</summary>
+    /// <remarks>Route: PUT api/formation-requests/{id:guid}. Requires the 'formation.edit' permission.</remarks>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
     public async Task<ActionResult<FormationRequestDto>> Update(Guid id, [FromBody] UpdateFormationRequestCommand command)
     {
@@ -62,22 +90,52 @@ public class FormationRequestsController : ControllerBase
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>Submits formation requests.</summary>
+    /// <remarks>Route: POST api/formation-requests/{id:guid}/submit. Requires the 'formation.submit' permission.</remarks>
     [HttpPost("{id:guid}/submit")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationSubmit)]
     public async Task<ActionResult<FormationRequestDto>> Submit(Guid id)
         => Ok(await _mediator.Send(new SubmitFormationRequestCommand(id)));
 
+    /// <summary>Approves formation requests.</summary>
+    /// <remarks>Route: POST api/formation-requests/{id:guid}/approve. Requires the 'formation.approve' permission.</remarks>
     [HttpPost("{id:guid}/approve")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationApprove)]
     public async Task<ActionResult<FormationRequestDto>> Approve(Guid id)
         => Ok(await _mediator.Send(new ApproveFormationRequestCommand(id)));
 
+    /// <summary>Rejects formation requests.</summary>
+    /// <remarks>Route: POST api/formation-requests/{id:guid}/reject. Requires the 'formation.reject' permission.</remarks>
     [HttpPost("{id:guid}/reject")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationReject)]
     public async Task<ActionResult<FormationRequestDto>> Reject(Guid id, [FromBody] FormationReasonRequest request)
         => Ok(await _mediator.Send(new RejectFormationRequestCommand(id, request.Reason)));
 
+    /// <summary>Cancels formation requests.</summary>
+    /// <remarks>Route: POST api/formation-requests/{id:guid}/cancel. Requires the 'formation.cancel' permission.</remarks>
     [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationCancel)]
     public async Task<ActionResult<FormationRequestDto>> Cancel(Guid id, [FromBody] FormationReasonRequest request)
         => Ok(await _mediator.Send(new CancelFormationRequestCommand(id, request.Reason)));
@@ -90,10 +148,21 @@ public class FormationRequestsController : ControllerBase
     [HttpPost("{id:guid}/revise")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
     [ProducesResponseType(typeof(FormationRequestDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<FormationRequestDto>> Revise(Guid id)
         => Ok(await _mediator.Send(new ReviseFormationRequestCommand(id)));
 
+    /// <summary>Deletes formation requests.</summary>
+    /// <remarks>Route: DELETE api/formation-requests/{id:guid}. Requires the 'formation.delete' permission.</remarks>
     [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationDelete)]
     public async Task<IActionResult> Delete(Guid id)
     {
@@ -106,6 +175,12 @@ public class FormationRequestsController : ControllerBase
     /// converted - the Job Order quantity is taken from this figure, never from the plan.
     /// </summary>
     [HttpPost("{id:guid}/basins/{basinId:guid}/actual-quantity")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
     public async Task<ActionResult<FormationRequestDto>> RecordBasinActualQuantity(
         Guid id, Guid basinId, [FromBody] RecordBasinActualQuantityRequest request)
@@ -117,6 +192,11 @@ public class FormationRequestsController : ControllerBase
     /// independent document: this never creates or changes a Job Order and never touches stock.
     /// </summary>
     [HttpPost("{id:guid}/start-production")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
     public async Task<ActionResult<FormationRequestDto>> StartProduction(Guid id)
         => Ok(await _mediator.Send(new StartFormationProductionCommand(id)));
@@ -126,6 +206,12 @@ public class FormationRequestsController : ControllerBase
     /// Accumulates - never overwrites - and re-derives the request's own completion status.
     /// </summary>
     [HttpPost("{id:guid}/groups/{groupId:guid}/production")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
     public async Task<ActionResult<FormationRequestDto>> RecordGroupProduction(
         Guid id, Guid groupId, [FromBody] RecordGroupOutputRequest request)
@@ -136,13 +222,23 @@ public class FormationRequestsController : ControllerBase
     /// The group's produced figure is re-derived from its basins, so it can never exceed what they hold.
     /// </summary>
     [HttpPost("{id:guid}/basins/{basinId:guid}/production")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationEdit)]
     public async Task<ActionResult<FormationRequestDto>> RecordBasinProduction(
         Guid id, Guid basinId, [FromBody] RecordBasinOutputRequest request)
         => Ok(await _mediator.Send(new RecordFormationBasinProductionCommand(
             id, request.GroupId, basinId, request.Quantity)));
 
+    /// <summary>Exports excel.</summary>
+    /// <remarks>Route: GET api/formation-requests/export/excel. Requires the 'formation.export' permission.</remarks>
     [HttpGet("export/excel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationExport)]
     public async Task<IActionResult> ExportExcel(
         [FromQuery] Guid? customerId, [FromQuery] FormationRequestStatus? status,
@@ -167,6 +263,8 @@ public class FormationRequestsController : ControllerBase
 
     /// <summary>The same register as a printable document (spec section 39), driven by the same filters.</summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationExport)]
     public async Task<IActionResult> Export(
         [FromQuery] Guid? customerId, [FromQuery] FormationRequestStatus? status,
@@ -191,6 +289,9 @@ public class FormationRequestsController : ControllerBase
 
     /// <summary>Printable formation request with its group/cell specification table (spec sections 49-50).</summary>
     [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationPrint)]
     public async Task<IActionResult> GetPdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -224,10 +325,20 @@ public class FormationRequestsController : ControllerBase
     }
 }
 
+/// <summary>Request payload to formation reason.</summary>
+/// <param name="Reason">The reason.</param>
 public record FormationReasonRequest(string Reason);
 
+/// <summary>Request payload to record basin actual quantity.</summary>
+/// <param name="GroupId">The group id.</param>
+/// <param name="ActualQuantity">The actual quantity.</param>
 public record RecordBasinActualQuantityRequest(Guid GroupId, decimal ActualQuantity);
 
+/// <summary>Request payload to record group output.</summary>
+/// <param name="Quantity">The quantity.</param>
 public record RecordGroupOutputRequest(decimal Quantity);
 
+/// <summary>Request payload to record basin output.</summary>
+/// <param name="GroupId">The group id.</param>
+/// <param name="Quantity">The quantity.</param>
 public record RecordBasinOutputRequest(Guid GroupId, decimal Quantity);

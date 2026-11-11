@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Application.Auth.Commands;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Domain.Exceptions;
@@ -18,12 +19,14 @@ public class ExceptionHandlingMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
+    /// <summary>Initializes a new instance of the ExceptionHandlingMiddleware class.</summary>
     public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
     }
 
+    /// <summary>Runs the pipeline and translates any exception into the JSON error envelope.</summary>
     public async Task InvokeAsync(HttpContext context)
     {
         try
@@ -72,7 +75,7 @@ public class ExceptionHandlingMiddleware
                 };
                 break;
 
-            case StockLockTimeoutException:
+            case StockLockTimeoutException lockTimeoutEx:
                 // R4: the stock/document locks (sp_getapplock) throw
                 // StockLockTimeoutException when another operation has held the
                 // same stock dimension past the wait budget. That is a "somebody
@@ -80,6 +83,10 @@ public class ExceptionHandlingMiddleware
                 // reported as a conflict the client can retry - not as a server
                 // fault. Only this specific type maps to LOCK_TIMEOUT; unrelated
                 // timeouts stay server faults.
+                DyeHouseMetrics.LockTimeouts.Add(1);
+                _logger.LogWarning(lockTimeoutEx,
+                    "EventName: {EventName}. A stock lock timed out for {Method} {Path}.",
+                    LogEvents.LockTimeout, context.Request.Method, context.Request.Path);
                 context.Response.StatusCode = (int)HttpStatusCode.Conflict;
                 payload = new
                 {
@@ -89,13 +96,16 @@ public class ExceptionHandlingMiddleware
                 };
                 break;
 
-            case DbUpdateConcurrencyException:
+            case DbUpdateConcurrencyException concurrencyEx:
                 // H1: someone else committed a change to the same row first.
                 // That is a normal "you are working on stale data" conflict, not
                 // a server fault - report it as 409 so the client reloads
                 // instead of showing an opaque 500.
                 // NOTE: evaluated BEFORE DbUpdateException (its base class) so
                 // it is never swallowed by the duplicate-key branch below.
+                _logger.LogWarning(concurrencyEx,
+                    "EventName: {EventName}. A concurrent update conflicted on {Method} {Path}.",
+                    LogEvents.ConcurrentUpdate, context.Request.Method, context.Request.Path);
                 context.Response.StatusCode = (int)HttpStatusCode.Conflict;
                 payload = new
                 {

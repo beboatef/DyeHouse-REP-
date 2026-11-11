@@ -1,4 +1,5 @@
 using System.Data;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
 using Microsoft.Data.SqlClient;
@@ -158,9 +159,12 @@ public class SqlAllocationLockService : IAllocationLockService
         var returnParam = new SqlParameter("@ReturnValue", SqlDbType.Int) { Direction = ParameterDirection.ReturnValue };
         command.Parameters.Add(returnParam);
 
+        var wait = System.Diagnostics.Stopwatch.StartNew();
         await command.ExecuteNonQueryAsync(cancellationToken);
+        wait.Stop();
 
         var result = (int)returnParam.Value;
+        DyeHouseMetrics.RecordLockAcquire(wait.Elapsed.TotalMilliseconds, lockMode, acquired: result >= 0);
         return result < 0 ? null : new SessionAppLockGuard(connection, resource);
     }
 

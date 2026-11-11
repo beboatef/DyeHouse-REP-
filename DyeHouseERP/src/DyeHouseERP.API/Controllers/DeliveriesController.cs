@@ -13,26 +13,39 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Hosts the deliveries endpoints.</summary>
 [ApiController]
 [Route("api/deliveries")]
 [Authorize]
 public class DeliveriesController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the DeliveriesController class.</summary>
     public DeliveriesController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists deliveries.</summary>
+    /// <remarks>Route: GET api/deliveries. Requires the 'ready.view' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
     public async Task<ActionResult<List<DeliveryDto>>> Get([FromQuery] Guid? customerId, [FromQuery] DeliveryStatus? status)
         => Ok(await _mediator.Send(new GetDeliveriesQuery(customerId, status)));
 
+    /// <summary>Gets by id.</summary>
+    /// <remarks>Route: GET api/deliveries/{id:guid}. Requires the 'ready.view' permission.</remarks>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
     public async Task<ActionResult<DeliveryDto>> GetById(Guid id) => Ok(await _mediator.Send(new GetDeliveryByIdQuery(id)));
 
     /// <summary>Printable delivery document PDF (spec section 39) - has no financial value, just the physical delivery record.</summary>
     /// <summary>Deliveries register as Excel or PDF - one row per delivered line, with raw origin (spec section 31).</summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] DeliveryStatus? status,
         [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
@@ -58,6 +71,9 @@ public class DeliveriesController : ControllerBase
     /// drawing number) always print.
     /// </summary>
     [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetDeliveryPdf(Guid id,
         [FromQuery] bool includeKg = true, [FromQuery] bool includeMeter = true, [FromQuery] bool includeRolls = true,
@@ -86,7 +102,14 @@ public class DeliveriesController : ControllerBase
         return File(bytes, "application/pdf", $"delivery-{delivery.DeliveryNumber}.pdf");
     }
 
+    /// <summary>Creates deliveries.</summary>
+    /// <remarks>Route: POST api/deliveries. Requires the 'ready.deliver' permission.</remarks>
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
     public async Task<ActionResult<DeliveryDto>> Create([FromBody] CreateDeliveryCommand command)
     {
@@ -94,7 +117,14 @@ public class DeliveriesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    /// <summary>Prepares deliveries.</summary>
+    /// <remarks>Route: POST api/deliveries/{id:guid}/prepare. Requires the 'ready.deliver' permission.</remarks>
     [HttpPost("{id:guid}/prepare")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
     public async Task<ActionResult<DeliveryDto>> Prepare(Guid id) => Ok(await _mediator.Send(new MarkDeliveryPreparedCommand(id)));
 
@@ -104,6 +134,11 @@ public class DeliveriesController : ControllerBase
     /// idempotent - the same token answers with the delivery that already posted and writes nothing.
     /// </summary>
     [HttpPost("{id:guid}/deliver")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
     public async Task<ActionResult<DeliveryDto>> Deliver(Guid id,
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] MarkDeliveredRequest? request = null)
@@ -118,6 +153,9 @@ public class DeliveriesController : ControllerBase
     [HttpGet("{id:guid}/statement")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyView)]
     [ProducesResponseType(typeof(DeliveryStatementDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DeliveryStatementDto>> GetStatement(Guid id)
         => Ok(await _mediator.Send(new GetDeliveryStatementQuery(id)));
 
@@ -127,6 +165,9 @@ public class DeliveriesController : ControllerBase
     /// not uploaded a logo still prints - only the identity block is narrower.
     /// </summary>
     [HttpGet("{id:guid}/statement/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetStatementPdf(Guid id,
         [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export)
@@ -159,7 +200,15 @@ public class DeliveriesController : ControllerBase
         return File(bytes, "application/pdf", $"delivery-statement-{statement.DeliveryNumber}.pdf");
     }
 
+    /// <summary>Cancels deliveries.</summary>
+    /// <remarks>Route: POST api/deliveries/{id:guid}/cancel. Requires the 'ready.deliver' permission.</remarks>
     [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyDeliver)]
     public async Task<ActionResult<DeliveryDto>> Cancel(Guid id, [FromBody] CancelDeliveryRequest request)
         => Ok(await _mediator.Send(new CancelDeliveryCommand(id, request.Reason)));
@@ -174,6 +223,12 @@ public class DeliveriesController : ControllerBase
     [HttpPost("{id:guid}/lines/corrections")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReadyEditPostApproval)]
     [ProducesResponseType(typeof(DeliveryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<DeliveryDto>> CorrectApprovedLines(Guid id, [FromBody] EditDeliveredDeliveryRequest request)
         => Ok(await _mediator.Send(new EditDeliveredDeliveryCommand(
             id, request.Lines.Select(l => new DeliveryLineQuantity(
@@ -182,15 +237,23 @@ public class DeliveriesController : ControllerBase
             request.Reason)));
 }
 
+/// <summary>Request payload to cancel delivery.</summary>
+/// <param name="Reason">The reason.</param>
 public record CancelDeliveryRequest(string Reason);
 
 /// <summary>
+/// <param name="RequestId">The request id.</param>
 /// Body of the deliver confirmation. Only the optional idempotency token travels here - the quantities
 /// are the permit's own, already recorded, and are never re-sent by a client.
 /// </summary>
 public record MarkDeliveredRequest(Guid? RequestId);
 
 /// <summary>
+/// <param name="LineId">The line id.</param>
+/// <param name="QuantityKg">The quantity kg.</param>
+/// <param name="QuantityMeter">The quantity meter.</param>
+/// <param name="OriginalRawQuantityKg">The original raw quantity kg.</param>
+/// <param name="OriginalRawQuantityMeter">The original raw quantity meter.</param>
 /// Request body for correcting an approved delivery's line quantities. The two original-raw figures are
 /// the delivery's own manually-entered data (spec section 31), so a correction can change them too;
 /// omitted (null) leaves whatever the line already recorded.
@@ -199,4 +262,7 @@ public record EditDeliveredDeliveryLineRequest(
     Guid LineId, decimal? QuantityKg, decimal? QuantityMeter,
     decimal? OriginalRawQuantityKg = null, decimal? OriginalRawQuantityMeter = null);
 
+/// <summary>Request payload to edit delivered delivery.</summary>
+/// <param name="Lines">The lines.</param>
+/// <param name="Reason">The reason.</param>
 public record EditDeliveredDeliveryRequest(IReadOnlyList<EditDeliveredDeliveryLineRequest> Lines, string Reason);

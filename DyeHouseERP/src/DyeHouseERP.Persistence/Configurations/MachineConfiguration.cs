@@ -71,6 +71,7 @@ public class ProductionShiftConfiguration : IEntityTypeConfiguration<ProductionS
 
         builder.Property(s => s.Code).HasMaxLength(30).IsRequired();
         builder.Property(s => s.Name).HasMaxLength(200).IsRequired();
+        builder.Property(s => s.HoursPerDay).HasPrecision(5, 2).IsRequired();
         builder.Property(s => s.CreatedBy).HasMaxLength(100).IsRequired();
         builder.Property(s => s.ModifiedBy).HasMaxLength(100);
 

@@ -11,6 +11,7 @@ namespace DyeHouseERP.API.Auth;
 /// </summary>
 public class LoginThrottleOptions
 {
+    /// <summary>The configuration section name the throttle options bind from.</summary>
     public const string SectionName = "LoginThrottle";
 
     /// <summary>Failed attempts allowed per (IP, username) window before lockout. Default 5.</summary>
@@ -80,6 +81,7 @@ public class LoginRateLimiter
         public DateTime WindowStartUtc;
     }
 
+    /// <summary>Initializes a new instance of the LoginRateLimiter class.</summary>
     public LoginRateLimiter(LoginThrottleOptions options) => _options = options;
 
     /// <summary>True when this (IP, username) pair - or this IP overall - is currently locked out.</summary>
@@ -209,5 +211,6 @@ public class LoginRateLimiter
 /// <summary>Static accessor helpers so the middleware can read the current options.</summary>
 public static class LoginThrottleDefaults
 {
+    /// <summary>The current throttle options (defaults when unconfigured).</summary>
     public static LoginThrottleOptions Default { get; } = new();
 }

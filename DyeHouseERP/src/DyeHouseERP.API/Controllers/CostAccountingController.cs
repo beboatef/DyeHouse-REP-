@@ -13,20 +13,33 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Hosts the job-order cost accounting endpoints.</summary>
 [ApiController]
 [Route("api/production-orders/{productionOrderId:guid}/cost")]
 [Authorize]
 public class CostAccountingController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the CostAccountingController class.</summary>
     public CostAccountingController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists job-order cost accounting.</summary>
+    /// <remarks>Route: GET api/production-orders/{productionOrderId:guid}/cost. Requires the 'production.view' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
     public async Task<ActionResult<ProductionOrderCostDto>> Get(Guid productionOrderId)
         => Ok(await _mediator.Send(new GetProductionOrderCostQuery(productionOrderId)));
 
+    /// <summary>Adds entry.</summary>
+    /// <remarks>Route: POST api/production-orders/{productionOrderId:guid}/cost/entries. Requires the 'production.edit' permission.</remarks>
     [HttpPost("entries")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
     public async Task<ActionResult<CostEntryDto>> AddEntry(Guid productionOrderId, [FromBody] AddCostEntryRequest request)
         => Ok(await _mediator.Send(new CreateCostEntryCommand(productionOrderId, request.Category, request.Amount, request.EntryDate, request.Description, request.IsChargeableToCustomer)));
@@ -35,6 +48,11 @@ public class CostAccountingController : ControllerBase
     [HttpPut("estimate")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CostingEditEstimate)]
     [ProducesResponseType(typeof(ProductionOrderCostDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderCostDto>> SetEstimate(Guid productionOrderId, [FromBody] SetEstimateRequest request)
         => Ok(await _mediator.Send(new SetProductionOrderEstimateCommand(productionOrderId, request.EstimatedCost, request.CostingNotes)));
 
@@ -42,6 +60,11 @@ public class CostAccountingController : ControllerBase
     [HttpPost("approve")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CostingApprove)]
     [ProducesResponseType(typeof(ProductionOrderCostDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderCostDto>> ApproveCost(Guid productionOrderId, [FromBody] ApproveCostRequest request)
         => Ok(await _mediator.Send(new ApproveProductionOrderCostCommand(productionOrderId, request.ApprovedCost, request.CostingNotes)));
 
@@ -54,6 +77,11 @@ public class CostAccountingController : ControllerBase
     [HttpPost("service-price")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PricingManage)]
     [ProducesResponseType(typeof(ProductionOrderServicePriceDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderServicePriceDto>> ApplyServicePrice(
         Guid productionOrderId, [FromBody] ApplyServicePriceRequest request)
         => Ok(await _mediator.Send(new ApplyServicePriceToJobOrderCommand(
@@ -63,11 +91,15 @@ public class CostAccountingController : ControllerBase
     [HttpGet("profitability")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CostingView)]
     [ProducesResponseType(typeof(ProductionOrderProfitabilityDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ProductionOrderProfitabilityDto>> GetProfitability(Guid productionOrderId)
         => Ok(await _mediator.Send(new GetProductionOrderProfitabilityQuery(productionOrderId)));
 
     /// <summary>Costing sheet as Excel/PDF for a comptroller review (spec sections 34 + 49).</summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.CostingView)]
     public async Task<IActionResult> Export(Guid productionOrderId, [FromQuery] string format = "excel",
         [FromServices] IReportExportService export = null!)
@@ -102,10 +134,27 @@ public class CostAccountingController : ControllerBase
     }
 }
 
+/// <summary>Request payload to add cost entry.</summary>
+/// <param name="Category">The category.</param>
+/// <param name="Amount">The amount.</param>
+/// <param name="EntryDate">The entry date.</param>
+/// <param name="Description">The description.</param>
+/// <param name="IsChargeableToCustomer">Whether is chargeable to customer.</param>
 public record AddCostEntryRequest(Domain.Enums.CostCategory Category, decimal Amount, DateTime EntryDate, string? Description, bool IsChargeableToCustomer = false);
+/// <summary>Request payload to set estimate.</summary>
+/// <param name="EstimatedCost">The estimated cost.</param>
+/// <param name="CostingNotes">The costing notes.</param>
 public record SetEstimateRequest(decimal? EstimatedCost, string? CostingNotes);
+/// <summary>Request payload to approve cost.</summary>
+/// <param name="ApprovedCost">The approved cost.</param>
+/// <param name="CostingNotes">The costing notes.</param>
 public record ApproveCostRequest(decimal ApprovedCost, string? CostingNotes);
 
+/// <summary>Request payload to apply service price.</summary>
+/// <param name="StageDefinitionId">The stage definition id.</param>
+/// <param name="Unit">The unit.</param>
+/// <param name="PricePerUnit">The price per unit.</param>
+/// <param name="OverrideReason">The override reason.</param>
 public record ApplyServicePriceRequest(
     Guid StageDefinitionId, Domain.Enums.UnitOfMeasure Unit,
     decimal? PricePerUnit = null, string? OverrideReason = null);

@@ -88,6 +88,13 @@ async function handleUnauthorized(error: unknown): Promise<unknown> {
     localStorage.removeItem("dyehouse_user");
     window.location.href = "/login";
   }
+  // Part 2: the must-change gate answers 403 + PASSWORD_CHANGE_REQUIRED to every business
+  // call while the flag stands. The session is alive (401 would have fired otherwise), so
+  // the user belongs on the change-password screen - never logged out, never stuck.
+  const code = (axiosError.response?.data as { code?: string } | undefined)?.code;
+  if (status === 403 && code === "PASSWORD_CHANGE_REQUIRED" && window.location.pathname !== "/change-password") {
+    window.location.href = "/change-password";
+  }
   throw error;
 }
 
@@ -1829,6 +1836,8 @@ export const ProductionFloorApi = {
 
 export interface LoginResult {
   token: string; expiresAtUtc: string; username: string; displayName: string; roles: string[];
+  /** Part 2: while true the API only answers change-password, logout and self-read. */
+  mustChangePassword: boolean;
 }
 
 export const AuthApi = {
@@ -1836,13 +1845,20 @@ export const AuthApi = {
   /** Rotates the session; the fresh tokens arrive as HttpOnly cookies, the body carries the profile. */
   refresh: () => api.post<LoginResult>("/auth/refresh").then((r) => r.data),
   /** Revokes every refresh token server-side and expires the cookies; the tokens themselves are never accessible to this code. */
-  logout: () => api.post("/auth/logout")
+  logout: () => api.post("/auth/logout"),
+  /** The current-user read: the one account query the must-change gate leaves open. */
+  me: () => api.get<User>("/auth/me").then((r) => r.data),
+  /** The signed-in user changes their OWN password (proves the current one). */
+  changeOwnPassword: (body: { currentPassword: string; newPassword: string }) =>
+    api.post("/auth/change-password", body)
 };
 
 // ---------------- Users (admin only) ----------------
 
 export interface User {
   id: string; username: string; displayName: string; roles: string[]; isActive: boolean;
+  /** Part 2: while true the account may only change-password, logout or read itself. */
+  mustChangePassword: boolean;
 }
 
 export const UsersApi = {
@@ -2151,6 +2167,123 @@ export const InventoryLedgerApi = {
   }
 };
 
+// ---------------- Management KPIs (spec Part 1, permission kpis.view) ----------------
+
+export interface KpiSummary {
+  from: string | null; to: string | null; timeZone: string; computedAtUtc: string;
+  overallWasteRatePct: number | null; totalWasteKg: number;
+  averageLeadTimeDays: number | null; finishedOrders: number;
+  overallUtilisationPct: number | null; totalRunningHours: number;
+  totalThroughputKg: number; totalCustomerExposure: number;
+  chequesDueCount: number; chequesDueTotal: number;
+  overridesCount: number; reopeningsCount: number;
+}
+
+export interface WasteRateOrderRow {
+  productionOrderId: string; orderNumber: string; orderDate: string;
+  customerCode: string; rawKg: number; wasteKg: number; wasteRatePct: number | null;
+}
+
+export interface WasteRateKpi {
+  from: string | null; to: string | null; timeZone: string;
+  orders: WasteRateOrderRow[]; totalRawKg: number; totalWasteKg: number;
+  overallRatePct: number | null; ordersWithWaste: number;
+}
+
+export interface LeadTimeOrderRow {
+  productionOrderId: string; orderNumber: string;
+  issueDate: string; completionDate: string; leadTimeDays: number;
+}
+
+export interface LeadTimeKpi {
+  from: string | null; to: string | null; timeZone: string;
+  orders: LeadTimeOrderRow[]; finishedOrders: number;
+  averageLeadTimeDays: number | null; minLeadTimeDays: number | null; maxLeadTimeDays: number | null;
+}
+
+export interface MachineUtilisationRow {
+  machineId: string | null; machineCode: string; machineName: string;
+  runningHours: number; availableHours: number; utilisationPct: number | null;
+}
+
+export interface ShiftUtilisationRow {
+  productionShiftId: string | null; shiftCode: string; shiftName: string;
+  hoursPerDay: number; runningHours: number; availableHours: number; utilisationPct: number | null;
+}
+
+export interface MachineUtilisationKpi {
+  from: string | null; to: string | null; timeZone: string; daysInPeriod: number;
+  machines: MachineUtilisationRow[]; shifts: ShiftUtilisationRow[];
+  totalRunningHours: number; totalAvailableHours: number; overallUtilisationPct: number | null;
+}
+
+export interface ThroughputGroupRow { code: string; name: string; transfersCount: number; quantityKg: number; }
+
+export interface ThroughputKpi {
+  from: string | null; to: string | null; timeZone: string;
+  byStage: ThroughputGroupRow[]; byShift: ThroughputGroupRow[];
+  totalTransfers: number; totalQuantityKg: number;
+}
+
+export interface CustomerExposureRow {
+  customerId: string; customerCode: string; customerName: string;
+  openBalance: number; openInvoicesCount: number; openInvoicesTotal: number;
+  oldestUnpaidInvoiceNumber: string | null; oldestUnpaidInvoiceAgeDays: number | null;
+}
+
+export interface CustomerExposureKpi {
+  from: string | null; to: string | null; timeZone: string; asOfUtc: string;
+  customers: CustomerExposureRow[]; totalOpenBalance: number; totalOpenInvoices: number;
+}
+
+export interface ChequeDueRow {
+  checkId: string; checkNumber: string; kind: string;
+  partyCode: string; partyName: string; dueDate: string;
+  amount: number; status: string; daysUntilDue: number;
+}
+
+export interface ChequesDueKpi {
+  from: string | null; to: string | null; timeZone: string; days: number;
+  cheques: ChequeDueRow[]; chequesCount: number; totalAmount: number;
+}
+
+export interface NegativeStockOverrideKpiRow {
+  id: string; approvedAtUtc: string; messageNumber: string; customerCode: string;
+  itemCode: string; requestedQuantity: number; reason: string; approvedBy: string;
+}
+
+export interface PeriodReopeningKpiRow {
+  periodCloseId: string; periodStart: string; periodEnd: string;
+  reopenedAtUtc: string; reopenedBy: string | null;
+  auditOccurredAtUtc: string; auditUserName: string;
+}
+
+export interface GovernanceKpi {
+  from: string | null; to: string | null; timeZone: string;
+  overridesCount: number; overrides: NegativeStockOverrideKpiRow[];
+  reopeningsCount: number; reopenings: PeriodReopeningKpiRow[];
+}
+
+export interface KpiRange { from?: string; to?: string; }
+
+export const KpisApi = {
+  summary: (params?: KpiRange) => api.get<KpiSummary>("/kpis/summary", { params }).then((r) => r.data),
+  wasteRate: (params?: KpiRange & { customerId?: string; productionOrderId?: string }) =>
+    api.get<WasteRateKpi>("/kpis/waste-rate", { params }).then((r) => r.data),
+  leadTime: (params?: KpiRange & { customerId?: string }) =>
+    api.get<LeadTimeKpi>("/kpis/lead-time", { params }).then((r) => r.data),
+  machineUtilisation: (params?: KpiRange) =>
+    api.get<MachineUtilisationKpi>("/kpis/machine-utilisation", { params }).then((r) => r.data),
+  throughput: (params?: KpiRange) =>
+    api.get<ThroughputKpi>("/kpis/throughput", { params }).then((r) => r.data),
+  customerExposure: (params?: { customerId?: string }) =>
+    api.get<CustomerExposureKpi>("/kpis/customer-exposure", { params }).then((r) => r.data),
+  chequesDue: (days = 7) =>
+    api.get<ChequesDueKpi>("/kpis/cheques-due", { params: { days } }).then((r) => r.data),
+  governance: (params?: KpiRange) =>
+    api.get<GovernanceKpi>("/kpis/governance", { params }).then((r) => r.data)
+};
+
 export const ReportsApi = {
   negativeStockOverrides: () => api.get<NegativeStockOverride[]>("/reports/negative-stock-overrides").then((r) => r.data),
   downloadNegativeStockOverridesPdf: () => downloadFile("/reports/negative-stock-overrides/pdf", "negative-stock-overrides.pdf"),
@@ -2176,12 +2309,19 @@ export interface CompanySettings {
   companyNameAr: string;
   companyNameEn: string;
   logoDataUrl: string | null;
+  /** Part 2: 0 = expiry disabled. */
+  passwordMaxAgeDays: number;
+  /** Part 2: idle session limit in minutes. */
+  sessionIdleMinutes: number;
 }
 
 export const SettingsApi = {
   get: () => api.get<CompanySettings>("/settings").then((r) => r.data),
   update: (body: { companyNameAr: string; companyNameEn: string; logoDataUrl: string | null }) =>
-    api.put<CompanySettings>("/settings", body).then((r) => r.data)
+    api.put<CompanySettings>("/settings", body).then((r) => r.data),
+  /** Part 2: tunes password max age (0 = disabled) and session idle minutes. */
+  updatePasswordPolicy: (body: { passwordMaxAgeDays: number; sessionIdleMinutes: number }) =>
+    api.put<CompanySettings>("/settings/password-policy", body).then((r) => r.data)
 };
 
 // ---------------- Dashboard ----------------

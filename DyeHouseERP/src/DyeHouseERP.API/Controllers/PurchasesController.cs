@@ -27,63 +27,110 @@ namespace DyeHouseERP.API.Controllers;
 public class PurchasesController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the PurchasesController class.</summary>
     public PurchasesController(ISender mediator) => _mediator = mediator;
 
     // ------------------------------------------------------------- orders
 
+    /// <summary>Gets orders.</summary>
+    /// <remarks>Route: GET api/Purchases/orders. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("orders")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(List<PurchaseOrderDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<PurchaseOrderDto>>> GetOrders(
         [FromQuery] Guid? supplierId, [FromQuery] PurchaseOrderStatus? status,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetPurchaseOrdersQuery(supplierId, status, from, to)));
 
+    /// <summary>Gets order.</summary>
+    /// <remarks>Route: GET api/Purchases/orders/{id:guid}. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("orders/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PurchaseOrderDto>> GetOrder(Guid id)
         => Ok(await _mediator.Send(new GetPurchaseOrderByIdQuery(id)));
 
+    /// <summary>Creates order.</summary>
+    /// <remarks>Route: POST api/Purchases/orders. Requires the 'purchases.create' permission.</remarks>
     [HttpPost("orders")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesCreate)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> CreateOrder([FromBody] CreatePurchaseOrderCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetOrder), new { id = result.Id }, result);
     }
 
+    /// <summary>Updates order.</summary>
+    /// <remarks>Route: PUT api/Purchases/orders/{id:guid}. Requires the 'purchases.edit' permission.</remarks>
     [HttpPut("orders/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesEdit)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> UpdateOrder(Guid id, [FromBody] UpdatePurchaseOrderCommand command)
     {
         if (id != command.Id) command = command with { Id = id };
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>Adds order line.</summary>
+    /// <remarks>Route: POST api/Purchases/orders/{id:guid}/lines. Requires the 'purchases.edit' permission.</remarks>
     [HttpPost("orders/{id:guid}/lines")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesEdit)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> AddOrderLine(Guid id, [FromBody] AddPurchaseOrderLineCommand command)
     {
         if (id != command.OrderId) command = command with { OrderId = id };
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>Updates order line.</summary>
+    /// <remarks>Route: PUT api/Purchases/orders/{id:guid}/lines/{lineId:guid}. Requires the 'purchases.edit' permission.</remarks>
     [HttpPut("orders/{id:guid}/lines/{lineId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesEdit)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> UpdateOrderLine(Guid id, Guid lineId, [FromBody] UpdatePurchaseOrderLineCommand command)
     {
         if (id != command.OrderId || lineId != command.LineId) command = command with { OrderId = id, LineId = lineId };
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>Removes order line.</summary>
+    /// <remarks>Route: DELETE api/Purchases/orders/{id:guid}/lines/{lineId:guid}. Requires the 'purchases.edit' permission.</remarks>
     [HttpDelete("orders/{id:guid}/lines/{lineId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesEdit)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<PurchaseOrderDto>> RemoveOrderLine(Guid id, Guid lineId)
         => Ok(await _mediator.Send(new RemovePurchaseOrderLineCommand(id, lineId)));
 
@@ -95,40 +142,77 @@ public class PurchasesController : ControllerBase
     [HttpPost("orders/{id:guid}/lines/{lineId:guid}/correct-quantity")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesEditAfterReceipt)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> CorrectOrderLineQuantity(Guid id, Guid lineId, [FromBody] CorrectQuantityRequest request)
         => Ok(await _mediator.Send(new CorrectPurchaseOrderLineQuantityCommand(id, lineId, request.NewQuantity, request.Reason)));
 
+    /// <summary>Submits order.</summary>
+    /// <remarks>Route: POST api/Purchases/orders/{id:guid}/submit. Requires the 'purchases.submit' permission.</remarks>
     [HttpPost("orders/{id:guid}/submit")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesSubmit)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> SubmitOrder(Guid id)
         => Ok(await _mediator.Send(new SubmitPurchaseOrderCommand(id)));
 
+    /// <summary>Approves order.</summary>
+    /// <remarks>Route: POST api/Purchases/orders/{id:guid}/approve. Requires the 'purchases.approve' permission.</remarks>
     [HttpPost("orders/{id:guid}/approve")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesApprove)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> ApproveOrder(Guid id)
         => Ok(await _mediator.Send(new ApprovePurchaseOrderCommand(id)));
 
+    /// <summary>Cancels order.</summary>
+    /// <remarks>Route: POST api/Purchases/orders/{id:guid}/cancel. Requires the 'purchases.cancel' permission.</remarks>
     [HttpPost("orders/{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesCancel)]
     [ProducesResponseType(typeof(PurchaseOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseOrderDto>> CancelOrder(Guid id, [FromBody] CancelRequest request)
         => Ok(await _mediator.Send(new CancelPurchaseOrderCommand(id, request.Reason)));
 
     // ----------------------------------------------------------- receipts
 
+    /// <summary>Gets receipts.</summary>
+    /// <remarks>Route: GET api/Purchases/receipts. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("receipts")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(List<PurchaseReceiptDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<PurchaseReceiptDto>>> GetReceipts(
         [FromQuery] Guid? supplierId, [FromQuery] Guid? purchaseOrderId,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetPurchaseReceiptsQuery(supplierId, purchaseOrderId, from, to)));
 
+    /// <summary>Gets receipt.</summary>
+    /// <remarks>Route: GET api/Purchases/receipts/{id:guid}. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("receipts/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(PurchaseReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PurchaseReceiptDto>> GetReceipt(Guid id)
         => Ok(await _mediator.Send(new GetPurchaseReceiptByIdQuery(id)));
 
@@ -136,6 +220,11 @@ public class PurchasesController : ControllerBase
     [HttpPost("receipts")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesReceive)]
     [ProducesResponseType(typeof(PurchaseReceiptDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PurchaseReceiptDto>> CreateReceipt([FromBody] CreatePurchaseReceiptCommand command)
     {
         var result = await _mediator.Send(command);
@@ -144,32 +233,56 @@ public class PurchasesController : ControllerBase
 
     // --------------------------------------------------- supplier invoices
 
+    /// <summary>Gets invoices.</summary>
+    /// <remarks>Route: GET api/Purchases/supplier-invoices. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("supplier-invoices")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(List<SupplierInvoiceDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<SupplierInvoiceDto>>> GetInvoices(
         [FromQuery] Guid? supplierId, [FromQuery] SupplierInvoiceStatus? status,
         [FromQuery] bool? overdueOnly, [FromQuery] DateTime? asOf)
         => Ok(await _mediator.Send(new GetSupplierInvoicesQuery(supplierId, status, overdueOnly, asOf)));
 
+    /// <summary>Gets invoice.</summary>
+    /// <remarks>Route: GET api/Purchases/supplier-invoices/{id:guid}. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("supplier-invoices/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(SupplierInvoiceDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SupplierInvoiceDto>> GetInvoice(Guid id)
         => Ok(await _mediator.Send(new GetSupplierInvoiceByIdQuery(id)));
 
+    /// <summary>Creates invoice.</summary>
+    /// <remarks>Route: POST api/Purchases/supplier-invoices. Requires the 'purchases.invoice' permission.</remarks>
     [HttpPost("supplier-invoices")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesInvoice)]
     [ProducesResponseType(typeof(SupplierInvoiceDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SupplierInvoiceDto>> CreateInvoice([FromBody] CreateSupplierInvoiceCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetInvoice), new { id = result.Id }, result);
     }
 
+    /// <summary>Updates invoice.</summary>
+    /// <remarks>Route: PUT api/Purchases/supplier-invoices/{id:guid}. Requires the 'purchases.invoice' permission.</remarks>
     [HttpPut("supplier-invoices/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesInvoice)]
     [ProducesResponseType(typeof(SupplierInvoiceDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SupplierInvoiceDto>> UpdateInvoice(Guid id, [FromBody] UpdateSupplierInvoiceCommand command)
     {
         if (id != command.Id) command = command with { Id = id };
@@ -180,27 +293,51 @@ public class PurchasesController : ControllerBase
     [HttpPost("supplier-invoices/{id:guid}/post")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesInvoice)]
     [ProducesResponseType(typeof(SupplierInvoiceDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SupplierInvoiceDto>> PostInvoice(Guid id)
         => Ok(await _mediator.Send(new PostSupplierInvoiceCommand(id)));
 
+    /// <summary>Cancels invoice.</summary>
+    /// <remarks>Route: POST api/Purchases/supplier-invoices/{id:guid}/cancel. Requires the 'purchases.cancel' permission.</remarks>
     [HttpPost("supplier-invoices/{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesCancel)]
     [ProducesResponseType(typeof(SupplierInvoiceDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SupplierInvoiceDto>> CancelInvoice(Guid id, [FromBody] CancelRequest request)
         => Ok(await _mediator.Send(new CancelSupplierInvoiceCommand(id, request.Reason)));
 
     // --------------------------------------------------- supplier payments
 
+    /// <summary>Gets payments.</summary>
+    /// <remarks>Route: GET api/Purchases/supplier-payments. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("supplier-payments")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(List<SupplierPaymentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<SupplierPaymentDto>>> GetPayments(
         [FromQuery] Guid? supplierId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetSupplierPaymentsQuery(supplierId, from, to)));
 
+    /// <summary>Runs the pay supplier operation.</summary>
+    /// <remarks>Route: POST api/Purchases/supplier-payments. Requires the 'purchases.pay' permission.</remarks>
     [HttpPost("supplier-payments")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesPay)]
     [ProducesResponseType(typeof(SupplierPaymentDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SupplierPaymentDto>> PaySupplier([FromBody] PaySupplierCommand command)
     {
         var result = await _mediator.Send(command);
@@ -211,6 +348,12 @@ public class PurchasesController : ControllerBase
     [HttpPost("supplier-payments/{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesPay)]
     [ProducesResponseType(typeof(SupplierPaymentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SupplierPaymentDto>> CancelSupplierPayment(Guid id, [FromBody] CancelSupplierPaymentRequest request)
         => Ok(await _mediator.Send(new CancelSupplierPaymentCommand(id, request.Reason)));
 
@@ -220,6 +363,9 @@ public class PurchasesController : ControllerBase
     [HttpGet("suppliers/{supplierId:guid}/ledger")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(List<SupplierLedgerEntryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<List<SupplierLedgerEntryDto>>> GetSupplierLedger(
         Guid supplierId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetSupplierLedgerQuery(supplierId, from, to)));
@@ -228,6 +374,9 @@ public class PurchasesController : ControllerBase
 
     /// <summary>One purchase order as a printable document (spec section 39).</summary>
     [HttpGet("orders/{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     public async Task<IActionResult> GetOrderPdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -247,6 +396,9 @@ public class PurchasesController : ControllerBase
 
     /// <summary>One goods receipt as a printable document (spec section 39) - the document the storeroom signs.</summary>
     [HttpGet("receipts/{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     public async Task<IActionResult> GetReceiptPdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -266,6 +418,9 @@ public class PurchasesController : ControllerBase
 
     /// <summary>One supplier invoice as a printable document (spec section 39).</summary>
     [HttpGet("supplier-invoices/{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     public async Task<IActionResult> GetSupplierInvoicePdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -292,6 +447,9 @@ public class PurchasesController : ControllerBase
     /// before the requested window - not a re-based zero.
     /// </summary>
     [HttpGet("suppliers/{supplierId:guid}/ledger/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesExport)]
     public async Task<IActionResult> ExportSupplierLedger(Guid supplierId,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string format = "excel",
@@ -334,6 +492,8 @@ public class PurchasesController : ControllerBase
 
     /// <summary>Purchase orders as Excel/PDF, honouring the same filters as the list.</summary>
     [HttpGet("orders/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesExport)]
     public async Task<IActionResult> ExportOrders([FromQuery] Guid? supplierId, [FromQuery] PurchaseOrderStatus? status,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string format = "excel",
@@ -353,6 +513,8 @@ public class PurchasesController : ControllerBase
 
     /// <summary>Goods receipts as Excel/PDF.</summary>
     [HttpGet("receipts/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesExport)]
     public async Task<IActionResult> ExportReceipts([FromQuery] Guid? supplierId, [FromQuery] DateTime? from,
         [FromQuery] DateTime? to, [FromQuery] string format = "excel",
@@ -372,6 +534,8 @@ public class PurchasesController : ControllerBase
 
     /// <summary>Supplier invoices as Excel/PDF - the supplier-payables working paper.</summary>
     [HttpGet("supplier-invoices/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesExport)]
     public async Task<IActionResult> ExportInvoices([FromQuery] Guid? supplierId, [FromQuery] SupplierInvoiceStatus? status,
         [FromQuery] bool? overdueOnly, [FromQuery] string format = "excel",
@@ -391,6 +555,8 @@ public class PurchasesController : ControllerBase
 
     /// <summary>Supplier outstanding balances as Excel/PDF (spec sections 41 + 48).</summary>
     [HttpGet("supplier-balances/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesExport)]
     public async Task<IActionResult> ExportSupplierBalances([FromQuery] Guid? supplierId,
         [FromQuery] bool? withBalanceOnly, [FromQuery] string format = "excel",
@@ -409,6 +575,8 @@ public class PurchasesController : ControllerBase
 
     /// <summary>Supplier payments as Excel/PDF - the cash-paid-out working paper (spec section 35).</summary>
     [HttpGet("supplier-payments/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesExport)]
     public async Task<IActionResult> ExportSupplierPayments([FromQuery] Guid? supplierId, [FromQuery] DateTime? from,
         [FromQuery] DateTime? to, [FromQuery] string format = "excel",
@@ -438,16 +606,26 @@ public class PurchasesController : ControllerBase
         { FileDownloadName = $"{fileStem}.xlsx" };
     }
 
+    /// <summary>Gets supplier balances.</summary>
+    /// <remarks>Route: GET api/Purchases/supplier-balances. Requires the 'purchases.view' permission.</remarks>
     [HttpGet("supplier-balances")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PurchasesView)]
     [ProducesResponseType(typeof(List<SupplierBalanceDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<SupplierBalanceDto>>> GetSupplierBalances(
         [FromQuery] Guid? supplierId, [FromQuery] bool? withBalanceOnly)
         => Ok(await _mediator.Send(new GetSupplierBalancesQuery(supplierId, withBalanceOnly)));
 }
 
 /// <summary>Shared body for the cancel actions that require a documented reason (spec section 46).</summary>
+/// <param name="Reason">The reason.</param>
 public record CancelRequest(string Reason);
+/// <summary>Request payload to correct quantity.</summary>
+/// <param name="NewQuantity">The new quantity.</param>
+/// <param name="Reason">The reason.</param>
 public record CorrectQuantityRequest(decimal NewQuantity, string Reason);
 
+/// <summary>Request payload to cancel supplier payment.</summary>
+/// <param name="Reason">The reason.</param>
 public record CancelSupplierPaymentRequest(string Reason);

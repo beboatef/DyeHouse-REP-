@@ -41,6 +41,8 @@ public class ProductionShiftDto
     public string Name { get; set; } = string.Empty;
     public int Sequence { get; set; }
     public bool IsActive { get; set; }
+    /// <summary>Planned production hours per day (machine-utilisation denominator).</summary>
+    public decimal HoursPerDay { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedAtUtc { get; set; }

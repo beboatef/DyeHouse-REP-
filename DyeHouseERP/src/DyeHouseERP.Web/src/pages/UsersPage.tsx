@@ -164,7 +164,7 @@ export default function UsersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div><label className="field-label">اسم المستخدم</label><Input value={username} onChange={(e) => setUsername(e.target.value)} required /></div>
               <div><label className="field-label">الاسم الظاهر</label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></div>
-              <div><label className="field-label">كلمة المرور</label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} /></div>
+              <div><label className="field-label">كلمة المرور</label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} /></div>
             </div>
             <div>
               <label className="field-label">الأدوار / الصلاحيات</label>
@@ -217,7 +217,9 @@ export default function UsersPage() {
             {users?.map((u) => {
               // An administrator account may only be changed by an administrator - the same rule the
               // API enforces - so its controls are simply not offered to a delegated administrator.
+              // Resets additionally need users.reset_password (mirrors the endpoint gate).
               const canManage = actor.canManageAccount(u.roles);
+              const canReset = canManage && actor.can("users.reset_password");
               return (
               <tr key={u.id} className="border-b border-line last:border-0 hover:bg-surface-sunken align-top">
                 <td className="font-medium ltr-nums">{u.username}</td>
@@ -228,13 +230,16 @@ export default function UsersPage() {
                     {u.roles.map((r) => <Badge key={r} tone="blue">{r}</Badge>)}
                   </div>
                 </td>
-                <td><Badge tone={u.isActive ? "green" : "gray"}>{u.isActive ? "نشط" : "معطل"}</Badge></td>
+                <td><Badge tone={u.isActive ? "green" : "gray"}>{u.isActive ? "نشط" : "معطل"}</Badge>{u.mustChangePassword && <span className="ms-1 inline-block text-2xs font-semibold text-amber-700">مطالب بتغيير كلمة المرور</span>}</td>
                 <td>
                   {!canManage ? (
                     <span className="text-xs text-ink-subtle">حساب مسؤول - يتطلب صلاحية admin</span>
                   ) : (
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" onClick={() => startEdit(u)}>الصلاحيات</Button>
+
+                    {canReset && (
+                    <>
                     <Input
                       placeholder="كلمة مرور جديدة"
                       type="password"
@@ -244,11 +249,13 @@ export default function UsersPage() {
                     />
                     <Button
                       variant="ghost"
-                      disabled={(newPasswordById[u.id]?.length ?? 0) < 8}
+                      disabled={(newPasswordById[u.id]?.length ?? 0) < 12}
                       onClick={() => changePasswordMutation.mutate({ id: u.id, newPassword: newPasswordById[u.id] })}
                     >
                       تغيير
                     </Button>
+                    </>
+                    )}
                     {u.isActive && <Button variant="ghost" onClick={() => deactivateMutation.mutate(u.id)}>تعطيل</Button>}
                   </div>
                   )}

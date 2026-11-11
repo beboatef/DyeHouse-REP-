@@ -590,7 +590,8 @@ public class Phase6TreasuryChequeCashTests : Phase6TestBase
 public class Phase6PeriodClosingTests : Phase6TestBase
 {
     private static ClosePeriodCommandHandler Handler(ApplicationDbContext db) =>
-        new(db, new StubCurrentUser("controller"), new RecordingStockLock());
+        new(db, new StubCurrentUser("controller"), new RecordingStockLock(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ClosePeriodCommandHandler>.Instance);
 
     [Fact]
     public async Task ClosingTheSameRangeTwice_LeavesExactlyOneClosedPeriod()
@@ -627,7 +628,8 @@ public class Phase6PeriodClosingTests : Phase6TestBase
     {
         using var db = NewDb();
         var lockPartner = new RecordingStockLock();
-        var handler = new ClosePeriodCommandHandler(db, new StubCurrentUser("controller"), lockPartner);
+        var handler = new ClosePeriodCommandHandler(db, new StubCurrentUser("controller"), lockPartner,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ClosePeriodCommandHandler>.Instance);
 
         var closed = await handler.Handle(
             new ClosePeriodCommand(new DateTime(2026, 2, 1), new DateTime(2026, 2, 28), null), CancellationToken.None);

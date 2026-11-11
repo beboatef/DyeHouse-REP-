@@ -1,4 +1,5 @@
 using DyeHouseERP.Application.Auth.DTOs;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Persistence;
@@ -21,11 +22,18 @@ namespace DyeHouseERP.IntegrationTests;
 ///
 /// Uses the "Testing" environment so Program.cs's Development-only
 /// migrate+seed block does NOT run - this factory resets and seeds the
-/// schema itself via EnsureCreated(), since no EF migrations exist yet
-/// (see README "Honest gaps").
+/// schema itself via EnsureCreated() - fast and hermetic per test class, while deploys
+/// run the real EF migrations (see README).
 /// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// The password the suite gives the bootstrap admin during the forced change. Compliant
+    /// with the policy (12+ chars, no username) and constant so every test class lands on the
+    /// same post-change session.
+    /// </summary>
+    public const string IntegrationAdminPassword = "DyeHouse#2026-Secure!";
+
     /// <summary>
     /// The SQL Server connection string for the integration suite. It is
     /// REQUIRED - there is deliberately no embedded credential fallback, so no
@@ -78,6 +86,32 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<LoginResultDto>();
+
+        // Part 2: the bootstrap admin is seeded flagged (the development default password is
+        // public), so the suite performs the same forced change a real operator must do: prove
+        // the current password, pick a compliant one, then re-authenticate. From here on the
+        // client behaves exactly like a post-change session.
+        if (result!.MustChangePassword)
+        {
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", result.Token);
+            var change = await client.PostAsJsonAsync("/api/auth/change-password", new
+            {
+                currentPassword = UserSeeder.DefaultPassword,
+                newPassword = IntegrationAdminPassword
+            });
+            change.EnsureSuccessStatusCode();
+
+            client.DefaultRequestHeaders.Authorization = null;
+            var relogin = await client.PostAsJsonAsync("/api/auth/login", new
+            {
+                username = UserSeeder.DefaultUsername,
+                password = IntegrationAdminPassword
+            });
+            relogin.EnsureSuccessStatusCode();
+            result = await relogin.Content.ReadFromJsonAsync<LoginResultDto>();
+        }
+
         return result!.Token;
     }
 }

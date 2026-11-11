@@ -27,28 +27,48 @@ namespace DyeHouseERP.API.Controllers;
 public class PayrollController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the PayrollController class.</summary>
     public PayrollController(ISender mediator) => _mediator = mediator;
 
     // -------------------------------------------------------- departments
 
+    /// <summary>Gets departments.</summary>
+    /// <remarks>Route: GET api/Payroll/departments. Requires the 'payroll.view' permission.</remarks>
     [HttpGet("departments")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     [ProducesResponseType(typeof(List<DepartmentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<DepartmentDto>>> GetDepartments([FromQuery] bool? activeOnly, [FromQuery] string? search)
         => Ok(await _mediator.Send(new GetDepartmentsQuery(activeOnly, search)));
 
+    /// <summary>Creates department.</summary>
+    /// <remarks>Route: POST api/Payroll/departments. Requires the 'payroll.employees' permission.</remarks>
     [HttpPost("departments")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     [ProducesResponseType(typeof(DepartmentDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<DepartmentDto>> CreateDepartment([FromBody] CreateDepartmentCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetDepartments), new { }, result);
     }
 
+    /// <summary>Updates department.</summary>
+    /// <remarks>Route: PUT api/Payroll/departments/{id:guid}. Requires the 'payroll.employees' permission.</remarks>
     [HttpPut("departments/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     [ProducesResponseType(typeof(DepartmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<DepartmentDto>> UpdateDepartment(Guid id, [FromBody] UpdateDepartmentCommand command)
     {
         if (id != command.Id) command = command with { Id = id };
@@ -57,32 +77,56 @@ public class PayrollController : ControllerBase
 
     // ---------------------------------------------------------- employees
 
+    /// <summary>Gets employees.</summary>
+    /// <remarks>Route: GET api/Payroll/employees. Requires the 'payroll.view' permission.</remarks>
     [HttpGet("employees")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     [ProducesResponseType(typeof(List<EmployeeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<EmployeeDto>>> GetEmployees(
         [FromQuery] Guid? departmentId, [FromQuery] EmployeeStatus? status,
         [FromQuery] bool? activeOnly, [FromQuery] string? search)
         => Ok(await _mediator.Send(new GetEmployeesQuery(departmentId, status, activeOnly, search)));
 
+    /// <summary>Gets employee.</summary>
+    /// <remarks>Route: GET api/Payroll/employees/{id:guid}. Requires the 'payroll.view' permission.</remarks>
     [HttpGet("employees/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EmployeeDto>> GetEmployee(Guid id)
         => Ok(await _mediator.Send(new GetEmployeeByIdQuery(id)));
 
+    /// <summary>Creates employee.</summary>
+    /// <remarks>Route: POST api/Payroll/employees. Requires the 'payroll.employees' permission.</remarks>
     [HttpPost("employees")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<EmployeeDto>> CreateEmployee([FromBody] CreateEmployeeCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetEmployee), new { id = result.Id }, result);
     }
 
+    /// <summary>Updates employee.</summary>
+    /// <remarks>Route: PUT api/Payroll/employees/{id:guid}. Requires the 'payroll.employees' permission.</remarks>
     [HttpPut("employees/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<EmployeeDto>> UpdateEmployee(Guid id, [FromBody] UpdateEmployeeCommand command)
     {
         if (id != command.Id) command = command with { Id = id };
@@ -93,6 +137,8 @@ public class PayrollController : ControllerBase
 
     /// <summary>Employee master as Excel or PDF, honouring the same filters as GET.</summary>
     [HttpGet("employees/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportEmployees(
         [FromQuery] Guid? departmentId, [FromQuery] EmployeeStatus? status,
@@ -112,81 +158,144 @@ public class PayrollController : ControllerBase
 
     /// <summary>Step 1 of the employee import workflow: the template with the exact expected columns.</summary>
     [HttpGet("employees/import/template")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     public IActionResult GetEmployeeImportTemplate([FromServices] IReportExportService export)
         => ExportFileHelper.Template(export, "Employees", EmployeeImportTemplate.Headers, EmployeeImportTemplate.SampleRows(), "employees-import-template");
 
     /// <summary>Step 2: validate the upload (departments, salary and dates) and report row errors. Writes nothing.</summary>
     [HttpPost("employees/import/preview")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     public async Task<ActionResult<ImportPreviewDto>> PreviewEmployeeImport(IFormFile file)
         => Ok(await _mediator.Send(new PreviewEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), false)));
 
     /// <summary>Step 3: confirm - re-validates and creates only the valid new rows.</summary>
     [HttpPost("employees/import/execute")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     public async Task<ActionResult<ImportExecuteResultDto>> ExecuteEmployeeImport(IFormFile file)
         => Ok(await _mediator.Send(new ExecuteEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), false)));
 
     /// <summary>Preview of the update-capable import - payroll.employees is required to overwrite an existing employee.</summary>
     [HttpPost("employees/import/preview-update")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     public async Task<ActionResult<ImportPreviewDto>> PreviewEmployeeImportWithUpdate(IFormFile file)
         => Ok(await _mediator.Send(new PreviewEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), true)));
 
     /// <summary>Confirm of the update-capable import (spec rule: no silent overwrite).</summary>
     [HttpPost("employees/import/execute-update")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollManageEmployees)]
     public async Task<ActionResult<ImportExecuteResultDto>> ExecuteEmployeeImportWithUpdate(IFormFile file)
         => Ok(await _mediator.Send(new ExecuteEmployeeImportCommand(await ExportFileHelper.ReadUploadAsync(file), true)));
 
     // -------------------------------------------------------- payroll runs
 
+    /// <summary>Gets runs.</summary>
+    /// <remarks>Route: GET api/Payroll/runs. Requires the 'payroll.view' permission.</remarks>
     [HttpGet("runs")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     [ProducesResponseType(typeof(List<PayrollRunDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<PayrollRunDto>>> GetRuns([FromQuery] int? periodYear, [FromQuery] PayrollRunStatus? status)
         => Ok(await _mediator.Send(new GetPayrollRunsQuery(periodYear, status)));
 
+    /// <summary>Gets run.</summary>
+    /// <remarks>Route: GET api/Payroll/runs/{id:guid}. Requires the 'payroll.view' permission.</remarks>
     [HttpGet("runs/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PayrollRunDto>> GetRun(Guid id)
         => Ok(await _mediator.Send(new GetPayrollRunByIdQuery(id)));
 
+    /// <summary>Creates run.</summary>
+    /// <remarks>Route: POST api/Payroll/runs. Requires the 'payroll.create' permission.</remarks>
     [HttpPost("runs")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> CreateRun([FromBody] CreatePayrollRunCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetRun), new { id = result.Id }, result);
     }
 
+    /// <summary>Updates run line.</summary>
+    /// <remarks>Route: PUT api/Payroll/runs/{id:guid}/lines/{lineId:guid}. Requires the 'payroll.create' permission.</remarks>
     [HttpPut("runs/{id:guid}/lines/{lineId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> UpdateRunLine(Guid id, Guid lineId, [FromBody] UpdatePayrollRunLineCommand command)
     {
         if (id != command.RunId || lineId != command.LineId) command = command with { RunId = id, LineId = lineId };
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>Removes run line.</summary>
+    /// <remarks>Route: DELETE api/Payroll/runs/{id:guid}/lines/{lineId:guid}. Requires the 'payroll.create' permission.</remarks>
     [HttpDelete("runs/{id:guid}/lines/{lineId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<PayrollRunDto>> RemoveRunLine(Guid id, Guid lineId)
         => Ok(await _mediator.Send(new RemovePayrollRunLineCommand(id, lineId)));
 
+    /// <summary>Sets run account.</summary>
+    /// <remarks>Route: PUT api/Payroll/runs/{id:guid}/account. Requires the 'payroll.create' permission.</remarks>
     [HttpPut("runs/{id:guid}/account")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> SetRunAccount(Guid id, [FromBody] SetPayrollAccountRequest request)
         => Ok(await _mediator.Send(new SetPayrollRunAccountCommand(id, request.TreasuryAccountId)));
 
+    /// <summary>Approves run.</summary>
+    /// <remarks>Route: POST api/Payroll/runs/{id:guid}/approve. Requires the 'payroll.approve' permission.</remarks>
     [HttpPost("runs/{id:guid}/approve")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollApprove)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> ApproveRun(Guid id)
         => Ok(await _mediator.Send(new ApprovePayrollRunCommand(id)));
 
@@ -194,12 +303,25 @@ public class PayrollController : ControllerBase
     [HttpPost("runs/{id:guid}/post")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollPost)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> PostRun(Guid id)
         => Ok(await _mediator.Send(new PostPayrollRunCommand(id)));
 
+    /// <summary>Cancels run.</summary>
+    /// <remarks>Route: POST api/Payroll/runs/{id:guid}/cancel. Requires the 'payroll.cancel' permission.</remarks>
     [HttpPost("runs/{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCancel)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> CancelRun(Guid id, [FromBody] CancelPayrollRequest request)
         => Ok(await _mediator.Send(new CancelPayrollRunCommand(id, request.Reason)));
 
@@ -211,6 +333,11 @@ public class PayrollController : ControllerBase
     [HttpPost("runs/{id:guid}/calculate")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> CalculateRun(Guid id)
         => Ok(await _mediator.Send(new CalculatePayrollRunCommand(id)));
 
@@ -221,6 +348,11 @@ public class PayrollController : ControllerBase
     [HttpPost("runs/{id:guid}/submit")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCreate)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> SubmitRun(Guid id)
         => Ok(await _mediator.Send(new SubmitPayrollRunForReviewCommand(id)));
 
@@ -231,6 +363,12 @@ public class PayrollController : ControllerBase
     [HttpPost("runs/{id:guid}/return")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollApprove)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> ReturnRun(Guid id, [FromBody] ReturnPayrollRunRequest? request)
         => Ok(await _mediator.Send(new ReturnPayrollRunForCorrectionCommand(id, request?.Notes)));
 
@@ -242,6 +380,12 @@ public class PayrollController : ControllerBase
     [HttpPost("runs/{id:guid}/reverse")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollCancel)]
     [ProducesResponseType(typeof(PayrollRunDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PayrollRunDto>> ReverseRun(Guid id, [FromBody] ReversePayrollRunRequest request)
         => Ok(await _mediator.Send(new ReversePayrollRunCommand(id, request.Reason)));
 
@@ -251,6 +395,9 @@ public class PayrollController : ControllerBase
     /// and posted - never recomputed from the employee master.
     /// </summary>
     [HttpGet("runs/{id:guid}/payslips/{lineId:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     public async Task<IActionResult> GetPayslipPdf(Guid id, Guid lineId, [FromServices] IReportExportService export)
     {
@@ -278,6 +425,9 @@ public class PayrollController : ControllerBase
 
     /// <summary>The whole run as a printable payroll sheet (spec section 49).</summary>
     [HttpGet("runs/{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     public async Task<IActionResult> GetRunPdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -297,6 +447,9 @@ public class PayrollController : ControllerBase
 
     /// <summary>Payroll run as Excel for accounting (spec section 49).</summary>
     [HttpGet("runs/{id:guid}/excel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.PayrollView)]
     public async Task<IActionResult> GetRunExcel(Guid id, [FromServices] IReportExportService export)
     {
@@ -314,13 +467,17 @@ public class PayrollController : ControllerBase
 }
 
 /// <summary>Body for selecting which account a payroll run is paid from.</summary>
+/// <param name="TreasuryAccountId">The treasury account id.</param>
 public record SetPayrollAccountRequest(Guid? TreasuryAccountId);
 
 /// <summary>Body for cancelling a payroll run - a documented reason is mandatory (spec section 46).</summary>
+/// <param name="Reason">The reason.</param>
 public record CancelPayrollRequest(string Reason);
 
 /// <summary>Body for returning a run under review - the note is optional.</summary>
+/// <param name="Notes">The notes.</param>
 public record ReturnPayrollRunRequest(string? Notes = null);
 
 /// <summary>Body for reversing a posted run - the reason is mandatory (spec section 39).</summary>
+/// <param name="Reason">The reason.</param>
 public record ReversePayrollRunRequest(string Reason);

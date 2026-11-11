@@ -1,5 +1,6 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.CustomerTransfers.DTOs;
 using DyeHouseERP.Domain.Common;
@@ -8,6 +9,7 @@ using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.CustomerTransfers.Commands;
@@ -64,10 +66,13 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
     private readonly IPeriodCloseService _periodClose;
     private readonly IAllocationLockService _stockLock;
 
+    private readonly ILogger<CreateCustomerTransferCommandHandler>? _logger;
+
     public CreateCustomerTransferCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IDocumentNumberGenerator numberGenerator,
         IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
-        IAllocationLockService stockLock)
+        IAllocationLockService stockLock,
+        ILogger<CreateCustomerTransferCommandHandler>? logger = null)
     {
         _db = db;
         _currentUser = currentUser;
@@ -75,7 +80,7 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
         _ledger = ledger;
         _clock = clock;
         _periodClose = periodClose;
-        _stockLock = stockLock;
+        _stockLock = stockLock; _logger = logger;
     }
 
     public async Task<CustomerTransferDto> Handle(CreateCustomerTransferCommand request, CancellationToken cancellationToken)
@@ -139,11 +144,16 @@ public class CreateCustomerTransferCommandHandler : IRequestHandler<CreateCustom
             // caller as both requester and approver - the self-approval the
             // separation of duties forbids - and posted with no approval at all.
             var decision = await ApprovalRequestGuard.ConsumeAsync(
-                _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+                _db, _currentUser, request.ApprovalRequestId, request, cancellationToken, _logger);
 
             _db.NegativeStockOverrides.Add(new NegativeStockOverride(
                 message.Id, request.ItemId, request.FromCustomerId, requested, available,
                 request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
+
+                _logger?.LogWarning(
+                    "EventName: {EventName}. Negative-stock override recorded for message {RawMessageId} "
+                    + "item {ItemId} customer {CustomerId}: requested {Requested}, available {Available}.",
+                    LogEvents.NegativeStockOverrideCreated, message.Id, request.ItemId, request.FromCustomerId, requested, available);
         }
 
         var transferNumber = await _numberGenerator.NextAsync(DocumentType.CustomerTransfer, cancellationToken: cancellationToken);

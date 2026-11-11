@@ -19,7 +19,7 @@ public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, List<UserDto>
         return users.Select(u => new UserDto
         {
             Id = u.Id, Username = u.Username, DisplayName = u.DisplayName,
-            Roles = u.RoleList.ToList(), IsActive = u.IsActive
+            Roles = u.RoleList.ToList(), IsActive = u.IsActive, MustChangePassword = u.MustChangePassword
         }).ToList();
     }
 }

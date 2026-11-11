@@ -219,8 +219,11 @@ public static class Permissions
 
     public const string ReportsView = "reports.view";
     public const string ReportsExport = "reports.export";
+    public const string KpisView = "kpis.view";
+    public const string AccountingExport = "accounting.export";
 
     public const string UsersManage = "users.manage";
+    public const string ResetPassword = "users.reset_password";
     public const string RolesManage = "roles.manage";
     public const string SettingsManage = "settings.manage";
     public const string AuditView = "audit.view";
@@ -253,7 +256,7 @@ public static class Permissions
         MaterialSalesView, MaterialSalesCreate, MaterialSalesPost, MaterialSalesCancel,
         ApprovalsView,
         AttachmentsView, AttachmentsManage,
-        ReportsView, ReportsExport,
-        UsersManage, RolesManage, SettingsManage, AuditView
+        ReportsView, ReportsExport, KpisView, AccountingExport,
+        UsersManage, ResetPassword, RolesManage, SettingsManage, AuditView
     };
 }

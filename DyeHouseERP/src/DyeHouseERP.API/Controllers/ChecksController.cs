@@ -25,11 +25,16 @@ namespace DyeHouseERP.API.Controllers;
 public class ChecksController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the ChecksController class.</summary>
     public ChecksController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists cheques.</summary>
+    /// <remarks>Route: GET api/checks. Requires the 'checks.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksView)]
     [ProducesResponseType(typeof(List<CheckDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<CheckDto>>> Get(
         [FromQuery] CheckDirection? direction, [FromQuery] CheckStatus? status,
         [FromQuery] Guid? customerId, [FromQuery] Guid? supplierId,
@@ -37,42 +42,77 @@ public class ChecksController : ControllerBase
         [FromQuery] DateTime? dueBefore, [FromQuery] bool? overdueOnly, [FromQuery] string? search)
         => Ok(await _mediator.Send(new GetChecksQuery(direction, status, customerId, supplierId, from, to, dueBefore, overdueOnly, search)));
 
+    /// <summary>Gets by id.</summary>
+    /// <remarks>Route: GET api/checks/{id:guid}. Requires the 'checks.view' permission.</remarks>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksView)]
     public async Task<ActionResult<CheckDto>> GetById(Guid id)
         => Ok(await _mediator.Send(new GetCheckByIdQuery(id)));
 
     /// <summary>Checks received / issued / in hand / deposited / endorsed / cleared / bounced totals + due and overdue figures.</summary>
     [HttpGet("summary")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksView)]
     public async Task<ActionResult<CheckRegisterSummaryDto>> GetSummary([FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetCheckRegisterSummaryQuery(from, to)));
 
+    /// <summary>Runs the register customer check operation.</summary>
+    /// <remarks>Route: POST api/checks/customer-checks. Requires the 'checks.create' permission.</remarks>
     [HttpPost("customer-checks")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksCreate)]
     [ProducesResponseType(typeof(CheckDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CheckDto>> RegisterCustomerCheck([FromBody] RegisterCustomerCheckCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    /// <summary>Runs the register supplier check operation.</summary>
+    /// <remarks>Route: POST api/checks/supplier-checks. Requires the 'checks.create' permission.</remarks>
     [HttpPost("supplier-checks")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksCreate)]
     [ProducesResponseType(typeof(CheckDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CheckDto>> RegisterSupplierCheck([FromBody] RegisterSupplierCheckCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    /// <summary>Confirms receipt.</summary>
+    /// <remarks>Route: POST api/checks/{id:guid}/confirm-receipt. Requires the 'checks.edit' permission.</remarks>
     [HttpPost("{id:guid}/confirm-receipt")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksEdit)]
     public async Task<ActionResult<CheckDto>> ConfirmReceipt(Guid id, [FromBody] MovementDateRequest? request)
         => Ok(await _mediator.Send(new ConfirmCheckReceiptCommand(id, request?.MovementDate)));
 
     /// <summary>Hands the SAME check to a supplier. The instrument stays one record from customer receipt to final status.</summary>
     [HttpPost("{id:guid}/endorse")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksEndorse)]
     public async Task<ActionResult<CheckDto>> Endorse(Guid id, [FromBody] EndorseCheckRequest request)
         => Ok(await _mediator.Send(new EndorseCheckToSupplierCommand(id, request.SupplierId, request.MovementDate ?? DateTime.UtcNow, request.Reason)));
@@ -84,39 +124,87 @@ public class ChecksController : ControllerBase
     /// accounts - NO cash/bank movement is posted.
     /// </summary>
     [HttpPost("{id:guid}/settle-supplier")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksEndorse)]
     public async Task<ActionResult<SupplierPaymentDto>> SettleSupplier(Guid id, [FromBody] SettleSupplierRequest request)
         => Ok(await _mediator.Send(new SettleSupplierPayableWithEndorsedCheckCommand(
             id, request.SupplierId, request.SettlementDate ?? DateTime.UtcNow,
             request.SupplierInvoiceId, request.Reason, request.PaymentMethod)));
 
+    /// <summary>Deposits cheques.</summary>
+    /// <remarks>Route: POST api/checks/{id:guid}/deposit. Requires the 'checks.deposit' permission.</remarks>
     [HttpPost("{id:guid}/deposit")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksDeposit)]
     public async Task<ActionResult<CheckDto>> Deposit(Guid id, [FromBody] DepositCheckRequest request)
         => Ok(await _mediator.Send(new DepositCheckCommand(id, request.TreasuryAccountId, request.MovementDate, request.Notes)));
 
+    /// <summary>Clears cheques.</summary>
+    /// <remarks>Route: POST api/checks/{id:guid}/clear. Requires the 'checks.clear' permission.</remarks>
     [HttpPost("{id:guid}/clear")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksClear)]
     public async Task<ActionResult<CheckDto>> Clear(Guid id, [FromBody] ClearCheckRequest? request)
         => Ok(await _mediator.Send(new ClearCheckCommand(id, request?.MovementDate, request?.Notes, request?.TreasuryAccountId)));
 
+    /// <summary>Bounces cheques.</summary>
+    /// <remarks>Route: POST api/checks/{id:guid}/bounce. Requires the 'checks.bounce' permission.</remarks>
     [HttpPost("{id:guid}/bounce")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksBounce)]
     public async Task<ActionResult<CheckDto>> Bounce(Guid id, [FromBody] ReasonRequest request)
         => Ok(await _mediator.Send(new BounceCheckCommand(id, request.Reason, request.MovementDate)));
 
+    /// <summary>Returns cheques.</summary>
+    /// <remarks>Route: POST api/checks/{id:guid}/return. Requires the 'checks.edit' permission.</remarks>
     [HttpPost("{id:guid}/return")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksEdit)]
     public async Task<ActionResult<CheckDto>> Return(Guid id, [FromBody] ReasonRequest? request)
         => Ok(await _mediator.Send(new ReturnCheckToCompanyCommand(id, request?.Reason, request?.MovementDate)));
 
+    /// <summary>Cancels cheques.</summary>
+    /// <remarks>Route: POST api/checks/{id:guid}/cancel. Requires the 'checks.cancel' permission.</remarks>
     [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksCancel)]
     public async Task<ActionResult<CheckDto>> Cancel(Guid id, [FromBody] ReasonRequest request)
         => Ok(await _mediator.Send(new CancelCheckCommand(id, request.Reason, request.MovementDate)));
 
     /// <summary>Checks report export - respects the same filters as the list (spec sections 40 and 49).</summary>
     [HttpGet("export/excel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksExport)]
     public async Task<IActionResult> ExportExcel(
         [FromQuery] CheckDirection? direction, [FromQuery] CheckStatus? status,
@@ -142,7 +230,11 @@ public class ChecksController : ControllerBase
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "checks.xlsx");
     }
 
+    /// <summary>Exports pdf.</summary>
+    /// <remarks>Route: GET api/checks/export/pdf. Requires the 'checks.export' permission.</remarks>
     [HttpGet("export/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksExport)]
     public async Task<IActionResult> ExportPdf(
         [FromQuery] CheckDirection? direction, [FromQuery] CheckStatus? status,
@@ -169,6 +261,9 @@ public class ChecksController : ControllerBase
     /// status audit travels with the printed document (spec sections 40 + 49).
     /// </summary>
     [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ChecksExport)]
     public async Task<IActionResult> GetPdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -192,12 +287,35 @@ public class ChecksController : ControllerBase
     }
 }
 
+/// <summary>Request payload to reason.</summary>
+/// <param name="Reason">The reason.</param>
+/// <param name="MovementDate">The movement date.</param>
 public record ReasonRequest(string Reason, DateTime? MovementDate = null);
+/// <summary>Request payload to movement date.</summary>
+/// <param name="MovementDate">The movement date.</param>
 public record MovementDateRequest(DateTime? MovementDate = null);
+/// <summary>Request payload to endorse check.</summary>
+/// <param name="SupplierId">The supplier id.</param>
+/// <param name="MovementDate">The movement date.</param>
+/// <param name="Reason">The reason.</param>
 public record EndorseCheckRequest(Guid SupplierId, DateTime? MovementDate = null, string? Reason = null);
 
+/// <summary>Request payload to settle supplier.</summary>
+/// <param name="SupplierId">The supplier id.</param>
+/// <param name="SettlementDate">The settlement date.</param>
+/// <param name="SupplierInvoiceId">The supplier invoice id.</param>
+/// <param name="Reason">The reason.</param>
+/// <param name="PaymentMethod">The payment method.</param>
 public record SettleSupplierRequest(
     Guid SupplierId, DateTime? SettlementDate = null, Guid? SupplierInvoiceId = null,
     string? Reason = null, string? PaymentMethod = null);
+/// <summary>Request payload to deposit check.</summary>
+/// <param name="TreasuryAccountId">The treasury account id.</param>
+/// <param name="MovementDate">The movement date.</param>
+/// <param name="Notes">The notes.</param>
 public record DepositCheckRequest(Guid TreasuryAccountId, DateTime? MovementDate = null, string? Notes = null);
+/// <summary>Request payload to clear check.</summary>
+/// <param name="MovementDate">The movement date.</param>
+/// <param name="Notes">The notes.</param>
+/// <param name="TreasuryAccountId">The treasury account id.</param>
 public record ClearCheckRequest(DateTime? MovementDate = null, string? Notes = null, Guid? TreasuryAccountId = null);

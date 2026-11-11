@@ -1,116 +1,193 @@
-import { useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { ArrowLeft, Factory } from "lucide-react";
 import { DeliveriesApi, InvoicesApi, ProductionOrdersApi, RawMessagesApi } from "@/api/client";
-import { Card, Badge } from "@/components/ui";
+import { Badge } from "@/components/ui";
+import RequestFailure from "@/components/RequestFailure";
+import { useI18n } from "@/i18n";
+import { loginHref } from "@/utils/returnUrl";
 
-/// <summary>
-/// What a QR code scan opens (spec section 40): a compact, read-only
-/// summary - not the full editing screen. Scanning a Production Order shows
-/// exactly the fields the spec calls out: Customer, Item, Color, Requested
-/// quantity, Current stage, Status, history (stage list).
-/// </summary>
+/**
+ * The QR code printed on a job card opens /scan/:type/:id. A scan is a
+ * floor action, so this page is a one-screen summary - order number, current
+ * stage, next action - with the next action one tap away (two taps total
+ * from the camera: scan, then the button).
+ */
 export default function ScanViewPage() {
-  const { type, id } = useParams<{ type: string; id: string }>();
+  const { type, id } = useParams();
+  const location = useLocation();
+
+  // The interceptor would bounce an unauthenticated API call to a bare
+  // /login and lose the scanned URL. Redirect first, with the scan URL as
+  // the validated same-origin return target, so no request fires unsigned.
+  const signedIn = typeof localStorage !== "undefined" && Boolean(localStorage.getItem("dyehouse_user"));
+  if (!signedIn) return <Navigate to={loginHref(location.pathname)} replace />;
 
   if (type === "production-order") return <ProductionOrderScan id={id!} />;
   if (type === "invoice") return <InvoiceScan id={id!} />;
   if (type === "delivery") return <DeliveryScan id={id!} />;
   if (type === "raw-message") return <RawMessageScan id={id!} />;
-
-  return <div className="p-8 text-center text-ink-subtle">نوع مستند غير معروف</div>;
+  return <UnknownScan />;
 }
 
-function ScanShell({ title, number, children }: { title: string; number: string; children: React.ReactNode }) {
+function ScanShell({ title, number, action, children }: {
+  title: string;
+  number: string;
+  /** The next action: rendered first, full-width, so it is one tap away. */
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="min-h-screen bg-surface-sunken p-4 flex items-start justify-center">
-      <Card className="card-pad w-full max-w-md mt-6">
-        <div className="text-xs text-ink-subtle mb-1">{title}</div>
-        <div className="text-lg font-bold ltr-nums mb-4">{number}</div>
-        {children}
-      </Card>
+    <div className="mx-auto w-full max-w-lg p-4">
+      <div className="card card-pad">
+        <div className="flex items-center gap-2 text-ink-subtle">
+          <Factory size={16} />
+          <span className="text-xs">{title}</span>
+        </div>
+        <div className="mt-1 text-3xl font-bold tracking-tight text-ink" dir="ltr">{number}</div>
+        {action && <div className="mt-4">{action}</div>}
+        <div className="mt-4 space-y-2 border-t border-line pt-4">{children}</div>
+      </div>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex justify-between py-2 border-b border-line text-sm">
-      <span className="text-ink-muted">{label}</span>
-      <span className="font-medium">{value}</span>
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="shrink-0 text-ink-subtle">{label}</span>
+      <span className="min-w-0 text-end font-medium text-ink">{value}</span>
     </div>
+  );
+}
+
+/**
+ * Big full-width link styled as a primary button: the 44px minimum comes
+ * from .btn-floor (index.css). A Link, not a Button, because Button renders
+ * a <button> and cannot carry navigation.
+ */
+function NextActionButton({ to, children }: { to: string; children: ReactNode }) {
+  const { lang } = useI18n();
+  return (
+    <Link to={to} className="btn btn-primary btn-floor w-full text-base">
+      <span>{children}</span>
+      <ArrowLeft size={18} className={lang === "ar" ? "" : "rotate-180"} />
+    </Link>
   );
 }
 
 function ProductionOrderScan({ id }: { id: string }) {
-  const { data: order, isLoading } = useQuery({ queryKey: ["scan-order", id], queryFn: () => ProductionOrdersApi.get(id) });
-  if (isLoading || !order) return <div className="p-8 text-center text-ink-subtle">جارٍ التحميل...</div>;
+  const { t } = useI18n();
+  const { data: order, isLoading, error, refetch } = useQuery({
+    queryKey: ["scan-order", id],
+    queryFn: () => ProductionOrdersApi.get(id)
+  });
+  if (isLoading) return <div className="p-8 text-center text-ink-subtle">{t("scan.loading", "جارٍ التحميل...")}</div>;
+  if (error || !order)
+    return (
+      <div className="mx-auto w-full max-w-lg p-4">
+        <RequestFailure error={error} onRetry={() => void refetch()} />
+      </div>
+    );
 
-  const currentStage = order.stageExecutions.find((s) => s.status === "InProgress") ?? order.stageExecutions.find((s) => s.status === "Pending");
-  const completedKg = order.stageExecutions.filter((s) => s.status === "Completed").reduce((sum, s) => sum + (s.outputKg ?? 0), 0);
+  const completedKg = order.stageExecutions?.filter((s) => s.status === "Completed").length ?? 0;
+  const currentStage = order.stageExecutions?.find((s) => s.status === "InProgress");
+  // The next action mirrors the floor: a paused order resumes, an order with
+  // no open stage starts, otherwise the open stage records output - all on
+  // the order page, so the scan stays a summary and never a second editor.
+  const nextAction =
+    order.status === "Paused"
+      ? t("scan.nextAction.resume", "استئناف الإنتاج")
+      : !currentStage
+        ? t("scan.nextAction.start", "بدء التشغيل")
+        : t("scan.nextAction.record", "تسجيل إنتاج المرحلة");
 
   return (
-    <ScanShell title="أمر تشغيل" number={order.orderNumber}>
-      <Row label="العميل" value={`${order.customerCode} - ${order.customerName}`} />
-      <Row label="الصنف" value={`${order.itemCode} - ${order.itemName}`} />
-      <Row label="اللون" value={order.color ?? "-"} />
-      <Row label="الكمية المطلوبة" value={`${order.requestedQuantityKg ?? ""} ${order.requestedQuantityKg ? "كجم" : ""} ${order.requestedQuantityMeter ?? ""} ${order.requestedQuantityMeter ? "م" : ""}`} />
-      <Row label="الكمية المكتملة" value={`${completedKg} كجم`} />
-      <Row label="المرحلة الحالية" value={currentStage?.stageName ?? "-"} />
-      <Row label="الحالة" value={<Badge tone="blue">{order.status}</Badge>} />
-
-      <div className="mt-4">
-        <div className="text-xs text-ink-subtle mb-2">سجل المراحل</div>
-        <div className="space-y-1.5">
-          {order.stageExecutions.map((s) => (
-            <div key={s.id} className="flex justify-between text-xs">
-              <span>{s.stageName}</span>
-              <span className="text-ink-subtle">{s.status}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <ScanShell
+      title={t("scan.jobOrder", "أمر تشغيل")}
+      number={order.orderNumber}
+      action={
+        <NextActionButton to={`/production-orders/${order.id}`}>{nextAction}</NextActionButton>
+      }
+    >
+      <Row label={t("scan.currentStage", "المرحلة الحالية")} value={currentStage?.stageName ?? t("scan.awaitingStart", "في انتظار البدء")} />
+      <Row label={t("scan.status", "الحالة")} value={<Badge tone="blue">{order.status}</Badge>} />
+      <Row label={t("scan.customer", "العميل")} value={`${order.customerCode} - ${order.customerName}`} />
+      <Row label={t("scan.color", "اللون")} value={order.color ?? "-"} />
+      <Row
+        label={t("scan.requestedQty", "الكمية المطلوبة")}
+        value={`${order.requestedQuantityKg ?? ""} ${order.requestedQuantityKg ? t("unit.kg") : ""} ${order.requestedQuantityMeter ?? ""} ${order.requestedQuantityMeter ? t("unit.meter") : ""}`}
+      />
+      <Row label={t("scan.completedStages", "مراحل مكتملة")} value={completedKg} />
     </ScanShell>
   );
 }
 
 function InvoiceScan({ id }: { id: string }) {
-  const { data: invoice, isLoading } = useQuery({ queryKey: ["scan-invoice", id], queryFn: () => InvoicesApi.get(id) });
-  if (isLoading || !invoice) return <div className="p-8 text-center text-ink-subtle">جارٍ التحميل...</div>;
+  const { t } = useI18n();
+  const { data: invoice, isLoading, error, refetch } = useQuery({ queryKey: ["scan-invoice", id], queryFn: () => InvoicesApi.get(id) });
+  if (isLoading) return <div className="p-8 text-center text-ink-subtle">{t("scan.loading", "جارٍ التحميل...")}</div>;
+  if (error || !invoice)
+    return (
+      <div className="mx-auto w-full max-w-lg p-4">
+        <RequestFailure error={error} onRetry={() => void refetch()} />
+      </div>
+    );
 
   return (
-    <ScanShell title="فاتورة" number={invoice.invoiceNumber}>
-      <Row label="العميل" value={`${invoice.customerCode} - ${invoice.customerName}`} />
-      <Row label="التاريخ" value={new Date(invoice.invoiceDate).toLocaleDateString("en-GB")} />
-      <Row label="الإجمالي" value={invoice.total} />
-      <Row label="الحالة" value={<Badge tone="blue">{invoice.status}</Badge>} />
+    <ScanShell title={t("scan.invoice", "فاتورة")} number={invoice.invoiceNumber}>
+      <Row label={t("scan.customer", "العميل")} value={`${invoice.customerCode} - ${invoice.customerName}`} />
+      <Row label={t("scan.date", "التاريخ")} value={new Date(invoice.invoiceDate).toLocaleDateString("en-GB")} />
+      <Row label={t("scan.total", "الإجمالي")} value={invoice.total} />
+      <Row label={t("scan.status", "الحالة")} value={<Badge tone="blue">{invoice.status}</Badge>} />
     </ScanShell>
   );
 }
 
 function DeliveryScan({ id }: { id: string }) {
-  const { data: delivery, isLoading } = useQuery({ queryKey: ["scan-delivery", id], queryFn: () => DeliveriesApi.get(id) });
-  if (isLoading || !delivery) return <div className="p-8 text-center text-ink-subtle">جارٍ التحميل...</div>;
+  const { t } = useI18n();
+  const { data: delivery, isLoading, error, refetch } = useQuery({ queryKey: ["scan-delivery", id], queryFn: () => DeliveriesApi.get(id) });
+  if (isLoading) return <div className="p-8 text-center text-ink-subtle">{t("scan.loading", "جارٍ التحميل...")}</div>;
+  if (error || !delivery)
+    return (
+      <div className="mx-auto w-full max-w-lg p-4">
+        <RequestFailure error={error} onRetry={() => void refetch()} />
+      </div>
+    );
 
   return (
-    <ScanShell title="إذن تسليم" number={delivery.deliveryNumber}>
-      <Row label="العميل" value={`${delivery.customerCode} - ${delivery.customerName}`} />
-      <Row label="التاريخ" value={new Date(delivery.deliveryDate).toLocaleDateString("en-GB")} />
-      <Row label="عدد البنود" value={delivery.lines.length} />
-      <Row label="الحالة" value={<Badge tone="blue">{delivery.status}</Badge>} />
+    <ScanShell title={t("scan.delivery", "إذن تسليم")} number={delivery.deliveryNumber}>
+      <Row label={t("scan.customer", "العميل")} value={`${delivery.customerCode} - ${delivery.customerName}`} />
+      <Row label={t("scan.date", "التاريخ")} value={new Date(delivery.deliveryDate).toLocaleDateString("en-GB")} />
+      <Row label={t("scan.lines", "عدد البنود")} value={delivery.lines.length} />
+      <Row label={t("scan.status", "الحالة")} value={<Badge tone="blue">{delivery.status}</Badge>} />
     </ScanShell>
   );
 }
 
 function RawMessageScan({ id }: { id: string }) {
-  const { data: message, isLoading } = useQuery({ queryKey: ["scan-raw-message", id], queryFn: () => RawMessagesApi.get(id) });
-  if (isLoading || !message) return <div className="p-8 text-center text-ink-subtle">جارٍ التحميل...</div>;
+  const { t } = useI18n();
+  const { data: message, isLoading, error, refetch } = useQuery({ queryKey: ["scan-raw-message", id], queryFn: () => RawMessagesApi.get(id) });
+  if (isLoading) return <div className="p-8 text-center text-ink-subtle">{t("scan.loading", "جارٍ التحميل...")}</div>;
+  if (error || !message)
+    return (
+      <div className="mx-auto w-full max-w-lg p-4">
+        <RequestFailure error={error} onRetry={() => void refetch()} />
+      </div>
+    );
 
   return (
-    <ScanShell title="إذن استلام خام" number={message.messageNumber}>
-      <Row label="العميل" value={`${message.customerCode} - ${message.customerName}`} />
-      <Row label="المخزن" value={message.warehouseName} />
-      <Row label="التاريخ" value={new Date(message.receiptDate).toLocaleDateString("en-GB")} />
-      <Row label="حالة الفحص" value={<Badge tone="blue">{message.inspectionStatus}</Badge>} />
+    <ScanShell title={t("scan.rawMessage", "إذن استلام خام")} number={message.messageNumber}>
+      <Row label={t("scan.customer", "العميل")} value={`${message.customerCode} - ${message.customerName}`} />
+      <Row label={t("scan.warehouse", "المخزن")} value={message.warehouseName} />
+      <Row label={t("scan.date", "التاريخ")} value={new Date(message.receiptDate).toLocaleDateString("en-GB")} />
+      <Row label={t("scan.inspection", "حالة الفحص")} value={<Badge tone="blue">{message.inspectionStatus}</Badge>} />
     </ScanShell>
   );
+}
+
+function UnknownScan() {
+  const { t } = useI18n();
+  return <div className="p-8 text-center text-ink-subtle">{t("scan.unknown", "نوع المستند غير معروف")}</div>;
 }

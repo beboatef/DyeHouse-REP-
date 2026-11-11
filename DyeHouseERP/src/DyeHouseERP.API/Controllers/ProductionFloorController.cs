@@ -26,9 +26,14 @@ namespace DyeHouseERP.API.Controllers;
 public class ProductionFloorController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the ProductionFloorController class.</summary>
     public ProductionFloorController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists production-floor execution.</summary>
+    /// <remarks>Route: GET api/production-floor. Requires the 'production.view' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
     public async Task<ActionResult<List<ProductionFloorRowDto>>> Get(
         [FromQuery] Guid? stageDefinitionId, [FromQuery] ProductionOrderStatus? status,

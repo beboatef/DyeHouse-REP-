@@ -12,25 +12,36 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Hosts the job orders (production orders) endpoints.</summary>
 [ApiController]
 [Route("api/production-orders")]
 [Authorize]
 public class ProductionOrdersController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the ProductionOrdersController class.</summary>
     public ProductionOrdersController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists job orders (production orders).</summary>
+    /// <remarks>Route: GET api/production-orders. Requires the 'production.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
     [ProducesResponseType(typeof(List<ProductionOrderDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<ProductionOrderDto>>> Get(
         [FromQuery] Guid? customerId, [FromQuery] ProductionOrderStatus? status,
         [FromQuery] JobOrderType? jobOrderType)
         => Ok(await _mediator.Send(new GetProductionOrdersQuery(customerId, status, jobOrderType)));
 
+    /// <summary>Gets by id.</summary>
+    /// <remarks>Route: GET api/production-orders/{id:guid}. Requires the 'production.view' permission.</remarks>
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionView)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductionOrderDto>> GetById(Guid id)
         => Ok(await _mediator.Send(new GetProductionOrderByIdQuery(id)));
 
@@ -41,6 +52,8 @@ public class ProductionOrdersController : ControllerBase
     /// production-register report. Honours the same filters as the list.
     /// </summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] ProductionOrderStatus? status,
         [FromQuery] JobOrderType? jobOrderType,
@@ -65,7 +78,12 @@ public class ProductionOrdersController : ControllerBase
         return ExportFileHelper.ToFile(export, format, "Job Orders", null, headers, rows, "job-orders", "JobOrders");
     }
 
+    /// <summary>Gets pdf.</summary>
+    /// <remarks>Route: GET api/production-orders/{id:guid}/pdf. Requires the 'reports.export' permission.</remarks>
     [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetPdf(Guid id, [FromServices] DyeHouseERP.Application.Common.Interfaces.IReportExportService export)
     {
@@ -94,6 +112,11 @@ public class ProductionOrdersController : ControllerBase
     [HttpPost("issue")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawConsume)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> IssueRawMaterial([FromBody] IssueRawMaterialCommand command)
     {
         var result = await _mediator.Send(command);
@@ -112,6 +135,12 @@ public class ProductionOrdersController : ControllerBase
     [HttpPut("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> Update(Guid id, [FromBody] UpdateProductionOrderRequest request)
         => Ok(await _mediator.Send(new UpdateProductionOrderCommand(
             id, request.OrderDate, request.Color, request.RawOrigin, request.CustomerReference,
@@ -131,9 +160,17 @@ public class ProductionOrdersController : ControllerBase
     // Nothing on the server can mark a stage skipped any more, so the stage definition no longer carries
     // an AllowSkip capability either. See docs/audit/phase4-report.md, section C.1.
 
+    /// <summary>Completes job orders (production orders).</summary>
+    /// <remarks>Route: POST api/production-orders/{id:guid}/complete. Requires the 'production.complete' permission.</remarks>
     [HttpPost("{id:guid}/complete")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionComplete)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> Complete(Guid id, [FromBody] CompleteProductionOrderRequest request)
         => Ok(await _mediator.Send(new CompleteProductionOrderCommand(id, request.Reason)));
 
@@ -145,6 +182,12 @@ public class ProductionOrdersController : ControllerBase
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> Cancel(Guid id, [FromBody] CancelProductionOrderRequest request)
         => Ok(await _mediator.Send(new CancelProductionOrderCommand(id, request.Reason)));
 
@@ -167,6 +210,12 @@ public class ProductionOrdersController : ControllerBase
     [HttpPost("stage-executions/{stageExecutionId:guid}/transfer")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> TransferStage(Guid stageExecutionId, [FromBody] TransferStageRequest request)
         => Ok(await _mediator.Send(new TransferToNextStageCommand(
             stageExecutionId, request.NextStageDefinitionId,
@@ -183,17 +232,39 @@ public class ProductionOrdersController : ControllerBase
     [HttpPost("stage-executions/{stageExecutionId:guid}/output")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> UpdateStageOutput(Guid stageExecutionId, [FromBody] UpdateStageOutputRequest request)
         => Ok(await _mediator.Send(new UpdateStageOutputCommand(stageExecutionId, request.OutputKg, request.OutputMeter, request.Reason)));
 
+    /// <summary>Updates drawing.</summary>
+    /// <remarks>Route: POST api/production-orders/stage-executions/{stageExecutionId:guid}/drawing. Requires the 'production.execute_stage' permission.</remarks>
     [HttpPost("stage-executions/{stageExecutionId:guid}/drawing")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionExecuteStage)]
     public async Task<ActionResult<ProductionOrderDto>> UpdateDrawing(Guid stageExecutionId, [FromBody] UpdateStageDrawingRequest request)
         => Ok(await _mediator.Send(new UpdateStageDrawingCommand(stageExecutionId, request.DrawingNumber, request.Reason)));
 
+    /// <summary>Pauses job orders (production orders).</summary>
+    /// <remarks>Route: POST api/production-orders/{id:guid}/pause. Requires the 'production.edit' permission.</remarks>
     [HttpPost("{id:guid}/pause")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ProductionEdit)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> Pause(Guid id, [FromBody] PauseProductionOrderRequest request)
         => Ok(await _mediator.Send(new PauseProductionOrderCommand(
             id, request.Reason, request.RawMessageId, request.ItemId, request.ReleaseKg, request.ReleaseMeter)));
@@ -206,6 +277,12 @@ public class ProductionOrdersController : ControllerBase
     [HttpPost("{id:guid}/resume")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.RawConsume)]
     [ProducesResponseType(typeof(ProductionOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<ProductionOrderDto>> Resume(Guid id, [FromBody] ResumeProductionOrderRequest request)
         => Ok(await _mediator.Send(new ResumeProductionOrderCommand(
             id, request.RawMessageId, request.ItemId, request.QuantityKg, request.QuantityMeter,
@@ -213,6 +290,19 @@ public class ProductionOrdersController : ControllerBase
 }
 
 /// <summary>
+/// <param name="NextStageDefinitionId">The next stage definition id.</param>
+/// <param name="OutputKg">The output kg.</param>
+/// <param name="OutputMeter">The output meter.</param>
+/// <param name="SeparatesKg">The separates kg.</param>
+/// <param name="SeparatesMeter">The separates meter.</param>
+/// <param name="Notes">The notes.</param>
+/// <param name="DrawingNumber">The drawing number.</param>
+/// <param name="InputMeter">The input meter.</param>
+/// <param name="InputKg">The operation's actual input in KG - recorded, never inferred.</param>
+/// <param name="SecondGradeMeter">The second grade meter.</param>
+/// <param name="SecondGradeKg">Second-grade KG: its own quantity, neither output nor waste.</param>
+/// <param name="MachineId">Where the operation ran (validated for suitability and availability).</param>
+/// <param name="ProductionShiftId">The production shift id.</param>
 /// Closes the operation currently in progress and activates the one the user chose - the ONLY production
 /// transaction (spec sections 13-17). Every recorded fact belongs to the operation being CLOSED: what it
 /// actually consumed, what it actually produced, its waste (derived from the immutable baseline, never
@@ -230,19 +320,43 @@ public record TransferStageRequest(
     // Where the operation ran. Validated for suitability (linked to this stage) and availability (active).
     Guid? MachineId = null, Guid? ProductionShiftId = null);
 
+/// <summary>Request payload to update stage drawing.</summary>
+/// <param name="DrawingNumber">The drawing number.</param>
+/// <param name="Reason">The reason.</param>
 public record UpdateStageDrawingRequest(string DrawingNumber, string Reason);
 
+/// <summary>Request payload to update stage output.</summary>
+/// <param name="OutputKg">The output kg.</param>
+/// <param name="OutputMeter">The output meter.</param>
+/// <param name="Reason">The reason.</param>
 public record UpdateStageOutputRequest(decimal? OutputKg, decimal? OutputMeter, string? Reason);
 
+/// <summary>Request payload to pause production order.</summary>
+/// <param name="Reason">The reason.</param>
+/// <param name="RawMessageId">The raw message id.</param>
+/// <param name="ItemId">The item id.</param>
+/// <param name="ReleaseKg">The release kg.</param>
+/// <param name="ReleaseMeter">The release meter.</param>
 public record PauseProductionOrderRequest(
     string Reason, Guid? RawMessageId = null, Guid? ItemId = null,
     decimal? ReleaseKg = null, decimal? ReleaseMeter = null);
 
+/// <summary>Request payload to complete production order.</summary>
+/// <param name="Reason">The reason.</param>
 public record CompleteProductionOrderRequest(string Reason);
 
+/// <summary>Request payload to cancel production order.</summary>
+/// <param name="Reason">The reason.</param>
 public record CancelProductionOrderRequest(string Reason);
 
 /// <summary>
+/// <param name="OrderDate">The order date.</param>
+/// <param name="Color">The color.</param>
+/// <param name="RawOrigin">The raw origin.</param>
+/// <param name="CustomerReference">The customer reference.</param>
+/// <param name="Notes">The notes.</param>
+/// <param name="Priority">The priority.</param>
+/// <param name="JobOrderType">The job order type.</param>
 /// Body for editing an open Job Order. Customer, item and requested quantity are intentionally absent:
 /// they are corrected by cancelling the order and re-creating it, never by editing it in place.
 /// </summary>
@@ -255,6 +369,13 @@ public record UpdateProductionOrderRequest(
     ProductionPriority Priority = ProductionPriority.Normal,
     JobOrderType JobOrderType = JobOrderType.ClosedLine);
 
+/// <summary>Request payload to resume production order.</summary>
+/// <param name="RawMessageId">The raw message id.</param>
+/// <param name="ItemId">The item id.</param>
+/// <param name="QuantityKg">The quantity kg.</param>
+/// <param name="QuantityMeter">The quantity meter.</param>
+/// <param name="OverrideNegativeStock">The override negative stock.</param>
+/// <param name="OverrideReason">The override reason.</param>
 public record ResumeProductionOrderRequest(
     Guid RawMessageId, Guid ItemId, decimal? QuantityKg, decimal? QuantityMeter,
     bool OverrideNegativeStock = false, string? OverrideReason = null);

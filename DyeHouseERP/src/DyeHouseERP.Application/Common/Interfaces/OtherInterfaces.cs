@@ -104,6 +104,13 @@ public interface IReportExportService
     // settings, never from a hard-coded caller literal), so null is the normal case.
     byte[] GeneratePdf(string title, string? subtitle, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows);
     byte[] GenerateExcel(string sheetName, IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows);
+    /// <summary>
+    /// UTF-8 with BOM so Arabic opens correctly in Excel. Values are formatted
+    /// invariantly (ISO dates, dot decimals); fields containing separators are quoted.
+    /// </summary>
+    byte[] GenerateCsv(IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows);
+    /// <summary>Multi-sheet variant of <see cref="GenerateExcel"/>: one sheet per set.</summary>
+    byte[] GenerateExcelWorkbook(IReadOnlyList<Accounting.DTOs.ExportWorksheet> sheets);
 }
 
 /// <summary>

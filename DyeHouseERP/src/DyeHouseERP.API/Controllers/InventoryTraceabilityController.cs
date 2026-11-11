@@ -28,6 +28,7 @@ namespace DyeHouseERP.API.Controllers;
 public class InventoryTraceabilityController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the InventoryTraceabilityController class.</summary>
     public InventoryTraceabilityController(ISender mediator) => _mediator = mediator;
 
     /// <summary>
@@ -40,6 +41,8 @@ public class InventoryTraceabilityController : ControllerBase
     [HttpGet("traceability")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     [ProducesResponseType(typeof(StockTraceabilityDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<StockTraceabilityDto>> GetTraceability(
         [FromQuery] string scope = "raw",
         [FromQuery] Guid? itemId = null,
@@ -72,6 +75,8 @@ public class InventoryTraceabilityController : ControllerBase
     [HttpGet("item-card")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     [ProducesResponseType(typeof(ItemCardDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ItemCardDto>> GetItemCard(
         [FromQuery] Guid warehouseId,
         [FromQuery] Guid? itemId = null,
@@ -89,6 +94,8 @@ public class InventoryTraceabilityController : ControllerBase
     /// the screen shows is exactly what the report contains (spec section 39).
     /// </summary>
     [HttpGet("traceability/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportTraceability(
         [FromQuery] string scope = "raw",
@@ -197,6 +204,8 @@ public class InventoryTraceabilityController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> ExportLotCard(
         [FromQuery] string scope = StockScopes.Raw,
         [FromQuery] Guid? rawMessageId = null,

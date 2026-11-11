@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SettingsApi } from "@/api/client";
 import { PageHeader, Card, Button, Input } from "@/components/ui";
+import { useI18n } from "@/i18n";
 import { UploadCloud, Trash2 } from "lucide-react";
 
 export default function SettingsPage() {
   const qc = useQueryClient();
+  const { t } = useI18n();
   const { data: settings, isLoading } = useQuery({ queryKey: ["company-settings"], queryFn: () => SettingsApi.get() });
 
   const [companyNameAr, setCompanyNameAr] = useState("");
@@ -14,11 +16,19 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Part 2: password/session policy knobs (settings.manage, same endpoint gate as branding).
+  const [maxAgeDays, setMaxAgeDays] = useState(0);
+  const [idleMinutes, setIdleMinutes] = useState(30);
+  const [policySaved, setPolicySaved] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+
   useEffect(() => {
     if (settings) {
       setCompanyNameAr(settings.companyNameAr);
       setCompanyNameEn(settings.companyNameEn);
       setLogoDataUrl(settings.logoDataUrl);
+      setMaxAgeDays(settings.passwordMaxAgeDays);
+      setIdleMinutes(settings.sessionIdleMinutes);
     }
   }, [settings]);
 
@@ -31,6 +41,17 @@ export default function SettingsPage() {
       setTimeout(() => setSaved(false), 2000);
     },
     onError: (err: ApiErrorLike) => setError(err?.response?.data?.title ?? "حدث خطأ - تأكد أن حسابك يملك صلاحية settings.manage")
+  });
+
+  const policyMutation = useMutation({
+    mutationFn: () => SettingsApi.updatePasswordPolicy({ passwordMaxAgeDays: maxAgeDays, sessionIdleMinutes: idleMinutes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["company-settings"] });
+      setPolicyError(null);
+      setPolicySaved(true);
+      setTimeout(() => setPolicySaved(false), 2000);
+    },
+    onError: (err: ApiErrorLike) => setPolicyError(err?.response?.data?.title ?? "حدث خطأ - تأكد أن حسابك يملك صلاحية settings.manage")
   });
 
   const onFileSelected = (file: File | undefined) => {
@@ -93,6 +114,26 @@ export default function SettingsPage() {
           {saveMutation.isPending ? "جارٍ الحفظ..." : saved ? "تم الحفظ ✓" : "حفظ"}
         </Button>
         {error && <p className="form-error mt-3">{error}</p>}
+      </Card>
+
+      <Card className="card-pad max-w-2xl mt-6">
+        <h3 className="card-title mb-4">{t("settings.passwordPolicy")}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="field-label">{t("settings.maxAgeDays")}</label>
+            <Input type="number" min={0} max={1825} value={maxAgeDays}
+              onChange={(e) => setMaxAgeDays(Number(e.target.value))} dir="ltr" />
+          </div>
+          <div>
+            <label className="field-label">{t("settings.idleMinutes")}</label>
+            <Input type="number" min={5} max={43200} value={idleMinutes}
+              onChange={(e) => setIdleMinutes(Number(e.target.value))} dir="ltr" />
+          </div>
+        </div>
+        <Button onClick={() => policyMutation.mutate()} disabled={policyMutation.isPending}>
+          {policyMutation.isPending ? t("changepw.submitting") : policySaved ? t("settings.saved", "تم الحفظ ✓") : t("settings.save", "حفظ")}
+        </Button>
+        {policyError && <p className="form-error mt-3">{policyError}</p>}
       </Card>
     </>
   );

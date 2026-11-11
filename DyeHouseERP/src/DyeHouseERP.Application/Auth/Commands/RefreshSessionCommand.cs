@@ -70,6 +70,20 @@ public class RefreshSessionCommandHandler : IRequestHandler<RefreshSessionComman
             throw new InvalidCredentialsException();
         }
 
+        // Part 2 (idle timeout): a session left alone longer than the policy is dead, even
+        // though its absolute expiry is still in the future. Activity is measured on the
+        // token row itself (last rotation or creation) - never on a client-side flag - so a
+        // stolen cookie cannot be kept alive by replaying it past the idle window.
+        var settings = await _db.CompanySettings.FirstOrDefaultAsync(cancellationToken);
+        var idleMinutes = settings?.SessionIdleMinutes ?? 30;
+        if (idleMinutes < 5) idleMinutes = 30;
+        if (nowUtc - stored.LastActivityAtUtc > TimeSpan.FromMinutes(idleMinutes))
+        {
+            stored.Revoke("IdleTimeout", null, nowUtc);
+            await _db.SaveChangesAsync(cancellationToken);
+            throw new InvalidCredentialsException();
+        }
+
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == stored.UserId, cancellationToken);
         if (user is null || !user.IsActive)
         {
@@ -85,6 +99,7 @@ public class RefreshSessionCommandHandler : IRequestHandler<RefreshSessionComman
         var newRefreshHash = RefreshTokenCodec.Hash(newRefreshToken);
         var newRefreshExpiresAtUtc = nowUtc.Add(_tokenService.RefreshTokenLifetime);
 
+        stored.Touch(nowUtc);
         stored.Revoke("Rotated", newRefreshHash, nowUtc);
         _db.UserRefreshTokens.Add(new UserRefreshToken(user.Id, newRefreshHash, newRefreshExpiresAtUtc));
 
@@ -132,6 +147,19 @@ public class RefreshSessionCommandHandler : IRequestHandler<RefreshSessionComman
         var successor = await _db.UserRefreshTokens
             .FirstOrDefaultAsync(t => t.TokenHash == stored.ReplacedByTokenHash, cancellationToken);
         if (successor is null || !successor.IsLive(nowUtc)) return null;
+
+        // The grace must not resurrect an idle session: the rotation timestamp on the
+        // presented row is the session's last activity, and past the idle window the
+        // answer is refusal, not a fresh access token.
+        var graceSettings = await _db.CompanySettings.FirstOrDefaultAsync(cancellationToken);
+        var graceIdleMinutes = graceSettings?.SessionIdleMinutes ?? 30;
+        if (graceIdleMinutes < 5) graceIdleMinutes = 30;
+        if (nowUtc - stored.LastActivityAtUtc > TimeSpan.FromMinutes(graceIdleMinutes))
+        {
+            successor.Revoke("IdleTimeout", null, nowUtc);
+            await _db.SaveChangesAsync(cancellationToken);
+            throw new InvalidCredentialsException();
+        }
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == stored.UserId, cancellationToken);
         if (user is null || !user.IsActive) return null;

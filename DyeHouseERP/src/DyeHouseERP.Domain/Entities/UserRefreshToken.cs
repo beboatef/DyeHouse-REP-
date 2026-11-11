@@ -16,6 +16,13 @@ public class UserRefreshToken
     public string TokenHash { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime ExpiresAtUtc { get; private set; }
+    /// <summary>
+    /// Part 2 (idle timeout): the last time this token leg was used. A rotation sets the
+    /// successor's activity to the rotation instant, so the idle window measures "time since
+    /// the session was last alive" across rotations - and it lives on the token row, never in
+    /// a client-readable session cookie flag.
+    /// </summary>
+    public DateTime LastActivityAtUtc { get; private set; }
     public DateTime? RevokedAtUtc { get; private set; }
     public string? ReplacedByTokenHash { get; private set; }
     public string? RevokedReason { get; private set; }
@@ -31,8 +38,12 @@ public class UserRefreshToken
         UserId = userId;
         TokenHash = tokenHash;
         CreatedAtUtc = DateTime.UtcNow;
+        LastActivityAtUtc = CreatedAtUtc;
         ExpiresAtUtc = expiresAtUtc;
     }
+
+    /// <summary>Records use of this token leg (called when it is rotated into its successor).</summary>
+    public void Touch(DateTime nowUtc) => LastActivityAtUtc = nowUtc;
 
     public bool IsLive(DateTime nowUtc) => RevokedAtUtc is null && ExpiresAtUtc > nowUtc;
 

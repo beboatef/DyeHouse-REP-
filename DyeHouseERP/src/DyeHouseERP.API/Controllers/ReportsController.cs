@@ -22,6 +22,7 @@ public class ReportsController : ControllerBase
     private readonly ISender _mediator;
     private readonly IReportExportService _export;
 
+    /// <summary>Initializes a new instance of the ReportsController class.</summary>
     public ReportsController(ISender mediator, IReportExportService export)
     {
         _mediator = mediator;
@@ -36,6 +37,8 @@ public class ReportsController : ControllerBase
     [HttpGet("inventory-movements")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     [ProducesResponseType(typeof(List<InventoryMovementDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<InventoryMovementDto>>> GetInventoryMovements(
         [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] Guid? warehouseId,
         [FromQuery] Guid? rawMessageId, [FromQuery] Guid? productionOrderId,
@@ -43,7 +46,11 @@ public class ReportsController : ControllerBase
         => Ok(await _mediator.Send(new GetInventoryMovementsQuery(
             customerId, itemId, warehouseId, rawMessageId, productionOrderId, from, to, limit)));
 
+    /// <summary>Gets inventory movements excel.</summary>
+    /// <remarks>Route: GET api/reports/inventory-movements/excel. Requires the 'reports.export' permission.</remarks>
     [HttpGet("inventory-movements/excel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetInventoryMovementsExcel(
         [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] Guid? warehouseId,
@@ -72,6 +79,8 @@ public class ReportsController : ControllerBase
 
     /// <summary>Same inventory ledger, as a printable PDF (spec section 39) - filters and date range included in the header.</summary>
     [HttpGet("inventory-movements/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetInventoryMovementsPdf(
         [FromQuery] Guid? customerId, [FromQuery] Guid? itemId, [FromQuery] Guid? warehouseId,
@@ -110,6 +119,8 @@ public class ReportsController : ControllerBase
     /// unit rather than added into the fabric figures.
     /// </summary>
     [HttpGet("warehouse-balances/export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> ExportWarehouseBalances([FromQuery] Guid? customerId,
         [FromQuery] Guid? warehouseId, [FromQuery] string format = "excel")
@@ -215,11 +226,17 @@ public class ReportsController : ControllerBase
 
     /// <summary>Negative Stock / Balance Override Report (spec section 17).</summary>
     [HttpGet("negative-stock-overrides")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsView)]
     public async Task<ActionResult<List<NegativeStockOverrideDto>>> GetNegativeStockOverrides([FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetNegativeStockOverridesQuery(from, to)));
 
+    /// <summary>Gets negative stock overrides pdf.</summary>
+    /// <remarks>Route: GET api/reports/negative-stock-overrides/pdf. Requires the 'reports.export' permission.</remarks>
     [HttpGet("negative-stock-overrides/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetNegativeStockOverridesPdf([FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
@@ -228,7 +245,11 @@ public class ReportsController : ControllerBase
         return File(bytes, "application/pdf", "negative-stock-overrides.pdf");
     }
 
+    /// <summary>Gets negative stock overrides excel.</summary>
+    /// <remarks>Route: GET api/reports/negative-stock-overrides/excel. Requires the 'reports.export' permission.</remarks>
     [HttpGet("negative-stock-overrides/excel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetNegativeStockOverridesExcel([FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
@@ -246,6 +267,8 @@ public class ReportsController : ControllerBase
     [HttpGet("waste")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsView)]
     [ProducesResponseType(typeof(WasteReportDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<WasteReportDto>> GetWasteReport(
         [FromQuery] Guid? customerId, [FromQuery] Guid? productionOrderId,
         [FromQuery] DateTime? from, [FromQuery] DateTime? to)

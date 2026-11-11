@@ -14,11 +14,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Request payload to warehouse.</summary>
+/// <param name="Id">The id.</param>
+/// <param name="Code">The code.</param>
+/// <param name="Name">The name.</param>
+/// <param name="Kind">The kind.</param>
+/// <param name="IsActive">Whether is active.</param>
 public record WarehouseDto(Guid Id, string Code, string Name, WarehouseKind Kind, bool IsActive);
+/// <summary>Request payload to create warehouse.</summary>
+/// <param name="Code">The code.</param>
+/// <param name="Name">The name.</param>
+/// <param name="Kind">The kind.</param>
 public record CreateWarehouseRequest(string Code, string Name, WarehouseKind Kind);
+/// <summary>Request payload to update warehouse.</summary>
+/// <param name="Name">The name.</param>
+/// <param name="Kind">The kind.</param>
 public record UpdateWarehouseRequest(string Name, WarehouseKind Kind);
+/// <summary>Request payload to set warehouse active.</summary>
+/// <param name="IsActive">Whether is active.</param>
 public record SetWarehouseActiveRequest(bool IsActive);
 
+/// <summary>Hosts the warehouses endpoints.</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -27,6 +43,7 @@ public class WarehousesController : ControllerBase
     private readonly IApplicationDbContext _db;
     private readonly ISender _mediator;
 
+    /// <summary>Initializes a new instance of the WarehousesController class.</summary>
     public WarehousesController(IApplicationDbContext db, ISender mediator)
     {
         _db = db;
@@ -35,7 +52,11 @@ public class WarehousesController : ControllerBase
 
     private static WarehouseDto ToApi(WarehouseMasterDto w) => new(w.Id, w.Code, w.Name, w.Kind, w.IsActive);
 
+    /// <summary>Lists warehouses.</summary>
+    /// <remarks>Route: GET api/Warehouses. Requires the 'inventory.view' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     public async Task<ActionResult<List<WarehouseDto>>> Get(
         [FromQuery] WarehouseKind? kind, [FromQuery] bool? activeOnly, [FromQuery] string? search)
@@ -44,7 +65,14 @@ public class WarehousesController : ControllerBase
         return Ok(warehouses.Select(ToApi).ToList());
     }
 
+    /// <summary>Creates warehouses.</summary>
+    /// <remarks>Route: POST api/Warehouses. Requires the 'settings.manage' permission.</remarks>
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<WarehouseDto>> Create([FromBody] CreateWarehouseRequest request)
     {
@@ -57,6 +85,12 @@ public class WarehousesController : ControllerBase
     /// the identity every document, ledger row and report already carries.
     /// </summary>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<WarehouseDto>> Update(Guid id, [FromBody] UpdateWarehouseRequest request)
         => Ok(ToApi(await _mediator.Send(new UpdateWarehouseCommand(id, request.Name, request.Kind))));
@@ -66,6 +100,12 @@ public class WarehousesController : ControllerBase
     /// stock history stays readable, and the warehouse can be reactivated at any time.
     /// </summary>
     [HttpPost("{id:guid}/active")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<WarehouseDto>> SetActive(Guid id, [FromBody] SetWarehouseActiveRequest request)
         => Ok(ToApi(await _mediator.Send(new SetWarehouseActiveCommand(id, request.IsActive))));
@@ -74,6 +114,8 @@ public class WarehousesController : ControllerBase
 
     /// <summary>Warehouse master data as Excel or PDF.</summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] WarehouseKind? kind,
         [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
@@ -92,18 +134,28 @@ public class WarehousesController : ControllerBase
 
     /// <summary>Step 1 of the warehouse import workflow: the template with the exact expected columns.</summary>
     [HttpGet("import/template")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InventoryView)]
     public IActionResult ImportTemplate([FromServices] IReportExportService export)
         => ExportFileHelper.Template(export, "Warehouses", WarehouseImportTemplate.Headers, WarehouseImportTemplate.SampleRows(), "warehouses-import-template");
 
     /// <summary>Step 2: validate the upload and report row errors. Writes nothing.</summary>
     [HttpPost("import/preview")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<ImportPreviewDto>> PreviewImport(IFormFile file, [FromServices] ISender mediator = null!)
         => Ok(await mediator.Send(new PreviewWarehouseImportCommand(await ExportFileHelper.ReadUploadAsync(file))));
 
     /// <summary>Step 3: confirm - creates only the valid new warehouses; existing codes are always skipped.</summary>
     [HttpPost("import/execute")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<ImportExecuteResultDto>> ExecuteImport(IFormFile file, [FromServices] ISender mediator = null!)
         => Ok(await mediator.Send(new ExecuteWarehouseImportCommand(await ExportFileHelper.ReadUploadAsync(file))));

@@ -12,8 +12,10 @@ namespace DyeHouseERP.UnitTests;
 /// </summary>
 public class UserRoleValidationTests
 {
+    // The fixture password satisfies the password policy (12+ chars, no username inside)
+    // so these tests exercise role validation rather than tripping the password rule.
     private static CreateUserCommand Create(params string[] roles) =>
-        new("newuser", "Password123", "New User", roles.ToList());
+        new("newuser", "Password123!", "New User", roles.ToList());
 
     private static UpdateUserCommand Update(params string[] roles) =>
         new(Guid.NewGuid(), "Some User", roles.ToList());

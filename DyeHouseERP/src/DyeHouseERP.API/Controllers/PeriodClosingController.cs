@@ -20,13 +20,25 @@ namespace DyeHouseERP.API.Controllers;
 public class PeriodClosingController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the PeriodClosingController class.</summary>
     public PeriodClosingController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists period closing.</summary>
+    /// <remarks>Route: GET api/period-closes. Requires the 'settings.manage' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<List<PeriodCloseDto>>> Get() => Ok(await _mediator.Send(new GetPeriodClosesQuery()));
 
+    /// <summary>Closes period closing.</summary>
+    /// <remarks>Route: POST api/period-closes. Requires the 'settings.manage' permission.</remarks>
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<PeriodCloseDto>> Close([FromBody] ClosePeriodCommand command)
     {
@@ -34,10 +46,20 @@ public class PeriodClosingController : ControllerBase
         return CreatedAtAction(nameof(Get), new { }, result);
     }
 
+    /// <summary>Reopens period closing.</summary>
+    /// <remarks>Route: POST api/period-closes/{id:guid}/reopen. Requires the 'settings.manage' permission.</remarks>
     [HttpPost("{id:guid}/reopen")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.SettingsManage)]
     public async Task<ActionResult<PeriodCloseDto>> Reopen(Guid id, [FromBody] ReopenPeriodRequest request)
         => Ok(await _mediator.Send(new ReopenPeriodCommand(id, request.Reason)));
 }
 
+/// <summary>Request payload to reopen period.</summary>
+/// <param name="Reason">The reason.</param>
 public record ReopenPeriodRequest(string Reason);

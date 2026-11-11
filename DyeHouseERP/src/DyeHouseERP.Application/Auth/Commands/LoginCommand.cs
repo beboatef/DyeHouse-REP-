@@ -64,6 +64,17 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResultDto>
             throw new InvalidCredentialsException();
         }
 
+        // Part 2 (expiry): when the business sets a maximum password age and this password is
+        // older, the login still SUCCEEDS - the user is flagged, not locked out - and the very
+        // next thing the API lets them do is pick a new password (see MustChangePasswordMiddleware).
+        var settings = await _db.CompanySettings.FirstOrDefaultAsync(cancellationToken);
+        if (settings is not null && settings.PasswordMaxAgeDays > 0 && user.PasswordChangedAtUtc.HasValue &&
+            DateTime.UtcNow - user.PasswordChangedAtUtc.Value > TimeSpan.FromDays(settings.PasswordMaxAgeDays) &&
+            !user.MustChangePassword)
+        {
+            user.FlagExpiredPassword(user.Username);
+        }
+
         var roles = user.RoleList.ToList();
         var token = _tokenService.GenerateToken(user.Id, user.Username, roles, out var expiresAtUtc);
 
@@ -81,7 +92,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResultDto>
         {
             Token = token, ExpiresAtUtc = expiresAtUtc,
             RefreshToken = refreshToken, RefreshExpiresAtUtc = refreshExpiresAtUtc,
-            Username = user.Username, DisplayName = user.DisplayName, Roles = roles
+            Username = user.Username, DisplayName = user.DisplayName, Roles = roles,
+            MustChangePassword = user.MustChangePassword
         };
     }
 

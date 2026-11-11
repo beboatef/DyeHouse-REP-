@@ -22,24 +22,44 @@ namespace DyeHouseERP.API.Controllers;
 public class FormationSpecificationsController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the FormationSpecificationsController class.</summary>
     public FormationSpecificationsController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists formation specifications.</summary>
+    /// <remarks>Route: GET api/formation-specifications. Requires the 'formation.view' permission.</remarks>
     [HttpGet]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationView)]
     [ProducesResponseType(typeof(List<FormationSpecTemplateDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<FormationSpecTemplateDto>>> Get([FromQuery] bool? activeOnly, [FromQuery] string? search)
         => Ok(await _mediator.Send(new GetFormationSpecTemplatesQuery(activeOnly, search)));
 
+    /// <summary>Creates formation specifications.</summary>
+    /// <remarks>Route: POST api/formation-specifications. Requires the 'formation.manage_specifications' permission.</remarks>
     [HttpPost]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationManageSpecifications)]
     [ProducesResponseType(typeof(FormationSpecTemplateDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<FormationSpecTemplateDto>> Create([FromBody] CreateFormationSpecTemplateCommand command)
     {
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(Get), new { }, result);
     }
 
+    /// <summary>Updates formation specifications.</summary>
+    /// <remarks>Route: PUT api/formation-specifications/{id:guid}. Requires the 'formation.manage_specifications' permission.</remarks>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationManageSpecifications)]
     public async Task<ActionResult<FormationSpecTemplateDto>> Update(Guid id, [FromBody] UpdateFormationSpecTemplateCommand command)
     {
@@ -47,10 +67,20 @@ public class FormationSpecificationsController : ControllerBase
         return Ok(await _mediator.Send(command));
     }
 
+    /// <summary>Sets active.</summary>
+    /// <remarks>Route: POST api/formation-specifications/{id:guid}/active. Requires the 'formation.manage_specifications' permission.</remarks>
     [HttpPost("{id:guid}/active")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.FormationManageSpecifications)]
     public async Task<ActionResult<FormationSpecTemplateDto>> SetActive(Guid id, [FromBody] SetSpecificationActiveRequest request)
         => Ok(await _mediator.Send(new SetFormationSpecTemplateActiveCommand(id, request.IsActive)));
 }
 
+/// <summary>Request payload to set specification active.</summary>
+/// <param name="IsActive">Whether is active.</param>
 public record SetSpecificationActiveRequest(bool IsActive);

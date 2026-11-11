@@ -10,7 +10,10 @@ namespace DyeHouseERP.API.Auth;
 /// </summary>
 public static class AuthCookies
 {
+    /// <summary>The HttpOnly access-token cookie name (unreadable by JavaScript).</summary>
     public const string AccessToken = "dyehouse_at";
+    /// <summary>The HttpOnly refresh-token cookie name (unreadable by JavaScript).</summary>
     public const string RefreshToken = "dyehouse_rt";
+    /// <summary>The readable CSRF cookie name; the SPA copies it into the X-CSRF-Token header.</summary>
     public const string Csrf = "dyehouse_csrf";
 }

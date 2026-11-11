@@ -1,6 +1,7 @@
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Domain.Common;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
@@ -9,6 +10,7 @@ using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.ProductionOrders.Commands;
@@ -248,12 +250,15 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
     private readonly IPeriodCloseService _periodClose;
     private readonly IAllocationLockService _allocationLock;
 
+    private readonly ILogger<ResumeProductionOrderCommandHandler>? _logger;
+
     public ResumeProductionOrderCommandHandler(IApplicationDbContext db, ICurrentUserService currentUser,
         IInventoryLedgerService ledger, IDateTime clock, IPeriodCloseService periodClose,
-        IAllocationLockService allocationLock)
+        IAllocationLockService allocationLock,
+        ILogger<ResumeProductionOrderCommandHandler>? logger = null)
     {
         _db = db; _currentUser = currentUser; _ledger = ledger; _clock = clock;
-        _periodClose = periodClose; _allocationLock = allocationLock;
+        _periodClose = periodClose; _allocationLock = allocationLock; _logger = logger;
     }
 
     public async Task<ProductionOrderDto> Handle(ResumeProductionOrderCommand request, CancellationToken cancellationToken)
@@ -392,11 +397,16 @@ public class ResumeProductionOrderCommandHandler : IRequestHandler<ResumeProduct
         // old path recorded the caller as both requester and approver, which is
         // exactly the self-approval the separation of duties forbids.
         var decision = await ApprovalRequestGuard.ConsumeAsync(
-            _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+            _db, _currentUser, request.ApprovalRequestId, request, cancellationToken, _logger);
 
         _db.NegativeStockOverrides.Add(new NegativeStockOverride(
             message.Id, request.ItemId, order.CustomerId, requested, available,
             request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
+
+        _logger?.LogWarning(
+            "EventName: {EventName}. Negative-stock override recorded for message {RawMessageId} "
+            + "item {ItemId} customer {CustomerId}: requested {Requested}, available {Available}.",
+            LogEvents.NegativeStockOverrideCreated, message.Id, request.ItemId, order.CustomerId, requested, available);
 
         await Task.CompletedTask;
     }

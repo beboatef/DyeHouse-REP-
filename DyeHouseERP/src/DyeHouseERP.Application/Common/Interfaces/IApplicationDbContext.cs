@@ -58,6 +58,7 @@ public interface IApplicationDbContext
     DbSet<CostEntry> CostEntries { get; }
     DbSet<User> Users { get; }
     DbSet<UserRefreshToken> UserRefreshTokens { get; }
+    DbSet<PasswordHistory> PasswordHistories { get; }
     DbSet<AuditLogEntry> AuditLogEntries { get; }
     DbSet<CompanySettings> CompanySettings { get; }
     DbSet<PeriodClose> PeriodCloses { get; }

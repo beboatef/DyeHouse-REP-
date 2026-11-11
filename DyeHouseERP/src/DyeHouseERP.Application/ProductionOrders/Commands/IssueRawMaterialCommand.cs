@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DyeHouseERP.Application.Common.Exceptions;
 using DyeHouseERP.Application.Common.Interfaces;
+using DyeHouseERP.Application.Common.Monitoring;
 using DyeHouseERP.Application.Common.Services;
 using DyeHouseERP.Application.ProductionOrders.DTOs;
 using DyeHouseERP.Application.ProductionOrders.Queries;
@@ -10,6 +11,7 @@ using DyeHouseERP.Domain.Enums;
 using DyeHouseERP.Domain.Exceptions;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 
 namespace DyeHouseERP.Application.ProductionOrders.Commands;
@@ -140,13 +142,16 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
     private readonly IPeriodCloseService _periodClose;
     private readonly IAllocationLockService _stockLock;
 
+    private readonly ILogger<IssueRawMaterialCommandHandler>? _logger;
+
     public IssueRawMaterialCommandHandler(
         IApplicationDbContext db, ICurrentUserService currentUser, IInventoryLedgerService ledger,
         IDocumentNumberGenerator numberGenerator, IDateTime clock, IPeriodCloseService periodClose,
-        IAllocationLockService stockLock)
+        IAllocationLockService stockLock,
+        ILogger<IssueRawMaterialCommandHandler>? logger = null)
     {
         _db = db; _currentUser = currentUser; _ledger = ledger; _numberGenerator = numberGenerator;
-        _clock = clock; _periodClose = periodClose; _stockLock = stockLock;
+        _clock = clock; _periodClose = periodClose; _stockLock = stockLock; _logger = logger;
     }
 
     public async Task<ProductionOrderDto> Handle(IssueRawMaterialCommand request, CancellationToken cancellationToken)
@@ -394,11 +399,16 @@ public class IssueRawMaterialCommandHandler : IRequestHandler<IssueRawMaterialCo
                 $"Overriding negative stock requires both '{Permissions.InventoryAllowNegativeStock}' and '{Permissions.InventoryApproveNegativeStock}' permissions.");
 
         var decision = await ApprovalRequestGuard.ConsumeAsync(
-            _db, _currentUser, request.ApprovalRequestId, request, cancellationToken);
+            _db, _currentUser, request.ApprovalRequestId, request, cancellationToken, _logger);
 
         _db.NegativeStockOverrides.Add(new NegativeStockOverride(
             message.Id, request.ItemId, request.CustomerId, requested, available,
             request.OverrideReason!, decision.RequestedBy, decision.ApprovedBy));
+
+                _logger?.LogWarning(
+                    "EventName: {EventName}. Negative-stock override recorded for message {RawMessageId} "
+                    + "item {ItemId} customer {CustomerId}: requested {Requested}, available {Available}.",
+                    LogEvents.NegativeStockOverrideCreated, message.Id, request.ItemId, request.CustomerId, requested, available);
 
         await Task.CompletedTask;
     }

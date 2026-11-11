@@ -19,7 +19,7 @@ namespace DyeHouseERP.UnitTests;
 /// or a rule nobody can see. These tests sweep EVERY controller and every mutating action in the
 /// API assembly and pin that:
 ///   1. nothing is gated on the admin ROLE (so a user holding the right permission can use it),
-///   2. every mutating action declares a granular permission policy - with three documented,
+///   2. every mutating action declares a granular permission policy - with documented,
 ///      authenticated exceptions,
 ///   3. every policy names a permission that actually exists in <see cref="Permissions.All"/> (a
 ///      typo would otherwise create a policy that no user could ever be granted), and
@@ -33,7 +33,9 @@ public class EditPermissionSweepTests
     {
         ["AuthController.Login"] = "anonymous by design - it is the login endpoint",
         ["ApprovalsController.Submit"] =
-            "checks the request TYPE's own permission inside SubmitApprovalRequestCommandHandler (ApprovalRequestKinds.ActionPermission)"
+            "checks the request TYPE's own permission inside SubmitApprovalRequestCommandHandler (ApprovalRequestKinds.ActionPermission)",
+        ["AuthController.ChangeOwnPassword"] =
+            "self-service: authenticated, operates only on the caller's own identity - there is no grantable permission for changing one's own password"
     };
 
     private static IEnumerable<Type> Controllers() =>

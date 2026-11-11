@@ -93,7 +93,8 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, UserD
             Username = user.Username,
             DisplayName = user.DisplayName,
             Roles = user.RoleList.ToList(),
-            IsActive = user.IsActive
+            IsActive = user.IsActive,
+            MustChangePassword = user.MustChangePassword
         };
     }
 }

@@ -6,10 +6,13 @@ name: ERP CI
 #   integration - the API suite against a real SQL Server, because the numbering engine uses
 #                 sp_getapplock and has no in-memory equivalent.
 on:
+  # Every pull request runs the full verification, whatever branch it targets.
   pull_request:
-    branches: [main]
   push:
     branches: [main, "codex/**", "feat/**"]
+  # Nightly drift check: the same integration job re-runs even with no PR open.
+  schedule:
+    - cron: "0 3 * * *"
 
 permissions:
   contents: read
@@ -122,7 +125,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
+        # Pinned (never `:latest`): a floating tag once moved the engine under a
+        # green build and broke date handling. Bump deliberately, not silently.
+        image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
         env:
           ACCEPT_EULA: "Y"
           # Protects a throwaway container that lives for one CI job; it is not a deployment
@@ -147,7 +152,100 @@ jobs:
           dotnet-version: 9.0.318
       - name: Wait for SQL Server
         # The runner starts the step as soon as the container is running, not when it is ready: the
-        # port opens first and the engine accepts logins a little later.
+        # port opens first and the engine accepts logins a little later. Bounded: if the port never
+        # opens, the job fails here instead of timing out inside the test run.
+        run: |
+          ready=0
+          for _ in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null; then
+              echo "SQL Server port 1433 is open"
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "SQL Server never opened port 1433 within the wait budget"
+            exit 1
+          fi
+          sleep 20
+      - name: Integration tests
+        run: >-
+          dotnet test DyeHouseERP/tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj
+          --configuration Release --nologo
+          --logger "trx;LogFileName=integration.trx"
+          --results-directory DyeHouseERP/tests/DyeHouseERP.IntegrationTests/TestResults
+      - name: Publish TRX results
+        # Always runs: a red test run must still publish its evidence.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-trx
+          path: DyeHouseERP/tests/DyeHouseERP.IntegrationTests/TestResults/*.trx
+          if-no-files-found: error
+      - name: Test-results summary (fails on zero executed tests)
+        # Guards against a silent skip: a run that executes nothing (bad filter,
+        # missing connection string, crashed host) must be red, not green.
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob, sys, xml.etree.ElementTree as ET
+          files = glob.glob('DyeHouseERP/tests/DyeHouseERP.IntegrationTests/TestResults/*.trx')
+          if not files:
+              print('No TRX file was produced - the test run never reported.')
+              sys.exit(1)
+          executed = 0
+          for f in files:
+              ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+              for r in ET.parse(f).getroot().iter('{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}UnitTestResult'):
+                  if r.get('outcome') != 'NotExecuted':
+                      executed += 1
+          print(f'Executed tests: {executed} (across {len(files)} TRX file(s))')
+          if executed == 0:
+              print('Zero tests executed - treating the run as failed.')
+              sys.exit(1)
+          EOF
+
+  backup-drill:
+    name: Backup and restore drill
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        # Pinned, same policy as the integration job above.
+        image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+        env:
+          ACCEPT_EULA: "Y"
+          # Protects a throwaway container that lives for one CI job; it is not a deployment
+          # credential and nothing outside this file uses it.
+          MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # The drill database is created by the seed test run below, backed up, restored into
+      # *_restoretest and verified - then dropped by restore-verify.sql itself.
+      DYEHOUSE_TEST_CONNECTION: "Server=127.0.0.1,1433;Database=DyeHouseERP_Drill;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Connect Timeout=30;"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.318
+      - name: Install sqlcmd
+        run: |
+          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+          source /etc/os-release
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
+            | sudo tee /etc/apt/sources.list.d/mssql-tools.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18
+          echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
+      - name: Wait for SQL Server
         run: |
           for _ in $(seq 1 60); do
             if (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null; then
@@ -157,7 +255,36 @@ jobs:
             sleep 2
           done
           sleep 20
-      - name: Integration tests
+      - name: Seed the drill database with real postings
+        # FullHappyPathTests posts a receipt -> production -> delivery -> invoice -> receipt,
+        # so the drill database holds real ledger rows to reconcile (not an empty schema).
         run: >-
           dotnet test DyeHouseERP/tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj
-          --nologo
+          --filter "FullyQualifiedName~FullHappyPathTests" --nologo
+      - name: Back up the drill database
+        env:
+          DYEHOUSE_BACKUP_PASSWORD: "YourStrong!Passw0rd"
+        run: |
+          chmod +x DyeHouseERP/tools/backup/*.sh
+          DyeHouseERP/tools/backup/backup-dyehouse.sh \
+            --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
+            --database DyeHouseERP_Drill --backup-dir /var/opt/mssql \
+            --path-separator "/" --backup-name drill-latest.bak --allow-db DyeHouseERP_Drill
+      - name: Restore into scratch and verify
+        env:
+          DYEHOUSE_BACKUP_PASSWORD: "YourStrong!Passw0rd"
+          DYEHOUSE_RESTORE_ALLOW_DBS: "DyeHouseERP_Drill"
+        run: |
+          DyeHouseERP/tools/backup/restore-verify.sh \
+            --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
+            --source-db DyeHouseERP_Drill \
+            --backup-file /var/opt/mssql/drill-latest.bak \
+            --scratch-db DyeHouseERP_Drill_restoretest \
+            --report drill-report.txt --path-separator "/" --data-dir /var/opt/mssql
+          cat drill-report.txt
+      - name: Recompute balances on the restored copy
+        env:
+          DYEHOUSE_RESTOREREVERIFY_CONNECTION: "Server=127.0.0.1,1433;Database=DyeHouseERP_Drill_restoretest;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Connect Timeout=30;"
+        run: >-
+          dotnet test DyeHouseERP/tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj
+          --filter "FullyQualifiedName~BackupRestoreVerificationTests" --nologo

@@ -185,12 +185,33 @@ DYEHOUSE_TEST_CONNECTION="Server=localhost,1433;Database=DyeHouseERP_Integration
   dotnet test tests/DyeHouseERP.IntegrationTests
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same commands on every push and pull request: the backend build plus the 1007 domain tests, the integration suite against a real SQL Server service container, and the frontend typecheck, lint, build, i18n parity and the structural sweeps in `tools/`. The frontend job ends by running the headless UI smoke test against the build it just produced (`vite preview` on `127.0.0.1:4173`, with `SMOKE_BASE` pointing at it), so a crash on mount, an invalid hook call or an unstyled white screen fails CI instead of reaching a user. CI installs Chrome for Testing with `npm run smoke:install` and asks puppeteer for its system libraries, since the runner has no browser of its own. A plain `dotnet test DyeHouseERP.sln` locally still reports the integration tests as failures unless `DYEHOUSE_TEST_CONNECTION` is set — run the unit test project on its own when no SQL Server is available.
+The same job CI runs, reproduced locally with Docker (same pinned image tag as `.github/workflows/ci.yml`):
+
+```bash
+# 1. Start a throwaway SQL Server (nothing else may use port 1433):
+docker run -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=YourStrong!Passw0rd' \
+  -p 1433:1433 -d --name dyehouse-ci-sql mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+# 2. Wait until it answers (bounded — the engine starts after the port opens):
+for _ in $(seq 1 60); do
+  (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null && break
+  sleep 2
+done; sleep 20
+docker exec dyehouse-ci-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa \
+  -P 'YourStrong!Passw0rd' -C -Q 'SELECT 1'
+# 3. Run the suite exactly as CI does (Release + TRX results):
+DYEHOUSE_TEST_CONNECTION="Server=127.0.0.1,1433;Database=DyeHouseERP_IntegrationTests;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Connect Timeout=30;" \
+  dotnet test tests/DyeHouseERP.IntegrationTests --configuration Release --nologo \
+  --logger "trx;LogFileName=integration.trx" --results-directory tests/DyeHouseERP.IntegrationTests/TestResults
+# 4. Stop and remove the container when done (the suite drops its database per test class anyway):
+docker rm -f dyehouse-ci-sql
+```
+
+CI (`.github/workflows/ci.yml`) runs the same commands on every pull request and on pushes to main — plus a nightly scheduled run of the integration job so drift is caught with no PR open: the backend build plus the domain tests, the integration suite against a real SQL Server service container (pinned image tag, TRX results published as the `integration-trx` artifact, and a summary step that fails the job when zero tests executed), and the frontend typecheck, lint, build, i18n parity and the structural sweeps in `tools/`. The frontend job ends by running the headless UI smoke test against the build it just produced (`vite preview` on `127.0.0.1:4173`, with `SMOKE_BASE` pointing at it), so a crash on mount, an invalid hook call or an unstyled white screen fails CI instead of reaching a user. CI installs Chrome for Testing with `npm run smoke:install` and asks puppeteer for its system libraries, since the runner has no browser of its own. A plain `dotnet test DyeHouseERP.sln` locally still reports the integration tests as failures unless `DYEHOUSE_TEST_CONNECTION` is set — run the unit test project on its own when no SQL Server is available.
 
 ## Verification performed in this repository
 
 - `dotnet build --configuration Release` — 0 errors / 0 warnings from project code.
-- `dotnet test tests/DyeHouseERP.UnitTests` — **1007/1007 passing**.
+- `dotnet test tests/DyeHouseERP.UnitTests` — **1066/1066 passing** (includes the Part 2 password-policy and Part 3 monitoring suites).
 - Integration tests compile; they require a reachable SQL Server and cannot run in this repo's dev environment. **No SQL Server integration testing has been performed here.**
 - `dotnet ef migrations has-pending-model-changes` — clean (model snapshot in sync).
 - Frontend: `npx tsc -b --noEmit` — clean.
@@ -199,11 +220,28 @@ CI (`.github/workflows/ci.yml`) runs the same commands on every push and pull re
   - `node tools/duplicate-sweep.js` — no duplicate permission values, i18n keys, entity names, or indexes; `DbSet`s match the persistence interface in both directions.
   - `node tools/hooks-check.js` — TypeScript-AST check for React rule violations a compiler misses (hooks in branches/loops/callbacks, hook-name shadowing).
   - `npm run smoke` / `smoke:authed` / `smoke:tabs` (run from `src/DyeHouseERP.Web`; `SMOKE_BASE` defaults to a dev server on `127.0.0.1:5173`, and CI points it at `vite preview` on `127.0.0.1:4173`) — headless-Chromium pass over the real routes (mount, RTL/LTR flip, export/import controls), counting backend-less API failures separately. Puppeteer is deliberately not a declared dependency, because it downloads a browser and would make every `npm ci` — CI included — pull Chromium: install it once with `npm run smoke:install` (into the git-ignored `tools/.puppeteer`), or point `PUPPETEER_DIR` at an existing install. `$PUPPETEER_EXECUTABLE_PATH` / `$CHROME_PATH` selects a browser living elsewhere, and a missing Puppeteer or browser exits with code 2 and the install command instead of a stack trace.
-- i18n: both dictionaries in `Web/src/i18n/index.tsx` at **1090/1090 key parity**. Some pages still carry inline Arabic literals alongside the dictionary; completing that extraction is mechanical work, not new architecture.
+- i18n: both dictionaries in `Web/src/i18n/index.tsx` at **1110/1110 key parity** (0 failures from `tools/i18n-parity-check.cjs`). Some pages still carry inline Arabic literals alongside the dictionary; completing that extraction is mechanical work, not new architecture.
+
+## Documentation
+
+- [End-user guide (Arabic)](docs/user-guide/) — one plain-language guide per module (login, receiving, job orders, stage transfer, separates, external processing, deliveries/invoices, treasury/cheques, purchases, payroll/HR, period closing, approvals, reports, troubleshooting), each naming its required permission.
+- [API documentation](docs/api/) — endpoint/ledger workflows with Mermaid sequences (`workflows.md`) and the error envelope with retry guidance (`errors.md`). Swagger UI carries every action's summary, route and permission.
+
+## Operations runbooks
+
+- [Backup, restore and verification](docs/operations/backup-and-restore.md) - schedules, retention,
+  the restore drill (runs in CI as `backup-drill`), RTO/RPO fields and the restore checklist.
+- [Password and session policy](docs/operations/password-and-session-policy.md) - the 12-character /
+  last-5 / expiry / idle-timeout rules, the forced-change gate, and the reset-permission model.
+- [Monitoring and alerting](docs/operations/monitoring.md) - health endpoints, stable business-event
+  names with alert thresholds, OTel metrics, and Seq/Elasticsearch query examples.
 
 ## Known operational notes
 
 - **PDF Arabic shaping**: handled in-code. `ReportExportService` embeds **Noto Naskh Arabic** (`src/DyeHouseERP.Infrastructure/Fonts/NotoNaskhArabic-Regular.ttf`, SIL OFL 1.1) as an assembly resource and registers it with QuestPDF in its static constructor, then sets it as the document font — so Arabic renders correctly on any host, with no system font required and no startup configuration. The OFL licence text ships alongside it. Excel export is unaffected.
-- **Backups / database maintenance** are SQL Server-side responsibilities; the application ships none.
+- **Backups**: the application ships its own tooling (`tools/backup/`) and the drill that proves restores work.
+  Nightly fulls, off-machine copies and restore drills are operator duties - see
+  [docs/operations/backup-and-restore.md](docs/operations/backup-and-restore.md). Database engine
+  maintenance outside backups (index/statistics upkeep, AG/clustering care) stays with the DBA.
 - List queries that hydrate full DTOs per row are simple and correct, not tuned for very large datasets (noted inline where it matters most).
 - No hardware barcode-scanner integration by design; QR codes on print documents encode `/scan/:type/:id` quick-view URLs that any phone camera or keyboard-wedge reader can open.

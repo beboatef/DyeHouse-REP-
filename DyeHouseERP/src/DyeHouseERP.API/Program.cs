@@ -12,15 +12,24 @@ using DyeHouseERP.Persistence.Numbering;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using DyeHouseERP.API.Authorization;
 using DyeHouseERP.API.Health;
+using DyeHouseERP.Domain.Common;
+using DyeHouseERP.API.Logging;
+using DyeHouseERP.Application.Common.Monitoring;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------- Serilog structured logging ----------
+builder.Services.AddHttpContextAccessor();
 builder.Host.UseSerilog((context, services, config) => config
     .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .Enrich.With(new RequestLogEnricher(services.GetRequiredService<IHttpContextAccessor>()))
     .WriteTo.Console()
     .WriteTo.File("logs/dyehouse-erp-.log", rollingInterval: RollingInterval.Day));
 
@@ -177,12 +186,31 @@ builder.Services.AddControllers()
 // answers it in one anonymous call (see Health/DatabaseHealthCheck.cs); the "ready" tag separates
 // "this box is alive" from "this box can actually serve requests" for an orchestrator.
 builder.Services.AddHealthChecks()
-    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" });
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" })
+    .AddCheck<MigrationHealthCheck>("migrations", tags: new[] { "ready" })
+    .AddCheck<SeedDataHealthCheck>("seed-data", tags: new[] { "ready" });
+
+// ---------- OpenTelemetry metrics (Part 3: monitoring) ----------
+// The instruments (see DyeHouseMetrics) always record; without a listener that
+// is a no-op. Export only happens when the operator sets the standard OTLP
+// endpoint variable, and it speaks plain OTLP to ANY backend - no vendor SDK,
+// no hard dependency. Unset = local process only, exactly as before.
+if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")))
+{
+    builder.Services.ConfigureOpenTelemetryMeterProvider((_, metrics) => metrics
+        .AddMeter(DyeHouseMetrics.MeterName)
+        .AddOtlpExporter());
+}
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "DyeHouse ERP API", Version = "v1" });
+    // Part 2 (API documentation): surface the XML doc comments on controllers
+    // and actions in the Swagger UI. The file name matches the assembly name.
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, "DyeHouseERP.API.xml");
+    if (File.Exists(xmlPath))
+        c.IncludeXmlComments(xmlPath);
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
@@ -248,6 +276,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseSerilogRequestLogging();
+app.UseMiddleware<RequestMetricsMiddleware>();
 if (!app.Environment.IsDevelopment())
 {
     // HSTS only where HTTPS is real: in development the app is reached over plain http behind the
@@ -258,16 +287,31 @@ app.UseHttpsRedirection();
 app.UseCors("DyeHouseERPClients");
 app.UseAuthentication();
 app.UseAuthorization();
+// Part 2: after auth so the identity exists, before controllers so a flagged account
+// cannot reach any business endpoint. Policy 401/403s already won above for anonymous
+// or unauthorized callers, so this gate only ever narrows an authenticated session.
+app.UseMiddleware<MustChangePasswordMiddleware>();
 app.MapControllers();
 
 // ---------- Health probes ----------
-// Anonymous on purpose: a probe has no credentials, and the check reads no business data.
-// /health is liveness (the process answers); /health/ready includes the database check.
-app.MapHealthChecks("/health").AllowAnonymous();
+// /health is anonymous liveness: "the process answers", nothing else. The
+// predicate excludes every "ready" check so a dead database never takes down
+// the liveness probe (and with it, the orchestrator's restart decision).
+// /health/ready is ADMIN-ONLY (Permission:users.manage): it answers whether
+// this instance can actually serve traffic - database reachability, schema
+// currency and seed data - which is operational intelligence, not public
+// information. Platform liveness probes must use /health; deploy verification
+// and monitoring use /health/ready with a service token. See
+// docs/operations/monitoring.md for the choice and the alternative (an ingress
+// IP allow-list) if this deployment's prober cannot present a token.
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = check => !check.Tags.Contains("ready")
+}).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
-}).AllowAnonymous();
+}).RequireAuthorization(PermissionPolicy.Prefix + Permissions.UsersManage);
 
 // ---------- Database bootstrap: schema, master data and the first administrator ----------
 // One path for every environment (see Startup/DatabaseBootstrap.cs). This used to be a
@@ -310,10 +354,12 @@ static bool IsEfDesignTime() =>
 
 // Exposes the top-level Program as a type WebApplicationFactory<Program> can
 // reference from the integration tests project.
+/// <summary>Application entry point (partial so the integration suite can host it).</summary>
 public partial class Program { }
 
 /// <summary>Constants for the EF design-time handshake used by Program.cs (H2).</summary>
 public static class EfDesignTime
 {
+    /// <summary>The environment name marking EF Core design-time tool runs.</summary>
     public const string EnvironmentName = "EfDesignTime";
 }

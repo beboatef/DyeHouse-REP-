@@ -12,20 +12,31 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DyeHouseERP.API.Controllers;
 
+/// <summary>Hosts the invoices endpoints.</summary>
 [ApiController]
 [Route("api/invoices")]
 [Authorize]
 public class InvoicesController : ControllerBase
 {
     private readonly ISender _mediator;
+    /// <summary>Initializes a new instance of the InvoicesController class.</summary>
     public InvoicesController(ISender mediator) => _mediator = mediator;
 
+    /// <summary>Lists invoices.</summary>
+    /// <remarks>Route: GET api/invoices. Requires the 'invoices.view' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesView)]
     public async Task<ActionResult<List<InvoiceDto>>> Get([FromQuery] Guid? customerId, [FromQuery] InvoiceStatus? status)
         => Ok(await _mediator.Send(new GetInvoicesQuery(customerId, status)));
 
+    /// <summary>Gets by id.</summary>
+    /// <remarks>Route: GET api/invoices/{id:guid}. Requires the 'invoices.view' permission.</remarks>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesView)]
     public async Task<ActionResult<InvoiceDto>> GetById(Guid id) => Ok(await _mediator.Send(new GetInvoiceByIdQuery(id)));
 
@@ -36,6 +47,8 @@ public class InvoicesController : ControllerBase
     /// what the user is looking at.
     /// </summary>
     [HttpGet("export")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> Export([FromQuery] Guid? customerId, [FromQuery] InvoiceStatus? status,
         [FromQuery] string format = "excel", [FromServices] IReportExportService export = null!)
@@ -56,7 +69,12 @@ public class InvoicesController : ControllerBase
             headers, rows, "invoices", "Invoices");
     }
 
+    /// <summary>Gets invoice pdf.</summary>
+    /// <remarks>Route: GET api/invoices/{id:guid}/pdf. Requires the 'reports.export' permission.</remarks>
     [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetInvoicePdf(Guid id, [FromServices] IReportExportService export)
     {
@@ -74,7 +92,14 @@ public class InvoicesController : ControllerBase
         return File(bytes, "application/pdf", $"invoice-{invoice.InvoiceNumber}.pdf");
     }
 
+    /// <summary>Creates invoices.</summary>
+    /// <remarks>Route: POST api/invoices. Requires the 'invoices.create' permission.</remarks>
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesCreate)]
     public async Task<ActionResult<InvoiceDto>> Create([FromBody] CreateInvoiceCommand command)
     {
@@ -87,45 +112,114 @@ public class InvoicesController : ControllerBase
     // working data, editable behind the configurable invoices.edit right. An Issued/Cancelled invoice is
     // refused by the domain and is corrected only through the cancellation/reversal workflow below.
 
+    /// <summary>Updates invoices.</summary>
+    /// <remarks>Route: PUT api/invoices/{id:guid}. Requires the 'invoices.edit' permission.</remarks>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
     public async Task<ActionResult<InvoiceDto>> Update(Guid id, [FromBody] UpdateInvoiceRequest request)
         => Ok(await _mediator.Send(new UpdateInvoiceCommand(id, request.InvoiceDate, request.DeliveryId,
             request.Discount, request.Tax, request.Notes)));
 
+    /// <summary>Adds line.</summary>
+    /// <remarks>Route: POST api/invoices/{id:guid}/lines. Requires the 'invoices.edit' permission.</remarks>
     [HttpPost("{id:guid}/lines")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
     public async Task<ActionResult<InvoiceDto>> AddLine(Guid id, [FromBody] AddInvoiceLineRequest request)
         => Ok(await _mediator.Send(new AddInvoiceLineCommand(id, request.ProductionOrderId, request.ItemId,
             request.Color, request.Quantity, request.ProcessingPrice, request.Unit, request.Notes, request.CostEntryId)));
 
+    /// <summary>Updates line.</summary>
+    /// <remarks>Route: PUT api/invoices/{id:guid}/lines/{lineId:guid}. Requires the 'invoices.edit' permission.</remarks>
     [HttpPut("{id:guid}/lines/{lineId:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
     public async Task<ActionResult<InvoiceDto>> UpdateLine(Guid id, Guid lineId, [FromBody] UpdateInvoiceLineRequest request)
         => Ok(await _mediator.Send(new UpdateInvoiceLineCommand(id, lineId, request.Quantity,
             request.ProcessingPrice, request.Unit, request.Color, request.Notes)));
 
+    /// <summary>Removes line.</summary>
+    /// <remarks>Route: DELETE api/invoices/{id:guid}/lines/{lineId:guid}. Requires the 'invoices.edit' permission.</remarks>
     [HttpDelete("{id:guid}/lines/{lineId:guid}")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesEdit)]
     public async Task<ActionResult<InvoiceDto>> RemoveLine(Guid id, Guid lineId)
         => Ok(await _mediator.Send(new RemoveInvoiceLineCommand(id, lineId)));
 
+    /// <summary>Issues invoices.</summary>
+    /// <remarks>Route: POST api/invoices/{id:guid}/issue. Requires the 'invoices.issue' permission.</remarks>
     [HttpPost("{id:guid}/issue")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesIssue)]
     public async Task<ActionResult<InvoiceDto>> Issue(Guid id) => Ok(await _mediator.Send(new IssueInvoiceCommand(id)));
 
+    /// <summary>Cancels invoices.</summary>
+    /// <remarks>Route: POST api/invoices/{id:guid}/cancel. Requires the 'invoices.cancel' permission.</remarks>
     [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesCancel)]
     public async Task<ActionResult<InvoiceDto>> Cancel(Guid id, [FromBody] CancelInvoiceRequest request)
         => Ok(await _mediator.Send(new CancelInvoiceCommand(id, request.Reason)));
 }
 
+/// <summary>Request payload to cancel invoice.</summary>
+/// <param name="Reason">The reason.</param>
 public record CancelInvoiceRequest(string Reason);
 
+/// <summary>Request payload to update invoice.</summary>
+/// <param name="InvoiceDate">The invoice date.</param>
+/// <param name="DeliveryId">The delivery id.</param>
+/// <param name="Discount">The discount.</param>
+/// <param name="Tax">The tax.</param>
+/// <param name="Notes">The notes.</param>
 public record UpdateInvoiceRequest(DateTime InvoiceDate, Guid? DeliveryId, decimal Discount, decimal Tax, string? Notes);
+/// <summary>Request payload to add invoice line.</summary>
+/// <param name="ProductionOrderId">The production order id.</param>
+/// <param name="ItemId">The item id.</param>
+/// <param name="Color">The color.</param>
+/// <param name="Quantity">The quantity.</param>
+/// <param name="ProcessingPrice">The processing price.</param>
+/// <param name="Unit">The unit.</param>
+/// <param name="Notes">The notes.</param>
+/// <param name="CostEntryId">The cost entry id.</param>
 public record AddInvoiceLineRequest(Guid? ProductionOrderId, Guid ItemId, string? Color, decimal Quantity, decimal ProcessingPrice, UnitOfMeasure Unit, string? Notes, Guid? CostEntryId = null);
+/// <summary>Request payload to update invoice line.</summary>
+/// <param name="Quantity">The quantity.</param>
+/// <param name="ProcessingPrice">The processing price.</param>
+/// <param name="Unit">The unit.</param>
+/// <param name="Color">The color.</param>
+/// <param name="Notes">The notes.</param>
 public record UpdateInvoiceLineRequest(decimal Quantity, decimal ProcessingPrice, UnitOfMeasure Unit, string? Color, string? Notes);
 
+/// <summary>Hosts the customer statements endpoints.</summary>
 [ApiController]
 [Route("api/customers/{customerId:guid}/statement")]
 [Authorize]
@@ -135,6 +229,7 @@ public class CustomerStatementController : ControllerBase
     private readonly IApplicationDbContext _db;
     private readonly IReportExportService _export;
 
+    /// <summary>Initializes a new instance of the CustomerStatementController class.</summary>
     public CustomerStatementController(ISender mediator, IApplicationDbContext db, IReportExportService export)
     {
         _mediator = mediator;
@@ -142,13 +237,19 @@ public class CustomerStatementController : ControllerBase
         _export = export;
     }
 
+    /// <summary>Lists invoices.</summary>
+    /// <remarks>Route: GET api/invoices. Requires the 'invoices.view' permission.</remarks>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InvoicesView)]
     public async Task<ActionResult<List<CustomerStatementLineDto>>> Get(Guid customerId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
         => Ok(await _mediator.Send(new GetCustomerStatementQuery(customerId, from, to)));
 
     /// <summary>Customer statement as a downloadable PDF (spec section 33: "Must support: date filtering, PDF, Excel, printing").</summary>
     [HttpGet("pdf")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetPdf(Guid customerId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
@@ -159,6 +260,8 @@ public class CustomerStatementController : ControllerBase
 
     /// <summary>Customer statement as a downloadable Excel workbook (spec section 33).</summary>
     [HttpGet("excel")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.ReportsExport)]
     public async Task<IActionResult> GetExcel(Guid customerId, [FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
