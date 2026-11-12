@@ -33,6 +33,9 @@
 #                        (passed through to the .sql; empty = server default)
 #   --path-separator C   "\" (Windows host) or "/" (Linux host), default "\"
 #
+#   --keep-scratch       leave the scratch database in place after a successful
+#                        drill (for follow-up application-level checks)
+#
 # Exit codes: 0 drill passed, 1 usage/validation error, 2 drill failed
 # (details in the report), 3 sqlcmd not installed.
 set -euo pipefail
@@ -46,6 +49,7 @@ USER_LOGIN=""
 PASSWORD_ENV="DYEHOUSE_BACKUP_PASSWORD"
 DATA_DIR=""
 PATH_SEP='\'
+KEEP_SCRATCH=0
 ALLOW=()
 
 while [[ $# -gt 0 ]]; do
@@ -60,6 +64,7 @@ while [[ $# -gt 0 ]]; do
         --allow-db) ALLOW+=("$2"); shift 2 ;;
         --data-dir) DATA_DIR="$2"; shift 2 ;;
         --path-separator) PATH_SEP="$2"; shift 2 ;;
+        --keep-scratch) KEEP_SCRATCH=1; shift ;;
         -h|--help) sed -n '2,/^set -euo/p' "$0"; exit 0 ;;
         *) echo "restore-verify.sh: unknown option $1" >&2; exit 1 ;;
     esac
@@ -119,7 +124,7 @@ TRANSCRIPT="$(mktemp)"
 # prepended afterwards to keep the report chronological).
 if ! sqlcmd -S "$SERVER" -d master -b -V16 "${AUTH_ARGS[@]}" \
     -v SourceDb="$SOURCE_DB" BackupFile="$BACKUP_FILE" ScratchDb="$SCRATCH_DB" \
-       DataDir="$DATA_DIR" PathSeparator="$PATH_SEP" \
+       DataDir="$DATA_DIR" PathSeparator="$PATH_SEP" KeepScratch="$KEEP_SCRATCH" \
     -i "$SCRIPT_DIR/restore-verify.sql" -o "$TRANSCRIPT"; then
     {
         echo "DyeHouseERP restore drill - $(date -u +%Y-%m-%dT%H:%M:%SZ) - FAILED"

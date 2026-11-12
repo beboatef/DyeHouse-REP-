@@ -10,12 +10,14 @@
  *      account, per customer/supplier) must be IDENTICAL between source and
  *      scratch; row counts for the key tables must match,
  *   5. row counts are SELECTed (the .sh wrapper captures them into the report),
- *   6. the scratch database is dropped - but only after re-checking its name.
+ *   6. the scratch database is dropped (unless KeepScratch="1") - but only
+ *      after re-checking its name.
  *
  * Usage (via restore-verify.sh, which re-checks every guard first):
  *   sqlcmd -S <server> -U <user> -P <pw> -d master -b -V16 \
  *     -v SourceDb="DyeHouseERP" BackupFile="D:\Backups\DyeHouseERP_....bak" \
  *        ScratchDb="DyeHouseERP_restoretest" DataDir="" PathSeparator="\" \
+ *        KeepScratch="0" \
  *     -i restore-verify.sql -o drill-report.txt
  *
  * sqlcmd variables:
@@ -28,6 +30,9 @@
  *                    "ask the server" (InstanceDefaultDataPath); if the server
  *                    reports none, the script fails and tells you to pass one.
  *   PathSeparator  - "\" (Windows) or "/" (Linux). Default "\".
+ *   KeepScratch    - "1" leaves the scratch database in place after a
+ *                    successful drill (follow-up checks); anything else drops
+ *                    it. Passed by the .sh wrapper (--keep-scratch).
  *
  * Exit behaviour: run sqlcmd with -b (ABORT_ON_ERROR) and -V16. Every guard
  * and every mismatch raises severity 16, so a failed drill exits non-zero
@@ -265,12 +270,25 @@ SELECT TableName, SourceRows AS [Rows] FROM #counts ORDER BY TableName;
 DROP TABLE #counts;
 
 -- ------------------------------------------------------- 6. drop scratch --
-PRINT N'== [6/6] dropping scratch database ' + N'$(ScratchDb)';
-IF RIGHT(N'$(ScratchDb)', 12) <> N'_restoretest'
+-- The CI drill passes KeepScratch=1 so a follow-up step can recompute balances
+-- through the application against the restored copy; interactive drills keep
+-- the historical behaviour and drop it.
+IF N'$(KeepScratch)' = N'1'
 BEGIN;
-    RAISERROR(N'Refusing to drop: name no longer ends in _restoretest. Dropping nothing; clean up manually.', 16, 1);
+    PRINT N'== [6/6] keeping scratch database ' + N'$(ScratchDb)' + N' (--keep-scratch)';
 END;
-DECLARE @dropSql NVARCHAR(MAX) = N'DROP DATABASE ' + QUOTENAME(N'$(ScratchDb)') + N';';
-EXEC sp_executesql @dropSql;
+ELSE
+BEGIN;
+    PRINT N'== [6/6] dropping scratch database ' + N'$(ScratchDb)';
+    IF RIGHT(N'$(ScratchDb)', 12) <> N'_restoretest'
+    BEGIN;
+        RAISERROR(N'Refusing to drop: name no longer ends in _restoretest. Dropping nothing; clean up manually.', 16, 1);
+    END;
+    DECLARE @dropSql NVARCHAR(MAX) = N'DROP DATABASE ' + QUOTENAME(N'$(ScratchDb)') + N';';
+    EXEC sp_executesql @dropSql;
+END;
 
-PRINT N'RESTORE DRILL PASSED: backup file verified, scratch CHECKDB clean, ledger sums and row counts identical, scratch dropped.';
+IF N'$(KeepScratch)' = N'1'
+    PRINT N'RESTORE DRILL PASSED: backup file verified, scratch CHECKDB clean, ledger sums and row counts identical, scratch retained.';
+ELSE
+    PRINT N'RESTORE DRILL PASSED: backup file verified, scratch CHECKDB clean, ledger sums and row counts identical, scratch dropped.';

@@ -227,7 +227,8 @@ jobs:
           --health-retries 20
     env:
       # The drill database is created by the seed test run below, backed up, restored into
-      # *_restoretest and verified - then dropped by restore-verify.sql itself.
+      # *_restoretest and verified. The scratch copy is retained for the last step, which
+      # recomputes balances through the application against the restored data.
       DYEHOUSE_TEST_CONNECTION: "Server=127.0.0.1,1433;Database=DyeHouseERP_Drill;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Connect Timeout=30;"
     steps:
       - name: Checkout
@@ -237,23 +238,44 @@ jobs:
         with:
           dotnet-version: 9.0.318
       - name: Install sqlcmd
+        env:
+          ACCEPT_EULA: "Y"
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+          # Register the Microsoft prod repo on a keyring this job owns. The
+          # runner image already ships Microsoft keys/repos for .NET and the
+          # Azure CLI, so writing to a shared keyring path trips gpg's
+          # "File exists" refusal, and Ubuntu 24.04 (ubuntu-latest) rejects an
+          # unsigned repo. A dedicated keyring plus an explicit signed-by line
+          # (the variant Microsoft documents) works on both 22.04 and 24.04.
+          KEYRING=/usr/share/keyrings/dyehouse-mssql.gpg
+          LIST=/etc/apt/sources.list.d/dyehouse-mssql.list
+          sudo rm -f "$KEYRING"
+          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+            | sudo gpg --batch --yes --dearmor -o "$KEYRING"
           source /etc/os-release
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
-            | sudo tee /etc/apt/sources.list.d/mssql-tools.list
+          echo "deb [arch=amd64 signed-by=$KEYRING] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
+            | sudo tee "$LIST" > /dev/null
           sudo apt-get update
-          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18
+          sudo env ACCEPT_EULA=Y DEBIAN_FRONTEND=noninteractive apt-get install -y mssql-tools18
           echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
+          # Fail here, with a clear message, if the tools did not land.
+          /opt/mssql-tools18/bin/sqlcmd -? > /dev/null
       - name: Wait for SQL Server
         run: |
+          ready=0
           for _ in $(seq 1 60); do
             if (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null; then
               echo "SQL Server port 1433 is open"
+              ready=1
               break
             fi
             sleep 2
           done
+          if [ "$ready" -ne 1 ]; then
+            echo "SQL Server never opened port 1433 within the wait budget"
+            exit 1
+          fi
           sleep 20
       - name: Seed the drill database with real postings
         # FullHappyPathTests posts a receipt -> production -> delivery -> invoice -> receipt,
@@ -280,7 +302,8 @@ jobs:
             --source-db DyeHouseERP_Drill \
             --backup-file /var/opt/mssql/drill-latest.bak \
             --scratch-db DyeHouseERP_Drill_restoretest \
-            --report drill-report.txt --path-separator "/" --data-dir /var/opt/mssql
+            --report drill-report.txt --path-separator "/" --data-dir /var/opt/mssql \
+            --keep-scratch
           cat drill-report.txt
       - name: Recompute balances on the restored copy
         env:
