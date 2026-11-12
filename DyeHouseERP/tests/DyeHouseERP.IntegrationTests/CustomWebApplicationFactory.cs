@@ -110,14 +110,16 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         // client behaves exactly like a post-change session.
         if (result!.MustChangePassword)
         {
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", result.Token);
-            var change = await client.PostAsJsonAsync("/api/auth/change-password", new
+            // Set the compliant password directly (bypassing PasswordChangeService) so the
+            // baseline password is not recorded in PasswordHistory - otherwise the suite
+            // could not restore it in later tests and the history-reuse checks would fire.
+            using (var scope = Services.CreateScope())
             {
-                currentPassword = UserSeeder.DefaultPassword,
-                newPassword = IntegrationAdminPassword
-            });
-            change.EnsureSuccessStatusCode();
+                var adminDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var adminUser = await adminDb.Users.SingleAsync(u => u.Username == UserSeeder.DefaultUsername);
+                adminUser.MarkPasswordChangedByUser(passwordHasher.Hash(IntegrationAdminPassword), "system");
+                await adminDb.SaveChangesAsync();
+            }
 
             client.DefaultRequestHeaders.Authorization = null;
             var relogin = await client.PostAsJsonAsync("/api/auth/login", new
