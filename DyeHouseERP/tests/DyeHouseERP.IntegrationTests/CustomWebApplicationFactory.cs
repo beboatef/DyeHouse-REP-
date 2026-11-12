@@ -113,9 +113,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // Set the compliant password directly (bypassing PasswordChangeService) so the
             // baseline password is not recorded in PasswordHistory - otherwise the suite
             // could not restore it in later tests and the history-reuse checks would fire.
-            using (var scope = Services.CreateScope())
+            using (var adminScope = Services.CreateScope())
             {
-                var adminDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var adminDb = adminScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 var adminUser = await adminDb.Users.SingleAsync(u => u.Username == UserSeeder.DefaultUsername);
                 adminUser.MarkPasswordChangedByUser(passwordHasher.Hash(IntegrationAdminPassword), "system");
                 await adminDb.SaveChangesAsync();
