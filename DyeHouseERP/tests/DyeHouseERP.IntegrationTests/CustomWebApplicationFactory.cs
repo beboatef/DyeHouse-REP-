@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using DyeHouseERP.Application.Common.Interfaces;
 using DyeHouseERP.Persistence;
+using DyeHouseERP.Persistence.Seeding;
 using DyeHouseERP.Persistence.Numbering;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -76,6 +77,22 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         await db.Database.EnsureDeletedAsync();
         await db.Database.EnsureCreatedAsync();
         await DocumentSequenceSeeder.SeedAsync(db);
+        await WarehouseSeeder.SeedAsync(db);
+        await PurchaseUnitSeeder.SeedAsync(db);
+        await ProductionStageSeeder.SeedAsync(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        await MachineSeeder.SeedAsync(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        await ProductionShiftSeeder.SeedAsync(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        // A baseline company settings row with a non-zero password max age so the
+        // Part 2 expiry path can be exercised by the integration suite (the
+        // production default of 0 disables expiry, which would make the expiry
+        // test's backdating a no-op).
+        if (!await db.CompanySettings.AnyAsync())
+        {
+            var settings = new DyeHouseERP.Domain.Entities.CompanySettings("system");
+            settings.UpdatePasswordPolicy(30, 30, "system");
+            db.CompanySettings.Add(settings);
+            await db.SaveChangesAsync();
+        }
         await UserSeeder.SeedAsync(db, passwordHasher);
 
         var response = await client.PostAsJsonAsync("/api/auth/login", new
