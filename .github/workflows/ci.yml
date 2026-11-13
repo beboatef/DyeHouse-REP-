@@ -384,10 +384,13 @@ jobs:
           if [ "$status" -ne 0 ]; then
             # sqlcmd -o sends the T-SQL errors to the report, not to the log, and
             # job logs need a sign-in: put the reason where anyone can read it.
-            excerpt=$(grep -hE 'Msg [0-9]+, Level|Operating system error|Sqlcmd: Error|Cannot open|DRILL FAILED|refusing' \
-                        /tmp/restore.log drill-report.txt 2>/dev/null \
-                      | tail -n 5 | tr '\n' ' ' | tr -d '%' | tr -s ' ' | cut -c1-900 || true)
-            echo "::error title=restore-drill-failed::exit=$status ${excerpt:-no diagnostic line found}"
+            # The first Msg block is the root cause; later ones are fallout from
+            # it (an error inside sp_executesql does not stop the outer batch).
+            stage=$(grep -oE '== \[[0-9]/6\][^<-]{0,60}' drill-report.txt | tail -n 1 || true)
+            excerpt=$(awk '/Msg [0-9]+, Level/{n=4} n>0{print; n--}' drill-report.txt 2>/dev/null | head -12 || true)
+            if [ -z "$excerpt" ]; then excerpt=$(tail -n 15 drill-report.txt 2>/dev/null || true); fi
+            excerpt=$(printf '%s' "$excerpt" | tr '\n' '|' | tr -d '%' | tr -s ' ' | cut -c1-1100)
+            echo "::error title=restore-drill-failed::exit=$status stage=${stage:-none} ${excerpt:-no diagnostic line found}"
             {
               echo "### Restore drill failed (exit $status)"
               echo '```'
