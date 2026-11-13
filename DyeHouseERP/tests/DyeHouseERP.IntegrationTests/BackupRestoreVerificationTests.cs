@@ -66,8 +66,8 @@ public class BackupRestoreVerificationTests
             await using var sql = new SqlConnection(connection);
             await sql.OpenAsync();
             await using var cmd = new SqlCommand(
-                "SELECT COALESCE(SUM(QuantityKg * CASE Direction WHEN 1 THEN 1 ELSE -1 END), 0), " +
-                "COALESCE(SUM(QuantityMeter * CASE Direction WHEN 1 THEN 1 ELSE -1 END), 0) " +
+                "SELECT COALESCE(SUM(QuantityKg * CASE Direction WHEN N'In' THEN 1 ELSE -1 END), 0), " +
+                "COALESCE(SUM(QuantityMeter * CASE Direction WHEN N'In' THEN 1 ELSE -1 END), 0) " +
                 "FROM InventoryTransactions " +
                 "WHERE WarehouseId = @w AND ItemId = @i AND RawMessageId = @m", sql);
             cmd.Parameters.AddWithValue("@w", key.WarehouseId);
@@ -103,8 +103,8 @@ public class BackupRestoreVerificationTests
             await using var sql = new SqlConnection(connection);
             await sql.OpenAsync();
             await using var cmd = new SqlCommand(
-                "SELECT COALESCE(SUM(QuantityKg * CASE Direction WHEN 1 THEN 1 ELSE -1 END), 0), " +
-                "COALESCE(SUM(QuantityMeter * CASE Direction WHEN 1 THEN 1 ELSE -1 END), 0) " +
+                "SELECT COALESCE(SUM(QuantityKg * CASE Direction WHEN N'In' THEN 1 ELSE -1 END), 0), " +
+                "COALESCE(SUM(QuantityMeter * CASE Direction WHEN N'In' THEN 1 ELSE -1 END), 0) " +
                 "FROM InventoryTransactions " +
                 "WHERE WarehouseId = @w AND ItemId = @i AND CustomerId = @c AND RawMessageId = @m", sql);
             cmd.Parameters.AddWithValue("@w", key.WarehouseId);
@@ -140,7 +140,7 @@ public class BackupRestoreVerificationTests
             await using var sql = new SqlConnection(connection);
             await sql.OpenAsync();
             await using var cmd = new SqlCommand(
-                "SELECT COALESCE(SUM(Quantity * CASE Direction WHEN 1 THEN 1 ELSE -1 END), 0) " +
+                "SELECT COALESCE(SUM(Quantity * CASE Direction WHEN N'In' THEN 1 ELSE -1 END), 0) " +
                 "FROM MaterialTransactions WHERE WarehouseId = @w AND MaterialId = @m", sql);
             cmd.Parameters.AddWithValue("@w", key.WarehouseId);
             cmd.Parameters.AddWithValue("@m", key.MaterialId);
@@ -172,7 +172,7 @@ public class BackupRestoreVerificationTests
             await using var sql = new SqlConnection(connection);
             await sql.OpenAsync();
             await using var cmd = new SqlCommand(
-                "SELECT COALESCE(SUM(Amount * CASE Direction WHEN 1 THEN 1 ELSE -1 END), 0) " +
+                "SELECT COALESCE(SUM(Amount * CASE Direction WHEN N'In' THEN 1 ELSE -1 END), 0) " +
                 "FROM TreasuryTransactions WHERE TreasuryAccountId = @a", sql);
             cmd.Parameters.AddWithValue("@a", row.AccountId);
             var expected = (decimal)(await cmd.ExecuteScalarAsync())!;
