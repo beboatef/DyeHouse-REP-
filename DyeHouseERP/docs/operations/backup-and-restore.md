@@ -42,6 +42,10 @@ Rules the wrapper enforces (and the runbook repeats because they matter):
   on the database server and be writable by the SQL Server service account.
 - The script exits non-zero on any failure (`sqlcmd -b -V16`); a failed backup is
   never reported as success. Alert on non-zero exit.
+- `--trust-server-cert` (both wrappers) adds `sqlcmd -C`. The sqlcmd 18 driver
+  encrypts and validates the server certificate by default, so a server with a
+  self-signed certificate — the CI/test containers — needs this; omit it when the
+  server presents a certificate the host already trusts.
 
 ## 3. The restore drill (do this before you need it)
 

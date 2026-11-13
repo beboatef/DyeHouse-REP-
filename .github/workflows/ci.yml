@@ -353,23 +353,37 @@ jobs:
         env:
           DYEHOUSE_BACKUP_PASSWORD: "YourStrong!Passw0rd"
         run: |
+          set -o pipefail
           chmod +x DyeHouseERP/tools/backup/*.sh
-          DyeHouseERP/tools/backup/backup-dyehouse.sh \
-            --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
-            --database DyeHouseERP_Drill --backup-dir /var/opt/mssql \
-            --path-separator "/" --backup-name drill-latest.bak --allow-db DyeHouseERP_Drill
+          # --trust-server-cert: the sqlcmd 18 driver encrypts and validates the
+          # server certificate by default, and the container's is self-signed.
+          if ! DyeHouseERP/tools/backup/backup-dyehouse.sh \
+              --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
+              --database DyeHouseERP_Drill --backup-dir /var/opt/mssql \
+              --path-separator "/" --backup-name drill-latest.bak \
+              --allow-db DyeHouseERP_Drill --trust-server-cert 2>&1 | tee /tmp/backup.log; then
+            reason=$(grep -E 'Msg [0-9]+|Operating system error|Sqlcmd: Error|Cannot open' /tmp/backup.log | tail -n 3 | tr '\n' ' ' | cut -c1-800)
+            echo "::error title=drill backup failed::${reason:-see the job log}"
+            exit 1
+          fi
       - name: Restore into scratch and verify
         env:
           DYEHOUSE_BACKUP_PASSWORD: "YourStrong!Passw0rd"
           DYEHOUSE_RESTORE_ALLOW_DBS: "DyeHouseERP_Drill"
         run: |
-          DyeHouseERP/tools/backup/restore-verify.sh \
-            --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
-            --source-db DyeHouseERP_Drill \
-            --backup-file /var/opt/mssql/drill-latest.bak \
-            --scratch-db DyeHouseERP_Drill_restoretest \
-            --report drill-report.txt --path-separator "/" --data-dir /var/opt/mssql \
-            --keep-scratch
+          set -o pipefail
+          if ! DyeHouseERP/tools/backup/restore-verify.sh \
+              --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
+              --source-db DyeHouseERP_Drill \
+              --backup-file /var/opt/mssql/drill-latest.bak \
+              --scratch-db DyeHouseERP_Drill_restoretest \
+              --report drill-report.txt --path-separator "/" --data-dir /var/opt/mssql \
+              --keep-scratch --trust-server-cert 2>&1 | tee /tmp/restore.log; then
+            cat drill-report.txt 2>/dev/null || true
+            reason=$(grep -E 'Msg [0-9]+|Operating system error|Sqlcmd: Error|Cannot open' /tmp/restore.log | tail -n 3 | tr '\n' ' ' | cut -c1-800)
+            echo "::error title=restore drill failed::${reason:-see the job log}"
+            exit 1
+          fi
           cat drill-report.txt
       - name: Recompute balances on the restored copy
         env:

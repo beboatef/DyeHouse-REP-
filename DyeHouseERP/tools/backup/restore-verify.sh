@@ -36,6 +36,11 @@
 #   --keep-scratch       leave the scratch database in place after a successful
 #                        drill (for follow-up application-level checks)
 #
+#   --trust-server-cert  pass sqlcmd -C (trust a server certificate that is not
+#                        in the host's trust store). The sqlcmd 18 driver
+#                        encrypts and validates by default, so the CI/test
+#                        container's self-signed certificate needs this.
+#
 # Exit codes: 0 drill passed, 1 usage/validation error, 2 drill failed
 # (details in the report), 3 sqlcmd not installed.
 set -euo pipefail
@@ -50,6 +55,7 @@ PASSWORD_ENV="DYEHOUSE_BACKUP_PASSWORD"
 DATA_DIR=""
 PATH_SEP='\'
 KEEP_SCRATCH=0
+TRUST_CERT=0
 ALLOW=()
 
 while [[ $# -gt 0 ]]; do
@@ -65,6 +71,7 @@ while [[ $# -gt 0 ]]; do
         --data-dir) DATA_DIR="$2"; shift 2 ;;
         --path-separator) PATH_SEP="$2"; shift 2 ;;
         --keep-scratch) KEEP_SCRATCH=1; shift ;;
+        --trust-server-cert) TRUST_CERT=1; shift ;;
         -h|--help) sed -n '2,/^set -euo/p' "$0"; exit 0 ;;
         *) echo "restore-verify.sh: unknown option $1" >&2; exit 1 ;;
     esac
@@ -114,6 +121,9 @@ if [[ -n "$USER_LOGIN" ]]; then
     AUTH_ARGS=(-U "$USER_LOGIN" -P "$PASSWORD")
 fi
 
+TLS_ARGS=()
+if [[ "$TRUST_CERT" -eq 1 ]]; then TLS_ARGS=(-C); fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_DIR="$(dirname "$REPORT")"
 mkdir -p "$REPORT_DIR"
@@ -122,7 +132,7 @@ TRANSCRIPT="$(mktemp)"
 # -b aborts on error, -V16 makes RAISERROR(>=11) fail the process; -o writes
 # the whole drill transcript to a temp file (-o overwrites, so the header is
 # prepended afterwards to keep the report chronological).
-if ! sqlcmd -S "$SERVER" -d master -b -V16 "${AUTH_ARGS[@]}" \
+if ! sqlcmd -S "$SERVER" -d master -b -V16 "${TLS_ARGS[@]}" "${AUTH_ARGS[@]}" \
     -v SourceDb="$SOURCE_DB" BackupFile="$BACKUP_FILE" ScratchDb="$SCRATCH_DB" \
        DataDir="$DATA_DIR" PathSeparator="$PATH_SEP" KeepScratch="$KEEP_SCRATCH" \
     -i "$SCRIPT_DIR/restore-verify.sql" -o "$TRANSCRIPT"; then

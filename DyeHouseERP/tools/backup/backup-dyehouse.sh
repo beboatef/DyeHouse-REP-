@@ -24,6 +24,11 @@
 #   --backup-name NAME   fixed file name instead of the timestamped default
 #   --path-separator C   "\" (Windows host) or "/" (Linux host), default "\"
 #
+#   --trust-server-cert  pass sqlcmd -C (trust a server certificate that is not
+#                        in the host's trust store). The sqlcmd 18 driver
+#                        encrypts and validates by default, so CI/test
+#                        containers with a self-signed certificate need this.
+#
 # Exit codes: 0 backup written, 1 usage/validation error, 2 sqlcmd failure,
 # 3 sqlcmd not installed.
 set -euo pipefail
@@ -35,6 +40,7 @@ USER_LOGIN=""
 PASSWORD_ENV="DYEHOUSE_BACKUP_PASSWORD"
 PATH_SEP='\'
 BACKUP_NAME=""
+TRUST_CERT=0
 ALLOW_EXTRA=()
 
 while [[ $# -gt 0 ]]; do
@@ -46,6 +52,7 @@ while [[ $# -gt 0 ]]; do
         --password-env) PASSWORD_ENV="$2"; shift 2 ;;
         --allow-db) ALLOW_EXTRA+=("$2"); shift 2 ;;
         --path-separator) PATH_SEP="$2"; shift 2 ;;
+        --trust-server-cert) TRUST_CERT=1; shift ;;
         --backup-name) BACKUP_NAME="$2"; shift 2 ;;
         -h|--help) sed -n '2,/^set -euo/p' "$0"; exit 0 ;;
         *) echo "backup-dyehouse.sh: unknown option $1" >&2; exit 1 ;;
@@ -96,11 +103,14 @@ if [[ -n "$USER_LOGIN" ]]; then
     AUTH_ARGS=(-U "$USER_LOGIN" -P "$PASSWORD")
 fi
 
+TLS_ARGS=()
+if [[ "$TRUST_CERT" -eq 1 ]]; then TLS_ARGS=(-C); fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # -b aborts on error, -V16 makes RAISERROR(>=11) fail the process: a failed
 # backup is never reported as success.
-if ! sqlcmd -S "$SERVER" -d master -b -V16 "${AUTH_ARGS[@]}" \
+if ! sqlcmd -S "$SERVER" -d master -b -V16 "${TLS_ARGS[@]}" "${AUTH_ARGS[@]}" \
     -v DbName="$DATABASE" BackupDir="$BACKUP_DIR" PathSeparator="$PATH_SEP" BackupName="$BACKUP_NAME" \
     -i "$SCRIPT_DIR/backup-dyehouse.sql"; then
     echo "backup-dyehouse.sh: BACKUP DATABASE failed for '$DATABASE'" >&2
