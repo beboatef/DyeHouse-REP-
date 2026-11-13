@@ -421,9 +421,34 @@ jobs:
       - name: Recompute balances on the restored copy
         env:
           DYEHOUSE_RESTOREREVERIFY_CONNECTION: "Server=127.0.0.1,1433;Database=DyeHouseERP_Drill_restoretest;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Connect Timeout=30;"
-        run: >-
-          dotnet test DyeHouseERP/tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj
-          --filter "FullyQualifiedName~BackupRestoreVerificationTests" --nologo
+        run: |
+          set -o pipefail
+          status=0
+          dotnet test DyeHouseERP/tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj \
+            --filter "FullyQualifiedName~BackupRestoreVerificationTests" --nologo \
+            --logger "trx;LogFileName=restoreverify.trx" \
+            --results-directory DyeHouseERP/tests/DyeHouseERP.IntegrationTests/TestResults \
+            2>&1 | tee /tmp/recompute.log || status=$?
+          # Job logs need a sign-in, so surface each failure as an annotation.
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          NS = '{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'
+          files = glob.glob('DyeHouseERP/tests/DyeHouseERP.IntegrationTests/TestResults/*.trx')
+          if not files:
+              print('::error title=recompute did not run::no TRX file was produced')
+          for path in files:
+              for result in ET.parse(path).getroot().iter(NS + 'UnitTestResult'):
+                  if result.get('outcome') != 'Failed':
+                      continue
+                  name = result.get('testName', '<unknown>')
+                  text = (result.findtext('.//' + NS + 'Message') or '').strip()
+                  first = next((line.strip() for line in text.splitlines() if line.strip()), 'failed')
+                  first = first.replace('%', '%25').replace('\r', ' ').replace('\n', ' ')
+                  print(f'::error title=Failed test::{name} - {first[:400]}')
+          PY
+          exit $status
       - name: Drop the drill scratch database
         # The drill keeps the restored copy (--keep-scratch) so the step above can
         # read it; this always runs to leave no scratch database behind, whether or
