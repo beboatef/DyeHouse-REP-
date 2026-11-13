@@ -205,10 +205,36 @@ jobs:
               print('Zero tests executed - treating the run as failed.')
               sys.exit(1)
           EOF
+      - name: Annotate failed tests
+        # Annotations are readable without a signed-in session, unlike the job
+        # log and the TRX artifact, so a red run says which test failed where.
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          NS = '{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'
+          failures = 0
+          for path in glob.glob('DyeHouseERP/tests/DyeHouseERP.IntegrationTests/TestResults/*.trx'):
+              for result in ET.parse(path).getroot().iter(NS + 'UnitTestResult'):
+                  if result.get('outcome') != 'Failed':
+                      continue
+                  failures += 1
+                  name = result.get('testName', '<unknown>')
+                  text = (result.findtext('.//' + NS + 'Message') or '').strip()
+                  first = next((line.strip() for line in text.splitlines() if line.strip()), 'failed')
+                  first = first.replace('%', '%25').replace('\r', ' ').replace('\n', ' ')
+                  print(f'::error title=Failed test::{name} - {first[:400]}')
+          print(f'Annotated {failures} failing test(s).')
+          EOF
 
   backup-drill:
     name: Backup and restore drill
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: this job installs mssql-tools18, and the
+    # floating label moved to a new Ubuntu release underneath it. 24.04 is the
+    # release Microsoft documents the prod repo and the tools for.
+    runs-on: ubuntu-24.04
     services:
       sqlserver:
         # Pinned, same policy as the integration job above.
@@ -242,25 +268,52 @@ jobs:
           ACCEPT_EULA: "Y"
           DEBIAN_FRONTEND: noninteractive
         run: |
-          # Register the Microsoft prod repo on a keyring this job owns. The
-          # runner image already ships Microsoft keys/repos for .NET and the
-          # Azure CLI, so writing to a shared keyring path trips gpg's
-          # "File exists" refusal, and Ubuntu 24.04 (ubuntu-latest) rejects an
-          # unsigned repo. A dedicated keyring plus an explicit signed-by line
-          # (the variant Microsoft documents) works on both 22.04 and 24.04.
+          set -euo pipefail
           KEYRING=/usr/share/keyrings/dyehouse-mssql.gpg
           LIST=/etc/apt/sources.list.d/dyehouse-mssql.list
+          INSTALL_LOG=/tmp/mssql-tools-install.log
+
+          # The runner image already ships Microsoft keys/repos for .NET and the
+          # Azure CLI, so a shared keyring path trips gpg's "File exists" refusal
+          # and a plain repo line is rejected as unsigned on 24.04+. Register the
+          # repo on a keyring this job owns, with an explicit signed-by line.
           sudo rm -f "$KEYRING"
           curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
             | sudo gpg --batch --yes --dearmor -o "$KEYRING"
+          sudo chmod 0644 "$KEYRING"
           source /etc/os-release
+          echo "Runner OS: ${PRETTY_NAME:-unknown} (VERSION_ID=${VERSION_ID} CODENAME=${VERSION_CODENAME})"
           echo "deb [arch=amd64 signed-by=$KEYRING] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
             | sudo tee "$LIST" > /dev/null
-          sudo apt-get update
-          sudo env ACCEPT_EULA=Y DEBIAN_FRONTEND=noninteractive apt-get install -y mssql-tools18
+
+          # Refresh ONLY the Microsoft index first. apt-get update exits 100 when
+          # ANY configured source fails, and runner images carry third-party
+          # lists that go stale between Ubuntu releases - a failure there has
+          # nothing to do with this install and used to abort the step.
+          if ! sudo apt-get update \
+              -o Dir::Etc::sourcelist="$LIST" \
+              -o Dir::Etc::sourceparts="-" \
+              -o APT::Get::List-Cleanup="0"; then
+            echo "::error::apt-get update failed for the Microsoft repository"
+            exit 1
+          fi
+          # Refresh the distribution indexes too, but never let an unrelated
+          # broken source fail this step: the image's existing lists still work.
+          sudo apt-get update || echo "::warning::An unrelated apt source failed to update; continuing with the image's existing indexes."
+
+          if ! sudo env ACCEPT_EULA=Y DEBIAN_FRONTEND=noninteractive \
+              apt-get install -y --no-install-recommends mssql-tools18 >"$INSTALL_LOG" 2>&1; then
+            echo "::error::mssql-tools18 install failed; apt said:"
+            tail -n 40 "$INSTALL_LOG"
+            echo "--- candidate versions ---"
+            apt-cache policy mssql-tools18 msodbcsql18 || true
+            exit 1
+          fi
+
           echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
-          # Fail here, with a clear message, if the tools did not land.
-          /opt/mssql-tools18/bin/sqlcmd -? > /dev/null
+          # GITHUB_PATH only applies to later steps, so verify the binary here.
+          test -x /opt/mssql-tools18/bin/sqlcmd
+          /opt/mssql-tools18/bin/sqlcmd -? >/dev/null 2>&1 || true > /dev/null
       - name: Wait for SQL Server
         run: |
           ready=0
