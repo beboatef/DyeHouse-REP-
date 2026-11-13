@@ -273,26 +273,33 @@ jobs:
           LIST=/etc/apt/sources.list.d/dyehouse-mssql.list
           INSTALL_LOG=/tmp/mssql-tools-install.log
 
-          # The runner image already ships Microsoft keys/repos for .NET and the
-          # Azure CLI, so a shared keyring path trips gpg's "File exists" refusal
-          # and a plain repo line is rejected as unsigned on 24.04+. Register the
-          # repo on a keyring this job owns, with an explicit signed-by line.
-          sudo rm -f "$KEYRING"
-          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-            | sudo gpg --batch --yes --dearmor -o "$KEYRING"
-          sudo chmod 0644 "$KEYRING"
           source /etc/os-release
           echo "Runner OS: ${PRETTY_NAME:-unknown} (VERSION_ID=${VERSION_ID} CODENAME=${VERSION_CODENAME})"
-          echo "deb [arch=amd64 signed-by=$KEYRING] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
-            | sudo tee "$LIST" > /dev/null
+
+          # The runner image already configures the Microsoft prod repo (for .NET
+          # and the Azure CLI) with its own signed-by keyring. Adding a second
+          # entry for the same source makes apt refuse it outright:
+          #   E: Conflicting values set for option Signed-By regarding source ...
+          # so reuse the image's entry when it exists, and register our own only
+          # when it does not.
+          MS_SOURCE=$(grep -rls 'packages\.microsoft\.com/ubuntu' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | head -n1 || true)
+          if [ -z "${MS_SOURCE:-}" ]; then
+            sudo rm -f "$KEYRING"
+            curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+              | sudo gpg --batch --yes --dearmor -o "$KEYRING"
+            sudo chmod 0644 "$KEYRING"
+            echo "deb [arch=amd64 signed-by=$KEYRING] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
+              | sudo tee "$LIST" > /dev/null
+            MS_SOURCE="$LIST"
+          else
+            echo "Reusing the runner's Microsoft prod source: $MS_SOURCE"
+          fi
 
           # Refresh ONLY the two indexes this install needs, one file at a time.
-          # A blanket `apt-get update` exits 100 when any of the runner image's
-          # third-party sources is stale (it was in the last run), and a failed
-          # update can leave the lists half-written, which then makes the
-          # dependencies unresolvable. Scoping it to one file avoids both.
+          # A blanket `apt-get update` exits 100 on any stale third-party source
+          # and can leave the lists unusable.
           if ! sudo apt-get update \
-              -o Dir::Etc::sourcelist="$LIST" \
+              -o Dir::Etc::sourcelist="$MS_SOURCE" \
               -o Dir::Etc::sourceparts="-" \
               -o APT::Get::List-Cleanup="0"; then
             echo "::error::apt-get update failed for the Microsoft repository"
