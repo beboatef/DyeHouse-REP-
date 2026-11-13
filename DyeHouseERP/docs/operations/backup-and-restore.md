@@ -72,7 +72,8 @@ the drop step, leaving the scratch database in place for forensics):
 5. Row counts match for `RawMessages`, `ProductionOrders`, `Deliveries`, `Invoices`,
    `TreasuryTransactions`, `InventoryTransactions` (written to the report file).
 6. The scratch database is dropped — only after re-checking the `_restoretest`
-   suffix inside the script itself.
+   suffix inside the script itself. Pass `--keep-scratch` to keep it for a
+   follow-up check instead (see "Keeping the restored copy" below).
 
 Safety rails (both wrapper and SQL re-check, so no single bug can drop production):
 
@@ -81,18 +82,66 @@ Safety rails (both wrapper and SQL re-check, so no single bug can drop productio
 - The source database must be on an explicit allow-list passed with `--allow-db`
   (there is deliberately no built-in default for restore sources).
 
+### Keeping the restored copy (`--keep-scratch`)
+
+By default the drill drops the scratch database itself after a **successful**
+verification; a failed drill never reaches the drop, so its copy stays in place for
+forensics. Pass `--keep-scratch` when you want to run the application-level
+recompute against the restored copy before it disappears — the same check the CI
+job performs:
+
+```bash
+./tools/backup/restore-verify.sh \
+  --source-db DyeHouseERP \
+  --backup-file /var/backups/dyehouse/DyeHouseERP_20260201_020000.bak \
+  --scratch-db DyeHouseERP_restoretest \
+  --report /var/log/dyehouse/restore-drill.txt \
+  --server db01.example.local --user backup_agent \
+  --password-env DYEHOUSE_BACKUP_PASSWORD --allow-db DyeHouseERP \
+  --keep-scratch
+
+# Recompute balances through the application against the restored copy.
+export DYEHOUSE_RESTOREREVERIFY_CONNECTION='Server=db01.example.local;Database=DyeHouseERP_restoretest;User Id=backup_agent;Password=<password>;TrustServerCertificate=True;'
+dotnet test tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj \
+  --filter "FullyQualifiedName~BackupRestoreVerificationTests"
+
+# Tidy up yourself when finished. The name guard still applies.
+sqlcmd -S db01.example.local -U backup_agent -P "$DYEHOUSE_BACKUP_PASSWORD" -C -d master -Q \
+  "ALTER DATABASE [DyeHouseERP_restoretest] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [DyeHouseERP_restoretest];"
+```
+
+`BackupRestoreVerificationTests` skip rather than fail when
+`DYEHOUSE_RESTOREREVERIFY_CONNECTION` is unset, so the filter is safe to run outside
+a drill. The flag only suppresses the drop: the `_restoretest` suffix check, the
+"scratch ≠ source" check and the source allow-list all still apply.
+
 Run the drill **monthly** and after every infrastructure change (new host, new SQL
 version, moved backup target). Keep every report; auditors will ask for them.
 
 ## 4. CI drill
 
-The `backup-drill` CI job runs the same toolchain against the integration SQL
-Server container on every push to `main`/`codex/*`/`feat/*`: it backs up the
-integration database after a data-populating test class has run, restores it into
-`*_restoretest`, runs the full `restore-verify.sql` (VERIFYONLY, CHECKDB,
-reconciliation, counts, drop), and executes `BackupRestoreVerificationTests`,
-which recompute balances through the application's own ledger services against the
-restored copy. A red drill fails the build like any test failure.
+The `backup-drill` job (`.github/workflows/ci.yml`) runs the same toolchain against
+the integration SQL Server container on every push to `main`/`codex/*`/`feat/*` and
+on the nightly schedule:
+
+1. Install `sqlcmd` (`mssql-tools18`) on the runner, then wait for SQL Server on
+   `127.0.0.1:1433`.
+2. Seed `DyeHouseERP_Drill` by running `FullHappyPathTests`, so the backup holds
+   real postings instead of an empty schema.
+3. `backup-dyehouse.sh` writes `drill-latest.bak` on the server.
+4. `restore-verify.sh` restores it into `DyeHouseERP_Drill_restoretest` and runs the
+   full `restore-verify.sql` (VERIFYONLY, CHECKDB, reconciliation, counts) with
+   `--keep-scratch`, so the restored copy survives for step 5.
+5. `BackupRestoreVerificationTests` recompute balances through the application's own
+   ledger services against that copy (`DYEHOUSE_RESTOREREVERIFY_CONNECTION`) and
+   compare them with independent SQL sums.
+6. A final `if: always()` step drops `DyeHouseERP_Drill_restoretest`, re-checking the
+   `_restoretest` suffix and no-opping when `sqlcmd` was never installed.
+
+A red drill fails the build like any test failure. The CI runner is disposable, so
+the cleanup drops the scratch copy unconditionally; a manual drill is not — there
+the script leaves a **failed** drill's copy in place for forensics and only drops it
+after a green verification.
 
 ## 5. Real restore checklist (production incident)
 
