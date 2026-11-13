@@ -366,6 +366,18 @@ jobs:
             echo "::error title=drill backup failed::${reason:-see the job log}"
             exit 1
           fi
+          # A backup the server cannot see is not a backup: prove the file is
+          # where the drill will look for it before the drill runs.
+          probe=$(sqlcmd -S 127.0.0.1 -U sa -P "$DYEHOUSE_BACKUP_PASSWORD" -C -b -d master -h -1 -W \
+            -Q "SET NOCOUNT ON; DECLARE @f INT, @d INT, @p INT;
+                EXEC master.dbo.xp_fileexist '/var/opt/mssql/drill-latest.bak', @f OUTPUT, @d OUTPUT, @p OUTPUT;
+                SELECT 'file_exists=' + CAST(@f AS VARCHAR(1));" \
+            | tr -d '[:space:]' || true)
+          echo "::notice title=drill backup file::${probe:-probe failed}"
+          case "$probe" in
+            *file_exists=1*) ;;
+            *) echo "::error title=drill backup missing::the server cannot see /var/opt/mssql/drill-latest.bak right after BACKUP (${probe:-no output})"; exit 1 ;;
+          esac
       - name: Restore into scratch and verify
         env:
           DYEHOUSE_BACKUP_PASSWORD: "YourStrong!Passw0rd"
@@ -391,6 +403,10 @@ jobs:
             if [ -z "$excerpt" ]; then excerpt=$(tail -n 15 drill-report.txt 2>/dev/null || true); fi
             excerpt=$(printf '%s' "$excerpt" | tr '\n' '|' | tr -d '%' | tr -s ' ' | cut -c1-1100)
             echo "::error title=restore-drill-failed::exit=$status stage=${stage:-none} ${excerpt:-no diagnostic line found}"
+            lsdir=$(sqlcmd -S 127.0.0.1 -U sa -P "$DYEHOUSE_BACKUP_PASSWORD" -C -b -d master -h -1 -W \
+              -Q "SET NOCOUNT ON; EXEC master.dbo.xp_dirtree '/var/opt/mssql', 1, 1;" \
+              | tr '\n' '|' | tr -d '%' | tr -s ' ' | cut -c1-600 || true)
+            echo "::notice title=server /var/opt/mssql::${lsdir:-could not list}"
             {
               echo "### Restore drill failed (exit $status)"
               echo '```'
