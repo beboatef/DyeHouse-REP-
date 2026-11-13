@@ -29,7 +29,8 @@
  *   DataDir        - directory for the relocated scratch files. Empty means
  *                    "ask the server" (InstanceDefaultDataPath); if the server
  *                    reports none, the script fails and tells you to pass one.
- *   PathSeparator  - "\" (Windows) or "/" (Linux). Default "\".
+ *   PathSeparator  - "\" (Windows) or "/" (Linux). Required: this script
+ *                    must not default it (see the note below).
  *   KeepScratch    - "1" leaves the scratch database in place after a
  *                    successful drill (follow-up checks); anything else drops
  *                    it. Passed by the .sh wrapper (--keep-scratch).
@@ -41,7 +42,10 @@
  */
 :on error exit
 
-:setvar PathSeparator "\"
+-- Deliberately no :setvar default for PathSeparator: a :setvar in the script
+-- takes precedence over the same variable passed with -v, so a "default" here
+-- would silently replace the separator the caller asked for and relocate the
+-- restored files under a backslashed path on Linux. It must come from -v.
 
 -- ---------------------------------------------------------------- guards ---
 IF RIGHT(N'$(ScratchDb)', 12) <> N'_restoretest'

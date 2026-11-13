@@ -14,7 +14,8 @@
  *                    NOTE: SQL Server writes this path itself, so it must exist
  *                    on the DATABASE SERVER (not on the machine running sqlcmd)
  *                    and be writable by the SQL Server service account.
- *   PathSeparator  - "\" on Windows hosts, "/" on Linux hosts. Default "\".
+ *   PathSeparator  - "\" on Windows hosts, "/" on Linux hosts. Required:
+ *                    this script must not default it (see the note below).
  *
  * The backup is a regular (COPY_ONLY=0) FULL backup with COMPRESSION and
  * CHECKSUM, named <DbName>_YYYYMMDD_HHMMSS.bak. It is the base of the log
@@ -25,9 +26,12 @@
  * RAISERROR or T-SQL error returns a non-zero exit code to the caller.
  */
 :on error exit
-:setvar BackupName ""
 
-:setvar PathSeparator "\"
+-- Deliberately no :setvar defaults for BackupName or PathSeparator: a :setvar
+-- in the script takes precedence over the same variable passed with -v, so a
+-- "default" here silently replaces what the caller asked for (it turned a
+-- named backup into a timestamped one written with the wrong separator).
+-- Every variable this script uses must come from -v.
 
 IF DB_ID(N'$(DbName)') IS NULL
 BEGIN;
