@@ -372,16 +372,28 @@ jobs:
           DYEHOUSE_RESTORE_ALLOW_DBS: "DyeHouseERP_Drill"
         run: |
           set -o pipefail
-          if ! DyeHouseERP/tools/backup/restore-verify.sh \
-              --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
-              --source-db DyeHouseERP_Drill \
-              --backup-file /var/opt/mssql/drill-latest.bak \
-              --scratch-db DyeHouseERP_Drill_restoretest \
-              --report drill-report.txt --path-separator "/" --data-dir /var/opt/mssql \
-              --keep-scratch --trust-server-cert 2>&1 | tee /tmp/restore.log; then
-            cat drill-report.txt 2>/dev/null || true
-            reason=$(grep -E 'Msg [0-9]+|Operating system error|Sqlcmd: Error|Cannot open' /tmp/restore.log | tail -n 3 | tr '\n' ' ' | cut -c1-800)
-            echo "::error title=restore drill failed::${reason:-see the job log}"
+          status=0
+          DyeHouseERP/tools/backup/restore-verify.sh \
+            --server 127.0.0.1 --user sa --password-env DYEHOUSE_BACKUP_PASSWORD \
+            --source-db DyeHouseERP_Drill \
+            --backup-file /var/opt/mssql/drill-latest.bak \
+            --scratch-db DyeHouseERP_Drill_restoretest \
+            --report drill-report.txt --path-separator "/" --data-dir /var/opt/mssql \
+            --keep-scratch --trust-server-cert 2>&1 | tee /tmp/restore.log || status=$?
+          if [ -f drill-report.txt ]; then cat drill-report.txt; fi
+          if [ "$status" -ne 0 ]; then
+            # sqlcmd -o sends the T-SQL errors to the report, not to the log, and
+            # job logs need a sign-in: put the reason where anyone can read it.
+            excerpt=$(grep -hE 'Msg [0-9]+, Level|Operating system error|Sqlcmd: Error|Cannot open|DRILL FAILED|refusing' \
+                        /tmp/restore.log drill-report.txt 2>/dev/null \
+                      | tail -n 5 | tr '\n' ' ' | tr -d '%' | tr -s ' ' | cut -c1-900 || true)
+            echo "::error title=restore-drill-failed::exit=$status ${excerpt:-no diagnostic line found}"
+            {
+              echo "### Restore drill failed (exit $status)"
+              echo '```'
+              tail -n 60 drill-report.txt 2>/dev/null || tail -n 60 /tmp/restore.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
           cat drill-report.txt
