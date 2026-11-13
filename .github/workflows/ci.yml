@@ -369,19 +369,16 @@ jobs:
           # A backup the server cannot see is not a backup: prove the file is
           # where the drill will look for it before the drill runs, and report
           # the path the engine recorded in case the two ever disagree.
-          probe=$(sqlcmd -S 127.0.0.1 -U sa -P "$DYEHOUSE_BACKUP_PASSWORD" -C -d master -h -1 -W -Q "
+          exists=$(sqlcmd -S 127.0.0.1 -U sa -P "$DYEHOUSE_BACKUP_PASSWORD" -C -d master -h -1 -W -Q "
               SET NOCOUNT ON;
               DECLARE @f INT;
               EXEC master.dbo.xp_fileexist '/var/opt/mssql/drill-latest.bak', @f OUTPUT;
-              SELECT N'exists=' + CAST(@f AS NVARCHAR(1));
-              SELECT TOP 3 N'bak=' + database_name + N' ' + CONVERT(NVARCHAR(19), backup_finish_date, 120)
-                     + N' ' + physical_device_name
-                FROM msdb.dbo.backupset ORDER BY backup_finish_date DESC;" 2>&1 \
-            | tr '\n' '|' | tr -d '%' | tr -s ' ' | cut -c1-700 || true)
-          echo "::notice title=drill backup file::${probe:-probe gave no output}"
-          case "$probe" in
+              SELECT N'exists=' + CAST(@f AS NVARCHAR(1));" 2>&1 \
+            | tr '\n' '|' | tr -d '%' | tr -s ' ' || true)
+          echo "::notice title=drill backup file::$(printf '%s' "$exists" | cut -c1-300)"
+          case "$(printf '%s' "$exists" | tr -d '[:space:]')" in
             *exists=1*) ;;
-            *) echo "::error title=drill backup missing::the server cannot see /var/opt/mssql/drill-latest.bak right after BACKUP (${probe:-no output})"; exit 1 ;;
+            *) echo "::error title=drill backup missing::the server cannot see /var/opt/mssql/drill-latest.bak right after BACKUP ($exists)"; exit 1 ;;
           esac
       - name: Restore into scratch and verify
         env:
