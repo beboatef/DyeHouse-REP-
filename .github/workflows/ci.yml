@@ -286,10 +286,11 @@ jobs:
           echo "deb [arch=amd64 signed-by=$KEYRING] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
             | sudo tee "$LIST" > /dev/null
 
-          # Refresh ONLY the Microsoft index first. apt-get update exits 100 when
-          # ANY configured source fails, and runner images carry third-party
-          # lists that go stale between Ubuntu releases - a failure there has
-          # nothing to do with this install and used to abort the step.
+          # Refresh ONLY the two indexes this install needs, one file at a time.
+          # A blanket `apt-get update` exits 100 when any of the runner image's
+          # third-party sources is stale (it was in the last run), and a failed
+          # update can leave the lists half-written, which then makes the
+          # dependencies unresolvable. Scoping it to one file avoids both.
           if ! sudo apt-get update \
               -o Dir::Etc::sourcelist="$LIST" \
               -o Dir::Etc::sourceparts="-" \
@@ -297,16 +298,21 @@ jobs:
             echo "::error::apt-get update failed for the Microsoft repository"
             exit 1
           fi
-          # Refresh the distribution indexes too, but never let an unrelated
-          # broken source fail this step: the image's existing lists still work.
-          sudo apt-get update || echo "::warning::An unrelated apt source failed to update; continuing with the image's existing indexes."
+          UBUNTU_SOURCES=/etc/apt/sources.list.d/ubuntu.sources
+          [ -f "$UBUNTU_SOURCES" ] || UBUNTU_SOURCES=/etc/apt/sources.list
+          sudo apt-get update \
+              -o Dir::Etc::sourcelist="$UBUNTU_SOURCES" \
+              -o Dir::Etc::sourceparts="-" \
+              -o APT::Get::List-Cleanup="0" \
+            || echo "::warning::The distribution index refresh failed; using the image's existing indexes."
 
           if ! sudo env ACCEPT_EULA=Y DEBIAN_FRONTEND=noninteractive \
               apt-get install -y --no-install-recommends mssql-tools18 >"$INSTALL_LOG" 2>&1; then
-            echo "::error::mssql-tools18 install failed; apt said:"
+            # One line only: an annotation body is not a log viewer, so keep apt's
+            # actual E: lines here and leave the full log in the job output.
+            reason=$(grep -E '^(E:|Err:|dpkg:)' "$INSTALL_LOG" | tail -n 3 | tr '\n' ' ' | cut -c1-800)
+            echo "::error title=mssql-tools18 install failed::${reason:-apt gave no E: line - see the job log}"
             tail -n 40 "$INSTALL_LOG"
-            echo "--- candidate versions ---"
-            apt-cache policy mssql-tools18 msodbcsql18 || true
             exit 1
           fi
 

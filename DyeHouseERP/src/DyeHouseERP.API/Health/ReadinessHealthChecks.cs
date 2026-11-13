@@ -51,12 +51,12 @@ public sealed class MigrationHealthCheck : IHealthCheck
             // be labelled, so a production database can never hide behind it:
             // production bootstrap runs MigrateAsync, which always writes history.
             var historyExists = await db.Database
-                .SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'__EFMigrationsHistory', N'U') IS NULL THEN 0 ELSE 1 END")
+                .SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'__EFMigrationsHistory', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]")
                 .SingleAsync(timeout.Token);
             if (historyExists == 0)
             {
                 var schemaExists = await db.Database
-                    .SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'Warehouses', N'U') IS NULL THEN 0 ELSE 1 END")
+                    .SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'Warehouses', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]")
                     .SingleAsync(timeout.Token);
                 if (schemaExists == 1)
                     return HealthCheckResult.Healthy(

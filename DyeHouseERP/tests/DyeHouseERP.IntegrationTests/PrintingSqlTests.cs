@@ -19,8 +19,14 @@ public class PrintingSqlTests : SqlServerConcurrencyTestBase
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            db.ProductionStageDefinitions.Add(new ProductionStageDefinition("FORMATION", "Formation", 1, "seed", isFormationStage: true));
-            db.ProductionStageDefinitions.Add(new ProductionStageDefinition("PRINTING", "Printing", 30, "seed", requiresDrawingNumber: true));
+            // The factory seeds the baseline master data, including the PRINTING
+            // stage (ProductionStageSeeder). Insert only what is missing: a second
+            // row with the same Code hits the unique index and fails the save.
+            var codes = db.ProductionStageDefinitions.Select(s => s.Code).ToHashSet();
+            if (!codes.Contains("FORMATION"))
+                db.ProductionStageDefinitions.Add(new ProductionStageDefinition("FORMATION", "Formation", 1, "seed", isFormationStage: true));
+            if (!codes.Contains("PRINTING"))
+                db.ProductionStageDefinitions.Add(new ProductionStageDefinition("PRINTING", "Printing", 30, "seed", requiresDrawingNumber: true));
             await db.SaveChangesAsync();
         }
         var message = await ReceiveAndAcceptAsync(customer, item, raw, 100m);

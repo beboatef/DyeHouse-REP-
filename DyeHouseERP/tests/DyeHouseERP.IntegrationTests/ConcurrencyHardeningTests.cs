@@ -454,16 +454,42 @@ public class JwtSessionInvalidationTests : SqlServerConcurrencyTestBase
 {
     private async Task<(Guid UserId, string Token)> CreateAndLoginAsync(List<string> roles)
     {
+        const string InitialPassword = "P@ssw0rd-Test-123";
+        const string ChosenPassword = "P@ssw0rd-Test-456";
+
         var username = $"u{Guid.NewGuid():N}"[..12];
         var createResponse = await Client.PostAsJsonAsync("/api/users", new
-        { username, password = "P@ssw0rd-Test-123", displayName = "Session User", roles });
+        { username, password = InitialPassword, displayName = "Session User", roles });
         createResponse.EnsureSuccessStatusCode();
         var user = (await createResponse.Content.ReadFromJsonAsync<UserDto>(Json))!;
 
-        var loginResponse = await Client.PostAsJsonAsync("/api/auth/login", new { username, password = "P@ssw0rd-Test-123" });
-        loginResponse.EnsureSuccessStatusCode();
-        var login = await loginResponse.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return (user.Id, login.GetProperty("token").GetString()!);
+        var login = await LoginAsync(username, InitialPassword);
+        var token = login.GetProperty("token").GetString()!;
+
+        // Part 2: a password an administrator sets is flagged must-change, and the
+        // gate answers 403 PASSWORD_CHANGE_REQUIRED until the user picks their own.
+        // Clear it here so the test exercises JWT invalidation, not that policy.
+        if (login.TryGetProperty("mustChangePassword", out var flag) && flag.GetBoolean())
+        {
+            using var change = new HttpRequestMessage(HttpMethod.Post, "/api/auth/change-password")
+            {
+                Content = JsonContent.Create(new { currentPassword = InitialPassword, newPassword = ChosenPassword })
+            };
+            change.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            (await Client.SendAsync(change)).EnsureSuccessStatusCode();
+
+            login = await LoginAsync(username, ChosenPassword);
+            token = login.GetProperty("token").GetString()!;
+        }
+
+        return (user.Id, token);
+    }
+
+    private async Task<JsonElement> LoginAsync(string username, string password)
+    {
+        var response = await Client.PostAsJsonAsync("/api/auth/login", new { username, password });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>(Json);
     }
 
     private static async Task<HttpResponseMessage> CallAsUserAsync(HttpClient sharedClient, string token)
