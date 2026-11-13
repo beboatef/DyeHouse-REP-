@@ -311,3 +311,27 @@ jobs:
         run: >-
           dotnet test DyeHouseERP/tests/DyeHouseERP.IntegrationTests/DyeHouseERP.IntegrationTests.csproj
           --filter "FullyQualifiedName~BackupRestoreVerificationTests" --nologo
+      - name: Drop the drill scratch database
+        # The drill keeps the restored copy (--keep-scratch) so the step above can
+        # read it; this always runs to leave no scratch database behind, whether or
+        # not the recompute passed. The name guard is repeated here so this step can
+        # never drop anything but a *_restoretest database.
+        if: always()
+        env:
+          DYEHOUSE_BACKUP_PASSWORD: "YourStrong!Passw0rd"
+        run: |
+          if ! command -v sqlcmd >/dev/null 2>&1; then
+            echo "sqlcmd is unavailable (the install step failed); nothing to clean up."
+            exit 0
+          fi
+          sqlcmd -S 127.0.0.1 -U sa -P "$DYEHOUSE_BACKUP_PASSWORD" -C -b -d master -Q "
+            IF DB_ID(N'DyeHouseERP_Drill_restoretest') IS NOT NULL
+               AND RIGHT(N'DyeHouseERP_Drill_restoretest', 12) = N'_restoretest'
+            BEGIN
+                ALTER DATABASE [DyeHouseERP_Drill_restoretest] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                DROP DATABASE [DyeHouseERP_Drill_restoretest];
+                PRINT 'Dropped DyeHouseERP_Drill_restoretest';
+            END
+            ELSE
+                PRINT 'DyeHouseERP_Drill_restoretest not present; nothing to drop.';
+          "
